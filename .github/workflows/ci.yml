@@ -1,0 +1,162 @@
+# FundZim CI. Least privilege, no secrets, no deployments. Third-party actions are pinned by commit SHA.
+name: ci
+
+on:
+  push:
+    branches: [main, "stage-*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOTOOLCHAIN: local
+
+jobs:
+  go:
+    name: Go (format, vet, unit tests, vulnerabilities)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          out=$(gofmt -l apps internal migrations tests)
+          if [ -n "$out" ]; then echo "gofmt needed:"; echo "$out"; exit 1; fi
+      - run: go vet ./apps/api/... ./internal/... ./migrations/...
+      - run: go vet -tags integration ./tests/...
+      - run: go test -race -count=1 ./apps/api/... ./internal/... ./migrations/...
+      - name: fuzz smoke (money)
+        run: |
+          go test -run=^$ -fuzz=FuzzParseNeverPanicsOrRounds -fuzztime=20s ./internal/platform/money/
+          go test -run=^$ -fuzz=FuzzUnmarshalNeverPanics -fuzztime=20s ./internal/platform/money/
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./apps/api/... ./internal/... ./migrations/...
+
+  web:
+    name: Web (lint, types, unit tests, build, audit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Audit production dependencies (blocking)
+        run: npm audit --omit=dev --audit-level=high
+      - name: Audit all dependencies (report)
+        # Known dev-only finding in the eslint-config-next chain is tracked in docs/stage-3/known-issues.md
+        # (KI-03). This step prints the full report; production dependencies are gated above.
+        run: npm audit --audit-level=high || echo "::warning::npm audit reports dev-dependency findings (see docs/stage-3/known-issues.md KI-03)"
+
+  e2e:
+    name: Web end-to-end (Playwright)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
+  contracts:
+    name: OpenAPI and SQL design drafts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.21.0
+      - run: npx --yes @redocly/cli@2.54.3 lint api/openapi/fundzim-v1.yaml --config api/openapi/redocly.yaml
+      - name: Validate SQL design drafts (in-memory PGlite)
+        working-directory: design/sql/validate
+        run: npm ci --no-audit --no-fund && node run.mjs && node catalogue.mjs
+
+  integration:
+    name: Integration (real PostgreSQL, Valkey, Garage via docker compose)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Generate throwaway local secrets
+        run: ./scripts/dev-env-init.sh
+      - name: Start infrastructure, initialise storage, migrate
+        run: |
+          docker compose up -d --wait fundzim-postgres fundzim-redis fundzim-storage
+          docker compose up --exit-code-from fundzim-storage-init fundzim-storage-init
+          docker compose up --build --exit-code-from fundzim-migrate fundzim-migrate
+      - name: Start the API on the runner
+        run: |
+          set -a; . ./.env; set +a
+          go build -o bin/api ./apps/api/cmd/api
+          LOG_FORMAT=json ./bin/api > api.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/api/v1/ready && break; sleep 1; done
+      - name: Integration tests (destructive migration round trip allowed on this throwaway database)
+        run: |
+          set -a; . ./.env; set +a
+          FUNDZIM_IT_API_URL=http://127.0.0.1:8080 FUNDZIM_IT_DESTRUCTIVE=1 \
+            go test -tags integration -count=1 -v ./tests/integration/...
+      - name: Logs on failure
+        if: failure()
+        run: |
+          cat api.log || true
+          docker compose logs --no-color || true
+      - if: always()
+        run: docker compose down -v
+
+  images:
+    name: Container images build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker build -f deploy/docker/api.Dockerfile -t fundzim/api:ci .
+      - run: docker build -f deploy/docker/web.Dockerfile -t fundzim/web:ci apps/web
+      - name: Images run as non-root
+        run: |
+          test "$(docker image inspect fundzim/api:ci --format '{{.Config.User}}')" = "65532:65532"
+          test -n "$(docker image inspect fundzim/web:ci --format '{{.Config.User}}')"
+
+  secrets:
+    name: Secret scanning
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - run: ./scripts/check-secrets.sh
+      - name: gitleaks (full history)
+        run: |
+          curl -fsSL -o gitleaks.tgz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks
+          ./gitleaks detect --source . --no-banner --redact

@@ -193,7 +193,7 @@ UPDATE app.provider_capabilities SET evidence_status = 'VERIFIED' WHERE id = 'b0
 
 -- @case provider_account_rejects_raw_secret expect=error:ck_provider_accounts_api_secret_ref
 INSERT INTO app.provider_accounts (id, provider_id, environment, account_label, api_credentials_secret_ref)
-VALUES (gen_random_uuid(), 'b0000000-0000-0000-0000-000000000001', 'STAGING', 'leak', 'sk_live_51HxQ2aBcDeF');
+VALUES (gen_random_uuid(), 'b0000000-0000-0000-0000-000000000001', 'STAGING', 'leak', 'sk_' || 'live_' || 'FAKE0000TEST');
 
 -- @case sandbox_provider_never_in_production expect=error:sandbox provider cannot have a PRODUCTION account
 INSERT INTO app.provider_accounts (id, provider_id, environment, account_label, api_credentials_secret_ref)

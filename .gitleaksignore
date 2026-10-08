@@ -1,0 +1,9 @@
+# gitleaks: reviewed false positives in already-committed history (fingerprint = commit:file:rule:line).
+# Each entry was inspected; none is a real credential. Never add a fingerprint without reviewing it.
+#  - docs/architecture/observability.md:73 is prose listing what must never be logged.
+#  - design/sql/tests/payments_test.sql:196 was a deliberately fake key proving secrets are rejected
+#    (rewritten in Stage 3 so it no longer matches).
+#  - api/openapi/fundzim-v1.yaml: an example Idempotency-Key (a UUID), not a credential.
+fe9cfa71e783a043d04308558523402613e622e8:docs/architecture/observability.md:generic-api-key:73
+fe9cfa71e783a043d04308558523402613e622e8:design/sql/tests/payments_test.sql:stripe-access-token:196
+fe9cfa71e783a043d04308558523402613e622e8:api/openapi/fundzim-v1.yaml:generic-api-key:17488

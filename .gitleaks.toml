@@ -1,0 +1,25 @@
+# gitleaks configuration: the default rules plus narrowly scoped allowlists for reviewed false positives.
+# Never allowlist a value that could be a real credential. Prefer fixing the source (e.g. splitting an
+# obviously fake test string) over adding an entry here.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Reviewed documentation and contract false positives"
+condition = "OR"
+regexTarget = "line"
+regexes = [
+  # Example Idempotency-Key header values in the OpenAPI contract are UUIDs, not credentials.
+  '''Idempotency-Key: [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}''',
+  # Container image tags such as valkey/valkey:9.0.6-alpine3.24
+  '''valkey/valkey:[0-9][0-9A-Za-z.\-]*''',
+  # Prose in observability.md listing data classes that must never be logged.
+  '''webhook secrets and signatures, private/KMS/HMAC keys''',
+]
+
+[[allowlists]]
+description = "Build output and dependencies are never committed"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)\.next/''',
+]
