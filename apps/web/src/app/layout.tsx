@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { connection } from "next/server";
 
 import { DevPreviewBanner } from "@/components/layout/dev-preview-banner";
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -23,7 +24,14 @@ export const viewport: Viewport = {
   themeColor: "#1b5e40",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+/**
+ * Strict CSP (F-04): every document is rendered at request time (`connection()`), so Next.js can stamp the
+ * per-request nonce from src/proxy.ts on its scripts and stylesheets. A prerendered page would contain
+ * framework scripts without a nonce, which 'strict-dynamic' blocks. Trade-off: no static/CDN-cached HTML;
+ * the pages are small, every authenticated page is per-user anyway, and the header shows the session.
+ */
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  await connection();
   return (
     <html lang="en-ZW" className="h-full antialiased">
       <body className="flex min-h-full flex-col">

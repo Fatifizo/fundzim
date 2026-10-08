@@ -252,6 +252,26 @@ describe("request headers and body", () => {
   });
 });
 
+describe("CSRF and credentials", () => {
+  it.each(["POST", "PUT", "PATCH", "DELETE"] as const)("sends X-CSRF-Token on %s, and caller headers cannot override it", async (method) => {
+    const { client, fetchMock } = setup([json(200, envelope({}))], { csrfToken: () => "tok-123" });
+    await client.request(method, "/api/v1/x", { headers: { "x-csrf-token": "attacker" } });
+    const headers = sentHeaders(fetchMock);
+    expect(headers["X-CSRF-Token"]).toBe("tok-123");
+    expect(headers["x-csrf-token"]).toBeUndefined();
+    expect(fetchMock.mock.calls[0]?.[1]?.credentials).toBe("same-origin");
+  });
+
+  it("never sends the CSRF token on GET/HEAD and omits it when there is no cookie", async () => {
+    const a = setup([json(200, envelope({}))], { csrfToken: () => "tok-123" });
+    await a.client.get("/api/v1/x");
+    expect(sentHeaders(a.fetchMock)["X-CSRF-Token"]).toBeUndefined();
+    const b = setup([json(200, envelope({}))], { csrfToken: () => undefined });
+    await b.client.post("/api/v1/x");
+    expect(sentHeaders(b.fetchMock)["X-CSRF-Token"]).toBeUndefined();
+  });
+});
+
 describe("parseRetryAfter", () => {
   it("parses seconds and HTTP dates", () => {
     expect(parseRetryAfter("5")).toBe(5000);

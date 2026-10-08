@@ -15,3 +15,10 @@ vi.mock("next/navigation", () => ({
     throw new Error("NEXT_NOT_FOUND");
   },
 }));
+
+// The header's session slot is an async Server Component that calls the API (server-only); jsdom cannot
+// render it. Unit tests see the anonymous state; the real component is covered by the E2E suite.
+vi.mock("@/components/layout/header-account", () => ({
+  HeaderAccount: () => <a href="/login">Sign In</a>,
+  HeaderAccountFallback: () => null,
+}));

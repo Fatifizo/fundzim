@@ -7,7 +7,6 @@ export const PRIMARY_NAV: readonly NavItem[] = [
   { href: "/explore", label: "Explore" },
   { href: "/how-it-works", label: "How It Works" },
   { href: "/start", label: "Start a Fundraiser" },
-  { href: "/login", label: "Sign In" },
 ];
 
 export const FOOTER_NAV: readonly NavItem[] = [

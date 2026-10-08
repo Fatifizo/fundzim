@@ -8,6 +8,10 @@
 # Runtime environment (read at REQUEST/START time, never baked into the image):
 #   API_BASE_URL   REQUIRED. Origin of the Go API, e.g. http://api:8080. The server refuses to start
 #                  without it (NODE_ENV=production). Server-only; never sent to browsers.
+#   WEB_TRUSTED_PROXY_CIDRS  optional, default empty. Comma-separated CIDRs of reverse proxies in FRONT of
+#                  this container whose X-Forwarded-For may be used to find the client address forwarded to
+#                  the API (right-most untrusted entry). Empty = the TCP peer is the client and any
+#                  client-supplied X-Forwarded-For is ignored. Invalid values stop the server at start.
 #   PORT           default 3000
 #   HOSTNAME       default 0.0.0.0
 # No build args are required. Do not pass secrets as build args: anything NEXT_PUBLIC_* is compiled into

@@ -1,6 +1,6 @@
 # apps/web — FundZim web frontend
 
-Next.js 16.4 (App Router, `cacheComponents` + Partial Prerendering) · React 19 · TypeScript (strict,
+Next.js 16.4 (App Router; every document rendered per request for the nonce CSP — `cacheComponents`/PPR off) · React 19 · TypeScript (strict,
 `noUncheckedIndexedAccess`) · Tailwind CSS v4.
 
 This app is **presentation only**: it renders pages and calls the Go API at `/api/v1/`. It never talks to the
@@ -9,7 +9,7 @@ database, never contains business or financial logic, and never holds secrets. S
 Next.js version has breaking changes relative to older documentation (e.g. `error.tsx` receives `retry`, not
 `reset`; request-time data must sit inside `<Suspense>` under `cacheComponents`).
 
-**Stage 3 status:** development preview. Homepage, How it works, About and Contact have real (honest) content.
+**Stage 3 status (Stage 4 adds authentication, below):** development preview. Homepage, How it works, About and Contact have real (honest) content.
 Every future feature route shows a "Coming soon — under development (Stage N)" page. There are no accounts,
 campaigns, donations or payments, and the site is `noindex` throughout.
 
@@ -21,7 +21,8 @@ npm run typecheck   # tsc --noEmit
 npm test            # Vitest + React Testing Library + axe-core (jsdom)
 npm run test:watch
 npm run build       # production build, output: standalone
-npm run test:e2e    # Playwright: builds, starts the standalone server, runs e2e/ (Chromium desktop + Pixel 7)
+npm run test:e2e    # Playwright: e2e/serve.mjs builds, starts the mock auth API and two standalone servers
+                    # (API down / API = mock), runs e2e/ (Chromium desktop + Pixel 7). E2E_SKIP_BUILD=1 reuses .next
 ```
 
 First E2E run on a machine: `npx playwright install chromium` (no sudo needed for the headless shell).
@@ -31,6 +32,7 @@ First E2E run on a machine: `npx playwright install chromium` (no sudo needed fo
 | Variable | Where read | Required | Notes |
 |---|---|---|---|
 | `API_BASE_URL` | Server only, **at request time** (Route Handler proxy, Server Components) and at server start (validation) | **Production: yes.** Dev/test default `http://127.0.0.1:8080` | Origin only (`http://api:8080`), no path/credentials. In production (`NODE_ENV=production`) a missing/invalid value makes the server **exit on start** (`src/instrumentation.ts`) and the proxy answers `503 SERVICE_UNAVAILABLE`; there is no silent fallback. Not needed at build time. |
+| `WEB_TRUSTED_PROXY_CIDRS` | Server only, at start (validated) and per request | No (default empty) | Comma-separated CIDRs of reverse proxies **in front of** the web server. Empty: the TCP peer is the client and client-supplied `X-Forwarded-For` is ignored. Invalid → the server exits on start in production. |
 | `PORT`, `HOSTNAME` | Standalone server | No | Defaults `3000` / `0.0.0.0` in the container. |
 | `NEXT_PUBLIC_*` | Inlined into the browser bundle **at build time** | — | Public by definition. None are used in Stage 3. Never put a secret in a `NEXT_PUBLIC_` variable. |
 
@@ -45,11 +47,55 @@ request, so one image works in every environment. In deployed environments the r
 `/api/v1` directly to the API instead (ARCHITECTURE §3).
 
 Proxy behaviour: fixed upstream origin (path + query only); strips hop-by-hop headers and client-supplied
-`Forwarded`/`X-Forwarded-*`/`X-Real-IP` (real client IP propagation is the reverse proxy's job); forwards
+`Forwarded`/`X-Forwarded-*`/`X-Real-IP`, then sets `X-Forwarded-For` to exactly one address — the client this
+process observed (see "Client address" below); forwards
 cookies, `Origin` and a validated `X-Request-ID` (generated if absent/malformed); 1 MiB body cap
 (`413 PAYLOAD_TOO_LARGE`); 30 s upstream timeout; never retries; passes redirects and multiple `Set-Cookie`
 through; upstream failure → error envelope `SERVICE_UNAVAILABLE` (503, or 504 on timeout) with
 `retryable: true` only for GET/HEAD.
+
+### Client address (security review F-02 / KI-04)
+
+Next.js 16 gives Route Handlers no socket information. Its only related behaviour
+(`next/dist/server/base-server.js`) is `req.headers['x-forwarded-for'] ??= socket.remoteAddress` — it fills
+`X-Forwarded-For` **only if the client did not send one**, so the header a handler sees is client-controlled.
+Therefore `src/lib/net/peer-stamp.ts` (installed from `src/instrumentation.ts`) wraps
+`http.Server.prototype.emit('request')` and, before Next.js sees the request, deletes every `x-fz-peer-*`
+header and records the real TCP peer under a **random per-process header name** (128 bits; a client cannot
+guess it). `src/lib/net/client-ip.ts` then applies the API's rule one hop earlier: peer not in
+`WEB_TRUSTED_PROXY_CIDRS` → the peer is the client; peer trusted → right-most untrusted `X-Forwarded-For`
+entry (malformed entry stops the walk). Requests arriving before the stamp is installed (server start-up) or
+with an unparsable peer forward **no** `X-Forwarded-For` (the API then sees the web container — coarse, never
+spoofable). Used by the `/api/v1` proxy and by server-side session calls. The API must trust `X-Forwarded-For`
+only from the web container's address (`TRUSTED_PROXY_CIDRS`). Tests: `src/lib/net/client-ip.test.ts`,
+`src/__tests__/api-proxy-route.test.ts`, and E2E (`e2e/auth.spec.ts`, spoofed headers against the real server).
+
+## Authentication (Stage 4)
+
+Contract: `docs/stage-4/interface-contracts.md` §4. Pages: `/register`, `/login`, `/login/mfa`,
+`/verify-email`, `/forgot-password`, `/reset-password`, `/staff/accept-invitation`, `/dashboard`,
+`/settings/{profile,security,mfa,sessions}`.
+
+- **Sessions** are HttpOnly cookies set by the API; JavaScript never sees them. Browser storage is banned by
+  ESLint (`localStorage`/`sessionStorage`/`indexedDB`).
+- **CSRF:** `browserApi` reads `__Host-fz_csrf`/`fz_csrf` and sends `X-CSRF-Token` on POST/PUT/PATCH/DELETE
+  (`credentials: "same-origin"`); callers cannot override it.
+- **Protected pages** call `requireUser(path)` (`src/lib/auth/session.ts`): GET `/api/v1/auth/session` at
+  `API_BASE_URL` with only the FundZim auth cookies and the client address forwarded; no valid session →
+  `307 /login?next=<path>`. `src/proxy.ts` additionally redirects cookie-less requests before rendering
+  (defence in depth only) and marks `/dashboard` and `/settings/*` `Cache-Control: private, no-store`.
+  Signed-in users visiting `/login` or `/register` go to their destination.
+- **`next`** is validated by `safeNextPath` (`src/lib/auth/safe-redirect.ts`): same-site path only, no `//`,
+  backslashes, control characters or schemes, never back into `/login`, `/register` or `/api`.
+- **Errors** map stable codes to fixed copy (`src/lib/auth/errors.ts`); server messages are never shown.
+  Generic messages where the contract forbids account enumeration. `AUTHENTICATION_REQUIRED` → login with
+  `next`; `STEP_UP_REQUIRED` → step-up dialog (`<dialog>` + `showModal`, password or TOTP; TOTP only for staff)
+  then one retry; `RATE_LIMITED` → shows the `Retry-After` wait.
+- **Tokens** from email links (verify, reset, staff invitation) are removed from the address bar on load
+  (`history.replaceState`), kept in memory only; those pages send `Referrer-Policy: no-referrer`.
+- **MFA:** QR code rendered in the browser as inline SVG with `qrcode-generator@2.0.4` (MIT, zero deps); the
+  TOTP secret/URI live only in component state during enrolment and are dropped on confirm/cancel. Recovery
+  codes are shown once (copy / download as a local text file).
 
 ## API client (`src/lib/api/`)
 
@@ -80,18 +126,28 @@ pass `minorUnits` from API currency config when available (ZWG minor units are u
 
 ## Security headers
 
-Set in `next.config.ts` `headers()` for every route: CSP, `X-Content-Type-Options: nosniff`,
-`X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (camera,
-microphone, geolocation, payment, … disabled), `Cross-Origin-Opener-Policy: same-origin`; `X-Powered-By`
-removed. HSTS is set by the TLS-terminating reverse proxy.
+Set for every route in `next.config.ts` `headers()`: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (camera, microphone, geolocation,
+payment, … disabled), `Cross-Origin-Opener-Policy: same-origin`; `X-Powered-By` removed. HSTS is set by the
+TLS-terminating reverse proxy.
 
-**CSP deviation (tracked):** FRONTEND.md §8 asks for a nonce-based CSP. Nonces force fully dynamic rendering and,
-per the bundled Next.js CSP guide, are incompatible with Partial Prerendering (`cacheComponents`). Stage 3
-therefore uses a static CSP with `script-src 'self' 'unsafe-inline'` (Next.js inline bootstrap scripts), no
-`'unsafe-eval'` in production, no third-party origins, `object-src 'none'`, `base-uri 'none'`,
-`frame-ancestors 'none'`. Verified in the built app by the E2E suite (hydration works; no CSP violations).
-Must be revisited before Stage 7 renders owner-supplied content (nonce via `proxy.ts` on dynamic routes, or
-hashes).
+**CSP (closes F-04 / KI-06):** documents get a strict per-request policy from `src/proxy.ts`
+(`src/lib/security/csp.ts`): `script-src 'self' 'nonce-…' 'strict-dynamic'`, `style-src 'self' 'nonce-…'`
+(no `'unsafe-inline'` anywhere; Tailwind is a same-origin stylesheet and no inline `style` attributes are
+rendered), `object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'`, `form-action 'self'`,
+`connect-src 'self'`. `next dev` adds `'unsafe-eval'` and inline styles only. `/api/*` and `/healthz` get
+`default-src 'none'`.
+
+Decision and evidence: with `cacheComponents` (PPR) the build-time static shell contains framework
+`<script>` tags **without** a nonce (observed: 10 un-nonced scripts on `/about`), which `'strict-dynamic'`
+blocks; making the root layout dynamic under PPR fixed the nonces but a resumed render cannot change the
+shell's HTTP status, so `notFound()` returned 200 and `redirect()` became client-side. `cacheComponents` and
+`partialPrefetching` are therefore **off** and the root layout calls `connection()`: every document is
+rendered per request. Trade-off: no static/CDN-cacheable HTML and more server CPU per page view (the site is
+small, and authenticated pages are per-user anyway). The root `loading.tsx` was removed so redirects and 404s
+keep real status codes. `e2e/csp.spec.ts` checks every page (anonymous and signed in) in the production build:
+fresh nonce per response, every `<script>`/`<style>` carries it, no inline style attributes, zero
+`securitypolicyviolation` events, hydration works, and an injected un-nonced inline script is blocked.
 
 ## Containers
 

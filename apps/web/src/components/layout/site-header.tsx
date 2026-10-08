@@ -1,8 +1,10 @@
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { Logo } from "@/components/logo";
 import { PRIMARY_NAV } from "@/lib/navigation";
 
+import { HeaderAccount, HeaderAccountFallback } from "./header-account";
 import { MobileNav } from "./mobile-nav";
 import { NavLink } from "./nav-link";
 
@@ -31,7 +33,12 @@ export function SiteHeader() {
             ))}
           </ul>
         </nav>
-        <MobileNav items={PRIMARY_NAV} />
+        <div className="flex items-center gap-2">
+          <Suspense fallback={<HeaderAccountFallback />}>
+            <HeaderAccount />
+          </Suspense>
+          <MobileNav items={PRIMARY_NAV} />
+        </div>
       </div>
     </header>
   );

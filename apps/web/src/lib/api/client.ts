@@ -14,9 +14,14 @@
  *   retrying. POST/PUT/PATCH/DELETE are NEVER retried automatically: a timeout on a mutation has an
  *   UNKNOWN outcome (CLAUDE.md rule 9); the caller must re-query state or retry deliberately with the
  *   same Idempotency-Key.
- * - No auth tokens are handled here. Session cookies (Stage 4) are first-party HttpOnly cookies and are
- *   never readable by this code.
+ * - Auth (Stage 4, interface-contracts §4.1): the session is a first-party HttpOnly cookie that this code
+ *   never sees. Requests use `credentials: "same-origin"`. On unsafe methods (POST/PUT/PATCH/DELETE) the
+ *   client sends `X-CSRF-Token`, read from the readable CSRF cookie via the `csrfToken` option (the browser
+ *   client reads `__Host-fz_csrf`/`fz_csrf` from document.cookie). Callers cannot override that header.
+ *   Nothing is ever written to localStorage/sessionStorage.
  */
+import { readCsrfToken } from "../auth/cookies";
+
 import { AbortedError, ApiError, ClientErrorCode, NetworkError, TimeoutError } from "./errors";
 import type { ApiErrorBody, ApiMeta, ApiSuccess } from "./types";
 
@@ -46,6 +51,8 @@ export interface ApiClientOptions {
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   random?: () => number;
   generateRequestId?: () => string;
+  /** Returns the CSRF token to send on unsafe methods (undefined → header omitted). */
+  csrfToken?: () => string | undefined;
 }
 
 export interface RequestOptions {
@@ -143,6 +150,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   const sleep = options.sleep ?? defaultSleep;
   const random = options.random ?? Math.random;
   const newRequestId = options.generateRequestId ?? generateRequestId;
+  const csrfToken = options.csrfToken;
 
   async function attempt<T>(
     method: HttpMethod,
@@ -159,6 +167,13 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       ...opts.headers,
       "X-Request-ID": requestId,
     };
+    for (const name of Object.keys(headers)) {
+      if (name.toLowerCase() === "x-csrf-token") delete headers[name];
+    }
+    if (!SAFE_METHODS.has(method) && csrfToken) {
+      const token = csrfToken();
+      if (token) headers["X-CSRF-Token"] = token;
+    }
     let body: string | undefined;
     if (opts.body !== undefined) {
       if (SAFE_METHODS.has(method)) throw new Error(`${method} requests cannot have a body`);
@@ -175,6 +190,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         body,
         signal,
         cache: opts.cache ?? "no-store",
+        credentials: "same-origin",
         redirect: "error",
       });
       text = method === "HEAD" ? "" : await response.text();
@@ -288,5 +304,10 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   };
 }
 
+function documentCsrfToken(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  return readCsrfToken(document.cookie);
+}
+
 /** Browser/same-origin client. Safe to import from client components: holds no configuration secrets. */
-export const browserApi: ApiClient = createApiClient({ baseUrl: "" });
+export const browserApi: ApiClient = createApiClient({ baseUrl: "", csrfToken: documentCsrfToken });

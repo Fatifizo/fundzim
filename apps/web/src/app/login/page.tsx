@@ -1,19 +1,22 @@
 import type { Metadata } from "next";
 
-import { StagePlaceholder } from "@/components/stage-placeholder";
+import { AuthShell, PreviewAccountNotice } from "@/components/auth/auth-shell";
+import { LoginForm } from "@/components/auth/login-form";
+import { afterLoginPath, safeNextPath } from "@/lib/auth/safe-redirect";
+import { redirectIfAuthenticated } from "@/lib/auth/session";
 
 export const metadata: Metadata = {
   title: "Sign in",
   robots: { index: false, follow: false },
 };
 
-export default function Page() {
+export default async function LoginPage({ searchParams }: PageProps<"/login">) {
+  const params = await searchParams;
+  const next = safeNextPath(typeof params.next === "string" ? params.next : null);
+  await redirectIfAuthenticated(afterLoginPath(next));
   return (
-    <StagePlaceholder
-      title="Sign in"
-      stage="Stage 4"
-      description="Accounts do not exist yet, so there is nothing to sign in to. Please do not share any passwords or codes on this site."
-      planned={["Sign in with your phone number or email address", "One-time codes for sign-in", "Stronger protection for staff accounts"]}
-    />
+    <AuthShell title="Sign in" intro="Welcome back to FundZim." footer={<PreviewAccountNotice />}>
+      <LoginForm next={next} />
+    </AuthShell>
   );
 }

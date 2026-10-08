@@ -1,22 +1,6 @@
-import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-/** Collects CSP violations and uncaught page errors (e.g. a CSP that breaks hydration). */
-function watchForBreakage(page: Page) {
-  const problems: string[] = [];
-  page.on("pageerror", (error) => problems.push(`pageerror: ${error.message}`));
-  page.on("console", (msg) => {
-    if (msg.type() === "error" && /Content Security Policy|Refused to/i.test(msg.text())) problems.push(msg.text());
-  });
-  return problems;
-}
-
-async function seriousAxeViolations(page: Page) {
-  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
-  return results.violations
-    .filter((v) => v.impact === "serious" || v.impact === "critical")
-    .map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target.join(" ")) }));
-}
+import { seriousAxeViolations, watchForBreakage } from "./helpers";
 
 test("homepage renders key sections, honest notices and security headers", async ({ page }) => {
   const problems = watchForBreakage(page);
@@ -25,6 +9,7 @@ test("homepage renders key sections, honest notices and security headers", async
   const headers = response!.headers();
   expect(headers["content-security-policy"]).toContain("frame-ancestors 'none'");
   expect(headers["content-security-policy"]).not.toContain("unsafe-eval");
+  expect(headers["content-security-policy"]).not.toContain("unsafe-inline");
   expect(headers["x-content-type-options"]).toBe("nosniff");
   expect(headers["x-frame-options"]).toBe("DENY");
   expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
@@ -34,8 +19,9 @@ test("homepage renders key sections, honest notices and security headers", async
   await expect(page.getByText(/Development preview — FundZim is not open for fundraising/)).toBeVisible();
   await expect(page.getByText("Payments are not live yet")).toBeVisible();
   await expect(page.getByText("Design preview — not a real campaign")).toBeVisible();
-  // API is intentionally unreachable in this run: the footer degrades gracefully.
+  // API is intentionally unreachable in this run: the footer degrades gracefully and the header offers sign-in.
   await expect(page.getByText(/Platform API: not reachable right now/)).toBeVisible();
+  await expect(page.getByRole("banner").getByRole("link", { name: "Sign In" })).toHaveAttribute("href", "/login");
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
 
   expect(await seriousAxeViolations(page)).toEqual([]);
@@ -69,8 +55,8 @@ test("campaign slugs are never rendered as campaigns", async ({ page }) => {
 });
 
 test("placeholder pages are accessible and have no forms", async ({ page }) => {
-  await page.goto("/login");
-  await expect(page.getByText(/Coming soon — under development \(Stage 4\)/)).toBeVisible();
+  await page.goto("/start");
+  await expect(page.getByText(/Coming soon — under development \(Stage 6\)/)).toBeVisible();
   await expect(page.locator("main form, main input")).toHaveCount(0);
   expect(await seriousAxeViolations(page)).toEqual([]);
 });
@@ -99,7 +85,7 @@ test.describe("mobile menu", () => {
     await button.click();
     await expect(button).toHaveAttribute("aria-expanded", "true");
     const menu = page.getByRole("navigation", { name: "Main menu" });
-    await expect(menu.getByRole("link", { name: "Sign In" })).toBeVisible();
+    await expect(menu.getByRole("link", { name: "How It Works" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(button).toHaveAttribute("aria-expanded", "false");
     await expect(menu).toBeHidden();

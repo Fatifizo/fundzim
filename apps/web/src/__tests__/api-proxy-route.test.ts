@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DELETE, GET, POST } from "@/app/api/v1/[...path]/route";
+import { clearPeerHeaderName, setPeerHeaderName } from "@/lib/net/peer-header";
 
 function req(url: string, init?: RequestInit): NextRequest {
   return new Request(url, init) as unknown as NextRequest;
@@ -17,6 +18,7 @@ describe("/api/v1 runtime proxy", () => {
   });
 
   afterEach(() => {
+    clearPeerHeaderName();
     fetchMock.mockReset();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
@@ -107,5 +109,36 @@ describe("/api/v1 runtime proxy", () => {
     const res = await GET(req("http://web.local/api/v1/health"));
     expect(res.status).toBe(503);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  describe("client address forwarding (F-02)", () => {
+    const PEER = "x-fz-peer-unit";
+
+    async function forwardedFor(headers: Record<string, string>) {
+      fetchMock.mockResolvedValueOnce(Response.json({ data: {}, meta: { request_id: "r" } }));
+      await GET(req("http://web.local/api/v1/x", { headers }));
+      return new Headers(fetchMock.mock.calls.at(-1)![1]?.headers);
+    }
+
+    it("replaces a spoofed X-Forwarded-For with the observed peer and never forwards internal headers", async () => {
+      setPeerHeaderName(PEER);
+      const sent = await forwardedFor({ [PEER]: "203.0.113.9", "X-Forwarded-For": "6.6.6.6", "X-Real-IP": "7.7.7.7", "x-fz-peer-other": "1.1.1.1" });
+      expect(sent.get("x-forwarded-for")).toBe("203.0.113.9");
+      expect(sent.get("x-real-ip")).toBeNull();
+      expect([...sent.keys()].filter((k) => k.startsWith("x-fz-peer-"))).toEqual([]);
+    });
+
+    it("behind a trusted reverse proxy takes the right-most untrusted X-Forwarded-For entry", async () => {
+      vi.stubEnv("WEB_TRUSTED_PROXY_CIDRS", "10.0.0.0/8");
+      setPeerHeaderName(PEER);
+      const sent = await forwardedFor({ [PEER]: "10.0.0.5", "X-Forwarded-For": "6.6.6.6, 198.51.100.4" });
+      expect(sent.get("x-forwarded-for")).toBe("198.51.100.4");
+    });
+
+    it("without a peer stamp sends no X-Forwarded-For at all", async () => {
+      const sent = await forwardedFor({ "X-Forwarded-For": "6.6.6.6", [PEER]: "6.6.6.6" });
+      expect(sent.get("x-forwarded-for")).toBeNull();
+      expect(sent.get(PEER)).toBeNull();
+    });
   });
 });

@@ -14,8 +14,9 @@ describe("SiteHeader", () => {
       ["Explore", "/explore"],
       ["How It Works", "/how-it-works"],
       ["Start a Fundraiser", "/start"],
-      ["Sign In", "/login"],
     ]);
+    // Sign-in / account menu sits outside the main nav (session-aware slot, mocked in src/test/setup.tsx).
+    expect(screen.getByRole("link", { name: "Sign In" })).toHaveAttribute("href", "/login");
   });
 
   it("toggles the mobile menu with aria-expanded", async () => {
@@ -31,7 +32,7 @@ describe("SiteHeader", () => {
     await user.click(button);
     expect(button).toHaveAttribute("aria-expanded", "true");
     expect(panel).toBeVisible();
-    expect(within(panel!).getByRole("link", { name: "Sign In" })).toBeVisible();
+    expect(within(panel!).getByRole("link", { name: "How It Works" })).toBeVisible();
 
     await user.click(button);
     expect(button).toHaveAttribute("aria-expanded", "false");

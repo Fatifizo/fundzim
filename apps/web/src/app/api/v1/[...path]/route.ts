@@ -11,6 +11,12 @@
  *  - Fixed upstream origin (no SSRF): only the path and query of the incoming URL are forwarded.
  *  - Hop-by-hop headers and client-supplied forwarding headers are stripped (the API must not trust a
  *    browser-supplied X-Forwarded-For); `Host` is set by fetch for the upstream.
+ *  - Client address (security review F-02 / KI-04): `X-Forwarded-For` is REPLACED by exactly one address,
+ *    the client this process actually observed (src/lib/net/client-ip.ts): the TCP peer, or — only when
+ *    the peer is in WEB_TRUSTED_PROXY_CIDRS — the right-most untrusted X-Forwarded-For entry. If the peer
+ *    is unknown, no X-Forwarded-For is sent (the API then sees the web container; coarse, not spoofable).
+ *    The API trusts X-Forwarded-For only from the web container's address (TRUSTED_PROXY_CIDRS).
+ *  - Internal `x-fz-peer-*` headers never leave this process.
  *  - Request body capped at MAX_BODY_BYTES (413 PAYLOAD_TOO_LARGE), upstream timeout UPSTREAM_TIMEOUT_MS.
  *  - Never retries: a forwarded mutation with an unknown outcome is reported, not replayed.
  *  - Redirects are passed through (redirect: "manual"), not followed.
@@ -19,6 +25,7 @@ import type { NextRequest } from "next/server";
 
 import { generateRequestId, isValidRequestId } from "@/lib/api/client";
 import { ApiConfigError, resolveApiBaseUrl } from "@/lib/api/config";
+import { clientIpFromHeaders, isInternalHeader } from "@/lib/net/client-ip";
 
 const MAX_BODY_BYTES = 1024 * 1024; // 1 MiB; file uploads use presigned URLs (Stage 5/6)
 const UPSTREAM_TIMEOUT_MS = 30_000;
@@ -37,7 +44,14 @@ const HOP_BY_HOP = new Set([
   "content-length",
 ]);
 
-const STRIP_FROM_CLIENT = new Set(["forwarded", "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "x-real-ip"]);
+const STRIP_FROM_CLIENT = new Set([
+  "forwarded",
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-port",
+  "x-forwarded-proto",
+  "x-real-ip",
+]);
 
 // fetch() transparently decompresses, so upstream encoding/length headers no longer describe the body.
 const STRIP_FROM_UPSTREAM = new Set(["content-encoding", "content-length"]);
@@ -117,10 +131,12 @@ async function forward(request: NextRequest): Promise<Response> {
   const headers = new Headers();
   request.headers.forEach((value, key) => {
     const name = key.toLowerCase();
-    if (HOP_BY_HOP.has(name) || STRIP_FROM_CLIENT.has(name) || dropped.has(name)) return;
+    if (HOP_BY_HOP.has(name) || STRIP_FROM_CLIENT.has(name) || dropped.has(name) || isInternalHeader(name)) return;
     headers.append(key, value);
   });
   headers.set("X-Request-ID", requestId);
+  const clientIp = clientIpFromHeaders(request.headers);
+  if (clientIp) headers.set("X-Forwarded-For", clientIp);
 
   let body: Uint8Array | undefined;
   try {
