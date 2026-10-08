@@ -49,33 +49,6 @@ func RequestIDMiddleware(trusted []netip.Prefix) func(http.Handler) http.Handler
 	}
 }
 
-// ClientIP returns the client address. X-Forwarded-For is honoured only when the direct peer is a
-// trusted proxy; the right-most untrusted address is used.
-func ClientIP(r *http.Request, trusted []netip.Prefix) netip.Addr {
-	peer := peerAddr(r)
-	if !inPrefixes(peer, trusted) {
-		return peer
-	}
-	xff := r.Header.Values("X-Forwarded-For")
-	var hops []string
-	for _, v := range xff {
-		for _, part := range splitComma(v) {
-			hops = append(hops, part)
-		}
-	}
-	for i := len(hops) - 1; i >= 0; i-- {
-		a, err := netip.ParseAddr(hops[i])
-		if err != nil {
-			break
-		}
-		a = a.Unmap()
-		if !inPrefixes(a, trusted) {
-			return a
-		}
-	}
-	return peer
-}
-
 func peerTrusted(r *http.Request, trusted []netip.Prefix) bool {
 	return inPrefixes(peerAddr(r), trusted)
 }
@@ -89,7 +62,7 @@ func peerAddr(r *http.Request) netip.Addr {
 	if err != nil {
 		return netip.Addr{}
 	}
-	return a.Unmap()
+	return a.Unmap().WithZone("")
 }
 
 func inPrefixes(a netip.Addr, ps []netip.Prefix) bool {
@@ -102,25 +75,4 @@ func inPrefixes(a netip.Addr, ps []netip.Prefix) bool {
 		}
 	}
 	return false
-}
-
-func splitComma(s string) []string {
-	var out []string
-	start := 0
-	for i := 0; i <= len(s); i++ {
-		if i == len(s) || s[i] == ',' {
-			part := s[start:i]
-			for len(part) > 0 && part[0] == ' ' {
-				part = part[1:]
-			}
-			for len(part) > 0 && part[len(part)-1] == ' ' {
-				part = part[:len(part)-1]
-			}
-			if part != "" {
-				out = append(out, part)
-			}
-			start = i + 1
-		}
-	}
-	return out
 }

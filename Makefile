@@ -25,7 +25,8 @@ LDFLAGS    := -s -w -X github.com/Fatifizo/fundzim/internal/platform/version.Ver
               -X github.com/Fatifizo/fundzim/internal/platform/version.BuildTime=$(BUILD_TIME)
 
 .PHONY: help env up dev down logs ps build test test-go test-web test-integration test-e2e lint fmt \
-        migrate-up migrate-down migrate-status openapi-lint db-validate security clean reset web-install
+        migrate-up migrate-down migrate-status openapi-lint db-validate security clean reset web-install \
+        worker worker-logs mail
 
 help: ## List available targets
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-17s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -45,6 +46,15 @@ dev: ## Start infrastructure in docker, then run the API and the web app on the 
 
 down: ## Stop the local stack (keeps data volumes)
 	$(COMPOSE) down
+
+worker: ## Run the background worker on the host (needs postgres + migrations; DATABASE_WORKER_URL from .env)
+	$(WITH_ENV) $(GO) run ./apps/api/cmd/worker
+
+worker-logs: ## Follow the worker container's logs
+	$(COMPOSE) logs -f --tail=100 fundzim-worker
+
+mail: ## Print the local Mailpit URL (email and dev SMS land there)
+	@echo "Mailpit: http://127.0.0.1:$${MAIL_UI_HOST_PORT:-8025}"
 
 logs: ## Follow logs of all local services
 	$(COMPOSE) logs -f --tail=100

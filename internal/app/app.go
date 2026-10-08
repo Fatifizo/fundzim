@@ -12,13 +12,20 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 
+	"github.com/Fatifizo/fundzim/internal/auth"
+	"github.com/Fatifizo/fundzim/internal/notifications"
+	"github.com/Fatifizo/fundzim/internal/organisations"
 	"github.com/Fatifizo/fundzim/internal/platform/cache"
+	"github.com/Fatifizo/fundzim/internal/platform/clock"
 	"github.com/Fatifizo/fundzim/internal/platform/config"
 	"github.com/Fatifizo/fundzim/internal/platform/db"
 	"github.com/Fatifizo/fundzim/internal/platform/health"
 	"github.com/Fatifizo/fundzim/internal/platform/httpx"
+	"github.com/Fatifizo/fundzim/internal/platform/idempotency"
 	"github.com/Fatifizo/fundzim/internal/platform/metrics"
+	"github.com/Fatifizo/fundzim/internal/platform/ratelimit"
 	"github.com/Fatifizo/fundzim/internal/platform/storage"
 	"github.com/Fatifizo/fundzim/internal/platform/version"
 	"github.com/Fatifizo/fundzim/migrations"
@@ -36,8 +43,14 @@ type Deps struct {
 	Version version.Info
 	// ExpectedSchemaVersion is the migration version this binary requires (defaults to the embedded one).
 	ExpectedSchemaVersion int64
-	// Now is the clock used by rate limiting (injected for tests).
+	// Now is the clock used by readiness caching (injected for tests).
 	Now func() time.Time
+
+	// Stage 4 identity. Auth is nil only in tests that exercise the bare platform router.
+	Limiter     ratelimit.Limiter
+	Idempotency *idempotency.Store
+	Auth        *auth.Service
+	Orgs        *organisations.Service
 }
 
 // NewDeps connects the dependencies described by cfg. The database pool is lazy: a database that is
@@ -92,6 +105,30 @@ func NewDeps(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Deps
 			return nil, err
 		}
 		d.Storage = sc
+	}
+
+	var sc redis.Scripter
+	if d.Redis != nil {
+		sc = d.Redis.Scripter()
+	}
+	d.Limiter = ratelimit.New(sc, ratelimit.Options{Metrics: ratelimit.NewMetrics(d.Metrics.Registry), Logger: logger})
+	d.Idempotency = idempotency.NewStore(pool, clock.System, 24*time.Hour)
+	d.Idempotency.SetLease(cfg.HTTP.RequestTimeout + 30*time.Second)
+	email, err := notifications.NewEmailSender(cfg.Email)
+	if err != nil {
+		d.Close()
+		return nil, err
+	}
+	sms, err := notifications.NewSMSSender(cfg.SMS, email)
+	if err != nil {
+		d.Close()
+		return nil, err
+	}
+	d.Auth, d.Orgs, err = NewAuthService(ctx, IdentityDeps{Pool: pool, Config: cfg, Clock: clock.System, Logger: logger,
+		Limiter: d.Limiter, SMS: sms})
+	if err != nil {
+		d.Close()
+		return nil, err
 	}
 	return d, nil
 }

@@ -5,6 +5,7 @@
 //	fundzimctl migrate status        list migrations and whether they are applied
 //	fundzimctl migrate version       print the applied and the embedded (expected) version
 //	fundzimctl migrate down          roll back ONE migration — development and test only
+//	fundzimctl bootstrap-admins ...  one-time, audited creation of the first two SUPER_ADMINs (see -h)
 //	fundzimctl version               print build information
 //	fundzimctl healthcheck [url]     exit 0 if url (default http://127.0.0.1:8080/healthz) answers 200;
 //	                                 used as the container HEALTHCHECK (the runtime image has no shell or curl)
@@ -14,7 +15,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"flag"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -22,7 +25,11 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver "pgx" for goose
 	"github.com/pressly/goose/v3"
 
+	"github.com/Fatifizo/fundzim/internal/app"
+	"github.com/Fatifizo/fundzim/internal/auth"
+	"github.com/Fatifizo/fundzim/internal/platform/clock"
 	"github.com/Fatifizo/fundzim/internal/platform/config"
+	"github.com/Fatifizo/fundzim/internal/platform/db"
 	"github.com/Fatifizo/fundzim/internal/platform/version"
 	"github.com/Fatifizo/fundzim/migrations"
 )
@@ -34,6 +41,7 @@ const usage = `usage: fundzimctl <command>
   migrate status     show migration status
   migrate version    show applied and expected schema versions
   migrate down       roll back the most recent migration (development/test only)
+  bootstrap-admins   one-time super-admin bootstrap ceremony (flags: -h)
   version            show build information
   healthcheck [url]  probe a health URL (container health checks)`
 
@@ -68,6 +76,8 @@ func run(args []string) error {
 		}
 		fmt.Println("configuration OK")
 		return nil
+	case "bootstrap-admins":
+		return bootstrapAdmins(args[1:])
 	case "migrate":
 		if len(args) != 2 {
 			return errors.New(usage)
@@ -156,5 +166,45 @@ func migrate(cmd string) error {
 	default:
 		return errors.New(usage)
 	}
+	return nil
+}
+
+// bootstrapAdmins runs the super-admin bootstrap ceremony (auth.BootstrapSuperAdmins). It refuses when any
+// active SUPER_ADMIN exists. The two people receive staff invitation emails (sent by the worker) and must
+// set a password and enrol TOTP before they can sign in. Nothing secret is printed.
+func bootstrapAdmins(args []string) error {
+	fs := flag.NewFlagSet("bootstrap-admins", flag.ContinueOnError)
+	aEmail := fs.String("admin-a-email", "", "first administrator's work email")
+	aName := fs.String("admin-a-name", "", "first administrator's display name")
+	bEmail := fs.String("admin-b-email", "", "second administrator's work email (must differ)")
+	bName := fs.String("admin-b-name", "", "second administrator's display name")
+	just := fs.String("justification", "", "ceremony justification recorded in the audit log (10-1000 chars)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, err := config.FromEnv()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	pool, err := db.NewPool(ctx, db.Options{URL: cfg.Database.URL.Reveal(), MaxConns: 2, ConnectTimeout: cfg.Database.ConnectTimeout,
+		AppName: "fundzimctl-bootstrap"})
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	svc, _, err := app.NewAuthService(ctx, app.IdentityDeps{Pool: pool, Config: cfg, Clock: clock.System, Logger: logger})
+	if err != nil {
+		return err
+	}
+	ids, err := svc.BootstrapSuperAdmins(ctx, auth.BootstrapAdmin{Email: *aEmail, DisplayName: *aName},
+		auth.BootstrapAdmin{Email: *bEmail, DisplayName: *bName}, *just)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("bootstrap complete: SUPER_ADMIN granted to staff accounts %s and %s (audited).\n", ids[0], ids[1])
+	fmt.Println("Both must accept their invitation email (password + TOTP) before signing in.")
 	return nil
 }

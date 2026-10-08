@@ -6,12 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/netip"
 	"runtime/debug"
 	"slices"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
@@ -215,101 +212,13 @@ func CORS(allowed []string) Middleware {
 			h.Set("Access-Control-Expose-Headers", HeaderRequestID+", Retry-After")
 			if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
 				h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE")
-				h.Set("Access-Control-Allow-Headers", "Content-Type, Idempotency-Key, "+HeaderRequestID)
+				h.Set("Access-Control-Allow-Headers", "Content-Type, Idempotency-Key, X-CSRF-Token, "+HeaderRequestID)
 				h.Set("Access-Control-Max-Age", "600")
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
 			next.ServeHTTP(w, r)
 		})
-	}
-}
-
-// RateLimiter limits requests per client key. Implementations must fail open only when the limiter
-// itself is broken, never by default.
-type RateLimiter interface {
-	Allow(key string) (ok bool, retryAfter time.Duration)
-}
-
-// RateLimit applies a coarse per-client-IP limit. Infrastructure probes are exempt.
-func RateLimit(l RateLimiter, trusted []netip.Prefix, logger *slog.Logger) Middleware {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" {
-				next.ServeHTTP(w, r)
-				return
-			}
-			ip := ClientIP(r, trusted)
-			if ok, retry := l.Allow(ip.String()); !ok {
-				secs := int(retry.Round(time.Second) / time.Second)
-				if secs < 1 {
-					secs = 1
-				}
-				w.Header().Set("Retry-After", strconv.Itoa(secs))
-				WriteError(w, r, logger, errs.New(errs.RateLimited, errs.CodeRateLimited, "Too many requests. Please slow down."))
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-// MemoryRateLimiter is an in-process token bucket per key. It is the safe fallback when Redis is absent
-// (ARCHITECTURE §8.2); with several API replicas the effective limit is per replica.
-type MemoryRateLimiter struct {
-	mu      sync.Mutex
-	rate    float64 // tokens per second
-	burst   float64
-	buckets map[string]*bucket
-	now     func() time.Time
-	maxKeys int
-}
-
-type bucket struct {
-	tokens float64
-	last   time.Time
-}
-
-// NewMemoryRateLimiter returns a limiter allowing rps sustained and burst at once per key.
-func NewMemoryRateLimiter(rps float64, burst int, now func() time.Time) *MemoryRateLimiter {
-	if now == nil {
-		now = time.Now
-	}
-	return &MemoryRateLimiter{rate: rps, burst: float64(burst), buckets: map[string]*bucket{}, now: now, maxKeys: 100_000}
-}
-
-// Allow consumes one token for key.
-func (m *MemoryRateLimiter) Allow(key string) (bool, time.Duration) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	now := m.now()
-	b, ok := m.buckets[key]
-	if !ok {
-		if len(m.buckets) >= m.maxKeys {
-			m.evict(now)
-		}
-		b = &bucket{tokens: m.burst, last: now}
-		m.buckets[key] = b
-	}
-	b.tokens += now.Sub(b.last).Seconds() * m.rate
-	if b.tokens > m.burst {
-		b.tokens = m.burst
-	}
-	b.last = now
-	if b.tokens >= 1 {
-		b.tokens--
-		return true, 0
-	}
-	need := (1 - b.tokens) / m.rate
-	return false, time.Duration(need * float64(time.Second))
-}
-
-// evict drops full (idle) buckets to bound memory.
-func (m *MemoryRateLimiter) evict(now time.Time) {
-	for k, b := range m.buckets {
-		if b.tokens+now.Sub(b.last).Seconds()*m.rate >= m.burst {
-			delete(m.buckets, k)
-		}
 	}
 }
 

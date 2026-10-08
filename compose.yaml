@@ -1,8 +1,9 @@
 # FundZim local development environment — NOT for production.
 #
 #   ./scripts/dev-env-init.sh          # once: creates .env with generated local secrets (never overwrites)
-#   docker compose up -d --build       # postgres, redis (valkey), storage (garage), migrations, api, web
-#   docker compose --profile tools up -d fundzim-mail   # optional local mail catcher
+#   docker compose up -d --build       # postgres, redis (valkey), storage (garage), migrations, api, worker,
+#                                      # web, mail (Mailpit: UI http://127.0.0.1:8025)
+#   docker compose --profile scale-test up -d fundzim-api-2   # second API replica on 127.0.0.1:8081
 #
 # Every published port binds to 127.0.0.1 only. Images are pinned to exact versions.
 # Secrets come from .env (git-ignored). Nothing here may ever point at a real payment provider.
@@ -11,6 +12,27 @@ name: fundzim
 x-logging: &logging
   driver: json-file
   options: { max-size: "10m", max-file: "3" }
+
+x-common-env: &common-env
+  APP_ENV: development
+  APP_NAME: FundZim
+  APP_PUBLIC_URL: http://localhost:3000
+  INTERNAL_HTTP_HOST: 0.0.0.0           # reachable only via the 127.0.0.1-bound port below
+  LOG_FORMAT: json
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  SHUTDOWN_TIMEOUT: 20s
+  DATABASE_URL: postgres://fundzim_app:${POSTGRES_APP_PASSWORD:?}@fundzim-postgres:5432/fundzim?sslmode=disable
+  # Mail and SMS go to the local Mailpit catcher only.
+  EMAIL_PROVIDER: smtp
+  SMTP_HOST: fundzim-mail
+  SMTP_PORT: "1025"
+  SMTP_TLS: none
+  EMAIL_FROM: FundZim <no-reply@fundzim.invalid>
+  SMS_PROVIDER: dev_mailpit
+  CSRF_SECRET: ${CSRF_SECRET:?run scripts/dev-env-init.sh}
+  FIELD_ENCRYPTION_PROVIDER: local
+  FIELD_ENCRYPTION_LOCAL_KEY: ${FIELD_ENCRYPTION_LOCAL_KEY:?run scripts/dev-env-init.sh}
+  BLIND_INDEX_KEY: ${BLIND_INDEX_KEY:?run scripts/dev-env-init.sh}
 
 services:
   fundzim-postgres:
@@ -119,23 +141,20 @@ services:
     build: *api-build
     image: fundzim/api:local
     restart: unless-stopped
-    depends_on:
+    depends_on: &api-depends
       fundzim-migrate: { condition: service_completed_successfully }
       fundzim-storage-init: { condition: service_completed_successfully }
       fundzim-redis: { condition: service_healthy }
-    environment:
-      APP_ENV: development
-      APP_NAME: FundZim
+      fundzim-mail: { condition: service_started }
+    environment: &api-env
+      <<: *common-env
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: "8080"
-      INTERNAL_HTTP_HOST: 0.0.0.0           # reachable only via the 127.0.0.1-bound port below
       INTERNAL_HTTP_PORT: "9090"
-      LOG_FORMAT: json
-      LOG_LEVEL: ${LOG_LEVEL:-info}
       REQUEST_TIMEOUT: 15s
-      SHUTDOWN_TIMEOUT: 20s
-      TRUSTED_PROXY_CIDRS: 172.16.0.0/12    # the web container's same-origin proxy on the compose network
-      DATABASE_URL: postgres://fundzim_app:${POSTGRES_APP_PASSWORD:?}@fundzim-postgres:5432/fundzim?sslmode=disable
+      # Only the web container's same-origin proxy (fixed address below) may set X-Forwarded-For.
+      # Requests from the host arrive from the Docker gateway (172.28.0.1), which is NOT trusted.
+      TRUSTED_PROXY_CIDRS: 172.28.0.10/32
       REDIS_URL: redis://:${REDIS_PASSWORD:?}@fundzim-redis:6379/0
       REDIS_REQUIRED: "false"
       STORAGE_ENDPOINT: http://fundzim-storage:3900
@@ -157,6 +176,47 @@ services:
     mem_limit: 512m
     logging: *logging
 
+  fundzim-api-2:
+    # Second API replica for distributed rate-limit tests:  docker compose --profile scale-test up -d
+    build: *api-build
+    image: fundzim/api:local
+    profiles: ["scale-test"]
+    restart: unless-stopped
+    depends_on: *api-depends
+    environment: *api-env
+    ports:
+      - "127.0.0.1:${API2_HOST_PORT:-8081}:8080"
+    stop_grace_period: 25s
+    mem_limit: 512m
+    logging: *logging
+
+  fundzim-worker:
+    # Background worker: River job queue, outbox relay/delivery, notifications, maintenance.
+    build: *api-build
+    image: fundzim/api:local
+    restart: unless-stopped
+    depends_on:
+      fundzim-migrate: { condition: service_completed_successfully }
+      fundzim-mail: { condition: service_started }
+    entrypoint: ["/usr/local/bin/worker"]
+    environment:
+      <<: *common-env                      # no storage or Redis credentials: the worker does not use them
+      DATABASE_WORKER_URL: postgres://fundzim_worker:${POSTGRES_WORKER_PASSWORD:?}@fundzim-postgres:5432/fundzim?sslmode=disable
+      WORKER_INTERNAL_HTTP_PORT: "9091"
+      WORKER_CONCURRENCY: "4"
+      SHUTDOWN_TIMEOUT: 30s
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/fundzimctl", "healthcheck", "http://127.0.0.1:9091/healthz"]
+      interval: 10s
+      timeout: 4s
+      start_period: 10s
+      retries: 3
+    ports:
+      - "127.0.0.1:${WORKER_INTERNAL_HOST_PORT:-9091}:9091"
+    stop_grace_period: 35s
+    mem_limit: 256m
+    logging: *logging
+
   fundzim-web:
     build:
       context: apps/web
@@ -167,20 +227,32 @@ services:
       fundzim-api: { condition: service_healthy }
     environment:
       API_BASE_URL: http://fundzim-api:8080
+    networks:
+      default:
+        ipv4_address: 172.28.0.10   # the API trusts X-Forwarded-For from this address only
     ports: ["127.0.0.1:${WEB_HOST_PORT:-3000}:3000"]
     mem_limit: 768m
     logging: *logging
 
   fundzim-mail:
-    # Optional local mail catcher (nothing sends mail in Stage 3).
+    # Local mail catcher (Mailpit): receives all email and dev_mailpit SMS. UI/API on 127.0.0.1:8025.
     image: axllent/mailpit:v1.31.4
-    profiles: ["tools"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:${MAIL_UI_HOST_PORT:-8025}:8025"
       - "127.0.0.1:${MAIL_SMTP_HOST_PORT:-1025}:1025"
     mem_limit: 128m
     logging: *logging
+
+networks:
+  default:
+    ipam:
+      config:
+        # Fixed subnet so the API can trust exactly the web container (172.28.0.10). Dynamic addresses
+        # come from the upper half, so no other container can take .10.
+        - subnet: 172.28.0.0/24
+          ip_range: 172.28.0.128/25
+          gateway: 172.28.0.1
 
 volumes:
   postgres-data:

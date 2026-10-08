@@ -9,9 +9,10 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/health"
 	"github.com/Fatifizo/fundzim/internal/platform/httpx"
 	"github.com/Fatifizo/fundzim/internal/platform/logging"
+	"github.com/Fatifizo/fundzim/internal/platform/ratelimit"
 )
 
-// NewRouter registers every Stage 3 route. Each route declares an access policy (deny by default).
+// NewRouter registers every route. Each route declares an access policy (deny by default).
 func NewRouter(d *Deps, checker *health.Checker) *httpx.Router {
 	r := httpx.NewRouter(d.Logger)
 
@@ -42,6 +43,11 @@ func NewRouter(d *Deps, checker *health.Checker) *httpx.Router {
 	r.HandleFunc("GET /api/v1/version", httpx.PolicyPublic, func(w http.ResponseWriter, req *http.Request) {
 		httpx.WriteData(w, req, http.StatusOK, d.Version)
 	})
+
+	if d.Auth != nil {
+		r.SetAuthorizer(d.Auth)
+		registerIdentityRoutes(r, d.Auth, d.Orgs, d.Idempotency, d.Logger)
+	}
 	return r
 }
 
@@ -66,12 +72,15 @@ func errString(err error) string {
 	return err.Error()
 }
 
-// PublicHandler wraps the router in the Stage 3 middleware chain (ARCHITECTURE §5 order; session
-// authentication, CSRF and idempotency arrive with the features that need them).
+// PublicHandler wraps the router in the middleware chain (ARCHITECTURE §5 order): request ID, trusted
+// client IP, access log, panic recovery, security headers, CORS, body limit, timeout, the distributed
+// global per-IP rate limit, session resolution and CSRF. Authorization runs per route in the router;
+// idempotency and per-route limits are route options.
 func PublicHandler(d *Deps, router http.Handler) http.Handler {
 	cfg := d.Config
 	mws := []httpx.Middleware{
 		httpx.RequestIDMiddleware(cfg.HTTP.TrustedProxyCIDRs),
+		httpx.ClientIPMiddleware(cfg.HTTP.TrustedProxyCIDRs),
 		httpx.AccessLog(d.Logger, d.Metrics),
 		httpx.Recover(d.Logger, d.Metrics.PanicRecovered),
 		httpx.SecurityHeaders(!cfg.App.Env.IsLocal()),
@@ -80,8 +89,15 @@ func PublicHandler(d *Deps, router http.Handler) http.Handler {
 		httpx.Timeout(cfg.HTTP.RequestTimeout),
 	}
 	if cfg.RateLimit.Enabled {
-		limiter := httpx.NewMemoryRateLimiter(cfg.RateLimit.RequestsPerS, cfg.RateLimit.Burst, d.Now)
-		mws = append(mws, httpx.RateLimit(limiter, cfg.HTTP.TrustedProxyCIDRs, d.Logger))
+		lim := d.Limiter
+		if lim == nil {
+			lim = ratelimit.New(nil, ratelimit.Options{Logger: d.Logger})
+		}
+		mws = append(mws, ratelimit.Middleware(lim, ratelimit.GlobalIPFromRate(cfg.RateLimit.RequestsPerS, cfg.RateLimit.Burst),
+			ratelimit.ByClientIP, d.Logger))
+	}
+	if d.Auth != nil {
+		mws = append(mws, d.Auth.SessionMiddleware(), d.Auth.CSRFMiddleware())
 	}
 	return httpx.Chain(router, mws...)
 }

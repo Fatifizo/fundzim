@@ -217,37 +217,6 @@ func TestBodyLimit(t *testing.T) {
 	}
 }
 
-func TestRateLimit(t *testing.T) {
-	now := time.Unix(1_700_000_000, 0)
-	lim := NewMemoryRateLimiter(1, 2, func() time.Time { return now })
-	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) })
-	h := RequestIDMiddleware(nil)(RateLimit(lim, nil, quietLogger(nil))(ok))
-	do := func(path string) *httptest.ResponseRecorder {
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest("GET", path, nil)
-		req.RemoteAddr = "198.51.100.7:1234"
-		h.ServeHTTP(rec, req)
-		return rec
-	}
-	if do("/a").Code != 204 || do("/a").Code != 204 {
-		t.Fatal("burst should pass")
-	}
-	rec := do("/a")
-	if rec.Code != 429 || rec.Header().Get("Retry-After") == "" {
-		t.Fatalf("expected 429 with Retry-After, got %d", rec.Code)
-	}
-	if e := decode(t, rec.Body); e.Error.Code != "RATE_LIMITED" {
-		t.Fatalf("bad code %+v", e.Error)
-	}
-	if do("/healthz").Code != 204 {
-		t.Fatal("probes must be exempt")
-	}
-	now = now.Add(time.Second)
-	if do("/a").Code != 204 {
-		t.Fatal("token should refill")
-	}
-}
-
 func TestClientIPHonoursForwardedOnlyFromTrustedPeers(t *testing.T) {
 	trusted := []netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}
 	req := httptest.NewRequest("GET", "/", nil)

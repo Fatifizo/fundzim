@@ -110,7 +110,7 @@ jobs:
         run: ./scripts/dev-env-init.sh
       - name: Start infrastructure, initialise storage, migrate
         run: |
-          docker compose up -d --wait fundzim-postgres fundzim-redis fundzim-storage
+          docker compose up -d --wait fundzim-postgres fundzim-redis fundzim-storage fundzim-mail
           docker compose up --exit-code-from fundzim-storage-init fundzim-storage-init
           docker compose up --build --exit-code-from fundzim-migrate fundzim-migrate
       - name: Start the API on the runner
@@ -119,15 +119,29 @@ jobs:
           go build -o bin/api ./apps/api/cmd/api
           LOG_FORMAT=json ./bin/api > api.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/api/v1/ready && break; sleep 1; done
-      - name: Integration tests (destructive migration round trip allowed on this throwaway database)
+      - name: Start the worker on the runner
         run: |
           set -a; . ./.env; set +a
-          FUNDZIM_IT_API_URL=http://127.0.0.1:8080 FUNDZIM_IT_DESTRUCTIVE=1 \
+          go build -o bin/worker ./apps/api/cmd/worker
+          LOG_FORMAT=json ./bin/worker > worker.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:9091/readyz && break; sleep 1; done
+      - name: Integration tests (identity end to end via the running worker and Mailpit)
+        run: |
+          set -a; . ./.env; set +a
+          FUNDZIM_IT_API_URL=http://127.0.0.1:8080 \
             go test -tags integration -count=1 -v ./tests/integration/...
+      - name: Destructive migration round trip (after stopping the API and worker; throwaway database)
+        run: |
+          pkill -f bin/worker || true
+          pkill -f bin/api || true
+          sleep 2
+          set -a; . ./.env; set +a
+          FUNDZIM_IT_DESTRUCTIVE=1 go test -tags integration -count=1 -v -run '^TestMigrationsAppliedAndRepeatable$' ./tests/integration/...
       - name: Logs on failure
         if: failure()
         run: |
           cat api.log || true
+          cat worker.log || true
           docker compose logs --no-color || true
       - if: always()
         run: docker compose down -v

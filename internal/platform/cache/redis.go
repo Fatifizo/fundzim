@@ -53,3 +53,7 @@ func (c *Client) Set(ctx context.Context, key, val string, ttl time.Duration) er
 
 // Close releases connections.
 func (c *Client) Close() error { return c.rdb.Close() }
+
+// Scripter exposes Lua script execution (EVAL/EVALSHA) for the distributed rate limiter. It is
+// deliberately narrower than the underlying client: callers can run scripts, not arbitrary commands.
+func (c *Client) Scripter() redis.Scripter { return c.rdb }

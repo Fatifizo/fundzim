@@ -24,6 +24,7 @@ const (
 	Conflict
 	Unprocessable
 	TooLarge
+	UnsupportedMediaType
 	RateLimited
 	Unavailable
 	Timeout
@@ -48,6 +49,8 @@ func (k Kind) Status() int {
 		return http.StatusUnprocessableEntity
 	case TooLarge:
 		return http.StatusRequestEntityTooLarge
+	case UnsupportedMediaType:
+		return http.StatusUnsupportedMediaType
 	case RateLimited:
 		return http.StatusTooManyRequests
 	case Unavailable:
