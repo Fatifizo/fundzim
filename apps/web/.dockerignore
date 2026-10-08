@@ -1,0 +1,15 @@
+# Build context for deploy/docker/web.Dockerfile is apps/web.
+node_modules
+.next
+out
+build
+coverage
+playwright-report
+test-results
+blob-report
+.env
+.env.*
+*.pem
+*.tsbuildinfo
+npm-debug.log*
+.DS_Store

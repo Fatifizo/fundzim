@@ -1,26 +1,99 @@
 @import "tailwindcss";
 
+/*
+ * FundZim design tokens (Stage 3).
+ *
+ * Palette: deep green (primary, trust/growth), warm gold (accent), off-white surfaces and
+ * charcoal text. Light theme only for now: dark mode is deliberately NOT shipped until it can
+ * be designed and contrast-checked properly (FRONTEND.md §6).
+ *
+ * Contrast ratios (WCAG 2.2 AA; computed from the hex values below with the WCAG formula):
+ *   ink-900 #1d2321 on canvas #faf7f0        14.9:1
+ *   ink-600 #4a524e on canvas #faf7f0         7.5:1   (secondary text)
+ *   brand-700 #1b5e40 on canvas #faf7f0       7.2:1   (links)
+ *   white on brand-700 #1b5e40                7.7:1   (primary buttons)
+ *   gold-800 #7a4f0e on gold-100 #fbf0d9      6.3:1   (badges/notices)
+ *   ink-900 on gold-400 #e0a93b               7.5:1   (gold buttons, dev banner)
+ *   white on brand-900 #0e3423               13.7:1   (hero / footer)
+ *   gold-400 on brand-900                     6.5:1   (hero accent text)
+ *   line-strong #8c8573 on canvas             3.4:1   (input/card borders that carry meaning)
+ *   focus ring brand-700 on canvas 7.2:1; gold-400 on brand-900 6.5:1 (≥3:1 required)
+ * Gold is never used as text colour on light surfaces (it fails 4.5:1); use gold-800.
+ */
+@theme {
+  --color-canvas: #faf7f0;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f2eee4;
+  --color-line: #ddd6c6;
+  --color-line-strong: #8c8573;
+
+  --color-ink-900: #1d2321;
+  --color-ink-700: #333a37;
+  --color-ink-600: #4a524e;
+
+  --color-brand-50: #eef7f1;
+  --color-brand-100: #d6ecdf;
+  --color-brand-600: #22744f;
+  --color-brand-700: #1b5e40;
+  --color-brand-800: #144830;
+  --color-brand-900: #0e3423;
+
+  --color-gold-100: #fbf0d9;
+  --color-gold-200: #f5ddab;
+  --color-gold-400: #e0a93b;
+  --color-gold-500: #c98f22;
+  --color-gold-800: #7a4f0e;
+
+  --color-danger-50: #fdf0ee;
+  --color-danger-700: #a32a1c;
+  --color-info-50: #eef4fb;
+  --color-info-700: #1d4f86;
+
+  /* System font stack: no web-font download on slow connections (FRONTEND.md §4). */
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial,
+    sans-serif;
+  --font-display:
+    ui-serif, Georgia, Cambria, "Times New Roman", serif;
+
+  --radius-card: 1rem;
+  --shadow-card: 0 1px 2px rgb(29 35 33 / 0.06), 0 4px 16px rgb(29 35 33 / 0.06);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: 5rem; /* keep focused/anchored content clear of the sticky header (WCAG 2.4.11) */
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-canvas);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+}
+
+/* Always-visible focus indicator (≥2px, ≥3:1). */
+:focus-visible {
+  outline: 3px solid var(--color-brand-700);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+.on-dark :focus-visible,
+.on-dark:focus-visible {
+  outline-color: var(--color-gold-400);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
