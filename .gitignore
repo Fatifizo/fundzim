@@ -1,0 +1,91 @@
+# ---------------------------------------------------------------------------
+# Secrets and environment — NEVER commit real configuration.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.env
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.crt
+!**/testdata/**/*.crt
+id_rsa*
+id_ed25519*
+*.kubeconfig
+credentials.json
+service-account*.json
+secrets/
+.secrets/
+
+# ---------------------------------------------------------------------------
+# Local data: uploads, KYC samples, databases, object-store volumes, dumps.
+# ---------------------------------------------------------------------------
+uploads/
+tmp/
+*.sqlite
+*.sqlite3
+*.db
+*.dump
+*.sql.gz
+*.backup
+/data/
+/deploy/**/data/
+/deploy/**/volumes/
+
+# ---------------------------------------------------------------------------
+# Go
+# ---------------------------------------------------------------------------
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+coverage.*
+/vendor/
+go.work.sum
+
+# ---------------------------------------------------------------------------
+# Node / Next.js (apps/web also has its own .gitignore)
+# ---------------------------------------------------------------------------
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.npm/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.vercel
+
+# ---------------------------------------------------------------------------
+# Test artefacts
+# ---------------------------------------------------------------------------
+/coverage/
+playwright-report/
+test-results/
+/tests/**/reports/
+
+# ---------------------------------------------------------------------------
+# OS / editor state
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# Claude Code local settings (shared settings in .claude/settings.json may be committed)
+.claude/settings.local.json
+
+# Logs
+*.log
+logs/
