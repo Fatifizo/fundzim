@@ -102,6 +102,12 @@ api/openapi/fundzim-v1.yaml           # exists from Stage 2; Stage 3 implements 
 Read `apps/web/AGENTS.md` and the Next 16 docs in `apps/web/node_modules/next/dist/docs/` first. This version
 renamed `middleware` to `proxy` and uses `cacheComponents`.
 
+> **Stage 3 note (as implemented):** the dev same-origin proxy below was **not** built with `rewrites()`.
+> `next.config.ts` is evaluated at build time and serialised into the standalone server, so a rewrite would
+> bake in the build-time `API_BASE_URL`. Stage 3 uses a runtime route handler,
+> `apps/web/src/app/api/v1/[...path]/route.ts`, which reads `API_BASE_URL` per request. See
+> [stage-3/implementation.md §12](../stage-3/implementation.md).
+
 | Addition | Detail |
 |---|---|
 | Dev same-origin proxy | `next.config.ts` `rewrites()`: `/api/v1/:path*` → `${API_BASE_URL}/api/v1/:path*` (dev and self-hosted). In deployed environments the reverse proxy does this (ARCHITECTURE §3). |
@@ -124,6 +130,12 @@ renamed `middleware` to `proxy` and uses `cacheComponents`.
 | Roles | `fundzim_migrator` (DDL only, `fundzimctl migrate`); `fundzim_app` (api runtime); **`fundzim_worker`** (worker runtime: the same table privileges as `fundzim_app` plus `EXECUTE` on worker-only routines such as `ledger.fold_deferred_balances` and `audit.verify_chain`, which the api pool cannot run, I-15); `fundzim_kyc`; `fundzim_compliance`; `fundzim_readonly`. Stage 3 creates the role and its grants. Its worker-only routines arrive with their stages (ledger 10, audit chain verification 18). Nothing connects as the migrator or a superuser at runtime. |
 
 ## 6. Redis and S3/MinIO configuration
+
+> **Stage 3 note (as implemented):** baseline §12 **I-26** amends I-19 below: the three credentials each reach
+> exactly **one of three buckets** (`public-media`, `private-kyc`, `private-evidence`) instead of prefixes in
+> one private bucket, and the local S3 server is **Garage** (`dxflrs/garage`), because MinIO community images are
+> no longer published and Garage has no prefix-scoped policies. Configuration names: `STORAGE_PUBLIC_*`,
+> `STORAGE_KYC_*`, `STORAGE_EVIDENCE_*` ([development/configuration.md](../development/configuration.md)).
 
 **Redis (optional).** `REDIS_URL`, `REDIS_REQUIRED=false`. On boot, if Redis is unreachable and not required,
 log `warn "redis unavailable"`, set `fundzim_redis_available 0`, and use the in-process rate-limit fallback.

@@ -148,6 +148,15 @@ Notes on ordering:
 
 ## Stage 3 — Core Platform Foundation
 
+> **Status: implemented (awaiting acceptance).** What was built, deviations and the endpoint status:
+> [stage-3/implementation.md](stage-3/implementation.md); security baseline review:
+> [stage-3/security-review.md](stage-3/security-review.md); configuration, migration and seed-data guides in
+> [development/](development/configuration.md). The **outbox dispatcher, Postgres-backed job runner (River),
+> worker mode and idempotency middleware are carried to the start of Stage 4**, together with the architecture
+> import test and golangci-lint; the `queue` schema and the outbox/inbox/idempotency tables exist. Local object
+> storage is Garage (MinIO community images are no longer published) and there is no ClamAV container yet
+> (uploads arrive in Stage 5). Handover: [stage-handover/STAGE-3-TO-STAGE-4.md](stage-handover/STAGE-3-TO-STAGE-4.md).
+
 - **Objective:** Stand up the runnable skeleton: Go API, worker mode, database, migrations, config,
   logging, errors, health checks, local dev environment and CI.
 - **Dependencies:** Stage 2.

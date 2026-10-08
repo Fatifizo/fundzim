@@ -1,8 +1,10 @@
 # FundZim — Development Guide
 
-> **Status:** Stage 0. Only `apps/web` (a Next.js scaffold) contains code. The Go API, database, local
-> services and test suites arrive from Stage 3. This guide says exactly what works today and what is pending —
-> it does not describe features that do not exist.
+> **Status:** Stage 3 — Core Platform Foundation (complete; awaiting acceptance). The Go API foundation,
+> migrations, local Docker Compose stack, Next.js development preview and CI exist. There is no
+> authentication, no domain feature and no money handling yet. This guide says exactly what works today and
+> what is pending — it does not describe features that do not exist. What was built:
+> [stage-3/implementation.md](stage-3/implementation.md).
 
 Related: [CLAUDE.md](../CLAUDE.md) (binding engineering rules) · [ARCHITECTURE.md](ARCHITECTURE.md) ·
 [TESTING.md](TESTING.md) · [SECURITY.md](SECURITY.md) · [ROADMAP.md](ROADMAP.md) · [adr/README.md](adr/README.md)
@@ -11,26 +13,26 @@ Related: [CLAUDE.md](../CLAUDE.md) (binding engineering rules) · [ARCHITECTURE.
 
 ## 1. Prerequisites
 
-| Tool | Version | Needed from | Status on the current dev machine (2026-10-08) |
+| Tool | Version | Needed for | Status on the current dev machine (2026-10-08) |
 |---|---|---|---|
-| Git | any recent | Stage 0 | Installed. **No `user.name`/`user.email` configured yet.** |
-| Node.js via nvm | Node 24 LTS (v24.21.0) | Stage 0 (`apps/web`) | Installed (nvm v0.40.8, default alias `lts/*`). |
-| npm | 11.x (ships with Node 24) | Stage 0 | Installed. |
-| GNU make | 4.x | Stage 0 (convenience) | **Not installed.** `sudo apt install make` |
-| gitleaks | latest stable | Stage 0 (`make security`), required in CI | **Not installed.** Install from the official GitHub releases (verify checksum). |
-| Go | current stable, pinned in `go.mod` toolchain directive | Stage 3 | **Not installed.** Install from go.dev official tarball (verify checksum) or a pinned version manager. |
-| Docker Engine + Compose v2 | recent | Stage 3 (local Postgres/Redis/MinIO/Mailpit/ClamAV) | Installed. Confirm your user can run `docker` without sudo. |
-| golangci-lint, govulncheck | pinned versions | Stage 3 | Not installed. Installed via `go install` at pinned versions in Stage 3. |
+| Git | any recent | everything | Installed; identity configured (`Fatifizo`) |
+| Go | **1.27.1** (`go.mod`) | API, `fundzimctl`, Go tests | Installed **user-local** at `~/.local/go` from the official tarball (checksum verified). Add `export PATH="$HOME/.local/go/bin:$PATH"` to your shell profile |
+| Node.js via nvm | **24.21.0** | `apps/web`, OpenAPI lint, SQL draft validation | Installed (nvm, default alias `lts/*`) |
+| npm | 11.x (ships with Node 24) | `apps/web` | Installed |
+| Docker Engine + Compose v2 | recent | local stack, integration tests, image builds | Installed. **Docker-group access for the dev user is being set up by the owner:** `sudo usermod -aG docker $USER`, then log out and in again — or, in the current session, prefix commands with `sg docker -c "…"` |
+| GNU make | 4.x | convenience only | **Not installed** (`sudo apt install make`). Every target has an equivalent in §3 |
+| gitleaks | v8.x | `make security` (optional locally) | Not installed locally; CI runs v8.30.1 |
+| govulncheck | v1.8.0 | `make security` | Not installed; run on demand with `go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...` |
+| Playwright Chromium | matches `@playwright/test` 1.63.0 | web E2E | `npx --prefix apps/web playwright install chromium` on first use (no sudo needed for the headless shell) |
+| golangci-lint | — | not used yet | Not part of Stage 3 (carried to Stage 4) |
 
-Install Node in a new shell with:
+Shell setup for a new terminal:
 
 ```bash
 export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"   # already in ~/.bashrc
-nvm use default
-node -v   # v24.x
+nvm use default                                   # node v24.21.0
+export PATH="$HOME/.local/go/bin:$PATH"          # go1.27.1
 ```
-
-Without `make`, every web target can be run directly: `npm --prefix apps/web run <dev|build|lint>`.
 
 ---
 
@@ -38,64 +40,97 @@ Without `make`, every web target can be run directly: `npm --prefix apps/web run
 
 ```
 /
-├── CLAUDE.md           Binding engineering rules (read first)
-├── README.md           Project overview
-├── Makefile            Standard developer commands
-├── .env.example        Placeholder-only configuration template (tracked)
-├── .editorconfig       Editor conventions (tabs for Go/Make, 2 spaces elsewhere)
-├── .gitignore
+├── CLAUDE.md             Binding engineering rules (read first)
+├── README.md             Overview and quick start
+├── Makefile              Developer commands (optional; equivalents in §3)
+├── compose.yaml          Local stack: postgres, valkey, garage (+init), migrate, api, web, mailpit (profile tools)
+├── go.mod, go.sum        One Go module at the repo root: github.com/Fatifizo/fundzim
+├── .env.example          Template with placeholders/generation markers (tracked); .env is git-ignored
+├── .gitleaks.toml, .gitleaksignore   Secret-scan configuration and reviewed false positives
+├── .github/workflows/ci.yml          CI pipeline
 ├── apps/
-│   ├── web/            Next.js 16 (App Router, TS, Tailwind v4) — presentation only
-│   └── api/            Go API + worker entrypoint (README only until Stage 3)
-├── internal/           Go domain modules of the modular monolith (README only until Stage 3)
-├── migrations/         SQL migrations (README only until Stage 2/3)
-├── docs/               Specifications; docs/adr/ = Architecture Decision Records
-├── deploy/             Deployment config (local compose arrives Stage 3)
-├── scripts/            Developer scripts (check-secrets.sh)
-└── tests/              Cross-cutting suites: e2e, financial, security, perf (from Stage 3+)
+│   ├── api/cmd/api/          HTTP API entrypoint
+│   ├── api/cmd/fundzimctl/   Operator CLI: config check, migrate, version, healthcheck
+│   └── web/                  Next.js 16 (App Router, TS, Tailwind v4) — presentation only
+├── internal/
+│   ├── app/                  Composition root: dependencies, routes, middleware chain, servers
+│   └── platform/             config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, version
+├── migrations/           Executable goose migrations + embed.go
+├── api/openapi/          OpenAPI 3.1 contract (source of truth for /api/v1)
+├── design/sql/           Stage 2 NON-EXECUTABLE schema drafts + validation harness (never run against a DB)
+├── deploy/docker/        api.Dockerfile, web.Dockerfile, postgres/init/10-roles.sh, garage/{garage.toml,init.sh}
+├── scripts/              dev-env-init.sh, check-secrets.sh
+├── tests/integration/    Integration tests against the local stack (build tag `integration`)
+└── docs/                 Specifications; docs/adr/ ADRs; docs/development/ guides; docs/stage-*/ stage records
 ```
 
-A single Go module will live at the repository root (`go.mod`, created in Stage 3) so that `apps/api` and
-`internal/` share one module and Go's `internal/` visibility rules apply. Unit tests live beside the code;
-`tests/` holds only cross-cutting suites. See [ARCHITECTURE.md](ARCHITECTURE.md) for module boundaries.
+Unit tests live beside the code (`*_test.go`, `apps/web/src/**/*.test.ts(x)`, `apps/web/e2e/`); `tests/` holds
+cross-cutting suites only. Domain modules (`internal/auth`, `internal/users`, …) are created in the stage
+that implements them. See [ARCHITECTURE.md](ARCHITECTURE.md) for module boundaries.
 
 ---
 
 ## 3. Standard commands
 
-Run `make help` for the live list. What each target does **today**:
+Run `make help` for the live list. Host-side targets that need configuration load `.env` first
+(`set -a; . ./.env; set +a`); do the same when running the equivalents by hand. No target fakes success.
 
-| Target | Stage 0 behaviour | From Stage 3 (once `go.mod` exists) |
+| Target | What it does | Equivalent without make |
 |---|---|---|
-| `make help` | Lists targets. | Same. |
-| `make web-install` | `npm ci` in `apps/web` (reproducible install from lockfile). | Same. |
-| `make dev` | Runs the Next.js dev server on http://localhost:3000. Prints a note that the API and local services do not exist yet. | Will also start local services (compose) and the API. |
-| `make test` | Prints that no Go module and no web test runner exist yet and that **nothing was tested**. Exits 0 without claiming success. | Runs `go test -race ./...` plus web tests once configured. |
-| `make lint` | ESLint on `apps/web`. Go skipped (prints why). | Adds `go vet` and `golangci-lint`. |
-| `make build` | Production build of `apps/web`. Go skipped. | Adds Go binary build into `bin/`. |
-| `make migrate` | Prints that no migration tool exists yet and **exits 1** (so scripts cannot mistake it for success). | Applies migrations with the tool chosen in Stage 2/3. |
-| `make security` | `scripts/check-secrets.sh`, gitleaks if installed (otherwise a warning), `npm audit --audit-level=high` (currently fails — see §9). | Adds `govulncheck`. CI adds Trivy image scans. |
-| `make clean` | Removes build artefacts (`bin`, `dist`, `.next`, `out`, tsbuildinfo). Never touches `.env` or data volumes. | Same. |
+| `make help` | Lists targets | `grep -E '^[a-z-]+:.*##' Makefile` |
+| `make env` | Creates `.env` with generated local secrets (never overwrites) | `./scripts/dev-env-init.sh` |
+| `make up` | Builds images and starts the full stack in the background, then shows status | `docker compose up -d --build && docker compose ps` |
+| `make dev` | Infrastructure in Docker, then storage init + migrations, then API (`go run`) and web (`next dev`) on the host; Ctrl-C stops both | `docker compose up -d --wait fundzim-postgres fundzim-redis fundzim-storage` · `docker compose up fundzim-storage-init fundzim-migrate` · `set -a; . ./.env; set +a; go run ./apps/api/cmd/api & npm --prefix apps/web run dev` |
+| `make down` | Stops the stack, keeps data volumes | `docker compose down` |
+| `make logs` | Follows logs | `docker compose logs -f --tail=100` |
+| `make ps` | Service status | `docker compose ps` |
+| `make build` | Go binaries into `bin/` (with version ldflags) and the production web build | `CGO_ENABLED=0 go build -trimpath -o bin/ ./apps/api/cmd/...` · `npm --prefix apps/web run build` |
+| `make test` | `test-go` + `test-web` | both below |
+| `make test-go` | Go unit tests with the race detector | `go test -race -count=1 ./...` |
+| `make test-web` | Vitest unit/component tests | `npm --prefix apps/web test` |
+| `make test-integration` | Integration tests against the **running** stack (API and web URLs default to the local ports) | `set -a; . ./.env; set +a; FUNDZIM_IT_API_URL=http://127.0.0.1:8080 FUNDZIM_IT_WEB_URL=http://127.0.0.1:3000 go test -tags integration -count=1 -v ./tests/integration/...` |
+| `make test-e2e` | Playwright E2E against the standalone web build (API deliberately unreachable) | `npm --prefix apps/web run test:e2e` |
+| `make lint` | gofmt check, `go vet` (also with the integration tag), ESLint, `tsc --noEmit` | `gofmt -l apps internal migrations tests` (must print nothing) · `go vet ./...` · `go vet -tags integration ./tests/...` · `npm --prefix apps/web run lint` · `npm --prefix apps/web run typecheck` |
+| `make fmt` | Formats Go code | `gofmt -w apps internal migrations tests` |
+| `make migrate-up` | Applies pending migrations as `fundzim_migrator` | `go run ./apps/api/cmd/fundzimctl migrate up` |
+| `make migrate-down` | **Development/test only:** rolls back the most recent migration (refused otherwise) | `go run ./apps/api/cmd/fundzimctl migrate down` |
+| `make migrate-status` | Lists migrations and applied times | `go run ./apps/api/cmd/fundzimctl migrate status` (also: `… migrate version`) |
+| `make openapi-lint` | Redocly lint of the contract | `npx --yes @redocly/cli@2.54.3 lint api/openapi/fundzim-v1.yaml --config api/openapi/redocly.yaml` |
+| `make db-validate` | Validates the Stage 2 SQL **design drafts** in in-memory PGlite | `cd design/sql/validate && npm ci --no-audit --no-fund && node run.mjs && node catalogue.mjs` |
+| `make security` | Secret scan, gitleaks (if installed), govulncheck, `npm audit --audit-level=high` (fails on the known dev-dependency advisories, §9) | `./scripts/check-secrets.sh` · `gitleaks detect --source . --no-banner --redact` · `go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...` · `npm --prefix apps/web audit --audit-level=high` |
+| `make clean` | Removes `bin`, `dist`, `.next`, `out`, tsbuildinfo; never touches `.env` or volumes | `rm -rf bin dist apps/web/.next apps/web/out apps/web/*.tsbuildinfo` |
+| `make reset` | **Destructive:** asks you to type `reset`, then deletes all local data volumes | `docker compose down -v --remove-orphans` |
+| `make web-install` | Installs web dependencies from the lockfile | `npm --prefix apps/web ci` |
 
-Rule: targets never fake output. A target that cannot do its job yet says so.
+Other useful commands: `go run ./apps/api/cmd/fundzimctl config check` (validates the environment, prints
+variable names only), `curl -s http://127.0.0.1:9090/internal/readiness` (which readiness check fails),
+`docker compose --profile tools up -d fundzim-mail` (Mailpit).
 
 ---
 
 ## 4. Environment configuration
 
-- `.env.example` (tracked) lists every variable, grouped: APP, DATABASE, REDIS, STORAGE, AUTH, EMAIL, SMS,
-  PAYMENTS, OBSERVABILITY, SECURITY. It contains **placeholders only**.
-- For local development: `cp .env.example .env` and replace `<set-locally>` values with locally generated
-  values (e.g. `openssl rand -base64 32`). Never reuse a local value anywhere else.
-- `.env` and all `.env.*` (except `.env.example`) are git-ignored. `scripts/check-secrets.sh` flags any tracked
-  env file.
-- `NEXT_PUBLIC_*` variables are compiled into the browser bundle and are public. Never name a secret
-  `NEXT_PUBLIC_*` ([FRONTEND.md](FRONTEND.md) §8).
-- In Stage 0 nothing reads `.env`; the Go API reads it from Stage 3 via a typed config loader that validates
-  every variable at startup and refuses unsafe combinations in production (e.g. `SMS_PROVIDER=log`,
-  `sslmode=disable`, local field-encryption keys, the sandbox payment provider, or any security control
-  switched off: `MALWARE_SCAN_ENABLED=false`, `AUDIT_HASH_CHAIN_ENABLED=false`, `RATE_LIMIT_ENABLED=false`).
-  The full list is in [SECURITY.md](SECURITY.md) §14.
+Full reference (every variable, default and refusal): [development/configuration.md](development/configuration.md).
+
+- `.env.example` (tracked) holds placeholders and generation markers only. Create your `.env` with
+  `./scripts/dev-env-init.sh` (`make env`): it fills every `<generate:…>` marker with a fresh random value,
+  expands `${NAME}` references, writes mode 600 and **refuses to overwrite** an existing `.env`.
+- The same `.env` serves two purposes:
+  1. **Docker Compose interpolation.** `compose.yaml` takes secrets, bucket names, `LOG_LEVEL` and host ports
+     from `.env` and sets the container environment itself (container hostnames, `APP_ENV=development`,
+     JSON logs). Other API settings in `.env` (e.g. `RATE_LIMIT_*`) do not reach the containerised API.
+  2. **Host processes.** `set -a; . ./.env; set +a` before `go run ./apps/api/cmd/api`, `fundzimctl` or the
+     integration tests. The host defaults are loopback addresses, text logs and debug level.
+- The API reads only the environment, validates everything at startup and exits listing the **names** of
+  missing or invalid variables. Staging/production refuse unsafe settings (`sslmode` other than
+  `verify-full`, plain `redis://`, missing or plain-HTTP storage, text logs, disabled rate limiting).
+  AUTH, EMAIL, SMS, PAYMENTS, OBSERVABILITY and SECURITY variables are placeholders for later stages and are
+  **not read** in Stage 3.
+- Database role passwords are applied only when the Postgres volume is first created. If you regenerate
+  `.env`, reset the volumes (`make reset`).
+- `.env` and all `.env.*` (except `.env.example`) are git-ignored; `scripts/check-secrets.sh` flags any tracked
+  env file. `NEXT_PUBLIC_*` variables are compiled into the browser bundle and are public — never name a
+  secret `NEXT_PUBLIC_*` ([FRONTEND.md](FRONTEND.md) §8).
 - **Staging/production secrets** come from a secret manager and are injected at runtime. They are never
   committed, never baked into images, never printed in logs or CI output, and are rotated on staff departure
   or suspected exposure. See [SECURITY.md](SECURITY.md).
@@ -123,16 +158,17 @@ Rule: targets never fake output. A target that cannot do its job yet says so.
 
 ## 6. Code style
 
-**Go (from Stage 3)**
-- `gofmt`/`goimports` formatting is mandatory; `go vet` and `golangci-lint` (config committed in Stage 3)
-  must pass.
+**Go**
+- `gofmt` formatting and `go vet` are mandatory (CI). `golangci-lint` is planned (carried to Stage 4; no
+  config is committed yet).
 - Errors wrapped with context (`fmt.Errorf("…: %w", err)`); domain errors are typed and mapped to stable API
   error codes at the HTTP boundary only.
 - `context.Context` first parameter for I/O; no global mutable state; clock and ID generator injected.
 - Logging via `log/slog` with the redaction rules in [OBSERVABILITY.md](OBSERVABILITY.md).
-- No `float32`/`float64` in any money path — enforced by a lint rule/arch test in Stage 3.
-- Module boundaries: import only another module's public package; arch test fails on cycles or on imports
-  of another module's internals.
+- No `float32`/`float64` in any money path (code review today; a lint rule/architecture test is carried to
+  Stage 4).
+- Module boundaries: import only another module's public package (code review today; the import-graph
+  architecture test is carried to Stage 4).
 
 **TypeScript / web**
 - ESLint (Next.js config) must pass; `tsc --noEmit` strict mode. Prettier added with the first real UI work.
@@ -187,14 +223,23 @@ A change is done only when **all** apply:
 
 ---
 
-## 9. Known environment issues (Stage 0)
+## 9. Known environment issues (Stage 3)
 
-- `npm audit` in `apps/web` reports 5 high-severity advisories, all in the `braces` → `micromatch` →
-  `fast-glob` chain under `eslint-config-next` (development tooling, not shipped to browsers). `npm audit fix
-  --force` proposes a breaking change; not applied. Re-evaluate on the next `eslint-config-next` update.
-  Consequence: `make security` currently exits non-zero.
-- `make`, Go and gitleaks are not installed on the current machine (§1).
-- Git identity is not configured; nothing has been committed yet.
+- **Docker group access.** The dev user was not in the `docker` group at the start of Stage 3; the owner is
+  setting it up (`sudo usermod -aG docker administrator`). Until you log in again, run Docker through
+  `sg docker -c "docker compose …"`. Without Docker access, the compose stack, integration tests and image
+  builds cannot run locally (unit tests, lint and the web build still can).
+- **Go is user-local** (`~/.local/go`), not on the system `PATH`; add `~/.local/go/bin` to `PATH`.
+- **`make` is not installed**; use the equivalents in §3.
+- **`npm audit`** in `apps/web` reports high-severity advisories in development-only dependencies
+  (the `eslint-config-next` chain). Production dependencies are audited as a blocking CI step; the full audit
+  is warning-only. Consequence: `make security` exits non-zero at its last step. Tracked in the Stage 3
+  known-issues record.
+- **gitleaks** and **govulncheck** are not installed locally; CI runs both (`make security` runs govulncheck
+  through `go run`, which downloads it on first use).
+- **Integration tests leave synthetic audit rows** in the local database (append-only by design); reset the
+  volumes to remove them ([development/seed-data.md §3](development/seed-data.md)).
+- **GitHub Actions** has not been confirmed running for this repository from this machine.
 
 ---
 

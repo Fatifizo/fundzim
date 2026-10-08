@@ -17242,6 +17242,124 @@ paths:
       - WEBHOOK_PAYLOAD_INVALID
       - WEBHOOK_PROVIDER_UNKNOWN
       - WEBHOOK_SIGNATURE_INVALID
+  /health:
+    get:
+      tags:
+      - Health
+      operationId: getApiHealth
+      summary: API liveness (enveloped)
+      description: '**HLT-03** · Auth: none · Authorization: Public. Process liveness only; checks no dependencies.
+        Implemented in Stage 3.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-READ` · Audit: —'
+      security: []
+      responses:
+        '200':
+          description: The process is running.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiHealthEnvelope'
+              example:
+                data:
+                  status: ok
+                meta:
+                  request_id: 0192f5a1-7c3e-7b8a-9d1e-2f3a4b5c6d7e
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      x-fundzim-endpoint-id: HLT-03
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-READ
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - RATE_LIMITED
+      x-fundzim-status: IMPLEMENTED
+  /ready:
+    get:
+      tags:
+      - Health
+      operationId: getApiReadiness
+      summary: API readiness (enveloped)
+      description: '**HLT-04** · Auth: none · Authorization: Public. Ready when the critical dependencies (database,
+        current schema version, object storage; Redis only when required) answer within their timeouts. Never names
+        hosts, versions or failing dependencies. Implemented in Stage 3.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-READ` · Audit: —'
+      security: []
+      responses:
+        '200':
+          description: Ready to serve requests that need the critical dependencies.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiReadinessEnvelope'
+              example:
+                data:
+                  status: ready
+                meta:
+                  request_id: 0192f5a1-7c3e-7b8a-9d1e-2f3a4b5c6d7e
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: HLT-04
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-READ
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
+  /version:
+    get:
+      tags:
+      - Health
+      operationId: getApiVersion
+      summary: Application name, version, build and commit
+      description: '**HLT-05** · Auth: none · Authorization: Public. Build metadata only; no host, path, dependency or
+        configuration details. Implemented in Stage 3.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-READ` · Audit: —'
+      security: []
+      responses:
+        '200':
+          description: Build information.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiVersionEnvelope'
+              example:
+                data:
+                  name: FundZim
+                  version: 0.1.0
+                  build: '2026-10-08T12:00:00Z'
+                  commit: 3f2a1b4c5d6e
+                meta:
+                  request_id: 0192f5a1-7c3e-7b8a-9d1e-2f3a4b5c6d7e
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      x-fundzim-endpoint-id: HLT-05
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-READ
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - RATE_LIMITED
+      x-fundzim-status: IMPLEMENTED
   /healthz:
     servers:
     - url: /
@@ -17264,6 +17382,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthStatus'
       x-fundzim-endpoint-id: HLT-01
+      x-fundzim-status: IMPLEMENTED
       x-fundzim-auth: none
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-HEALTH
@@ -17300,6 +17419,7 @@ paths:
             Retry-After:
               $ref: '#/components/headers/RetryAfter'
       x-fundzim-endpoint-id: HLT-02
+      x-fundzim-status: IMPLEMENTED
       x-fundzim-auth: none
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-HEALTH
@@ -24204,6 +24324,73 @@ components:
           type: boolean
       required:
       - received
+    ApiHealthEnvelope:
+      type: object
+      description: Envelope for API liveness.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: object
+          required:
+          - status
+          properties:
+            status:
+              type: string
+              enum:
+              - ok
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    ApiReadinessEnvelope:
+      type: object
+      description: Envelope for API readiness (no dependency details).
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: object
+          required:
+          - status
+          properties:
+            status:
+              type: string
+              enum:
+              - ready
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    VersionInfo:
+      type: object
+      description: Public build metadata.
+      required:
+      - name
+      - version
+      - build
+      - commit
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+          description: Semantic version of the build, or 0.0.0-dev for unversioned development builds.
+        build:
+          type: string
+          description: Build timestamp (RFC 3339) or `unknown`.
+        commit:
+          type: string
+          description: Short commit reference or `unknown`.
+    ApiVersionEnvelope:
+      type: object
+      description: Envelope for VersionInfo.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/VersionInfo'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
     HealthStatus:
       type: object
       description: Health probe body (no versions, hostnames or dependency details on public interfaces).

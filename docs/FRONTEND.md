@@ -1,8 +1,13 @@
 # FundZim — Frontend Standards (apps/web)
 
-> **Status:** Stage 0 standard. `apps/web` is currently an unmodified Next.js 16.4 scaffold (App Router,
-> TypeScript, Tailwind CSS v4, ESLint, `src/` directory). The public fundraising UI is built in Stage 7,
-> sharing optimisation in Stage 16, the admin portal in Stage 14.
+> **Status:** Stage 0 standard; **implementation state as of Stage 3:** `apps/web` is a development preview,
+> no longer the unmodified scaffold. It has the homepage, How it works, About and Contact pages, draft
+> placeholders for Privacy and Terms, "coming soon" pages for later features (explore, start, login, register,
+> dashboard, campaign pages), shared layout and UI components, a same-origin `/api/v1` route-handler proxy, a
+> typed API client, string-based money formatting, `/healthz`, security headers, and Vitest/axe and Playwright
+> tests. There are no accounts, campaigns, donations or payments, and the site is `noindex`. Details:
+> [apps/web/README.md](../apps/web/README.md) and [stage-3/implementation.md §12](stage-3/implementation.md).
+> The public fundraising UI is built in Stage 7, sharing optimisation in Stage 16, the admin portal in Stage 14.
 
 Related: [ARCHITECTURE.md](ARCHITECTURE.md) · [MONEY.md](MONEY.md) · [SECURITY.md](SECURITY.md) ·
 [PRIVACY.md](PRIVACY.md) · [TESTING.md](TESTING.md) · `apps/web/AGENTS.md`
@@ -147,6 +152,12 @@ each release from Stage 7.
   scripts, no `unsafe-eval` in production, `object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'`,
   `form-action 'self'` plus explicitly allow-listed PSP hosted-payment origins. `connect-src` limited to self
   and required telemetry endpoints. Reporting via `report-to`.
+  **Stage 3 deviation (tracked):** the implemented CSP (`next.config.ts`) is static and uses
+  `script-src 'self' 'unsafe-inline'` (and `style-src 'self' 'unsafe-inline'`), because per-request nonces
+  force dynamic rendering and conflict with Partial Prerendering under `cacheComponents`. It has no third-party
+  origins, no `unsafe-eval` in production, and locks `object-src`, `base-uri`, `frame-ancestors` and
+  `form-action`; no `report-to` yet. This must be replaced by a nonce- or hash-based policy before Stage 7
+  renders owner-supplied content ([stage-3/security-review.md](stage-3/security-review.md) F-04).
 - Other headers (set at proxy or Next.js level, verified in tests): HSTS (values and preload timing per [SECURITY.md](SECURITY.md) §11: preload once the domain is stable),
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`
   disabling unused features (camera allowed only on KYC capture pages if used).

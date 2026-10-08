@@ -4,6 +4,17 @@
 > towards. Almost nothing here is implemented yet. Where a choice is deferred, the stage that decides it is
 > named. Significant changes require an ADR (see [`docs/adr/`](adr/)).
 
+> **Stage 3 implementation status.** What exists in code: one Go binary `api` (public listener with
+> `/healthz`, `/readyz`, `/api/v1/health|ready|version`; internal listener with `/metrics` and detailed
+> readiness) and the CLI `fundzimctl`; `internal/app` (composition root) and `internal/platform` (config,
+> logging with redaction, errors/envelope, HTTP middleware, health, db, cache, storage, metrics, money, ids,
+> version); PostgreSQL migrations for the foundation, platform tables and the two audit tables with derived
+> runtime grants; a local Compose stack (PostgreSQL 17, Valkey, Garage S3 with three buckets/credentials);
+> the Next.js development preview with a runtime same-origin proxy for `/api/v1`. **Not yet built:** the
+> worker (§3, §7), job queue and outbox dispatcher, any domain module (§4.2), authentication and the
+> session/CSRF/idempotency middleware steps (§5), tracing. Details and deviations:
+> [stage-3/implementation.md](stage-3/implementation.md).
+
 Related: [MONEY.md](MONEY.md) · [LEDGER.md](LEDGER.md) · [PAYMENTS.md](PAYMENTS.md) · [SECURITY.md](SECURITY.md) ·
 [THREAT-MODEL.md](THREAT-MODEL.md) · [DATABASE.md](DATABASE.md) · [AUDIT.md](AUDIT.md) ·
 [OBSERVABILITY.md](OBSERVABILITY.md) · [DATA-CLASSIFICATION.md](DATA-CLASSIFICATION.md) · [COMPLIANCE.md](COMPLIANCE.md)
