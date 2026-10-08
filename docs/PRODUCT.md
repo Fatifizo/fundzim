@@ -129,6 +129,8 @@ The full RBAC/ABAC model is implemented in Stages 4 and 14. Stage 0 fixes the sh
 | `SUPPORT` | Customer support staff | View account/campaign status, assist users, see masked PII, **request** refunds | View KYC documents, unmask donor identities, approve refunds or otherwise move money |
 | `COMPLIANCE` | Compliance / AML staff | KYC decisions, investigations, suspend/freeze, view KYC docs (with justification), prepare regulatory reports, **request** refunds | Approve payouts or refunds, post ledger adjustments |
 | `FINANCE` | Finance / operations staff | Approve payouts above threshold (maker-checker), approve refunds, reconciliation, ledger adjustments (dual control) | Approve their own requests, view KYC documents |
+| `KYC_REVIEWER` | Identity-verification staff (added in Stage 1, [ADR-017](adr/ADR-017-payout-approval-segregation-of-duties.md)) | Review KYC/KYB cases and decide verification outcomes; view KYC documents with justification | Approve payouts or refunds, change campaign state, post ledger entries |
+| `SECURITY_ADMIN` | Security administration (added in Stage 1, [ADR-017](adr/ADR-017-payout-approval-segregation-of-duties.md)) | Access reviews, key and secret rotation, incident tooling, security configuration | Access financial records, KYC documents or donor identities; approve any financial action |
 | `ADMIN` | Platform operations admin | Configuration, content moderation, staff support tasks | Implicit KYC document access, ledger adjustments, payout approval |
 | `SUPER_ADMIN` | Very small number of named people | Assign and revoke roles, emergency configuration | Bypass sensitive-access controls; still needs the specific permission + justification + audit |
 
@@ -264,6 +266,17 @@ stateDiagram-v2
   over a second channel.
 - `SUSPENDED` and `FROZEN` are separate from account-level and payout-level holds. A campaign can be `ACTIVE`
   while a specific payout is held by risk.
+- **Fundraising authority (Stage 1 finding).** The Private Voluntary Organisations Act as amended in 2025
+  appears to restrict collecting contributions from the public for charitable purposes to registered PVOs,
+  excluded bodies and holders of a temporary (s8) authority ([regulatory-landscape.md](compliance/regulatory-landscape.md)).
+  Until counsel answers LR-046 – LR-048 and LR-050, every campaign records a `fundraising_authority`
+  (self-fundraising, registered PVO, excluded body or s8 authority, with evidence), its end date may not
+  exceed the authority's validity, and payouts require valid authority evidence where one is required.
+  Campaigns where an individual raises money **for someone else** are disabled by the policy flag
+  `campaign.individual_for_others.enabled = false` until LR-046 – LR-048 (LR-068 is a duplicate) and PD-27 are
+  decided. See [kyb-architecture.md](compliance/kyb-architecture.md),
+  [beneficiary-verification.md](compliance/beneficiary-verification.md) and
+  [campaign-approval-policy.md](compliance/campaign-approval-policy.md). **LEGAL_REVIEW_REQUIRED.**
 - What happens to funds on a cancelled or frozen-then-cancelled campaign (refund donors, pay out to the
   verified beneficiary, or redirect with consent) is a business and legal decision:
   **LEGAL_REVIEW_REQUIRED** (LR-019).
@@ -281,6 +294,11 @@ Implementation is Stage 5. The verification vendor has not been chosen.
 | `IDENTITY_VERIFIED` | Legal name, date of birth, national ID or passport, document capture, liveness or manual review, sanctions screening | Submitting and publishing campaigns |
 | `PAYOUT_VERIFIED` | Above + payout account (mobile-money wallet or bank account) ownership verified, with name match | Requesting withdrawals |
 
+Alongside the level, every account carries a **verification status** overlay: `ACTIVE`, `PENDING_REVIEW`,
+`REJECTED` or `SUSPENDED`. `REJECTED` and `SUSPENDED` block every level-gated action without erasing the
+level history ([ADR-015](adr/ADR-015-risk-based-identity-verification.md)). Checks, evidence, review outcomes
+and re-verification triggers are specified in [kyc-architecture.md](compliance/kyc-architecture.md).
+
 Thresholds, limits and the exact evidence required at each level are configurable policy and
 **LEGAL_REVIEW_REQUIRED** (LR-007, LR-008) (AML/CFT obligations). Donor verification above certain amounts or risk levels may
 become necessary: **LEGAL_REVIEW_REQUIRED** (LR-007).
@@ -292,6 +310,13 @@ organisation, school, other), registration details and documents, directors or t
 where applicable, authorised representative (who must be `IDENTITY_VERIFIED`), and a payout account in the
 organisation's name. Which organisation types may fundraise for which purposes is **LEGAL_REVIEW_REQUIRED** (LR-013)
 (e.g. obligations under the Private Voluntary Organisations Act as amended).
+
+Organisation levels (`ORG_UNVERIFIED`, `ORG_REGISTERED_VERIFIED`, `ORG_KYB_VERIFIED`, `ORG_PAYOUT_VERIFIED`),
+the beneficial-ownership test and the fundraising-authority evidence (PVO registration, excluded-body basis or
+s8 temporary authority) are specified in [kyb-architecture.md](compliance/kyb-architecture.md). The
+beneficiary is modelled separately from the campaign owner, and no payout is made before the beneficiary is
+verified ([beneficiary-verification.md](compliance/beneficiary-verification.md),
+[ADR-016](adr/ADR-016-beneficiary-verification-before-payout.md)).
 
 ### 7.3 Data handling
 
@@ -439,3 +464,32 @@ Sharing is a first-class feature. It is implemented in Stage 7 (basics) and Stag
 | PD-11 | Initial launch currency set (USD only vs USD + ZiG) | PSP support + **LEGAL_REVIEW_REQUIRED** (LR-006) |
 | PD-12 | Which organisation types can fundraise at launch | **LEGAL_REVIEW_REQUIRED** (LR-013) |
 | PD-13 | Brand, domain names, licence for the codebase | Owner decision |
+| PD-14 | Release timing: funds available at settlement match, or settlement match plus an N-day hold per risk tier | Provisional: settlement match + configurable hold per risk tier; pilot hold set by FINANCE. Approver: Founders + FINANCE. Source: [settlement-and-custody-model.md](ledger/settlement-and-custody-model.md) |
+| PD-15 | Settlement SLA before automatic FINANCE escalation, per provider and method | Provisional: provider's published timeline + 2 business days, configured per provider. Approver: FINANCE. Source: [funds-flow-architecture.md](payments/funds-flow-architecture.md) |
+| PD-16 | IMTT and rail-cost disclosure at checkout; who bears them | Provisional: disclose that bank/wallet taxes and fees may apply; FundZim does not compute IMTT; revisit after LR-059. Approver: Founders. Source: [currency-and-fx-policy.md](payments/currency-and-fx-policy.md) |
+| PD-17 | Operating-model criteria weights and launch provider strategy (single PSP vs separate collection and payout providers) | Provisional: single provider if it meets conditions C-2–C-7, otherwise two providers, both on Model A terms. Approver: Founders. Source: [operating-model-decision.md](compliance/operating-model-decision.md) |
+| PD-18 | Accept foreign-issued card donations at the pilot | Provisional: not at the pilot unless LR-044 is resolved favourably and the provider verifies foreign-card acceptance. Approver: Founders. Source: [currency-and-fx-policy.md](payments/currency-and-fx-policy.md) |
+| PD-19 | Platform-fee collection mechanism and cadence | Provisional: split at source where supported, otherwise remittance per settlement batch. Approver: Founders + FINANCE. Source: [settlement-and-custody-model.md](ledger/settlement-and-custody-model.md) |
+| PD-20 | Fee treatment on refunds and chargebacks (platform fee reversed? who bears unrecovered PSP and dispute fees?) | Provisional: platform fee reversed; campaign bears PSP and dispute fees. **Conflicts with PD-32's recommendation; decide together.** Approver: Founders. Source: [refund-and-reversal-flows.md](payments/refund-and-reversal-flows.md) |
+| PD-21 | Donor refund window and eligibility; auto-approval of duplicate-payment refunds below a limit | Provisional: donor-initiated refunds before payout only, subject to review; duplicates auto-approved below an internal limit. Approver: Founders. Source: [refund-and-reversal-flows.md](payments/refund-and-reversal-flows.md) |
+| PD-22 | Recovery order across campaign accounts; set-off against later donations | Provisional: recovery order per refund-and-reversal-flows §5.2; set-off only after LR-082. Approver: Founders + FINANCE. Source: [refund-and-reversal-flows.md](payments/refund-and-reversal-flows.md) |
+| PD-23 | Payout mechanics: in-flight payouts per campaign and currency, minimum payout, who bears payout fees | Provisional: one in flight; minimum and fee bearer set with provider pricing. Approver: Founders + FINANCE. Source: [payout-eligibility-and-controls.md](payments/payout-eligibility-and-controls.md) |
+| PD-24 | Pilot approval policy: whether AUTO approval exists, SINGLE/DUAL thresholds | Provisional: no AUTO at the pilot; every payout at least SINGLE; DUAL above the LR-030 threshold. Approver: Founders + FINANCE. Source: [payout-eligibility-and-controls.md](payments/payout-eligibility-and-controls.md) |
+| PD-25 | Identity verification approach for the pilot (vendor vs manual) and vendor choice | Provisional: manual-only review acceptable at pilot scale; choose a vendor before scaling. Approver: Founders + COMPLIANCE lead. Source: [kyc-architecture.md](compliance/kyc-architecture.md) |
+| PD-26 | Donor verification policy: unverified-donor caps, identity threshold, anonymous donations to PVO campaigns | Provisional: caps configured as INTERNAL_RISK limits pending LR-007. Approver: Founders + COMPLIANCE lead. Source: [aml-risk-framework.md](compliance/aml-risk-framework.md) |
+| PD-27 | Launch scope for individual "for others" campaigns; surplus over a confirmed institution invoice | Provisional: disabled (`campaign.individual_for_others.enabled = false`) until counsel answers LR-046 – LR-048. Approver: Founders on counsel's advice. Source: [beneficiary-verification.md](compliance/beneficiary-verification.md) |
+| PD-28 | Named compliance officer and DPO; case SLAs and staffing at launch | Provisional: both named before the pilot. Approver: Founders. Source: [aml-risk-framework.md](compliance/aml-risk-framework.md) |
+| PD-29 | Screening vendor and list provider, rescreen frequency, match thresholds | Provisional: select in Stage 5. Approver: Founders + COMPLIANCE lead. Source: [sanctions-screening.md](compliance/sanctions-screening.md) |
+| PD-30 | Donor refund window and discretionary refund policy | **Duplicate of PD-21** (same recommendation: before payout only). Kept for reference. Source: [donor-protection-policy.md](compliance/donor-protection-policy.md) |
+| PD-31 | Review and complaint SLAs per risk tier | Provisional: fast-track for funeral/emergency with tighter payout controls. Overlaps PD-08; decide together. Approver: Founders. Source: [donor-protection-policy.md](compliance/donor-protection-policy.md) |
+| PD-32 | Platform-fee treatment on refunds and chargebacks | **Duplicate of PD-20, with a different recommendation:** refund the platform fee on duplicate and fraud refunds, retain it on discretionary refunds. Decide together with PD-20. Source: [donor-protection-policy.md](compliance/donor-protection-policy.md) |
+| PD-33 | Payout reserve or delay for high-risk tiers and card-heavy campaigns | Provisional: percentage or time-based holdback per tier (uses `campaign_reserve`), value TBD. Approver: Founders + FINANCE. Source: [donor-protection-policy.md](compliance/donor-protection-policy.md) |
+| PD-34 | Loss allocation after payout; whether to offer a donor guarantee | Provisional: no guarantee in MVP; FundZim bears unrecoverable chargebacks; recovery pursued (LR-080). Approver: Founders. Source: [donor-protection-policy.md](compliance/donor-protection-policy.md) |
+| PD-35 | Policy for individual "fundraising for others" campaigns until PVO Act advice | **Duplicate of PD-27.** Its recommended option (b), allow only with s8 authority or registered-PVO sponsorship, is one of PD-27's options. Source: [open-legal-questions.md](compliance/open-legal-questions.md) §7 |
+| PD-36 | Operating entity: jurisdiction and structure | Provisional: Zimbabwe-resident operating company as the contracting party, subject to tax and legal advice. Approver: Founders. Source: [open-legal-questions.md](compliance/open-legal-questions.md) §7 |
+| PD-37 | Approach the RBZ before the pilot (comfort letter, sandbox)? | Provisional: decide after counsel's LR-041 view; default approach with counsel. Approver: Founders. Source: [open-legal-questions.md](compliance/open-legal-questions.md) §7 |
+| PD-38 | Hosting region for personal and KYC data | Provisional: defer until LR-011/LR-057; design must allow in-country KYC hosting. Approver: Founders + DPO. Source: [open-legal-questions.md](compliance/open-legal-questions.md) §7 |
+| PD-39 | Default public visibility of beneficiary identity, medical detail and minors' images | Provisional: hide medical detail and minors' identifying details by default; no minors' faces unless guardian consent is verified. Approver: Founders + DPO. Source: [open-legal-questions.md](compliance/open-legal-questions.md) §7 |
+
+PD-14 – PD-39 were raised in Stage 1. Each is a business-owner decision; the provisional recommendation
+applies until it is approved. The Stage 2 handover lists them with their impact on design.

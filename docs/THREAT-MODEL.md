@@ -140,7 +140,7 @@ Stage = the roadmap stage that implements the primary mitigation.
 | T-16 | R | Insider edits records then denies it | High | Medium | Append-only ledger/audit with triggers; hash-chained audit events; staff actions require reason | 3, 10 |
 | T-17 | E | SUPER_ADMIN grants self sensitive permissions | High | Low | No self-grant; role grants maker-checker; alerts on grants | 4, 14 |
 | T-18 | T | Payout destination swapped by attacker or insider | High | Medium | Destination ownership verification (name match); change → hold + cooling-off + notifications; staff override is maker-checker | 11 |
-| T-19 | D | Double payout from retry after timeout | High | Medium | Payout idempotency key to provider; unknown outcome stays PROCESSING until status/reconciliation; UNIQUE payout request key | 11 |
+| T-19 | D | Double payout from retry after timeout | High | Medium | Payout idempotency key to provider; unknown outcome moves the payout to `UNKNOWN` (ADR-020) and it is never resubmitted; it is resolved by status query or reconciliation; UNIQUE payout request key | 11 |
 | T-20 | T | Race: two concurrent withdrawals exceed available balance | High | Medium | Serialised balance check + ledger hold posting in one DB transaction (row lock or serializable); concurrency tests | 10, 11, 19 |
 | T-21 | I | Logs/error reports leak OTPs, tokens, ID numbers | High | Medium | Allow-list logging; redaction tests; scrubbing in error reporter | 3 |
 | T-22 | I | Anonymous donor de-anonymised via API or campaign owner exports | Medium | Medium | Per-audience DTOs; owner exports exclude anonymous donor identity | 6, 7 |

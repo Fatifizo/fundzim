@@ -1,6 +1,6 @@
 # ADR-010: Multi-currency architecture
 
-- **Status:** Accepted
+- **Status:** Accepted — **amended by [ADR-018](ADR-018-currency-isolation-and-fx.md)** (currency isolation rules, `minor_units_verified`; Stage 1)
 - **Date:** 2026-10-08
 - **Stage:** 0 (design), applies from Stage 2 data model onward
 
@@ -13,9 +13,11 @@ combining or converting currencies would misstate what a campaign has raised and
 
 ## Decision
 
-- Every amount carries its currency (ADR-005). A `currencies` table (code, numeric, minor_units, name, display_symbol, enabled)
+- Every amount carries its currency (ADR-005). A `currencies` table (code, numeric, minor_units, minor_units_verified, name, display_symbol, enabled)
   starts with **USD (840, 2)** and **ZWG (924, 2)**. Code and data use `ZWG`, and the UI displays "ZiG". The
-  minor-unit usage that PSPs apply to ZWG must be verified (open item).
+  minor-unit usage that PSPs apply to ZWG must be verified (open item). *Amended by
+  [ADR-018](ADR-018-currency-isolation-and-fx.md):* `minor_units_verified` is `false` for ZWG until LR-043
+  and PCR-018 are resolved, and while it is false ZWG runs only in sandbox/test.
 - **USD and ZWG are never combined, summed or compared.**
   - The `Money` type rejects cross-currency arithmetic.
   - Ledger accounts are single-currency.

@@ -146,22 +146,29 @@ by default. `SUPER_ADMIN` can assign roles, but:
 
 Indicative role → permission matrix (final matrix in Stage 4/14):
 
-| Permission | REVIEWER | SUPPORT | COMPLIANCE | FINANCE | ADMIN | SUPER_ADMIN |
-|---|---|---|---|---|---|---|
-| View campaign + review queue | ✓ | read | ✓ | read | ✓ | ✓ |
-| Approve/reject campaign | ✓ | | ✓ | | | |
-| Suspend / unsuspend campaign | ✓ | | ✓ | | | |
-| Freeze campaign / payouts | | | ✓ | ✓ | | |
-| View KYC status | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| View KYC documents / reveal ID numbers | | | ✓ (justified) | | | |
-| Record KYC decision | | | ✓ | | | |
-| Approve payout (checker) | | | | ✓ | | |
-| Create ledger adjustment (maker) | | | | ✓ | | |
-| Approve ledger adjustment (checker) | | | | ✓ (different person) | | |
-| Request refund (maker) | | ✓ | ✓ | | | |
-| Approve refund (checker) | | | | ✓ (not the requester) | | |
-| Assign roles | | | | | | ✓ (maker-checker) |
-| Read audit log | | | ✓ (scoped) | ✓ (financial) | | ✓ |
+Stage 1 added two roles ([ADR-017](adr/ADR-017-payout-approval-segregation-of-duties.md)):
+`KYC_REVIEWER` (identity-verification decisions) and `SECURITY_ADMIN` (access reviews, key rotation, incident
+tooling, with no access to financial records, KYC documents or donor identities). The full
+separation-of-duties matrix and maker-checker policy are in
+[compliance/operational-controls.md](compliance/operational-controls.md).
+
+| Permission | REVIEWER | KYC_REVIEWER | SUPPORT | COMPLIANCE | FINANCE | ADMIN | SECURITY_ADMIN | SUPER_ADMIN |
+|---|---|---|---|---|---|---|---|---|
+| View campaign + review queue | ✓ | | read | ✓ | read | ✓ | | ✓ |
+| Approve/reject campaign | ✓ | | | ✓ | | | | |
+| Suspend / unsuspend campaign | ✓ | | | ✓ | | | | |
+| Freeze campaign / payouts | | | | ✓ | ✓ | | | |
+| View KYC status | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | ✓ |
+| View KYC documents / reveal ID numbers | | ✓ (justified) | | ✓ (justified) | | | | |
+| Record KYC decision | | ✓ | | ✓ | | | | |
+| Approve payout (checker) | | | | | ✓ | | | |
+| Create ledger adjustment (maker) | | | | | ✓ | | | |
+| Approve ledger adjustment (checker) | | | | | ✓ (different person) | | | |
+| Request refund (maker) | | | ✓ | ✓ | | | | |
+| Approve refund (checker) | | | | | ✓ (not the requester) | | | |
+| Access reviews, key/secret rotation, incident tooling | | | | | | | ✓ | |
+| Assign roles | | | | | | | | ✓ (maker-checker) |
+| Read audit log | | | | ✓ (scoped) | ✓ (financial) | | ✓ (security events) | ✓ |
 
 ### 5.3 Separation of duties (maker-checker)
 

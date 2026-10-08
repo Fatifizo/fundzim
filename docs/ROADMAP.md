@@ -97,6 +97,13 @@ Notes on ordering:
 
 ## Stage 1 — Regulatory & Compliance Architecture
 
+> **Status: delivered as documentation (awaiting acceptance).** Stage 1 produced the regulatory research,
+> operating-model decision, funds flows, provider evaluation, KYC/KYB/AML designs, payout controls and
+> compliance operations documents indexed in [COMPLIANCE.md](COMPLIANCE.md) §6 and
+> [payments/](payments/), plus ADR-013 – ADR-020. The `LR` items are **researched but not resolved**: no
+> counsel has reviewed them, so "recorded answers per `LR-xxx`" remains outstanding and is carried as a
+> condition into later stages (P0 items gate Stage 20). Handover: [stage-handover/STAGE-1-TO-STAGE-2.md](stage-handover/STAGE-1-TO-STAGE-2.md).
+
 - **Objective:** Turn the compliance assumptions register into a researched position with qualified
   Zimbabwean counsel, and define the operating model the law allows.
 - **Dependencies:** Stage 0.
@@ -168,6 +175,11 @@ Notes on ordering:
 
 - **Objective:** Individual and organisation verification workflows with segregated, protected storage.
 - **Dependencies:** Stage 4; Stage 1 (KYC thresholds, vendor/legal constraints).
+- **Stage 1 inputs:** [kyc-architecture.md](compliance/kyc-architecture.md) (levels + status overlay,
+  ADR-015), [kyb-architecture.md](compliance/kyb-architecture.md) including the PVO **fundraising authority**
+  records (`kyc.fundraising_authorities`), [beneficiary-verification.md](compliance/beneficiary-verification.md)
+  (ADR-016), [sanctions-screening.md](compliance/sanctions-screening.md) and
+  [identity-data-protection.md](security/identity-data-protection.md). Remote identification standard is LR-062.
 - **Major deliverables:** Verification levels (UNVERIFIED → BASIC → IDENTITY → PAYOUT); `kyc` schema + DB role;
   application-level encryption of identity numbers with blind index; `private-kyc` bucket; upload quarantine
   + malware scanning; verification vendor adapter (vendor chosen in this stage, behind an interface) + fake
@@ -184,6 +196,10 @@ Notes on ordering:
 
 - **Objective:** Campaign creation, editing, review and the full lifecycle state machine.
 - **Dependencies:** Stages 4, 5.
+- **Stage 1 inputs:** [campaign-approval-policy.md](compliance/campaign-approval-policy.md). The campaign engine
+  must record a fundraising authority per campaign, cap the end date at the authority's validity, and enforce
+  the policy flag `campaign.individual_for_others.enabled` (default `false`) until LR-046 – LR-048 and PD-27
+  are decided. Depends on Stage 5's fundraising-authority records.
 - **Major deliverables:** Campaign model (goal currency, categories, beneficiary declaration, story, media
   references); state machine per PRODUCT.md §6 with DB constraints; review queue and checklists;
   re-review on material edits; suspend/freeze/cancel with reasons; campaign updates; public media pipeline
@@ -215,6 +231,11 @@ Notes on ordering:
 - **Objective:** The provider-neutral payments module, with sandbox provider, webhook inbox, idempotency and
   payment state machine.
 - **Dependencies:** Stages 3, 6.
+- **Stage 1 inputs:** [transaction-lifecycle.md](payments/transaction-lifecycle.md) (states incl. `UNKNOWN`,
+  `AUTHORISED`; ADR-020). Provider capabilities gain a `custody_model` (`PSP_POOL` / `MERCHANT_SETTLEMENT` /
+  `SPLIT_DIRECT`), and routing **refuses** `MERCHANT_SETTLEMENT` providers for donations (ADR-013). The
+  currency registry's `minor_units_verified` gate keeps ZWG sandbox-only until LR-043 / PCR-018 are resolved
+  (ADR-018).
 - **Major deliverables:** `payments.Service`; `Provider` interface with capabilities; sandbox provider
   (scriptable: decline, timeout, duplicate/out-of-order webhooks, late success); payment intent state
   machine with precedence rules; `Idempotency-Key` handling; webhook inbox + async processing + DLQ;
@@ -233,6 +254,12 @@ Notes on ordering:
 - **Objective:** Contract and integrate the PSP(s) chosen from the Stage 1 shortlist for target rails (mobile money, ZimSwitch / bank,
   cards) **in test/sandbox environments**.
 - **Dependencies:** Stage 8; Stage 1 (PSP selection, settlement model, contracts).
+- **Stage 1 inputs:** provider due diligence per
+  [provider-due-diligence-checklist.md](payments/provider-due-diligence-checklist.md) and the `PCR-xxx`
+  questions in [provider-questions.md](payments/provider-questions.md). Provider selection is **pending**
+  ([provider-comparison.md](payments/provider-comparison.md)); no provider may be contracted unless it supports
+  a Model A or Model C custody arrangement (ADR-013). ZWG stays sandbox-only while `minor_units_verified` is
+  false.
 - **Major deliverables:** Provider adapter(s); capability declarations; webhook verification per provider;
   status polling where webhooks are weak; settlement report ingestion format; provider-specific runbooks.
 - **Security considerations:** Credential scoping per environment; IP allow-listing where offered; verifying
@@ -263,9 +290,16 @@ Notes on ordering:
 
 - **Objective:** Safe payout requests, approval and execution to verified beneficiaries.
 - **Dependencies:** Stages 10, 12, 5 (PAYOUT_VERIFIED).
+- **Stage 1 inputs:** [payout-lifecycle.md](payments/payout-lifecycle.md),
+  [payout-eligibility-and-controls.md](payments/payout-eligibility-and-controls.md) and the settlement-aware
+  ledger ([settlement-and-custody-model.md](ledger/settlement-and-custody-model.md)). Every limit is a
+  configured limit record (REGULATORY / PROVIDER / INTERNAL_RISK) and an **unconfigured limit fails closed** to
+  manual review. Payout requires a verified beneficiary and valid fundraising authority where required.
 - **Major deliverables:** Payout request flow; available-balance computation from the ledger (per currency,
-  less holds/reserves); payout state machine (REQUESTED → UNDER_REVIEW → APPROVED → PROCESSING → PAID |
-  FAILED | CANCELLED, + RETURNED); automated policy checks on every payout and maker-checker approval above
+  less holds/reserves); payout state machine per ADR-020 (PAYOUT_REQUESTED → PENDING_REVIEW → APPROVED → SUBMITTED →
+  PROCESSING → COMPLETED | FAILED | REJECTED | CANCELLED | UNKNOWN, + REVERSED;
+  [payments/payout-lifecycle.md](payments/payout-lifecycle.md)) and the eligibility engine
+  ([payments/payout-eligibility-and-controls.md](payments/payout-eligibility-and-controls.md)); automated policy checks on every payout and maker-checker approval above
   configurable thresholds (LR-030); destination verification + cooling-off; minimal rule-based risk/hold hook
   (extended in Stage 13); provider payout adapters; payout failure and return handling.
 - **Security considerations:** Account takeover → payout redirection; insider fraud (dual control);
@@ -292,6 +326,10 @@ Notes on ordering:
 
 - **Objective:** Detect and act on fraud and abuse across users, campaigns, donations and payouts.
 - **Dependencies:** Stages 6, 11 (extends the Stage 11 risk/hold hook).
+- **Stage 1 inputs:** [aml-risk-framework.md](compliance/aml-risk-framework.md) (limits model, fail-closed),
+  [transaction-monitoring.md](compliance/transaction-monitoring.md) (TM-01 – TM-19),
+  [compliance-case-management.md](compliance/compliance-case-management.md). Automated-decision safeguards are
+  LR-071.
 - **Major deliverables:** Rules engine with explainable risk scores; velocity limits; device/IP signals (where
   lawful); automatic holds; investigation cases; sanctions/watch-list integration; suspicious-transaction
   workflow (**LEGAL_REVIEW_REQUIRED**, LR-008: reporting obligations); card-testing defences.
@@ -386,6 +424,12 @@ Notes on ordering:
 
 - **Objective:** Decide, with evidence, whether FundZim may run a limited pilot with real users and money.
 - **Dependencies:** Stages 18, 19, 15, 16; legal/regulatory sign-off on all blocking `LR-xxx` items.
+- **Stage 1 gates:** entry requires **every P0 item** in
+  [open-legal-questions.md](compliance/open-legal-questions.md) §5 resolved (or the dependent feature disabled),
+  provider due diligence passed for each provider in use, a POTRAZ data-controller licence and named DPO
+  before real personal data is processed (LR-010, LR-057), a named compliance officer (PD-28), and the
+  [regulatory-readiness-checklist.md](compliance/regulatory-readiness-checklist.md) items at `APPROVED` or
+  `EXTERNALLY_VERIFIED` where required.
 - **Major deliverables:** Operational readiness review; legal readiness confirmation (by counsel);
   production deployment; monitoring, on-call and runbooks; pilot limits (users, amounts, rails); go/no-go
   record; post-pilot review plan.

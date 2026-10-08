@@ -25,8 +25,8 @@ Bug fixes, refactors inside one module, and routine dependency upgrades do not n
 1. Copy `ADR-000-template.md` to `ADR-NNN-short-kebab-title.md` using the next unused number. Numbers are never reused.
 2. Set **Status: Proposed** and open it for review with the change that depends on it.
 3. Financial, security or KYC-affecting ADRs need review from the technical lead **and** a second engineer;
-   anything with regulatory impact must also list the relevant `LEGAL_REVIEW_REQUIRED` items from
-   [`../COMPLIANCE.md`](../COMPLIANCE.md).
+   anything with regulatory impact must also list the relevant `LEGAL_REVIEW_REQUIRED` items (`LR-xxx`) from
+   the register in [`../compliance/open-legal-questions.md`](../compliance/open-legal-questions.md).
 4. On approval set **Status: Accepted** and update the index below.
 5. Accepted ADRs are not rewritten. To change a decision, write a new ADR that supersedes it, then set the old
    one to **Superseded by ADR-NNN** (the only edit allowed to an accepted ADR, plus typo fixes).
@@ -50,10 +50,18 @@ Bug fixes, refactors inside one module, and routine dependency upgrades do not n
 | [ADR-003](ADR-003-nextjs-frontend.md) | Next.js frontend (presentation layer only) | Accepted |
 | [ADR-004](ADR-004-postgresql.md) | PostgreSQL as the authoritative database | Accepted |
 | [ADR-005](ADR-005-exact-money-representation.md) | Integer minor-unit money representation | Accepted |
-| [ADR-006](ADR-006-double-entry-ledger.md) | Double-entry ledger requirement | Accepted |
-| [ADR-007](ADR-007-payment-provider-abstraction.md) | Payment provider abstraction | Accepted |
+| [ADR-006](ADR-006-double-entry-ledger.md) | Double-entry ledger requirement | Accepted (amended by ADR-014) |
+| [ADR-007](ADR-007-payment-provider-abstraction.md) | Payment provider abstraction | Accepted (amended by ADR-020) |
 | [ADR-008](ADR-008-s3-object-storage.md) | S3-compatible object storage | Accepted |
 | [ADR-009](ADR-009-kyc-storage-separation.md) | Sensitive KYC storage separation | Accepted |
-| [ADR-010](ADR-010-multi-currency.md) | Multi-currency architecture | Accepted |
+| [ADR-010](ADR-010-multi-currency.md) | Multi-currency architecture | Accepted (amended by ADR-018) |
 | [ADR-011](ADR-011-utc-time.md) | UTC internal time | Accepted |
 | [ADR-012](ADR-012-container-first.md) | Container-first development | Accepted |
+| [ADR-013](ADR-013-regulatory-operating-model.md) | Regulatory operating model: PSP-mediated (Model A) for the MVP | Accepted (provisional — subject to LR-001/LR-004 and provider confirmation) |
+| [ADR-014](ADR-014-accounting-separated-from-custody.md) | Separation of financial accounting from custody | Accepted |
+| [ADR-015](ADR-015-risk-based-identity-verification.md) | Risk-based identity verification | Accepted |
+| [ADR-016](ADR-016-beneficiary-verification-before-payout.md) | Beneficiary verification before payout | Accepted |
+| [ADR-017](ADR-017-payout-approval-segregation-of-duties.md) | Payout approval and segregation of duties | Accepted |
+| [ADR-018](ADR-018-currency-isolation-and-fx.md) | Currency isolation and FX policy | Accepted |
+| [ADR-019](ADR-019-regulatory-evidence-management.md) | Regulatory evidence management | Accepted |
+| [ADR-020](ADR-020-payment-payout-state-model-revision.md) | Payment and payout state model revision | Accepted |

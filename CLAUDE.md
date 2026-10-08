@@ -15,7 +15,9 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
-**Stage 0 — Product Definition & Engineering Foundation (complete; awaiting acceptance).**
+**Stage 1 — Regulatory, Compliance, Funds-Flow & Payment Operating Architecture (complete; awaiting
+acceptance).** Stage 0 is complete. A documentation-stage PASS is never permission to operate a live
+crowdfunding business or to move real money.
 Do not start a stage until the user explicitly asks for it. Do not implement work belonging to a later stage
 "while you're there". Each stage ends with a completion report (template in `docs/DEVELOPMENT.md`) and then
 STOPS.
@@ -38,6 +40,15 @@ STOPS.
    auth/permissions/uploads → `docs/SECURITY.md`; KYC/personal data → `docs/DATA-CLASSIFICATION.md` and
    `docs/PRIVACY.md`; schema → `docs/DATABASE.md`; audit → `docs/AUDIT.md`; regulatory → `docs/COMPLIANCE.md`;
    UI → `docs/FRONTEND.md`; logging/metrics → `docs/OBSERVABILITY.md`; overall → `docs/ARCHITECTURE.md`.
+   Stage 1 specifications refine these and win where they are more specific:
+   operating model / custody → `docs/compliance/operating-model-decision.md`, `docs/ledger/settlement-and-custody-model.md`;
+   payment & payout states → `docs/payments/transaction-lifecycle.md`, `docs/payments/payout-lifecycle.md`,
+   `docs/payments/payout-eligibility-and-controls.md`; refunds/disputes → `docs/payments/refund-and-dispute-architecture.md`;
+   currency → `docs/payments/currency-and-fx-policy.md`; providers → `docs/payments/provider-*.md`;
+   identity → `docs/compliance/kyc-architecture.md`, `kyb-architecture.md`, `beneficiary-verification.md`,
+   `docs/security/identity-data-protection.md`; AML/risk → `docs/compliance/aml-risk-framework.md` and siblings;
+   staff controls → `docs/compliance/operational-controls.md`; evidence → `docs/compliance/audit-evidence-model.md`.
+   Stage 2 starts from `docs/stage-handover/STAGE-1-TO-STAGE-2.md`.
 2. Check the relevant ADRs in `docs/adr/`.
 3. If the change contradicts a doc or ADR, do not silently diverge. Propose a new ADR (or a superseding one)
    and get agreement first.
@@ -60,11 +71,20 @@ STOPS.
 7. **Every financial operation is idempotent**: payment creation, webhook processing, ledger posting, refunds,
    payout requests, payout processing. Back idempotency with database unique constraints, not just code.
 8. **Every external callback is authenticated and verified** (signature, timestamp/replay window, dedupe).
-9. **Unknown outcome ≠ failure.** After a timeout, a payment/payout stays pending until resolved by status
-   query or reconciliation. Never auto-retry an operation that could double-pay without an idempotency key.
+9. **Unknown outcome ≠ failure.** A timeout or ambiguous provider response puts a payment or payout in
+   `UNKNOWN`, resolved only by authoritative status query, webhook or reconciliation — never `FAILED` by
+   assumption. A payout in `UNKNOWN` is **never resubmitted**; the provider reference (`payment_id`,
+   `payout_id`, `refund_id`) is reused on every retry, and a retry after an authoritative failure is a new
+   request with a new id.
 10. **Enforce critical invariants in the database too** (constraints, triggers, restricted grants), not only
     in application code.
-11. **Stop and report** if you observe a financial invariant failure (imbalanced journal, negative available
+11. **Money states are distinct.** Captured ≠ settled ≠ available ≠ reserved ≠ paid out. Never present them as
+    one "campaign balance". Funds become available only after a settlement match and a release posting
+    (`docs/ledger/settlement-and-custody-model.md`).
+12. **Payouts fail closed.** Every eligibility check must pass at request time and again immediately before
+    submission. An unconfigured limit, missing verification, open hold or missing fundraising-authority
+    evidence routes the payout to manual review — never to automatic approval.
+13. **Stop and report** if you observe a financial invariant failure (imbalanced journal, negative available
     balance, reconciliation mismatch, duplicate posting). Do not "fix" it by editing data or loosening checks.
 
 ## Security and privacy rules
@@ -83,14 +103,34 @@ STOPS.
 - Do not remove, weaken, or bypass a security control to get past a development problem. Fix the problem.
 - Sensitive staff actions require maker-checker (the initiator cannot approve): payouts above configurable
   thresholds or flagged by risk (every payout still passes automated policy checks), refunds, ledger
-  adjustments, role grants, fee-configuration changes and unfreezing campaigns.
+  adjustments, role grants, fee-configuration changes, limit/threshold changes, compliance overrides and
+  exemptions, staff changes to payout destinations, and unfreezing campaigns
+  (`docs/compliance/operational-controls.md`, ADR-017).
+- Holds and freezes are new records plus ledger moves (payable → held). They never edit or delete history.
+- Audit events never embed identity documents, KYC values or secrets; they reference evidence records
+  (`docs/compliance/audit-evidence-model.md`, ADR-019).
 
 ## Regulatory rules
 
 - Do not invent legal or regulatory conclusions. Do not assume FundZim may hold customer funds, operate a
   wallet/stored value, or act as a payment provider.
-- Mark every unresolved legal/regulatory dependency `LEGAL_REVIEW_REQUIRED` and add or reference an entry in
-  the Compliance Assumptions Register (`docs/COMPLIANCE.md`, IDs `LR-xxx`).
+- **Operating model A (ADR-013):** a licensed PSP collects, holds and disburses; FundZim orchestrates and keeps
+  records. Only FundZim's own platform-fee income may land in a FundZim bank account. Never integrate a
+  provider in a way that settles donor funds to a FundZim account (merchant settlement = Model B in
+  substance): provider routing must refuse that custody model. Moving to Model B needs a new ADR plus legal
+  sign-off.
+- Ledger balances are accounting records, not spendable stored value. Never build wallets, user-spendable
+  balances or transfers between users.
+- FundZim never converts currencies (only authorised dealers may). A rail that cannot settle in the donation
+  currency is not offered for that donation.
+- Mark every unresolved legal/regulatory dependency `LEGAL_REVIEW_REQUIRED` with an `LR-xxx` entry in
+  `docs/compliance/open-legal-questions.md` (the authoritative register). Unconfirmed provider behaviour is
+  `PROVIDER_CONFIRMATION_REQUIRED` with a `PCR-xxx` entry in `docs/payments/provider-questions.md`. Unknown
+  regulatory requirements go in `docs/compliance/regulatory-requirements-register.md` (`REQ-xxx`).
+- Never invent a statute, section, statutory instrument, threshold, rate, fee or provider capability. Cite a
+  source you actually read, with URL and access date, or mark it unverified.
+- Legal thresholds and limits are configuration (type REGULATORY / PROVIDER / INTERNAL_RISK, with source,
+  approval owner, effective dates and review date) — never hard-coded.
 - Never write "compliant", "licensed", "approved", "PCI compliant", "certified" or similar claims anywhere
   (code, docs, UI copy) unless the user supplies evidence.
 

@@ -1,6 +1,8 @@
 # FundZim — Payments Architecture
 
-> Status: Stage 0 specification. **No payment provider is selected and none is integrated.**
+> Status: Stage 0 specification, amended in Stage 1 (§6, §8, §13 superseded by
+> [ADR-020](adr/ADR-020-payment-payout-state-model-revision.md); Stage 1 detail in [payments/](payments/)).
+> **No payment provider is selected and none is integrated.**
 >
 > | Stage | Delivers |
 > |---|---|
@@ -143,71 +145,35 @@ type Capabilities struct {
 
 ## 6. Payment intent state machine
 
-```mermaid
-stateDiagram-v2
-    [*] --> CREATED
-    CREATED --> PENDING: submitted to provider
-    CREATED --> FAILED: rejected before submit (validation/risk)
-    CREATED --> CANCELLED
-    PENDING --> REQUIRES_ACTION: handset/USSD/3DS approval needed
-    REQUIRES_ACTION --> PENDING
-    PENDING --> SUCCEEDED
-    REQUIRES_ACTION --> SUCCEEDED
-    PENDING --> FAILED
-    REQUIRES_ACTION --> FAILED
-    PENDING --> CANCELLED
-    REQUIRES_ACTION --> CANCELLED
-    PENDING --> EXPIRED
-    REQUIRES_ACTION --> EXPIRED
-    SUCCEEDED --> PARTIALLY_REFUNDED
-    SUCCEEDED --> REFUNDED
-    PARTIALLY_REFUNDED --> PARTIALLY_REFUNDED
-    PARTIALLY_REFUNDED --> REFUNDED
-    SUCCEEDED --> DISPUTED
-    PARTIALLY_REFUNDED --> DISPUTED
-    DISPUTED --> SUCCEEDED: dispute won
-    DISPUTED --> CHARGED_BACK: dispute lost
-```
+> **Superseded by [ADR-020](adr/ADR-020-payment-payout-state-model-revision.md) (Stage 1).** The authoritative
+> state model, transition table (P1–P20), rank table and out-of-order rules are in
+> [payments/transaction-lifecycle.md](payments/transaction-lifecycle.md). This section is a summary only;
+> if the two differ, the lifecycle document wins.
+
+States: `CREATED`, `PENDING`, `REQUIRES_ACTION`, `AUTHORISED` (only for providers that separate authorisation
+from capture), `UNKNOWN`, `SUCCEEDED` (= captured/confirmed), `FAILED`, `CANCELLED`, `EXPIRED`,
+`PARTIALLY_REFUNDED`, `REFUNDED`, `DISPUTED`, `CHARGED_BACK`.
+
+- `UNKNOWN` replaces the Stage 0 `outcome_unknown` flag. It means FundZim cannot tell whether the provider
+  received or processed a request (timeout, connection reset after send, 5xx, malformed response). It is
+  resolved **only** by an authoritative status query, webhook or reconciliation. **A timeout never means
+  `FAILED`.**
+- Settlement is **not** a payment status. It is tracked on settlement/reconciliation records and in the
+  ledger ([ledger/settlement-and-custody-model.md](ledger/settlement-and-custody-model.md)).
+- `CHARGED_BACK` covers any involuntary reversal (card chargeback or provider-initiated reversal), with a
+  `reversal_kind` attribute. It is never recorded as `REFUNDED`.
 
 ### 6.1 Precedence (out-of-order protection)
 
-Each status has a rank. An inbound event may move a payment only if the target status has a **higher rank
-AND** the move is an edge in the state graph above (the single exception, `DISPUTED → SUCCEEDED`, is listed
-below). Rank alone is never sufficient: an early `refunded` event must not move PENDING straight to REFUNDED
-and post a refund for a capture that was never posted.
+Each status has a rank (`CREATED` 0, `UNKNOWN` 5, `PENDING` 10, `REQUIRES_ACTION` 20, `AUTHORISED` 30,
+`FAILED`/`CANCELLED`/`EXPIRED` 50, `SUCCEEDED` 60, then the post-success statuses). An inbound event may move
+a payment only if the target has a **higher rank AND** the move is an edge in the state graph. Rank alone is
+never sufficient. Events whose prerequisite state has not been reached are **parked** and reprocessed later
+(TESTING.md scenario F3). Explicit exceptions (`DISPUTED → SUCCEEDED` when a dispute is won; late
+authoritative success after `FAILED`/`EXPIRED`/`CANCELLED`) are listed in the lifecycle document §5.
 
-- **Lower-rank events** are recorded in `payment_events` and otherwise ignored.
-- **Higher-rank events whose prerequisite state has not been reached** (e.g. `refunded` or `disputed` while
-  the payment is still PENDING) are **parked**: recorded, held in the inbox with status `PARKED`, and
-  reprocessed when the payment reaches the prerequisite state (or escalated to reconciliation if it never
-  does within the configured window). See TESTING.md scenario F3.
-
-| Rank | Status | Terminal for collection? |
-|---|---|---|
-| 0 | CREATED | no |
-| 10 | PENDING | no |
-| 20 | REQUIRES_ACTION | no |
-| 50 | FAILED / CANCELLED / EXPIRED | yes |
-| 60 | SUCCEEDED | yes (post-success edges only) |
-| 70 | PARTIALLY_REFUNDED | post-success |
-| 80 | DISPUTED | post-success |
-| 90 | REFUNDED | post-success, terminal |
-| 95 | CHARGED_BACK | post-success, terminal (dispute lost) |
-
-Special cases:
-
-- **FAILED/EXPIRED then SUCCEEDED** from an authoritative source: success wins (rank 60 > 50). This is the
-  "money arrived after we gave up" case. The payment moves to SUCCEEDED, the ledger posts, and a `risk`/ops
-  signal is raised. The donor is not charged twice because our reference never changed.
-- **SUCCEEDED then FAILED**: the event is ignored for state, recorded, and alerted as an anomaly for
-  reconciliation review. A genuine reversal arrives as a refund or dispute event, not as "failed".
-- `DISPUTED → SUCCEEDED` (dispute won) is an allowed edge despite the lower rank, because it is explicitly
-  modelled.
-- Every transition is written to `payment_events` (append-only): `from`, `to`, source
-  (`WEBHOOK`/`POLL`/`RECON`/`USER`/`STAFF`), `provider_event_id` and timestamps.
-
-The transition and the resulting ledger posting happen in **one DB transaction**. A transition to SUCCEEDED
-without a ledger posting cannot commit.
+Every transition is written to `payment_events` (append-only). The transition and its ledger posting happen
+in **one DB transaction**; a transition to `SUCCEEDED` without its ledger posting cannot commit.
 
 > **Stage sequencing.** The payment abstraction (Stage 8) is built before the ledger (Stage 10). In Stage 8,
 > `payments` posts through the `ledger.Post` interface backed by an explicit **test-only stub** that records
@@ -257,13 +223,16 @@ the final state. Polling is read-only and never triggers confirmation by itself.
 
 ## 8. Timeouts and unknown outcomes
 
+> **Superseded by [ADR-020](adr/ADR-020-payment-payout-state-model-revision.md).** Authoritative procedure:
+> [payments/transaction-lifecycle.md](payments/transaction-lifecycle.md) (Flow 6). Summary:
+
 | Situation | Handling |
 |---|---|
-| `CreatePayment` fails with `ErrDefinitelyNotSent` (e.g. DNS failure, connection refused before write) | Safe to retry with the **same** provider idempotency reference, or fall back to another provider (payment not yet bound). |
-| `CreatePayment` times out / `ErrOutcomeUnknown` | The payment stays `PENDING` with flag `outcome_unknown=true`. The client is told "processing". A status-poll job queries `GetPayment(our reference)` with backoff. Retrying creation is allowed **only** with the same idempotency reference and only if the provider documents idempotent creation. Otherwise poll only. |
-| No webhook within the provider's expected window | Poll `GetPayment`. Polling results go through the same precedence rules as webhooks (source `POLL`). |
-| Still unresolved after the max polling horizon | → `EXPIRED` only if the provider confirms expiry or documents a hard expiry. Otherwise the payment stays PENDING and is flagged for reconciliation and ops review. **Never mark failed on silence alone** when the provider might still settle. |
-| Success arrives after client gave up / after EXPIRED | Accepted per §6.1. The ledger posts and the donor is notified. |
+| `CreatePayment` fails with `ErrDefinitelyNotSent` (e.g. DNS failure, connection refused before write) | Safe to retry with the **same** provider reference (`payment_id`), or fall back to another provider (payment not yet bound). |
+| `CreatePayment` times out / `ErrOutcomeUnknown` | The payment moves to **`UNKNOWN`**. The donor is told "We're confirming your payment — don't pay again". A status-poll job queries `GetPayment(payment_id)` with backoff. Creation is retried **only** with the same reference and only if the provider documents idempotent creation (PCR-009); otherwise poll only. |
+| No webhook within the provider's expected window | Poll `GetPayment`. Poll results go through the same precedence rules as webhooks (source `POLL`). |
+| Still unresolved after the poll horizon | → `EXPIRED` only if the provider confirms expiry or documents a hard expiry (PCR-010). Otherwise the payment stays `UNKNOWN`/`PENDING`, is flagged `needs_reconciliation`, and goes to FINANCE review. **Never mark failed on silence alone.** |
+| Success arrives after the client gave up / after `EXPIRED` | Accepted as a late authoritative success (transition P15). The ledger posts and the donor is notified. |
 
 ## 9. Webhook pipeline
 
@@ -361,6 +330,10 @@ Worker:
 
 ## 11. Refunds
 
+> Stage 1 detail: [payments/refund-and-reversal-flows.md](payments/refund-and-reversal-flows.md) (Flow 4,
+> journals) and [payments/refund-and-dispute-architecture.md](payments/refund-and-dispute-architecture.md)
+> (refund-request and refund state machines, roles). Those documents are authoritative; this is a summary.
+
 - Who initiates:
   - staff: SUPPORT or COMPLIANCE may only **request** a refund; FINANCE **approves** (maker-checker: the
     requester can never approve);
@@ -373,10 +346,11 @@ Worker:
   - the campaign payable balance can cover it, or the shortfall is handled per policy (open question, for
     example when funds were already paid out).
 - Flow:
-  1. Create a `refund` (REQUESTED).
-  2. Approval.
-  3. `RefundPayment(ref=refund_id)` → PROCESSING.
-  4. Authoritative confirmation → SUCCEEDED/FAILED.
+  1. Create a refund request (`REQUESTED` → `PENDING_APPROVAL`).
+  2. FINANCE approval (`APPROVED`), or `REJECTED` / `ON_HOLD`.
+  3. `RefundPayment(ref=refund_id)`; the refund entity tracks provider processing, including an `UNKNOWN`
+     outcome resolved by status query (PCR-006).
+  4. Authoritative confirmation → refund `SUCCEEDED`/`FAILED`.
   5. The ledger follows [LEDGER.md](LEDGER.md) §6.3: a **reservation** is posted on approval (moving the amount
      out of `campaign_payable` into `refund_payable`, so it cannot be paid out concurrently), the
      **settlement** is posted on authoritative confirmation, and a failed refund posts the exact **reversal**
@@ -386,61 +360,82 @@ Worker:
 
 ## 12. Disputes and chargebacks (cards)
 
+> Stage 1 detail: [payments/refund-and-reversal-flows.md](payments/refund-and-reversal-flows.md) (Flow 5) and
+> the dispute case state machine in
+> [payments/refund-and-dispute-architecture.md](payments/refund-and-dispute-architecture.md).
+
 - A dispute notification moves the payment to `DISPUTED` and creates a `dispute` record (reason, deadline,
   amount). It raises a risk signal and may place a **payout hold** on the campaign.
 - Ledger treatment is defined in [LEDGER.md](LEDGER.md) §6.4, which is authoritative. In summary:
   - when the provider debits the funds (dispute opened), the amount is debited from `campaign_payable`
-    (shortfall to `asset:chargeback_recoverable`, with a payout hold) and credited to `psp_receivable`;
+    (shortfall to `asset:chargeback_recoverable`, with a payout hold) and credited to `psp_clearing` or `psp_settled` (whichever holds the funds at the time; see
+    [ledger/settlement-and-custody-model.md](ledger/settlement-and-custody-model.md));
   - won: the exact inverse is posted;
   - lost: no further movement for the disputed amount; recovery or approved write-off follows LEDGER §6.4;
   - for providers that debit only on loss, the amount is moved to `campaign_held` when the dispute opens.
-- Payment state: won → `SUCCEEDED`; lost → `CHARGED_BACK` (terminal). A chargeback is never recorded as
+- Payment state: won → `SUCCEEDED`; lost or accepted → `CHARGED_BACK` (terminal). A provider-initiated reversal without a dispute phase also ends
+  in `CHARGED_BACK` (`reversal_kind = PROVIDER_REVERSAL`). A chargeback is never recorded as
   `REFUNDED`, so refund and chargeback reporting stay distinct.
 - Evidence submission is an ops workflow (Stage 14). Chargeback liability allocation between FundZim, the PSP
   and the campaign owner is a contract/legal question (`LEGAL_REVIEW_REQUIRED`, LR-020).
 
 ## 13. Payouts (withdrawals)
 
-Payout states:
+> **Superseded by [ADR-020](adr/ADR-020-payment-payout-state-model-revision.md) (state names) and the Stage 1
+> payout documents.** Authoritative: [payments/payout-lifecycle.md](payments/payout-lifecycle.md) (states,
+> transitions Y1–Y14, ledger effects) and
+> [payments/payout-eligibility-and-controls.md](payments/payout-eligibility-and-controls.md) (checks
+> EC-01–EC-22, limits, holds, approval tiers). This section is a summary.
+
+Payout states: `PAYOUT_REQUESTED`, `PENDING_REVIEW`, `APPROVED`, `SUBMITTED`, `PROCESSING`, `COMPLETED`,
+`FAILED`, `REJECTED`, `CANCELLED`, `UNKNOWN`, `REVERSED`. (Stage 0 names `REQUESTED`, `UNDER_REVIEW`, `PAID`
+and `RETURNED` became `PAYOUT_REQUESTED`, `PENDING_REVIEW`, `COMPLETED` and `REVERSED`.)
 
 ```mermaid
 stateDiagram-v2
-    [*] --> REQUESTED
-    REQUESTED --> UNDER_REVIEW: risk/threshold
-    REQUESTED --> APPROVED: auto-approve within policy
-    UNDER_REVIEW --> APPROVED: checker ≠ maker
-    UNDER_REVIEW --> CANCELLED
-    REQUESTED --> CANCELLED
-    APPROVED --> PROCESSING: submitted to provider
-    PROCESSING --> PAID
+    [*] --> PAYOUT_REQUESTED
+    PAYOUT_REQUESTED --> PENDING_REVIEW: risk / threshold / tier
+    PAYOUT_REQUESTED --> APPROVED: AUTO tier within policy
+    PAYOUT_REQUESTED --> REJECTED
+    PAYOUT_REQUESTED --> CANCELLED
+    PENDING_REVIEW --> APPROVED: checker ≠ maker
+    PENDING_REVIEW --> REJECTED
+    PENDING_REVIEW --> CANCELLED
+    APPROVED --> PENDING_REVIEW: new hold before submission
+    APPROVED --> SUBMITTED: eligibility re-checked
+    APPROVED --> CANCELLED
+    SUBMITTED --> PROCESSING
+    SUBMITTED --> COMPLETED
+    SUBMITTED --> FAILED
+    SUBMITTED --> UNKNOWN: outcome indeterminate
+    PROCESSING --> COMPLETED
     PROCESSING --> FAILED
-    PAID --> RETURNED: rail returns funds
-    FAILED --> [*]
-    CANCELLED --> [*]
+    PROCESSING --> UNKNOWN
+    UNKNOWN --> PROCESSING
+    UNKNOWN --> COMPLETED
+    UNKNOWN --> FAILED
+    COMPLETED --> REVERSED: rail returns funds
 ```
 
-Preconditions for a request:
+Key rules (detail in the payout documents):
 
-- the owner/organisation is `PAYOUT_VERIFIED`;
-- the campaign is `ACTIVE` or `COMPLETED` (not `SUSPENDED`/`FROZEN`);
-- there is no active payout hold;
-- the amount ≤ **available** balance for that currency from the ledger;
-- the destination ownership is verified (name match);
-- any destination-change cooling-off period has elapsed;
-- the risk checks pass. Stage 11 delivers a **minimal rule-based risk/hold hook** (velocity, new or changed
-  destination, campaign age, open disputes, manual holds); the Stage 13 risk engine extends the same hook
-  rather than replacing the precondition.
-
-Controls:
-
-- **Every** payout passes the automated policy checks above. Payouts **above configurable thresholds** (or
-  flagged by the risk hook) additionally require maker-checker approval by FINANCE, with **approver ≠
-  requester ≠ initiator**. Threshold values are a policy decision subject to `LEGAL_REVIEW_REQUIRED` (LR-030).
-- Funds are reserved on request by a ledger posting (payable → payout-pending). This prevents two concurrent
-  requests from both spending the same balance.
-- Submission uses `payout_id` as the provider reference. Unknown outcome → PROCESSING + poll. **Never
-  resubmit** without provider-supported idempotency.
-- PAID/FAILED/RETURNED come only from authoritative provider state and post the corresponding ledger entries.
+- Preconditions include `PAYOUT_VERIFIED` owner or organisation, a verified beneficiary
+  ([ADR-016](adr/ADR-016-beneficiary-verification-before-payout.md)), a payout-eligible campaign (not
+  `SUSPENDED`/`FROZEN`), no active hold, amount ≤ **available** (settled and released) balance in that
+  currency, verified destination ownership, elapsed cooling-off after destination changes, valid fundraising
+  authority where required, and passing risk checks (Stage 11 minimal rule-based hook, extended in Stage 13).
+  Eligibility is re-checked immediately before `SUBMITTED`.
+- Every payout passes automated policy checks. Approval tiers are AUTO / SINGLE / DUAL; the pilot has no AUTO
+  tier (PD-24). Payouts above configurable thresholds (LR-030) or flagged by risk need maker-checker by
+  FINANCE, with approver ≠ requester ≠ initiator
+  ([ADR-017](adr/ADR-017-payout-approval-segregation-of-duties.md)).
+- Funds are reserved at `PAYOUT_REQUESTED` (payable → payout-pending), moved to `payout_in_transit` at
+  `SUBMITTED`, and settled at `COMPLETED` from authoritative provider state only.
+- `payout_id` is the provider reference on every attempt. A payout in `UNKNOWN` is **never resubmitted**; it is
+  resolved by status query (PCR-026) or reconciliation. A retry after an authoritative `FAILED` is a **new**
+  payout request with a new id.
+- Holds can stop a payout up to `APPROVED`; after `SUBMITTED` only a provider-supported cancel or recall
+  (PCR-014) applies.
 - Payout destination changes trigger a payout hold, notification to all contact points, and a cooling-off
   period (duration is a policy decision).
 
@@ -491,7 +486,10 @@ Required scenarios:
 | Zimbabwean bank transfer (RTGS/instant) | Payouts, larger donations | Reconciliation of manual transfers is hard. Prefer PSP-mediated references. |
 | Visa / Mastercard | International and diaspora donors | **Only via a PSP's hosted/tokenised checkout.** Cross-border receipt is subject to exchange-control review (LEGAL_REVIEW_REQUIRED, LR-005). |
 
-No provider has been chosen. No real credentials exist in this repository.
+No provider has been chosen. No real credentials exist in this repository. Stage 1 researched candidate
+providers per rail: see [payments/provider-capability-matrix.md](payments/provider-capability-matrix.md) and
+[payments/provider-comparison.md](payments/provider-comparison.md). Open provider questions are numbered
+`PCR-xxx` in [payments/provider-questions.md](payments/provider-questions.md).
 
 ## 16. Card data and PCI DSS scope stance
 
@@ -505,6 +503,13 @@ No provider has been chosen. No real credentials exist in this repository.
   receive extra integrity attention because script injection on those pages is a skimming risk.
 
 ## 17. Provider selection criteria (Stage 1 shortlist, Stage 9 integration)
+
+> **Stage 1 outcome.** These criteria were applied in
+> [payments/provider-comparison.md](payments/provider-comparison.md) (weighted scoring, must-pass gates) and
+> [payments/provider-due-diligence-checklist.md](payments/provider-due-diligence-checklist.md). Selection is
+> **PENDING**: no candidate yet has verified RBZ licensing evidence, contract fit for crowdfunding, or a
+> verified Model A custody arrangement (PCR-001 – PCR-003). The operating model the provider must support is
+> set by [ADR-013](adr/ADR-013-regulatory-operating-model.md).
 
 These criteria are applied in **Stage 1** to produce a PSP shortlist alongside the regulatory work. The chosen
 provider(s) are contracted and integrated against their **sandbox** in Stage 9. Live acceptance of real donor

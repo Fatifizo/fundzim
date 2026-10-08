@@ -110,11 +110,14 @@ currency     CHAR(3) NOT NULL REFERENCES currencies(code),
 | `public` / `app` (final name in Stage 2) | Core domain tables (users, organisations, campaigns, payments, payouts, fees, outbox, jobs, idempotency) | API/worker app role |
 | `ledger` | `ledger_accounts`, `ledger_transactions`, `ledger_entries`, balance projections | App role, via the `ledger` module only: SELECT + INSERT on `ledger_accounts`, `ledger_transactions`, `ledger_entries`; additionally UPDATE on the `ledger_balances` projection (same-transaction projection updates, LEDGER.md §8) |
 | `audit` | `audit_events` | App role: INSERT + SELECT (SELECT is needed to read `prev_hash` for the hash chain); staff viewing goes through the audit module's authorised viewer |
-| `kyc` | Verification cases, identity attributes (encrypted), document metadata (objects live in `private-kyc` bucket) | `fundzim_kyc` role only, used solely by the `kyc` module |
+| `kyc` | Verification cases, identity attributes (encrypted), document metadata (objects live in `private-kyc` bucket), organisation (KYB) records, beneficiary evidence, consents, and `fundraising_authorities` (PVO registration, excluded-body basis or s8 temporary authority per campaign/organisation; Stage 1, [kyb-architecture.md](compliance/kyb-architecture.md)) | `fundzim_kyc` role only, used solely by the `kyc` module |
+| `risk` | Limits (append-only versions, [aml-risk-framework.md](compliance/aml-risk-framework.md)), monitoring rules, alerts, scores, linkage edges ([transaction-monitoring.md](compliance/transaction-monitoring.md)). No C3 data. Added in Stage 1. | App role via the `risk` module only; limit changes are maker-checker |
+| `compliance` | Compliance cases, holds, screening list sources, screening requests and hits ([compliance-case-management.md](compliance/compliance-case-management.md), [sanctions-screening.md](compliance/sanctions-screening.md)). Restricted-STR cases carry a confidentiality level. Added in Stage 1. | App role via the `compliance` module only; restricted-case rows readable only with the specific permission |
 
 Cross-schema foreign keys are allowed only from `kyc` → core (e.g. `user_id`) and from `ledger` → core
 reference IDs where needed. Nothing in core references KYC attribute tables; core sees only a
-verification **level/status** projection.
+verification **level/status** projection. Final grants for `risk` and `compliance` (including whether
+`compliance` needs its own database role like `kyc`) are decided in Stage 2.
 
 C3 fields such as national ID numbers and passport numbers are stored **encrypted at the application level**
 (envelope encryption with KMS-managed keys), with an HMAC **blind index** column for duplicate detection.

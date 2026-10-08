@@ -104,16 +104,21 @@ fail a test. Entries marked **J** require staff justification text.
 | users | `user.created`, `user.phone.changed`, `user.email.changed`, `user.suspended` (J), `user.data_export.requested`, `user.deletion.requested`, `user.anonymised` |
 | roles | `role.grant.requested` (J), `role.grant.approved` (J), `role.revoked` (J), `breakglass.started` (J), `breakglass.ended` |
 | organisations | `organisation.created`, `organisation.member.added`, `organisation.member.removed`, `organisation.verification.decided` (J) |
-| campaigns | `campaign.created`, `campaign.submitted`, `campaign.state.changed` (J when staff), `campaign.material_edit.flagged`, `campaign.beneficiary.changed`, `campaign.reported` |
-| kyc | `kyc.submission.created`, `kyc.document.uploaded`, `kyc.document.viewed` (J), `kyc.identity_number.revealed` (J), `kyc.decision.recorded` (J), `kyc.level.changed`, `kyc.vendor.result.received` |
-| payments | `payment.created`, `payment.state.changed`, `payment.refund.requested`, `payment.refund.approved` (J), `payment.dispute.opened` |
+| campaigns | `campaign.created`, `campaign.submitted`, `campaign.state.changed` (J when staff), `campaign.material_edit.flagged`, `campaign.beneficiary.changed`, `campaign.reported`, `campaign.review.claimed`, `campaign.review.check_recorded` |
+| kyc | `kyc.submission.created`, `kyc.document.uploaded`, `kyc.document.viewed` (J), `kyc.identity_number.revealed` (J), `kyc.decision.recorded` (J), `kyc.level.changed`, `kyc.status.changed` (J when staff), `kyc.vendor.result.received`, `beneficiary.verification.decided` (J) |
+| payments | `payment.created`, `payment.state.changed`, `payment.refund.requested`, `payment.refund.approved` (J), `payment.dispute.opened`, `payment.provider.called` |
 | webhooks | `webhook.received`, `webhook.signature.failed`, `webhook.deadlettered` |
 | ledger | `ledger.transaction.posted`, `ledger.adjustment.requested` (J), `ledger.adjustment.approved` (J), `ledger.reversal.posted` (J), `ledger.invariant.violation` |
-| payouts | `payout.destination.added`, `payout.destination.changed`, `payout.destination.verified`, `payout.requested`, `payout.approved` (J), `payout.rejected` (J), `payout.state.changed`, `payout.hold.applied` (J), `payout.hold.released` (J) |
+| payouts | `payout.destination.added`, `payout.destination.changed`, `payout.destination.verified`, `payout.requested`, `payout.approved` (J), `payout.rejected` (J), `payout.state.changed`, `payout.hold.applied` (J), `payout.hold.released` (J), `payout.approval.denied_self`, `payout.eligibility.rechecked` |
 | fees | `fee.config.change.requested` (J), `fee.config.change.approved` (J) |
-| risk/compliance | `risk.score.recorded`, `risk.case.opened`, `risk.case.closed` (J), `compliance.report.filed` (J), `sanctions.screening.hit` |
+| risk/compliance | `risk.score.recorded`, `risk.case.opened`, `risk.case.closed` (J), `compliance.report.filed` (J), `sanctions.screening.hit`, `compliance.override.*` (J), `compliance.exemption.expired` |
 | reconciliation | `reconciliation.run.completed`, `reconciliation.mismatch.detected`, `reconciliation.mismatch.resolved` (J) |
-| admin/ops | `killswitch.activated` (J), `killswitch.deactivated` (J), `config.changed` (J), `audit.exported` (J) |
+| admin/ops | `killswitch.activated` (J), `killswitch.deactivated` (J), `config.changed` (J), `audit.exported` (J), `policy.change.*` (J), `evidence.exported` (J), `evidence.purged` (J) |
+
+Stage 1 additions (`campaign.review.*`, `kyc.status.changed`, `beneficiary.verification.decided`,
+`payment.provider.called`, `payout.approval.denied_self`, `payout.eligibility.rechecked`, `compliance.override.*`,
+`compliance.exemption.expired`, `policy.change.*`, `evidence.*`) are specified, with their required fields and
+evidence links, in [compliance/audit-evidence-model.md](compliance/audit-evidence-model.md).
 
 Not every event is equally voluminous; high-frequency, low-value events (e.g. every public page view) are
 **not** audit events — they are metrics.

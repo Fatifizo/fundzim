@@ -124,7 +124,7 @@ The invariant checker (built in Stage 10, used everywhere after) asserts:
 - Every entry currency equals its account currency; every amount > 0.
 - No USD/ZWG cross-currency postings.
 - Materialised balance projections equal a full recompute from entries.
-- Every SUCCEEDED payment has exactly one donation posting; every PAID payout exactly one payout posting;
+- Every SUCCEEDED payment has exactly one donation posting; every COMPLETED payout exactly one completion posting (plus its reserve and submit postings);
   reversals reference originals.
 - No available balance is negative.
 - Ledger and audit rows were never updated or deleted (compare counts/hashes before/after; audit hash chain
@@ -147,14 +147,14 @@ written, balances, invariant checker) for F1, F6 and F7 are added in Stage 10 ag
 | F1 | **Duplicate webhook** (same event delivered twice, sequentially and concurrently) | Second delivery deduplicated by `UNIQUE(provider, provider_event_id)`; one state change, one ledger posting. |
 | F2 | **Webhook retry** after our endpoint returned 5xx/timeout | Retry accepted and processed once; no double posting. |
 | F3 | **Webhook out of order** (e.g. `succeeded` before `pending`, or `refunded` before `succeeded`) | State precedence table prevents regression; late `pending` ignored after `SUCCEEDED`; early `refunded` held/reprocessed once prerequisite state arrives, never lost. |
-| F4 | **Network timeout** between FundZim and provider on CreatePayment | Payment remains `PENDING` (unknown outcome); retry uses same provider reference/idempotency key; resolved by status query — no duplicate charge. |
+| F4 | **Network timeout** between FundZim and provider on CreatePayment | Payment moves to `UNKNOWN` (ADR-020), never `FAILED`; any retry uses the same provider reference/idempotency key; resolved by status query or reconciliation — no duplicate charge. |
 | F5 | **Provider timeout / 5xx** on status query | Backoff and retry; no state change on error; alert after threshold. |
 | F6 | **Successful payment after client timeout** (donor closed browser / redirect never returned) | Webhook or reconciliation marks `SUCCEEDED` and posts ledger; donor receives confirmation; redirect absence irrelevant. |
 | F7 | **Database transaction failure** mid-processing (injected error after state update, before ledger posting) | Whole transaction rolls back; job retries; final state consistent; outbox event emitted once. |
 | F8 | **Concurrent donations** | See §3.7. |
 | F9 | **Concurrent withdrawals** | See §3.7; available balance never overdrawn. |
 | F10 | **Duplicate payout request** (same idempotency key; and double-click with distinct keys) | Same key → one payout. Distinct keys → second rejected if exceeds available balance; hold/confirmation UX prevents accidental double. |
-| F11 | **Payout failure** (provider rejects / returns funds later) | Payout `FAILED`/`RETURNED`; reversing ledger transaction restores available balance; owner notified; no silent retry to a different destination. |
+| F11 | **Payout failure** (provider rejects / returns funds later) | Payout `FAILED`/`REVERSED` (ADR-020); the failure or reversal journal restores available balance (or `campaign_held` if frozen); a payout in `UNKNOWN` is never resubmitted; owner notified; no silent retry to a different destination. |
 | F12 | **Reconciliation mismatch** (provider statement has a transaction we lack, lacks one we have, or differs in amount/currency) | Mismatch recorded as an exception case; alert raised; no automatic ledger "fix"; resolution via audited adjusting entry under maker-checker. |
 | F13 | Redirect claims success but provider says failed | Payment not marked succeeded; UI shows provider truth. |
 | F14 | Webhook with invalid signature / stale timestamp | Rejected (4xx), logged without payload secrets, metric incremented; no processing. |

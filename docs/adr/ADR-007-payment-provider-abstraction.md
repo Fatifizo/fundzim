@@ -1,6 +1,6 @@
 # ADR-007: Payment provider abstraction
 
-- **Status:** Accepted
+- **Status:** Accepted — **amended by [ADR-020](ADR-020-payment-payout-state-model-revision.md)** (payment and payout state model; Stage 1)
 - **Date:** 2026-10-08
 - **Stage:** 0 (design). Abstraction is built in Stage 8. Real PSPs arrive in Stage 9.
 

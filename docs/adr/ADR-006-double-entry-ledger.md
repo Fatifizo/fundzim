@@ -1,6 +1,6 @@
 # ADR-006: Double-entry ledger requirement
 
-- **Status:** Accepted
+- **Status:** Accepted — **amended by [ADR-014](ADR-014-accounting-separated-from-custody.md)** (chart of accounts, settlement-aware states; Stage 1)
 - **Date:** 2026-10-08
 - **Stage:** 0 (design), implemented Stage 10
 

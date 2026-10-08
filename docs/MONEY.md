@@ -33,17 +33,21 @@ Currencies are **data** (table `currencies`, owned by `platform`), not an enum s
 | `name` | `TEXT` | |
 | `display_symbol` | `TEXT` | e.g. `US$`, `ZiG` |
 | `enabled` | `BOOLEAN` | Whether new transactions may use it |
+| `minor_units_verified` | `BOOLEAN` | Whether `minor_units` has been confirmed for accounting and for every enabled provider (Stage 1, [ADR-018](adr/ADR-018-currency-isolation-and-fx.md)). While `false`, the currency may run only in sandbox/test; production enablement is blocked. |
 
 Initial rows:
 
-| code | numeric | minor_units | name | display label |
-|---|---|---|---|---|
-| `USD` | 840 | 2 | US Dollar | US$ |
-| `ZWG` | 924 | 2 | Zimbabwe Gold | ZiG |
+| code | numeric | minor_units | minor_units_verified | name | display label |
+|---|---|---|---|---|---|
+| `USD` | 840 | 2 | `true` | US Dollar | US$ |
+| `ZWG` | 924 | 2 | **`false`** until LR-043 and PCR-018 are resolved | Zimbabwe Gold | ZiG |
 
 - In code and data use **`ZWG`**. In user-facing copy use **"ZiG"**.
 - Whether PSPs actually transact ZWG at 2 minor units (or round to whole units for some rails) is an **open
-  item** to verify in Stage 9. If a rail cannot handle cents, the adapter rejects non-conforming amounts. It
+  item** (LR-043, PCR-018). Stage 1 research found that S.I. 60 of 2024 does not define ZiG cents, and that
+  providers use different codes (Pesepay uses `ZiG` for some methods and `ZWG` for others). Adapters map
+  provider codes to `ZWG`; the internal code is always `ZWG`
+  ([payments/currency-and-fx-policy.md](payments/currency-and-fx-policy.md)). If a rail cannot handle cents, the adapter rejects non-conforming amounts. It
   never rounds them silently.
 - The Go `Currency` type is a validated value looked up from the registry at startup. Unknown codes fail.
   Disabling a currency stops **new** transactions only. Historical records keep their currency.
