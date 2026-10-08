@@ -142,6 +142,13 @@ and `internal/<module>`. See [ADR-001](adr/ADR-001-modular-monolith.md) and [ADR
 
 ### 4.2 Module catalogue
 
+> **Refined in Stage 2 ([ADR-021](adr/ADR-021-module-boundaries-and-ownership.md)).** The authoritative module
+> list, dependency graph and table ownership are in [stage-2/design-baseline.md](stage-2/design-baseline.md)
+> §2–§6 and [architecture/dependency-matrix.md](architecture/dependency-matrix.md). Changes since this table:
+> new modules `psp` (provider registry, capabilities, adapters, webhook inbox) and `beneficiaries`;
+> holds and limits owned by `risk`; evidence records by `audit`; `organisations` no longer imports `kyc`
+> (projection fed by events). Table names below are Stage 0 working names; final names are in the baseline §5.
+
 | Module | Responsibility | Owns (data) | May depend on |
 |---|---|---|---|
 | `platform` | Shared kernel: config, DB pool and transaction helper, logging, IDs (UUIDv7), `money` type, `clock`, HTTP envelope/errors, request context, outbox writer, job queue client, crypto helpers (envelope encryption, HMAC). | `outbox`, `jobs` (queue), `currencies` registry | — |
@@ -422,14 +429,17 @@ setting.
 | [ADR-010](adr/ADR-010-multi-currency.md) | Multi-Currency Architecture |
 | [ADR-011](adr/ADR-011-utc-time.md) | UTC Internal Time |
 | [ADR-012](adr/ADR-012-container-first.md) | Container-First Development |
+| ADR-013 – ADR-020 | Stage 1 regulatory and financial decisions (see [adr/README.md](adr/README.md)) |
+| ADR-021 – ADR-031 | Stage 2 system architecture decisions (see [adr/README.md](adr/README.md)) |
 
 ## 14. Decisions deferred
 
 | Decision | Stage |
 |---|---|
-| Migration tool (goose / golang-migrate / atlas) | 2/3 |
-| Job queue library | 2/3 |
-| Go module path, HTTP router | 3 |
+| Migration tool | **Decided Stage 2: goose** ([ADR-028](adr/ADR-028-migration-strategy.md)) |
+| Job queue library | **Decided Stage 2: River** ([ADR-025](adr/ADR-025-outbox-inbox-job-queue.md)) |
+| HTTP router | **Decided Stage 2: stdlib `ServeMux`** ([ADR-031](adr/ADR-031-data-access-and-http-stack.md)) |
+| Go module path | 3 |
 | Identity verification vendor | 5 |
 | PSP selection (criteria + shortlist; contract + sandbox integration; live acceptance) | 1; 9; 20 |
 | Production hosting/topology, CDN, KMS, secret manager | 18/20 |

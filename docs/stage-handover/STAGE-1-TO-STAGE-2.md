@@ -58,6 +58,9 @@ the owner writes its tables, and only `ledger` writes journals, through named po
 | Settlement batches, matches, discrepancy items | `reconciliation` (Stage 17) | `ledger` (posts via rules), `payments`, `payouts` |
 | Limits registry (REGULATORY / PROVIDER / INTERNAL_RISK) | to be decided in Stage 2 (see below) | read by `payouts`, `payments`, `risk` |
 
+> **Resolved in Stage 2:** see [design-baseline.md §6](../stage-2/design-baseline.md) and ADR-021 (holds and
+> limits → `risk`; evidence → `audit`; payout destinations → `payouts`).
+
 **Ownership questions Stage 2 must settle** (Stage 0 and Stage 1 differ; no behaviour depends on the
 answer yet):
 

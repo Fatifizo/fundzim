@@ -1,0 +1,16 @@
+# Redocly CLI configuration for the FundZim contract (pinned CLI: @redocly/cli@2.54.3).
+# Run from the repository root:
+#   npx --yes @redocly/cli@2.54.3 lint api/openapi/fundzim-v1.yaml --config api/openapi/redocly.yaml
+extends:
+  - recommended
+rules:
+  # FundZim is not published under an open licence; no licence object is declared.
+  info-license: off
+  info-license-strict: off
+  # Health probes (/healthz, /readyz) intentionally have no 4xx responses.
+  operation-4xx-response: warn
+  # Every operation must have an operationId, summary and tag.
+  operation-operationId: error
+  operation-summary: error
+  operation-tag-defined: error
+  security-defined: error

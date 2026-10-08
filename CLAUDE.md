@@ -15,8 +15,9 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
-**Stage 1 — Regulatory, Compliance, Funds-Flow & Payment Operating Architecture (complete; awaiting
-acceptance).** Stage 0 is complete. A documentation-stage PASS is never permission to operate a live
+**Stage 2 — System Architecture, Database Design & API Contracts (complete; awaiting acceptance).**
+Stage 0 is complete; Stage 1 is complete but its acceptance has not been recorded
+(`docs/stage-2/prerequisite-assessment.md`). A documentation-stage PASS is never permission to operate a live
 crowdfunding business or to move real money.
 Do not start a stage until the user explicitly asks for it. Do not implement work belonging to a later stage
 "while you're there". Each stage ends with a completion report (template in `docs/DEVELOPMENT.md`) and then
@@ -31,6 +32,8 @@ STOPS.
 | `internal/` | Go modular-monolith domain modules (code begins Stage 3). One Go module rooted at repo root. |
 | `migrations/` | SQL migrations (begin Stage 2/3). |
 | `docs/` | Specifications. `docs/adr/` holds Architecture Decision Records. |
+| `api/openapi/` | OpenAPI 3.1 contract for `/api/v1` (source of truth, ADR-026). |
+| `design/sql/` | Stage 2 **non-executable** schema drafts + in-memory validation harness. Not migrations. |
 | `deploy/`, `scripts/`, `tests/` | Deployment config, dev scripts, cross-cutting test suites. |
 
 ## Before you change anything
@@ -48,7 +51,12 @@ STOPS.
    identity → `docs/compliance/kyc-architecture.md`, `kyb-architecture.md`, `beneficiary-verification.md`,
    `docs/security/identity-data-protection.md`; AML/risk → `docs/compliance/aml-risk-framework.md` and siblings;
    staff controls → `docs/compliance/operational-controls.md`; evidence → `docs/compliance/audit-evidence-model.md`.
-   Stage 2 starts from `docs/stage-handover/STAGE-1-TO-STAGE-2.md`.
+   Stage 2 (system design) refines all of the above and wins where more specific: module list, dependency
+   graph, schemas, table names and owners → `docs/stage-2/design-baseline.md` (ADR-021/022); per-domain
+   schema → `docs/database/`; architecture → `docs/architecture/`; HTTP contract → `api/openapi/fundzim-v1.yaml`
+   and `docs/api/`. `design/sql/` holds NON-EXECUTABLE schema drafts (validated in-memory only) — never run
+   them against a real database; executable migrations go in `/migrations` (goose, ADR-028).
+   Stage 3 starts from `docs/stage-handover/STAGE-2-TO-STAGE-3.md`.
 2. Check the relevant ADRs in `docs/adr/`.
 3. If the change contradicts a doc or ADR, do not silently diverge. Propose a new ADR (or a superseding one)
    and get agreement first.
@@ -138,6 +146,11 @@ STOPS.
 
 - Prefer boring, proven technology. Modular monolith; no microservices, Kubernetes, or Kafka without an ADR
   that demonstrates the need.
+- Respect the module dependency graph in `docs/stage-2/design-baseline.md` §3. A module's SQL may reference
+  only tables it owns (§5). Adding a dependency or moving table ownership needs an ADR.
+- Every state machine (payments, refunds, disputes, payouts, campaigns, compliance cases, KYC cases, ledger
+  adjustments) is guarded in the database by `app.guard_transition` + `app.status_transitions`; keep Go and SQL
+  edge lists identical.
 - Go modules communicate only through each other's public service interfaces — never through another
   module's tables. No circular dependencies. Only `ledger` writes ledger tables.
 - PostgreSQL is the only authoritative store. Redis is cache/rate-limit/coordination only and may be lost

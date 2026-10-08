@@ -1,0 +1,8 @@
+{
+  "name": "fundzim-sql-design-validate",
+  "private": true,
+  "description": "Validates the NON-EXECUTABLE Stage 2 SQL design drafts in an in-memory PGlite (WASM PostgreSQL). Never points at a real database.",
+  "type": "module",
+  "scripts": { "validate": "node run.mjs" },
+  "devDependencies": { "@electric-sql/pglite": "0.5.8" }
+}

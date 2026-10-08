@@ -140,6 +140,9 @@ CREATE INDEX ON ledger_entries (account_id, transaction_id);
 
 ## 4. Invariants
 
+> Stage 2 ([ADR-023](adr/ADR-023-ledger-posting-architecture.md)) adds L11–L14 and P-1 and defines the
+> database enforcement of every invariant: [architecture/ledger-invariants.md](architecture/ledger-invariants.md).
+
 | # | Invariant | Enforced in |
 |---|---|---|
 | L1 | For every transaction **and every currency within it**, Σ debits = Σ credits | Go (`ledger.Post` builder) **and** DB deferred constraint trigger |

@@ -54,6 +54,11 @@ implications), physical security of hosting (provider responsibility; hosting no
 
 ## 4. Trust boundaries
 
+> **Stage 2 addenda:** the Stage 1 and Stage 2 trust boundaries, and the threats they add, are in
+> [architecture/trust-boundaries.md](architecture/trust-boundaries.md) (THREAT-MODEL addendum, T-33 onwards)
+> and [security/data-protection-architecture.md](security/data-protection-architecture.md) (T2-01 – T2-12).
+> Fold them into this document at the next full review.
+
 ```mermaid
 flowchart LR
   subgraph Untrusted["Untrusted zone"]

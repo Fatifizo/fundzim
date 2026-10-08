@@ -105,6 +105,12 @@ currency     CHAR(3) NOT NULL REFERENCES currencies(code),
 
 ## 7. Schemas and data separation
 
+> **Decided in Stage 2 ([ADR-022](adr/ADR-022-database-schema-organisation.md)).** Schemas are `app`, `queue`,
+> `ledger`, `audit`, `kyc`, `risk`, `compliance` and `recon`. Role `fundzim_compliance` is added, holds move
+> to `risk` ([ADR-021](adr/ADR-021-module-boundaries-and-ownership.md)). Full catalogue:
+> [stage-2/design-baseline.md](stage-2/design-baseline.md) §4–§5 and [database/schema-overview.md](database/schema-overview.md).
+> The table below is the Stage 0/1 view, kept for history.
+
 | Schema | Contents | Accessed by |
 |---|---|---|
 | `public` / `app` (final name in Stage 2) | Core domain tables (users, organisations, campaigns, payments, payouts, fees, outbox, jobs, idempotency) | API/worker app role |
@@ -125,6 +131,12 @@ Dates of birth and payout account numbers are also encrypted or partially masked
 [DATA-CLASSIFICATION.md](DATA-CLASSIFICATION.md).
 
 ## 8. Database roles and grants
+
+> **Stage 2 additions ([ADR-022](adr/ADR-022-database-schema-organisation.md), baseline §12 I-13/I-15):**
+> `fundzim_compliance` (sole full access to `compliance`), `fundzim_worker` (worker pool: app privileges plus
+> worker-only routines). The `kyc` and `compliance` roles write audit events and outbox rows only through
+> `SECURITY DEFINER` gateway functions. Grants are derived in `design/sql/0018_grants.sql`; see
+> [security/data-protection-architecture.md](security/data-protection-architecture.md).
 
 | Role | Purpose | Privileges |
 |---|---|---|
@@ -209,8 +221,8 @@ derivable from, and consistent with, the event history.
 
 ## 13. Migrations
 
-- Tooling: plain SQL migration files in `/migrations`. Tool chosen in Stage 2/3 (candidates: goose,
-  golang-migrate, atlas) and recorded in an ADR.
+- Tooling: plain SQL migration files in `/migrations`, run with **goose** ([ADR-028](adr/ADR-028-migration-strategy.md);
+  details in [database/migration-strategy.md](database/migration-strategy.md)).
 - File naming: ordered (timestamp or sequence) + description, e.g. `20261101120000_create_currencies.sql`.
 - **Forward-only in production.** "Down" migrations may exist for local development but are never relied on
   to undo production changes. Fixes are new forward migrations.

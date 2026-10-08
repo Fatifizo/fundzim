@@ -65,3 +65,14 @@ Bug fixes, refactors inside one module, and routine dependency upgrades do not n
 | [ADR-018](ADR-018-currency-isolation-and-fx.md) | Currency isolation and FX policy | Accepted |
 | [ADR-019](ADR-019-regulatory-evidence-management.md) | Regulatory evidence management | Accepted |
 | [ADR-020](ADR-020-payment-payout-state-model-revision.md) | Payment and payout state model revision | Accepted |
+| [ADR-021](ADR-021-module-boundaries-and-ownership.md) | Domain module boundaries, dependency graph and table ownership | Accepted (Stage 2; pending owner acceptance of Stage 2) |
+| [ADR-022](ADR-022-database-schema-organisation.md) | Database schema organisation and roles | Accepted (Stage 2) |
+| [ADR-023](ADR-023-ledger-posting-architecture.md) | Ledger posting architecture | Accepted (Stage 2) |
+| [ADR-024](ADR-024-payment-intent-and-db-guarded-state-machines.md) | Payment intent vs provider transaction; database-guarded state machines | Accepted (Stage 2) |
+| [ADR-025](ADR-025-outbox-inbox-job-queue.md) | Transactional outbox, inbox and PostgreSQL job queue (River) | Accepted (Stage 2) |
+| [ADR-026](ADR-026-api-versioning-contract-first.md) | API versioning and contract-first OpenAPI | Accepted (Stage 2) |
+| [ADR-027](ADR-027-authentication-session-strategy.md) | Authentication and session strategy | Accepted (Stage 2) |
+| [ADR-028](ADR-028-migration-strategy.md) | Database migration strategy (goose, forward-only) | Accepted (Stage 2) |
+| [ADR-029](ADR-029-provider-capability-abstraction.md) | Provider capability abstraction (`psp` module) | Accepted (Stage 2) |
+| [ADR-030](ADR-030-reconciliation-architecture.md) | Financial reconciliation architecture | Accepted (Stage 2) |
+| [ADR-031](ADR-031-data-access-and-http-stack.md) | Data access and HTTP stack (pgx + sqlc, stdlib router) | Accepted (Stage 2) |

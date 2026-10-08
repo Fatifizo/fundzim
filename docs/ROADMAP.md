@@ -71,6 +71,11 @@ Notes on ordering:
   Stage 1 produces the PSP selection criteria and shortlist; Stage 9 contracts and integrates (sandbox only).
 - **Stage 8 before Stage 10:** payments are built against the `ledger.Post` interface backed by an explicit
   test-only stub; ledger-level assertions are added in Stage 10.
+- **Settlement matching before Stage 11 acceptance (Stage 2, ADR-030):** funds become available only after a
+  settlement match (ADR-014), so the minimal settlement-matching part of reconciliation (import a provider
+  settlement report, match captures, post `SETTLEMENT_MATCHED` / discrepancy) is built with the ledger in
+  Stage 10 and used by Stage 11. Full reconciliation (all discrepancy types, bank statements, reporting) stays
+  in Stage 17.
 - **Stage 11 before Stage 13:** Stage 11 ships a minimal rule-based risk/hold hook; Stage 13 extends it.
 - **Stage 4 before Stage 15:** Stage 4 delivers OTPs through the `log` SMS fake and Mailpit only; real SMS and
   email providers are chosen in Stage 15, which is a prerequisite of Stage 20.
@@ -121,6 +126,11 @@ Notes on ordering:
   items blocking Stages 5, 9, 11 and 20 are identified; no unverified legal claims in docs.
 
 ## Stage 2 — System Architecture & Database Design
+
+> **Status: delivered as design documentation (awaiting acceptance).** Baseline and index:
+> [stage-2/design-baseline.md](stage-2/design-baseline.md); architecture in [architecture/](architecture/),
+> schema in [database/](database/) with validated SQL drafts in `design/sql/`, API in [api/](api/) and
+> `api/openapi/fundzim-v1.yaml`, ADR-021 – ADR-031. Handover: [stage-handover/STAGE-2-TO-STAGE-3.md](stage-handover/STAGE-2-TO-STAGE-3.md).
 
 - **Objective:** Turn the Stage 0 architecture into concrete designs: module boundaries, API conventions,
   schema, job/outbox model and local infrastructure.

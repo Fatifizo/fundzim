@@ -36,7 +36,7 @@ authoritative record of an action.
 ```sql
 CREATE TABLE audit_events (
     id               uuid        PRIMARY KEY,          -- UUIDv7
-    seq              bigint      GENERATED ALWAYS AS IDENTITY UNIQUE, -- total order for hash chain
+    seq              bigint      NOT NULL UNIQUE,  -- total order for hash chain; Stage 2: assigned under the chain lock (identity values can commit out of order)
     occurred_at      timestamptz NOT NULL,             -- when the action happened (UTC)
     recorded_at      timestamptz NOT NULL DEFAULT now(),
     actor_type       text        NOT NULL CHECK (actor_type IN ('user','staff','system','provider')),
