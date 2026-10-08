@@ -34,6 +34,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/auth"
 	"github.com/Fatifizo/fundzim/internal/platform/config"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
+	"github.com/Fatifizo/fundzim/internal/users"
 )
 
 const itPassword = "correct horse battery staple 42"
@@ -357,8 +358,14 @@ func TestIdentityRegistrationVerificationAndLogin(t *testing.T) {
 		t.Fatal("email should be verified")
 	}
 
-	// the raw token is never stored: only its SHA-256 hash exists
+	// the accepted terms version is recorded (LR-022 acceptance versioning)
 	p := pool(t, os.Getenv("DATABASE_URL"))
+	var termsVersion string
+	if err := p.QueryRow(ctx(t), `SELECT version FROM app.user_terms_acceptances WHERE user_id = $1 AND document = 'TERMS_OF_USE'`,
+		me.ID).Scan(&termsVersion); err != nil || termsVersion != users.CurrentTermsVersion {
+		t.Fatalf("terms acceptance: %q %v", termsVersion, err)
+	}
+	// the raw token is never stored: only its SHA-256 hash exists
 	var n int
 	if err := p.QueryRow(ctx(t), `SELECT count(*) FROM app.auth_tokens WHERE token_hash = convert_to($1, 'UTF8')`, tok).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("raw token found in database: %d %v", n, err)

@@ -13,7 +13,7 @@ Mailpit in containers). Nothing is reported as passing that was not run. **GitHu
 | Go format / vet | `gofmt -l apps internal migrations tests`; `go vet ./apps/api/... ./internal/... ./migrations/...`; `go vet -tags integration ./tests/...` | clean |
 | Go build | `CGO_ENABLED=0 go build -trimpath ./apps/api/cmd/...` (api, worker, fundzimctl) | OK |
 | Go unit + architecture tests | `go test -count=1 ./apps/api/... ./internal/... ./migrations/...` | **113 top-level tests passed, 0 failed, 0 skipped** (18 packages with tests, including `internal/archtest`) |
-| Integration (real stack) | `set -a; . ./.env; set +a; FUNDZIM_IT_WEB_URL=http://127.0.0.1:3000 FUNDZIM_IT_API_URL=http://127.0.0.1:8080 FUNDZIM_IT_STOP_VALKEY=1 FUNDZIM_IT_PERF=1 sg docker -c "go test -tags integration -count=1 -v ./tests/integration/"` | **45 passed, 0 failed, 0 skipped** (60.8 s) |
+| Integration (real stack) | `set -a; . ./.env; set +a; FUNDZIM_IT_WEB_URL=http://127.0.0.1:3000 FUNDZIM_IT_API_URL=http://127.0.0.1:8080 FUNDZIM_IT_STOP_VALKEY=1 FUNDZIM_IT_PERF=1 sg docker -c "go test -tags integration -count=1 -v ./tests/integration/"` | **45 passed, 0 failed, 0 skipped** (60.8 s). Final re-run after the last change (terms-acceptance migration, session-expiry test), without the perf/replica opt-ins: **45 passed, 0 failed, 2 opt-in skipped** (77.9 s) |
 | Two-replica limit | `docker compose --profile scale-test up -d fundzim-api-2`; `FUNDZIM_IT_API_URL=… FUNDZIM_IT_API2_URL=http://127.0.0.1:8081 go test -tags integration -run TestDistributedLoginLimitAcrossReplicas …` | **passed** (status sequence `[401 401 401 401 401 429 429 429]` alternating replicas) |
 | Session expiry | `go test -tags integration -run TestIdentitySessionExpiry …` (added after the full run) | **passed** (idle expiry, absolute expiry with cookie `Max-Age`, sliding idle expiry) |
 | Web lint / types | `npm --prefix apps/web run lint`, `run typecheck` | clean |
@@ -34,7 +34,7 @@ read from Mailpit.
 
 | Test | Proves |
 |---|---|
-| `TestIdentityRegistrationVerificationAndLogin` | policy 422, unknown-field 422 (no mass assignment), duplicate registration indistinguishable + owner notified, unverified login allowed, `/me` not cacheable, single-use verification token, raw token absent from DB |
+| `TestIdentityRegistrationVerificationAndLogin` | policy 422, unknown-field 422 (no mass assignment), accepted terms version recorded, duplicate registration indistinguishable + owner notified, unverified login allowed, `/me` not cacheable, single-use verification token, raw token absent from DB |
 | `TestIdentityLoginGenericErrorsAndCSRF` | identical errors for wrong password/unknown account, cookies set, raw session token absent from DB, CSRF: missing/forged/foreign-origin/cross-site/other-session token rejected, per-account throttle → 429 even with the right password |
 | `TestIdentityEmailChangeAndResend` | resend invalidates the old link, generic resend, wrong password refused, change to a taken address gives the same 202 and sends nothing, old address notified, address changes only on confirmation, sessions revoked, old address can no longer sign in |
 | `TestIdentitySessionsRotationLogoutAndIDOR` | rotation on re-login (old token dead), listing with masked IPs, another user's session → 404, revoke one / logout-all / logout |

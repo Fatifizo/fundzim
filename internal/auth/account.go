@@ -154,8 +154,11 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 			VALUES ($1, $2, 'PASSWORD', 'USER')`, ids.New(), userID); err != nil {
 			return err
 		}
+		if err := users.RecordAcceptance(ctx, tx, userID, users.DocTermsOfUse, users.CurrentTermsVersion, s.now(), ipString(ctx)); err != nil {
+			return err
+		}
 		if err := audit.Record(ctx, tx, audit.Event{Stream: audit.Security, Action: "auth.user.registered", ActorType: "user",
-			ActorID: userID, TargetType: "user", TargetID: userID}); err != nil {
+			ActorID: userID, TargetType: "user", TargetID: userID, Metadata: map[string]any{"terms_version": users.CurrentTermsVersion}}); err != nil {
 			return err
 		}
 		return s.emit(ctx, tx, EvEmailVerificationRequested, userID, map[string]any{"user_id": userID, "email_id": emailID})

@@ -33,9 +33,9 @@ var allowedImports = map[string][]string{
 }
 
 // ownedTables is design-baseline §5 (plus the Stage 4 additions recorded in docs/stage-4/implementation.md:
-// auth_tokens, mfa_login_challenges, session_events belong to auth).
+// auth_tokens, mfa_login_challenges, session_events belong to auth; user_terms_acceptances to users).
 var ownedTables = map[string][]string{
-	"users": {"app.users", "app.user_profiles", "app.user_emails", "app.user_phone_numbers"},
+	"users": {"app.users", "app.user_profiles", "app.user_emails", "app.user_phone_numbers", "app.user_terms_acceptances"},
 	"auth": {"app.authentication_identities", "app.password_credentials", "app.otp_challenges", "app.sessions", "app.mfa_methods",
 		"app.recovery_codes", "app.roles", "app.permissions", "app.role_permissions", "app.role_assignments",
 		"app.role_assignment_requests", "app.break_glass_grants", "app.staff_conflict_declarations", "app.security_events",

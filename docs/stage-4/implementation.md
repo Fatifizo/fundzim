@@ -41,8 +41,8 @@ Related: [authentication-architecture.md](authentication-architecture.md) ·
 | `internal/archtest` | — | Architecture tests |
 
 Module dependencies follow design-baseline §4 and are enforced by `internal/archtest`. Table ownership
-follows §5 with three Stage 4 additions owned by **auth**: `app.auth_tokens`, `app.mfa_login_challenges`,
-`app.session_events`.
+follows §5 with Stage 4 additions: `app.auth_tokens`, `app.mfa_login_challenges`, `app.session_events`
+(owned by **auth**) and `app.user_terms_acceptances` (owned by **users**).
 
 ## 3. Database (migrations `20261008140000`–`20261008140500`)
 
@@ -54,8 +54,9 @@ follows §5 with three Stage 4 additions owned by **auth**: `app.auth_tokens`, `
 | `140300_identity_rbac` | `roles`, `permissions` (+ `account.suspend`, `account.reactivate`, `staff.invite`), `role_permissions`, `role_assignment_requests` (maker-checker, no self-request/approval CHECKs, 24 h expiry, guarded state machine), `role_assignments` (only from an APPROVED GRANT request whose maker/checker are copied by composite FK; SoD conflicts rejected by trigger), `security_events`, `break_glass_grants`, `staff_conflict_declarations` |
 | `140400_organisations` | `organisations`, `organisation_roles` (ORG_ADMIN, ORG_MEMBER), `organisation_members` (deferred "at least one active ORG_ADMIN" trigger; removal final), `organisation_invitations` |
 | `140500_runtime_grants_v2` | `app.apply_runtime_grants()` v2: new reference tables, River routines/types for `fundzim_app` |
+| `140600_terms_acceptances` | `user_terms_acceptances` (users module; append-only): document, version, time and IP of each acceptance — LR-022 acceptance versioning. Registration records `TERMS_OF_USE` version `placeholder-2026-10-08` (the text is a counsel-pending placeholder) |
 
-All twelve migrations go down to zero and up again cleanly (verified twice on a scratch database; the Down
+All thirteen migrations go down to zero and up again cleanly (verified twice on a scratch database; the Down
 sections of `users` and `rbac` lift the `status_transitions` append-only trigger only inside the rollback).
 
 ## 4. HTTP API (48 routes, all in `api/openapi/fundzim-v1.yaml`)

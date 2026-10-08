@@ -305,3 +305,22 @@ func DisplayNames(ctx context.Context, q Querier, userIDs []string) (map[string]
 	}
 	return out, rows.Err()
 }
+
+// Legal documents a user can accept (app.user_terms_acceptances).
+const (
+	DocTermsOfUse = "TERMS_OF_USE"
+
+	// CurrentTermsVersion identifies the terms text shown at registration. The text is a placeholder until
+	// counsel drafts it (LEGAL_REVIEW_REQUIRED, LR-022); publishing real terms means a new version string and
+	// a re-consent flow for existing users.
+	CurrentTermsVersion = "placeholder-2026-10-08"
+)
+
+// RecordAcceptance stores that userID accepted version of document at `at` (append-only; accepting the same
+// version twice is a no-op).
+func RecordAcceptance(ctx context.Context, tx pgx.Tx, userID, document, version string, at time.Time, ip any) error {
+	_, err := tx.Exec(ctx, `INSERT INTO app.user_terms_acceptances (id, user_id, document, version, accepted_at, ip)
+		VALUES ($1, $2, $3, $4, $5, $6::inet) ON CONFLICT (user_id, document, version) DO NOTHING`,
+		ids.New(), userID, document, version, at, ip)
+	return err
+}
