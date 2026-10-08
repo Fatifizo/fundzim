@@ -50,7 +50,8 @@ export PATH="$HOME/.local/go/bin:$PATH"          # go1.27.1
 ├── .github/workflows/ci.yml          CI pipeline
 ├── apps/
 │   ├── api/cmd/api/          HTTP API entrypoint
-│   ├── api/cmd/fundzimctl/   Operator CLI: config check, migrate, version, healthcheck
+│   ├── api/cmd/worker/       Background worker (River jobs, outbox relay and delivery)
+│   ├── api/cmd/fundzimctl/   Operator CLI: config check, migrate, bootstrap-admins, version, healthcheck
 │   └── web/                  Next.js 16 (App Router, TS, Tailwind v4) — presentation only
 ├── internal/
 │   ├── app/                  Composition root: dependencies, routes, middleware chain, servers
@@ -104,7 +105,9 @@ Run `make help` for the live list. Host-side targets that need configuration loa
 
 Other useful commands: `go run ./apps/api/cmd/fundzimctl config check` (validates the environment, prints
 variable names only), `curl -s http://127.0.0.1:9090/internal/readiness` (which readiness check fails),
-`docker compose --profile tools up -d fundzim-mail` (Mailpit).
+Mailpit at <http://127.0.0.1:8025> (default service since Stage 4), the worker's readiness at
+`curl -s http://127.0.0.1:9091/readyz`, the first administrators via `fundzimctl bootstrap-admins` (README),
+and a second API replica for distributed-limit tests via `docker compose --profile scale-test up -d fundzim-api-2`.
 
 ---
 

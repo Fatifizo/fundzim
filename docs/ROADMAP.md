@@ -77,8 +77,9 @@ Notes on ordering:
   Stage 10 and used by Stage 11. Full reconciliation (all discrepancy types, bank statements, reporting) stays
   in Stage 17.
 - **Stage 11 before Stage 13:** Stage 11 ships a minimal rule-based risk/hold hook; Stage 13 extends it.
-- **Stage 4 before Stage 15:** Stage 4 delivers OTPs through the `log` SMS fake and Mailpit only; real SMS and
-  email providers are chosen in Stage 15, which is a prerequisite of Stage 20.
+- **Stage 4 before Stage 15:** Stage 4 delivers phone-verification codes through the `dev_mailpit` SMS sender
+  and email through SMTP to Mailpit only; real SMS and email providers are chosen in Stage 15, which is a
+  prerequisite of Stage 20.
 - Stages 13–16 can partially overlap once their dependencies are met, but they are accepted one at a time.
 
 ---
@@ -174,6 +175,16 @@ Notes on ordering:
   property-based tests; audit table rejects UPDATE/DELETE/TRUNCATE from the app role.
 
 ## Stage 4 — Authentication & Identity
+
+> **Status: implemented (awaiting acceptance).** Built per [ADR-032](adr/ADR-032-email-password-totp-authentication.md)
+> (email + password with TOTP MFA instead of OTP-first login; staff TOTP, WebAuthn deferred) together with the
+> Stage 3 remediation gate (worker/outbox, distributed rate limits, trusted client IP, idempotency, nonce CSP,
+> architecture tests). Summary: [stage-4/implementation.md](stage-4/implementation.md); evidence:
+> [stage-4/testing.md](stage-4/testing.md); review: [stage-4/security-review.md](stage-4/security-review.md);
+> open items: [stage-4/known-issues.md](stage-4/known-issues.md); handover:
+> [stage-handover/STAGE-4-TO-STAGE-5.md](stage-handover/STAGE-4-TO-STAGE-5.md). Not met yet: **CI green**
+> (Actions not running), an exhaustive role × permission test matrix (policy-level matrix and representative
+> role tests exist), account recovery beyond password reset (support-mediated recovery is Stage 14).
 
 - **Objective:** Secure user and staff authentication, sessions and the authorisation framework.
 - **Dependencies:** Stage 3.

@@ -85,6 +85,14 @@ controls for payment, payout, ledger and KYC paths. Final mapping is re-checked 
 
 Implemented in Stage 4. Design:
 
+> **Stage 4 as built ([ADR-032](adr/ADR-032-email-password-totp-authentication.md) amends §4.1):** users sign in
+> with **email + password** (Argon2id, 12+ characters, offline common-password list, no composition rules) and
+> optional TOTP MFA with recovery codes; OTP **login** is deferred until an SMS provider exists. Phone numbers
+> are verified by SMS code (development provider) as contact data only. Staff: password + **mandatory TOTP**
+> (WebAuthn deferred), invitation-only accounts, TOTP-only step-up. Step-up uses `/auth/step-up/verify`.
+> Details: [stage-4/authentication-architecture.md](stage-4/authentication-architecture.md),
+> [stage-4/mfa.md](stage-4/mfa.md). The OTP rules below apply to phone verification codes.
+
 ### 4.1 Users (donors, campaign owners, organisation members)
 
 - **Primary factor:** one-time code to a verified phone number (SMS; WhatsApp or other channels later if a
@@ -207,6 +215,11 @@ For emergencies where the normal permission path is unavailable:
 
 ## 6. Session management
 
+> **Stage 4 as built:** as described below, with the named timeouts as config defaults; rotation at login and
+> MFA completion; revocation on logout(-all), password reset/change, email change, MFA change, privilege change
+> and suspension; step-up refreshes `step_up_at` on the existing session rather than rotating it.
+> [stage-4/session-management.md](stage-4/session-management.md).
+
 - Opaque, random session token (≥ 256 bits from a CSPRNG). Only `SHA-256(token)` is stored server-side in
   PostgreSQL, so a database read does not yield usable sessions.
 - Cookie: `__Host-fz_session`, `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, no `Domain` attribute.
@@ -232,6 +245,11 @@ Defence in depth for every state-changing request (`POST`, `PUT`, `PATCH`, `DELE
 3. Synchroniser/double-submit CSRF token bound to the session, sent in a header (`X-CSRF-Token`).
 
 Webhook endpoints are exempt from CSRF (no cookies) and are authenticated by signature instead.
+
+**Stage 4 as built:** `SameSite=Lax`, Origin check and session-bound HMAC token (`fz_csrf` cookie →
+`X-CSRF-Token`). Deviation: there is no `Referer` fallback — a request **without** `Origin` (non-browser
+clients, very old browsers) passes the origin step and, when it carries a session cookie, still needs the
+token; pre-session endpoints (login, register) without `Origin` rely on `SameSite` and `Sec-Fetch-Site`.
 `GET` handlers never change state.
 
 ### 7.2 XSS
@@ -276,6 +294,11 @@ case that must return `404` (not `403`, to avoid confirming existence) for user-
 Token-bucket/sliding-window limits keyed by multiple dimensions: IP (and /24 or ASN aggregation for abuse),
 account, phone number, email, device fingerprint where lawful, and campaign. Stored in Redis with a
 conservative fail-closed fallback for sensitive endpoints (§2).
+
+**Stage 4 as built:** GCRA in Valkey (atomic Lua) with named policies keyed by IP (IPv6 /64), normalised
+email, user, E.164 number, MFA challenge; on Valkey failure every policy keeps limiting per replica with an
+in-process fallback (never allow-all). Device fingerprint, /24 and ASN aggregation are not implemented.
+Values: [stage-4/authentication-architecture.md](stage-4/authentication-architecture.md) §5.
 
 ### 10.2 Brute force
 

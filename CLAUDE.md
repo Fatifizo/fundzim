@@ -15,11 +15,12 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
-**Stage 3 — Core Platform Foundation (complete; awaiting acceptance).**
-Stage 0 is complete; Stages 1 and 2 are complete but their acceptance has not been recorded
-(`docs/stage-3/prerequisite-assessment.md`). What Stage 3 built: `docs/stage-3/implementation.md`; Stage 4
-starts from `docs/stage-handover/STAGE-3-TO-STAGE-4.md`. A documentation-stage PASS is never permission to operate a live
-crowdfunding business or to move real money.
+**Stage 4 — Authentication & Identity (complete; awaiting acceptance).**
+Stage 0 is complete; Stages 1–3 are complete but their acceptance has not been recorded
+(`docs/stage-4/prerequisite-assessment.md`). What Stage 4 built: `docs/stage-4/implementation.md`; Stage 5
+starts from `docs/stage-handover/STAGE-4-TO-STAGE-5.md`. GitHub Actions is not running for the repository
+(KI-S4-01) — never report CI as green without seeing a run. A documentation-stage PASS is never permission to
+operate a live crowdfunding business or to move real money.
 Do not start a stage until the user explicitly asks for it. Do not implement work belonging to a later stage
 "while you're there". Each stage ends with a completion report (template in `docs/DEVELOPMENT.md`) and then
 STOPS.
@@ -29,8 +30,8 @@ STOPS.
 | Path | Purpose |
 |---|---|
 | `apps/web/` | Next.js 16 (App Router, TypeScript, Tailwind v4). **Presentation only.** Has its own `AGENTS.md` — read it: this Next.js version differs from older training data; consult `apps/web/node_modules/next/dist/docs/` before writing Next.js code. |
-| `apps/api/` | Go entrypoints: `cmd/api` (HTTP API), `cmd/fundzimctl` (config check, migrations, healthcheck). No worker binary yet (Stage 4). |
-| `internal/` | Go code: `app/` (composition root) and `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, version). Domain modules arrive with their stages. One Go module (`github.com/Fatifizo/fundzim`) rooted at repo root. |
+| `apps/api/` | Go entrypoints: `cmd/api` (HTTP API), `cmd/worker` (River jobs, outbox relay/delivery), `cmd/fundzimctl` (config check, migrations, `bootstrap-admins`, healthcheck). |
+| `internal/` | Go code: `app/` (composition root), `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, crypto, authz, clock, ratelimit, idempotency, outbox, jobs, version) and domain modules `users`, `auth`, `organisations`, `audit`, `notifications`. `archtest/` enforces the module import graph and table ownership — register every new module there. One Go module (`github.com/Fatifizo/fundzim`) rooted at repo root. |
 | `migrations/` | Executable goose SQL migrations, embedded and run by `fundzimctl migrate` as `fundzim_migrator` (`docs/development/migrations.md`). |
 | `docs/` | Specifications. `docs/adr/` holds Architecture Decision Records. |
 | `api/openapi/` | OpenAPI 3.1 contract for `/api/v1` (source of truth, ADR-026). |
@@ -175,11 +176,11 @@ Node 24.21.0 via nvm. Docker needs docker-group access (`sudo usermod -aG docker
 ```bash
 ./scripts/dev-env-init.sh                 # make env       — local .env with generated secrets (never overwrites)
 docker compose up -d --build              # make up        — full local stack (all ports on 127.0.0.1)
-go test -race -count=1 ./...              # make test-go
+go test -race -count=1 ./apps/api/... ./internal/... ./migrations/...   # make test-go (never ./... — apps/web/node_modules has Go files)
 npm --prefix apps/web test                # make test-web
 set -a; . ./.env; set +a; go test -tags integration -count=1 ./tests/integration/...   # make test-integration
 npm --prefix apps/web run test:e2e        # make test-e2e
-gofmt -l apps internal migrations tests; go vet ./...; npm --prefix apps/web run lint; npm --prefix apps/web run typecheck   # make lint
+gofmt -l apps internal migrations tests; go vet ./apps/api/... ./internal/... ./migrations/...; npm --prefix apps/web run lint; npm --prefix apps/web run typecheck   # make lint
 CGO_ENABLED=0 go build -trimpath -o bin/ ./apps/api/cmd/...; npm --prefix apps/web run build                               # make build
 set -a; . ./.env; set +a; go run ./apps/api/cmd/fundzimctl migrate up    # make migrate-up (status/down likewise)
 ./scripts/check-secrets.sh                # part of make security

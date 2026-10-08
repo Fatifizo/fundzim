@@ -11,14 +11,16 @@ providers.
 FundZim is **not** an investment, lending, equity or rewards platform, and it is not a wallet or a payment
 provider.
 
-> **Status: Stage 3 — Core Platform Foundation (complete; awaiting acceptance).** The repository contains the
-> product, regulatory and system-design specifications (Stages 0–2), a runnable Go API foundation (config,
-> logging, errors, health/readiness, metrics, PostgreSQL migrations, Redis and S3 wiring), a local Docker
-> Compose environment, a Next.js development preview and CI. There are **no user accounts, campaigns,
-> donations, payments, payouts or KYC features** yet, and no real money is handled. Nothing here is a claim of
-> regulatory approval or compliance — open legal questions are tracked in
+> **Status: Stage 4 — Authentication & Identity (complete; awaiting acceptance).** On top of the Stage 3
+> platform foundation, the repository now has user registration and email verification, email + password
+> login with optional TOTP MFA, server-side sessions with CSRF protection, password reset, phone verification
+> (development SMS provider), staff accounts with mandatory TOTP created by invitation, maker-checker role
+> grants, organisations with membership isolation, a background worker with a transactional outbox, and
+> distributed rate limiting. There are **no campaigns, donations, payments, payouts or KYC features** yet,
+> and no real money is handled. Production start-up is refused until KMS key management exists (Stage 18).
+> Nothing here is a claim of regulatory approval or compliance — open legal questions are tracked in
 > [`docs/COMPLIANCE.md`](docs/COMPLIANCE.md). What exists in detail:
-> [`docs/stage-3/implementation.md`](docs/stage-3/implementation.md).
+> [`docs/stage-4/implementation.md`](docs/stage-4/implementation.md).
 
 ## Stack
 
@@ -62,7 +64,7 @@ docs/                  Specifications, roadmap, ADRs, stage reports and handover
 
 ```bash
 ./scripts/dev-env-init.sh        # once: creates .env with generated local secrets (never overwrites)
-docker compose up -d --build     # postgres, valkey, garage (+ init), migrations, api, web
+docker compose up -d --build     # postgres, valkey, garage (+ init), mailpit, migrations, api, worker, web
 docker compose ps                # wait until fundzim-api and fundzim-web are healthy
 curl -s http://127.0.0.1:8080/api/v1/ready      # {"data":{"status":"ready"},"meta":{...}}
 ```
@@ -77,11 +79,28 @@ Then open <http://127.0.0.1:3000>. With make: `make env` then `make up`.
 | PostgreSQL | `127.0.0.1:5432`, database `fundzim` | Roles and passwords in `.env` |
 | Redis (Valkey) | `127.0.0.1:6379` | Password in `.env` |
 | Object storage (Garage S3 API) | <http://127.0.0.1:3900> | Three buckets, three keys in `.env` |
-| Mail UI (Mailpit, optional) | <http://127.0.0.1:8025> | `docker compose --profile tools up -d fundzim-mail`; nothing sends mail yet |
+| Worker internal | <http://127.0.0.1:9091> | `/healthz`, `/readyz`, `/metrics` of the background worker |
+| Mail UI (Mailpit) | <http://127.0.0.1:8025> | All local email lands here: verification and reset links, invitations, and dev "SMS" codes (to `<number>@sms.dev.invalid`) |
 
 Host ports can be changed with the `*_HOST_PORT` variables in `.env` (then also edit the matching URLs in
 `.env`). Full development guide: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md); configuration reference:
 [`docs/development/configuration.md`](docs/development/configuration.md).
+
+### First administrators
+
+There is no default administrator. Create the first two SUPER_ADMINs once with the audited bootstrap ceremony,
+then accept both invitation emails in Mailpit (each sets a password and enrols an authenticator app):
+
+```bash
+set -a; . ./.env; set +a
+go run ./apps/api/cmd/fundzimctl bootstrap-admins \
+  --admin-a-email ops-a@example.org --admin-a-name "Ops A" \
+  --admin-b-email ops-b@example.org --admin-b-name "Ops B" \
+  --justification "initial platform administrators"
+```
+
+Further staff are invited by an administrator; roles are granted by maker-checker requests
+([`docs/stage-4/rbac.md`](docs/stage-4/rbac.md)).
 
 ### Hot-reload alternative
 
@@ -114,14 +133,15 @@ Guide: [`docs/development/migrations.md`](docs/development/migrations.md).
 
 | Suite | make | without make |
 |---|---|---|
-| Go unit tests | `make test-go` | `go test -race -count=1 ./...` |
+| Go unit tests | `make test-go` | `go test -race -count=1 ./apps/api/... ./internal/... ./migrations/...` (name the packages: `./...` would descend into `apps/web/node_modules`) |
 | Web unit tests (Vitest) | `make test-web` | `npm --prefix apps/web test` |
 | Both | `make test` | both commands above |
 | Web E2E (Playwright; first run: `npx --prefix apps/web playwright install chromium`) | `make test-e2e` | `npm --prefix apps/web run test:e2e` |
 | Integration (needs the running stack) | `make test-integration` | `set -a; . ./.env; set +a; FUNDZIM_IT_API_URL=http://127.0.0.1:8080 FUNDZIM_IT_WEB_URL=http://127.0.0.1:3000 go test -tags integration -count=1 -v ./tests/integration/...` |
 
-Integration tests write a few synthetic, undeletable audit rows into your local database (append-only by
-design); `make reset` clears them. Never set `FUNDZIM_IT_DESTRUCTIVE=1` against a database you care about.
+Integration tests need the running stack **including the worker** (identity tests read emails from Mailpit).
+They write synthetic accounts, staff, organisations and undeletable audit rows into your local database, and
+revoke existing SUPER_ADMIN assignments to re-run the bootstrap ceremony; `make reset` clears everything. Never set `FUNDZIM_IT_DESTRUCTIVE=1` against a database you care about.
 
 ## Linting, formatting and building
 
@@ -176,9 +196,10 @@ Reset deletes the Postgres and Garage volumes (database, roles, objects). `.env`
 | [DATA-CLASSIFICATION](docs/DATA-CLASSIFICATION.md) · [PRIVACY](docs/PRIVACY.md) | Data classes, handling, privacy architecture |
 | [OBSERVABILITY](docs/OBSERVABILITY.md) · [FRONTEND](docs/FRONTEND.md) · [TESTING](docs/TESTING.md) · [DEVELOPMENT](docs/DEVELOPMENT.md) | Operating, building and testing standards |
 | [ADRs](docs/adr/README.md) | Architecture Decision Records |
+| [Stage 4 implementation](docs/stage-4/implementation.md) · [security review](docs/stage-4/security-review.md) · [testing](docs/stage-4/testing.md) | Authentication, sessions, RBAC, MFA, organisations, worker, distributed limits |
 | [Stage 3 implementation](docs/stage-3/implementation.md) · [security review](docs/stage-3/security-review.md) | What Stage 3 built, deviations, endpoint status, security baseline findings |
 | [Configuration](docs/development/configuration.md) · [Migrations](docs/development/migrations.md) · [Seed data](docs/development/seed-data.md) | Environment variables and refusals, migration guide, development data rules |
-| [Stage handovers](docs/stage-handover/STAGE-3-TO-STAGE-4.md) | Stage 3 → 4 (authentication and identity); earlier handovers in the same folder |
+| [Stage handovers](docs/stage-handover/STAGE-4-TO-STAGE-5.md) | Stage 4 → 5 (KYC and verification); earlier handovers in the same folder |
 
 ## Licence
 

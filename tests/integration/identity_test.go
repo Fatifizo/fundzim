@@ -1091,3 +1091,59 @@ func TestDistributedLoginLimitAcrossReplicas(t *testing.T) {
 		}
 	}
 }
+
+// TestIdentitySessionExpiry proves idle and absolute expiry are enforced server-side and that the idle expiry
+// slides (at most once a minute) but never past the absolute expiry. Short timeouts are injected through
+// config on dedicated in-process servers.
+func TestIdentitySessionExpiry(t *testing.T) {
+	need(t, "DATABASE_MIGRATION_URL")
+	email := uniqueEmail("expiry")
+	base := newITServer(t, nil)
+	b0 := base.browser(t)
+	b0.registerVerified(email)
+
+	// idle expiry: 1.5 s idle, 1 h absolute
+	idle := newITServer(t, func(c *config.Config) { c.Auth.SessionIdleTimeout = 1500 * time.Millisecond })
+	b := idle.browser(t)
+	b.mustLogin(email, itPassword)
+	b.expect(b.do("GET", "/me", nil), 200, "")
+	time.Sleep(2 * time.Second)
+	b.expect(b.do("GET", "/me", nil), 401, "AUTHENTICATION_REQUIRED")
+
+	// absolute expiry: idle (1 h) is clamped to the 2 s absolute lifetime; cookie Max-Age matches
+	abs := newITServer(t, func(c *config.Config) { c.Auth.SessionAbsoluteTimeout = 2 * time.Second })
+	c := abs.browser(t)
+	r := c.login(email, itPassword)
+	c.expect(r, 200, "")
+	for _, ck := range (&http.Response{Header: r.Header}).Cookies() {
+		if ck.Name == "fz_session" && (ck.MaxAge < 1 || ck.MaxAge > 2) {
+			t.Fatalf("session cookie Max-Age %d, want ≤ absolute lifetime", ck.MaxAge)
+		}
+	}
+	c.expect(c.do("GET", "/me", nil), 200, "")
+	time.Sleep(2500 * time.Millisecond)
+	c.expect(c.do("GET", "/me", nil), 401, "AUTHENTICATION_REQUIRED")
+
+	// sliding idle expiry: a request after > 1 minute of inactivity pushes idle_expires_at forward
+	d := base.browser(t)
+	d.mustLogin(email, itPassword)
+	var me auth.Me
+	_ = json.Unmarshal(d.do("GET", "/me", nil).Data, &me)
+	mig := pool(t, os.Getenv("DATABASE_MIGRATION_URL"))
+	if _, err := mig.Exec(ctx(t), `UPDATE app.sessions SET last_seen_at = now() - interval '2 minutes',
+		idle_expires_at = now() + interval '1 minute' WHERE id = (SELECT id FROM app.sessions WHERE user_id = $1 AND revoked_at IS NULL
+		ORDER BY created_at DESC LIMIT 1)`, me.ID); err != nil {
+		t.Fatal(err)
+	}
+	d.expect(d.do("GET", "/me", nil), 200, "")
+	var idleLeft, absLeft time.Duration
+	var idleAt, absAt, now time.Time
+	if err := mig.QueryRow(ctx(t), `SELECT idle_expires_at, absolute_expires_at, now() FROM app.sessions
+		WHERE user_id = $1 AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1`, me.ID).Scan(&idleAt, &absAt, &now); err != nil {
+		t.Fatal(err)
+	}
+	idleLeft, absLeft = idleAt.Sub(now), absAt.Sub(now)
+	if idleLeft < base.cfg.Auth.SessionIdleTimeout-time.Minute || idleAt.After(absAt) {
+		t.Fatalf("idle expiry did not slide: idle in %s, absolute in %s", idleLeft, absLeft)
+	}
+}

@@ -152,12 +152,10 @@ each release from Stage 7.
   scripts, no `unsafe-eval` in production, `object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'`,
   `form-action 'self'` plus explicitly allow-listed PSP hosted-payment origins. `connect-src` limited to self
   and required telemetry endpoints. Reporting via `report-to`.
-  **Stage 3 deviation (tracked):** the implemented CSP (`next.config.ts`) is static and uses
-  `script-src 'self' 'unsafe-inline'` (and `style-src 'self' 'unsafe-inline'`), because per-request nonces
-  force dynamic rendering and conflict with Partial Prerendering under `cacheComponents`. It has no third-party
-  origins, no `unsafe-eval` in production, and locks `object-src`, `base-uri`, `frame-ancestors` and
-  `form-action`; no `report-to` yet. This must be replaced by a nonce- or hash-based policy before Stage 7
-  renders owner-supplied content ([stage-3/security-review.md](stage-3/security-review.md) F-04).
+  **Implemented in Stage 4** (`apps/web/src/proxy.ts`, `src/lib/security/csp.ts`, [ADR-033](adr/ADR-033-per-request-nonce-csp.md)):
+  per-request nonce with `'strict-dynamic'`, no `unsafe-inline` for scripts or styles, `unsafe-eval` only in
+  `next dev`; `cacheComponents` disabled so every page renders per request. `report-to` is not configured yet
+  (Stage 18). The Stage 3 `unsafe-inline` deviation is closed.
 - Other headers (set at proxy or Next.js level, verified in tests): HSTS (values and preload timing per [SECURITY.md](SECURITY.md) §11: preload once the domain is stable),
   `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`
   disabling unused features (camera allowed only on KYC capture pages if used).

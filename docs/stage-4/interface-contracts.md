@@ -215,7 +215,7 @@ All under `/api/v1`, JSON, standard envelope. Same-origin through the web proxy.
 | `POST /auth/logout-all` | authenticated | → **204** | Revokes every session of the user |
 | `POST /auth/forgot-password` | public | `{email}` → **202** `{status:"reset_requested"}` | Generic |
 | `POST /auth/reset-password` | public | `{token, new_password}` → `{status:"password_reset"}` | Revokes all sessions; `400 TOKEN_INVALID`; `422 PASSWORD_POLICY_VIOLATION` with `details` |
-| `POST /auth/step-up/verify` | authenticated | `{password}` or `{code}` → `{step_up_expires_at}` | Refreshes step-up freshness |
+| `POST /auth/step-up/verify` | authenticated | `{password}` or `{code}` → `{step_up_expires_at}` | Refreshes step-up freshness; staff must use `{code}` (TOTP) |
 | `GET /me` | authenticated | → `Me` | |
 | `PATCH /me` | authenticated | `{display_name}` → `Me` | Optional `Idempotency-Key` |
 | `POST /me/password` | authenticated | `{current_password, new_password}` → **204** | Revokes the user's other sessions |
@@ -225,17 +225,20 @@ All under `/api/v1`, JSON, standard envelope. Same-origin through the web proxy.
 | `DELETE /me/sessions/{session_id}` | authenticated | → **204** | Own sessions only; others → 404 |
 | `POST /me/mfa/enroll` | authenticated + step-up | → `{enrollment_id, secret, otpauth_uri}` | Secret returned once, never again |
 | `POST /me/mfa/confirm` | authenticated + step-up | `{enrollment_id, code}` → `{recovery_codes: [10]}` | Codes returned once |
-| `POST /me/mfa/disable` | user + step-up | `{code}` (TOTP or recovery code) → **204** | Staff cannot disable MFA (403 MFA_REQUIRED_FOR_ROLE) |
+| `POST /me/mfa/disable` | authenticated + step-up (staff refused) | `{code}` (TOTP or recovery code) → **204** | Staff cannot disable MFA (403 MFA_REQUIRED_FOR_ROLE) |
 | `POST /me/mfa/recovery-codes` | authenticated + step-up | → `{recovery_codes}` | Regenerates (old batch superseded) |
-| `POST /me/phone/verify-request` | user | `{phone}` → **202** `{expires_at}` | Zimbabwe default region; E.164 |
-| `POST /me/phone/verify-confirm` | user | `{phone, code}` → `{phone_verified: true}` | |
+| `POST /me/phone/verify-request` | user | `{phone}` → **202** `{phone_masked, expires_at}` | Zimbabwe default region; E.164 |
+| `POST /me/phone/verify-confirm` | user | `{phone, code}` → `{phone_verified: true, phone_masked}` | `422 OTP_INVALID`, `409 PHONE_IN_USE` |
 
 `Me = {id, account_kind, email, email_verified, display_name, phone_masked, phone_verified, mfa_enabled, roles: [..] (staff only), created_at}`.
 
 Errors use the standard envelope; `STEP_UP_REQUIRED` (403) tells the client to call `/auth/step-up/verify` and
 retry. `AUTHENTICATION_REQUIRED` (401) means no valid session.
 
-Organisation and staff/admin endpoints are listed in [rbac.md](rbac.md) and the OpenAPI contract.
+Organisation and staff/admin endpoints are described in [rbac.md](rbac.md) and specified in the OpenAPI contract
+(`api/openapi/fundzim-v1.yaml`, operations marked `x-fundzim-status: IMPLEMENTED`). Staff invitation acceptance:
+`POST /auth/staff-invitation/start {token}` → `{email, display_name, enrollment_id, secret, otpauth_uri}`;
+`POST /auth/staff-invitation/finish {token, enrollment_id, code, password}` → `{status:"activated", recovery_codes}`.
 
 ---
 

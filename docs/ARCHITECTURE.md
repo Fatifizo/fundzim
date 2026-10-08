@@ -4,16 +4,15 @@
 > towards. Almost nothing here is implemented yet. Where a choice is deferred, the stage that decides it is
 > named. Significant changes require an ADR (see [`docs/adr/`](adr/)).
 
-> **Stage 3 implementation status.** What exists in code: one Go binary `api` (public listener with
-> `/healthz`, `/readyz`, `/api/v1/health|ready|version`; internal listener with `/metrics` and detailed
-> readiness) and the CLI `fundzimctl`; `internal/app` (composition root) and `internal/platform` (config,
-> logging with redaction, errors/envelope, HTTP middleware, health, db, cache, storage, metrics, money, ids,
-> version); PostgreSQL migrations for the foundation, platform tables and the two audit tables with derived
-> runtime grants; a local Compose stack (PostgreSQL 17, Valkey, Garage S3 with three buckets/credentials);
-> the Next.js development preview with a runtime same-origin proxy for `/api/v1`. **Not yet built:** the
-> worker (§3, §7), job queue and outbox dispatcher, any domain module (§4.2), authentication and the
-> session/CSRF/idempotency middleware steps (§5), tracing. Details and deviations:
-> [stage-3/implementation.md](stage-3/implementation.md).
+> **Stage 4 implementation status.** In code: Go binaries `api`, `worker` (River on PostgreSQL, outbox relay
+> and delivery, purge jobs) and `fundzimctl` (config, migrations, health, `bootstrap-admins`); `internal/app`
+> (composition root), `internal/platform` (config, logging, errors, HTTP middleware incl. trusted client IP,
+> distributed rate limiting, idempotency, health, db, cache, storage, metrics, money, ids, crypto, outbox,
+> jobs, authz, clock) and the first domain modules `users`, `auth`, `organisations`, `audit`,
+> `notifications`; identity, RBAC and organisation migrations; the Next.js app with authentication pages,
+> protected routes and a nonce CSP. Module boundaries are enforced by `internal/archtest`. **Not yet built:**
+> every financial module (payments, ledger, payouts, fees), KYC/KYB, campaigns, tracing export. Details:
+> [stage-4/implementation.md](stage-4/implementation.md) (Stage 3: [stage-3/implementation.md](stage-3/implementation.md)).
 
 Related: [MONEY.md](MONEY.md) · [LEDGER.md](LEDGER.md) · [PAYMENTS.md](PAYMENTS.md) · [SECURITY.md](SECURITY.md) ·
 [THREAT-MODEL.md](THREAT-MODEL.md) · [DATABASE.md](DATABASE.md) · [AUDIT.md](AUDIT.md) ·
@@ -237,17 +236,19 @@ flowchart LR
 A typical authenticated mutating request, for example "submit campaign for review":
 
 1. The reverse proxy terminates TLS, applies coarse rate limits and forwards it to api.
-2. Middleware chain (order matters):
+2. Middleware chain (order matters; implemented in `internal/app/routes.go`, Stage 4):
    1. request ID (accept a valid inbound `X-Request-ID` only from trusted proxies, otherwise generate one;
       always echo it — see [OBSERVABILITY.md](OBSERVABILITY.md));
-   2. panic recovery;
-   3. structured access log;
-   4. security headers;
-   5. body size limit;
-   6. session authentication;
-   7. CSRF check (Origin/Fetch-Metadata + token) for unsafe methods;
-   8. per-route rate limit;
-   9. `Idempotency-Key` handling where the route requires it.
+   2. client IP resolution (`X-Forwarded-For` honoured only from `TRUSTED_PROXY_CIDRS`);
+   3. structured access log (wraps recovery so recovered panics are logged with their 500);
+   4. panic recovery;
+   5. security headers; CORS (off by default);
+   6. body size limit; request timeout;
+   7. global per-IP rate limit (Valkey GCRA, protective local fallback);
+   8. session resolution (a database failure makes protected routes answer 503);
+   9. CSRF check (Origin/Fetch-Metadata + session-bound token) for unsafe methods;
+   10. router: route policy authorisation (deny by default), then per-route options such as
+       `Idempotency-Key` handling. Account-keyed limits (login per email, OTP per number) run in handlers.
 3. Handler: decode into a typed request (unknown fields rejected), validate, and call the module service.
 4. Service: authorisation (permission + ownership), then business rules, then a DB transaction that writes
    domain rows + audit event + outbox events **atomically**.
