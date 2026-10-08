@@ -39,7 +39,7 @@ yet** (the branch has not been pushed), so CI results are not claimed.
 | SQL design drafts | `node run.mjs && node catalogue.mjs` | **ALL CHECKS PASSED** (666 cases), catalogue OK |
 | CI workflow lint | actionlint v1.7.12 | clean |
 | Secret scan (pattern) | `scripts/check-secrets.sh` | no secrets found |
-| Secret scan (gitleaks 8.30.1, full git history) | `gitleaks detect --source .` | see §4 (run after the Stage 3 commits) |
+| Secret scan (gitleaks 8.30.1, full git history) | `gitleaks detect --source .` | **No leaks found** (run after the five Stage 3 commits, with `.gitleaks.toml` and `.gitleaksignore`) |
 
 ## 3. Docker and live-stack validation
 
