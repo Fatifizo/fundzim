@@ -1,13 +1,15 @@
-# FundZim API — OpenAPI 3.1 contract (Stage 2 design, ADR-026).
+# FundZim API — OpenAPI 3.1 contract (Stage 2 design, ADR-026; identity implemented in Stage 4).
 # Source of truth for /api/v1. Human-readable design: docs/api/api-design.md.
 # Lint: npx --yes @redocly/cli@2.54.3 lint api/openapi/fundzim-v1.yaml --config api/openapi/redocly.yaml
 openapi: 3.1.0
 info:
   title: FundZim API
-  version: 1.0.0-draft.stage2
-  summary: Contract for the FundZim /api/v1 HTTP API (Stage 2 design; no implementation yet).
-  description: 'Contract-first OpenAPI for FundZim (ADR-026). Design source: docs/api/api-design.md, docs/api/authorization-matrix.md, docs/api/error-model.md,
-    docs/stage-2/design-baseline.md.
+  version: 1.0.0-draft.stage4
+  summary: Contract for the FundZim /api/v1 HTTP API. Identity endpoints (authentication, profile, organisations membership, staff administration)
+    are implemented in Stage 4; health in Stage 3; all other areas remain design-only.
+  description: 'Contract-first OpenAPI for FundZim (ADR-026). Operations marked `x-fundzim-status: IMPLEMENTED` exist in the API; `DEFERRED` and
+    `SUPERSEDED` (with `x-fundzim-status-note`) are Stage 2 designs that Stage 4 did not implement; unmarked operations are design-only. Design
+    source: docs/api/api-design.md, docs/api/authorization-matrix.md, docs/api/error-model.md, docs/stage-2/design-baseline.md.
 
 
     Conventions: JSON `snake_case`; RFC 3339 UTC timestamps; envelope `{data, meta}` / `{error, meta}`; money is `{amount_minor: string, currency}`
@@ -29,7 +31,7 @@ security:
 - session: []
 tags:
 - name: Authentication
-  description: Sessions, OTP login, step-up, staff MFA.
+  description: Email + password sign-in, TOTP MFA, sessions, step-up, password reset, staff invitation acceptance (ADR-032).
 - name: User profiles
   description: Signed-in user's own account (`/me`).
 - name: Organisations
@@ -89,13 +91,14 @@ paths:
       tags:
       - Authentication
       operationId: getSession
-      summary: Get the current session and CSRF token
-      description: '**AUTH-01** · Auth: session · Authorization: Session holder (user or staff). No session → 401; there are no guest sessions.
+      summary: Get the current authentication state
+      description: '**AUTH-01** · Auth: none · Authorization: Public. Never 401: `{authenticated: false}` without a live session (plus `mfa_pending:
+        true` while an MFA challenge cookie is present). The CSRF token is read from the `fz_csrf` cookie, not this body. Implemented in Stage
+        4.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-USER-READ` · Audit: —'
-      security:
-      - session: []
+        Idempotency: n/a · Rate-limit class: `RL-USER-READ` (policies: `global.ip`) · Audit: —'
+      security: []
       responses:
         '200':
           description: Success.
@@ -105,22 +108,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SessionInfoEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                $ref: '#/components/schemas/AuthSessionStateEnvelope'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: AUTH-01
-      x-fundzim-auth: session
+      x-fundzim-auth: none
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
       x-fundzim-audit: —
       x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
+      - INTERNAL_ERROR
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
   /auth/otp:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -129,7 +135,10 @@ paths:
       - Authentication
       operationId: sendLoginOtp
       summary: Send a login OTP
-      description: '**AUTH-02** · Auth: none · Authorization: Anyone; enumeration-resistant uniform 202.
+      description: '**Deferred.** OTP login is deferred by ADR-032 (stays PLANNED until an SMS provider exists); Stage 4 sign-in is `POST /auth/login`.
+
+
+        **AUTH-02** · Auth: none · Authorization: Anyone; enumeration-resistant uniform 202.
 
 
         Idempotency: n/a · Rate-limit class: `RL-OTP-SEND` · Audit: auth.otp.sent (security)'
@@ -169,6 +178,8 @@ paths:
       - CHALLENGE_REQUIRED
       - CSRF_TOKEN_INVALID
       - VALIDATION_FAILED
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: OTP login is deferred by ADR-032 (stays PLANNED until an SMS provider exists); Stage 4 sign-in is `POST /auth/login`.
   /auth/otp/verify:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -177,7 +188,11 @@ paths:
       - Authentication
       operationId: verifyLoginOtp
       summary: Verify OTP and sign in
-      description: '**AUTH-03** · Auth: none · Authorization: Holder of the challenge.
+      description: '**Deferred.** OTP login is deferred by ADR-032 (stays PLANNED until an SMS provider exists); Stage 4 sign-in is `POST /auth/login`
+        + `POST /auth/mfa/verify`.
+
+
+        **AUTH-03** · Auth: none · Authorization: Holder of the challenge.
 
 
         Idempotency: n/a · Rate-limit class: `RL-OTP-VERIFY` · Audit: auth.login.succeeded / auth.login.failed / auth.otp.failed_max_attempts
@@ -223,6 +238,9 @@ paths:
       - OTP_EXPIRED
       - OTP_INVALID
       - VALIDATION_FAILED
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: OTP login is deferred by ADR-032 (stays PLANNED until an SMS provider exists); Stage 4 sign-in is `POST /auth/login`
+        + `POST /auth/mfa/verify`.
   /auth/logout:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -230,22 +248,20 @@ paths:
       tags:
       - Authentication
       operationId: logout
-      summary: Sign out (server-side session deletion)
-      description: '**AUTH-04** · Auth: session · Authorization: Session holder.
+      summary: Sign out (revoke the current session)
+      description: '**AUTH-04** · Auth: session · Authorization: Any live session (personal or staff). Implemented in Stage 4.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` · Audit: auth.session.revoked (security)'
+        Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: auth.logout (security)'
       security:
       - session: []
         csrfToken: []
       responses:
         '204':
-          description: No content.
+          description: No content. Clears the session and CSRF cookies.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
-        '400':
-          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -254,14 +270,23 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: AUTH-04
       x-fundzim-auth: session
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-WRITE
-      x-fundzim-audit: auth.session.revoked (security)
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: auth.logout (security)
       x-fundzim-error-codes:
       - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
   /auth/step-up/challenges:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -270,7 +295,10 @@ paths:
       - Authentication
       operationId: startStepUp
       summary: Start a step-up challenge (user OTP)
-      description: '**AUTH-05** · Auth: session · Authorization: Signed-in user.
+      description: '**Superseded.** Superseded by ADR-032: step-up needs no challenge; send the password or a TOTP code to `POST /auth/step-up/verify`.
+
+
+        **AUTH-05** · Auth: session · Authorization: Signed-in user.
 
 
         Idempotency: n/a · Rate-limit class: `RL-OTP-SEND` · Audit: auth.otp.sent (security)'
@@ -314,6 +342,8 @@ paths:
       - AUTHENTICATION_REQUIRED
       - CSRF_TOKEN_INVALID
       - VALIDATION_FAILED
+      x-fundzim-status: SUPERSEDED
+      x-fundzim-status-note: 'Superseded by ADR-032: step-up needs no challenge; send the password or a TOTP code to `POST /auth/step-up/verify`.'
   /auth/step-up/verify:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -321,11 +351,14 @@ paths:
       tags:
       - Authentication
       operationId: verifyStepUp
-      summary: Complete step-up (rotates session)
-      description: '**AUTH-06** · Auth: session · Authorization: Signed-in user.
+      summary: Step up with a fresh factor
+      description: '**AUTH-06** · Auth: session · Authorization: Any live session (personal or staff). Refreshes the session''s step-up time (the
+        session is not rotated). Personal accounts: password or TOTP; staff: TOTP only. Clients call this after `403 STEP_UP_REQUIRED` and retry.
+        Implemented in Stage 4.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-OTP-VERIFY` · Audit: auth.step_up.succeeded (security)'
+        Idempotency: n/a · Rate-limit class: `RL-SENSITIVE-USER` (policies: `global.ip`, `auth.step_up`) · Audit: session event STEP_UP; security
+        events'
       security:
       - session: []
         csrfToken: []
@@ -334,7 +367,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StepUpVerifyRequest'
+              $ref: '#/components/schemas/StepUpRequest'
       responses:
         '200':
           description: Success.
@@ -344,31 +377,791 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SessionInfoEnvelope'
+                $ref: '#/components/schemas/StepUpResultEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: AUTH-06
       x-fundzim-auth: session
       x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-OTP-VERIFY
-      x-fundzim-audit: auth.step_up.succeeded (security)
+      x-fundzim-rate-limit-class: RL-SENSITIVE-USER
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.step_up
+      x-fundzim-audit: session event STEP_UP; security events
       x-fundzim-error-codes:
       - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
-      - OTP_ATTEMPTS_EXCEEDED
-      - OTP_EXPIRED
-      - OTP_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - STEP_UP_FAILED
+      - UNSUPPORTED_MEDIA_TYPE
       - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /auth/register:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Authentication
+      operationId: register
+      summary: Register a personal account
+      description: '**AUTH-16** · Auth: none · Authorization: Public. Identical 202 whether or not the address is already registered (an existing
+        owner is emailed instead); the account is unverified until the emailed link is used. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-WRITE` (policies: `global.ip`, `auth.register.ip`) · Audit: auth.user.registered (security)'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '202':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationSentEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: AUTH-16
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.register.ip
+      x-fundzim-audit: auth.user.registered (security)
+      x-fundzim-error-codes:
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PASSWORD_POLICY_VIOLATION
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /auth/verify-email:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Authentication
+      operationId: verifyEmail
+      summary: Verify an email address (or confirm an email change)
+      description: '**AUTH-17** · Auth: none · Authorization: Public. Consumes an EMAIL_VERIFICATION or EMAIL_CHANGE token exactly once. An email
+        change swaps the sign-in address and revokes the user''s sessions. Unknown, expired or used tokens → `400 TOKEN_INVALID`. Implemented
+        in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-WRITE` (policies: `global.ip`, `auth.token.ip`) · Audit: auth.email.verified / auth.email.changed
+        (security)'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthTokenRequest'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailVerifiedEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: AUTH-17
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.token.ip
+      x-fundzim-audit: auth.email.verified / auth.email.changed (security)
+      x-fundzim-error-codes:
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - TOKEN_INVALID
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /auth/resend-verification:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Authentication
+      operationId: resendVerification
+      summary: Resend the verification email
+      description: '**AUTH-18** · Auth: none · Authorization: Public. Always 202 for a syntactically valid address (no enumeration); the per-account
+        limit is answered like success. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-WRITE` (policies: `global.ip`, `auth.verify_resend.ip`, `auth.verify_resend.account`)
+        · Audit: —'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthEmailRequest'
+      responses:
+        '202':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationSentEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: AUTH-18
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.verify_resend.ip
+      - auth.verify_resend.account
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /auth/login:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Authentication
+      operationId: login
+      summary: Sign in with email and password
+      description: '**AUTH-19** · Auth: none · Authorization: Public. Personal and staff accounts (ADR-032; staff always get `mfa_required`).
+        Unknown address and wrong password both → `401 INVALID_CREDENTIALS` with equal timing; `403 ACCOUNT_SUSPENDED` only after a correct password;
+        a staff account without MFA → `403 MFA_REQUIRED`. A request that carries a session cookie must also send `X-CSRF-Token`. Implemented in
+        Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-WRITE` (policies: `global.ip`, `auth.login.ip`, `auth.login.account`) · Audit: auth.login.succeeded
+        (security); failures → security events'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 'Success. Either `status: authenticated` with the session and CSRF cookies set (any presented session is rotated), or `status:
+            mfa_required` with the HttpOnly, SameSite=Strict `fz_mfa` challenge cookie set and no session.'
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResultEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: AUTH-19
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.login.ip
+      - auth.login.account
+      x-fundzim-audit: auth.login.succeeded (security); failures → security events
+      x-fundzim-error-codes:
+      - ACCOUNT_SUSPENDED
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - INVALID_CREDENTIALS
+      - MALFORMED_REQUEST
+      - MFA_REQUIRED
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /auth/mfa/verify:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Authentication
+      operationId: verifyLoginMfa
+      summary: Complete sign-in with a TOTP code
+      description: '**AUTH-20** · Auth: none · Authorization: Public. Requires the `fz_mfa` challenge cookie from `POST /auth/login` (missing,
+        expired or exhausted → `401 MFA_CHALLENGE_EXPIRED`). Wrong or replayed code → `401 MFA_CODE_INVALID`; the challenge is invalidated after
+        5 failures. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-OTP-VERIFY` (policies: `global.ip`, `auth.mfa.challenge`) · Audit: auth.login.succeeded (security)'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaCodeRequest'
+      responses:
+        '200':
+          description: Success. Sets the session cookie (`fz_session` / `__Host-fz_session`, HttpOnly, SameSite=Lax) and the readable CSRF cookie
+            (`fz_csrf` / `__Host-fz_csrf`), rotates any presented session and clears `fz_mfa`.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedResultEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: AUTH-20
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-OTP-VERIFY
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.mfa.challenge
+      x-fundzim-audit: auth.login.succeeded (security)
+      x-fundzim-error-codes:
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - MFA_CHALLENGE_EXPIRED
+      - MFA_CODE_INVALID
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /auth/mfa/recovery:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Authentication
+      operationId: verifyLoginRecoveryCode
+      summary: Complete sign-in with a recovery code
+      description: '**AUTH-21** · Auth: none · Authorization: Public. Requires the `fz_mfa` challenge cookie. Each recovery code works once; the
+        owner is notified when one is used. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-OTP-VERIFY` (policies: `global.ip`, `auth.mfa.challenge`) · Audit: auth.mfa.recovery_used, auth.login.succeeded
+        (security)'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaRecoveryRequest'
+      responses:
+        '200':
+          description: Success. Sets the session cookie (`fz_session` / `__Host-fz_session`, HttpOnly, SameSite=Lax) and the readable CSRF cookie
+            (`fz_csrf` / `__Host-fz_csrf`), rotates any presented session and clears `fz_mfa`.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticatedResultEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: AUTH-21
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-OTP-VERIFY
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.mfa.challenge
+      x-fundzim-audit: auth.mfa.recovery_used, auth.login.succeeded (security)
+      x-fundzim-error-codes:
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - MFA_CHALLENGE_EXPIRED
+      - MFA_CODE_INVALID
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /auth/forgot-password:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Authentication
+      operationId: forgotPassword
+      summary: Request a password reset email
+      description: '**AUTH-22** · Auth: none · Authorization: Public. Always 202 for a syntactically valid address (no enumeration); the per-account
+        limit is answered like success. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-WRITE` (policies: `global.ip`, `auth.password_reset.ip`, `auth.password_reset.account`)
+        · Audit: —'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthEmailRequest'
+      responses:
+        '202':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetRequestedEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: AUTH-22
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.password_reset.ip
+      - auth.password_reset.account
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /auth/reset-password:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Authentication
+      operationId: resetPassword
+      summary: Reset the password with an emailed token
+      description: '**AUTH-23** · Auth: none · Authorization: Public. `400 TOKEN_INVALID` for unknown, expired or used tokens (or a non-active
+        account); `422 PASSWORD_POLICY_VIOLATION` with `details`. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-WRITE` (policies: `global.ip`, `auth.token.ip`) · Audit: auth.password.reset_completed
+        (security)'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Success. Clears the session and CSRF cookies; every session and pending MFA challenge of the account is revoked. MFA is
+            still required at the next sign-in.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: AUTH-23
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.token.ip
+      x-fundzim-audit: auth.password.reset_completed (security)
+      x-fundzim-error-codes:
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PASSWORD_POLICY_VIOLATION
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - TOKEN_INVALID
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /auth/staff-invitation/start:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Authentication
+      operationId: startStaffInvitation
+      summary: Open a staff invitation and start TOTP enrolment
+      description: '**AUTH-24** · Auth: none · Authorization: Public. Validates the STAFF_INVITATION token without consuming it and returns a
+        TOTP secret once. Invalid → `400 TOKEN_INVALID`. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-WRITE` (policies: `global.ip`, `auth.token.ip`) · Audit: —'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffInvitationStartRequest'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: &id001
+              description: '`no-store` (one-time secret material).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffInvitationEnrollmentEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: AUTH-24
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.token.ip
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - TOKEN_INVALID
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /auth/staff-invitation/finish:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Authentication
+      operationId: finishStaffInvitation
+      summary: Accept a staff invitation (confirm TOTP, set password)
+      description: '**AUTH-25** · Auth: none · Authorization: Public. One transaction: consumes the token, confirms TOTP, sets the password, verifies
+        the email and returns recovery codes once. No session is created (sign in with `POST /auth/login`). Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-WRITE` (policies: `global.ip`, `auth.token.ip`) · Audit: staff.invitation.accepted (security)'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffInvitationFinishRequest'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffInvitationFinishedEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: AUTH-25
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.token.ip
+      x-fundzim-audit: staff.invitation.accepted (security)
+      x-fundzim-error-codes:
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - MFA_CODE_INVALID
+      - MFA_ENROLLMENT_NOT_FOUND
+      - PASSWORD_POLICY_VIOLATION
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - TOKEN_INVALID
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /auth/logout-all:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Authentication
+      operationId: logoutAll
+      summary: Sign out everywhere
+      description: '**AUTH-26** · Auth: session · Authorization: Any live session (personal or staff). Revokes every session of the account, including
+        the current one. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: auth.session.revoked_all (security)'
+      security:
+      - session: []
+        csrfToken: []
+      responses:
+        '204':
+          description: No content. Clears the session and CSRF cookies.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: AUTH-26
+      x-fundzim-auth: session
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-USER-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: auth.session.revoked_all (security)
+      x-fundzim-error-codes:
+      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
   /me/sessions:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -376,41 +1169,49 @@ paths:
       tags:
       - Authentication
       operationId: listMySessions
-      summary: List my sessions
-      description: '**AUTH-07** · Auth: session · Authorization: Own sessions only.
+      summary: List my live sessions
+      description: '**AUTH-07** · Auth: session · Authorization: Any live session (personal or staff). Own sessions only (scoped by the caller).
+        Implemented in Stage 4.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-USER-READ` · Audit: —'
+        Idempotency: n/a · Rate-limit class: `RL-USER-READ` (policies: `global.ip`) · Audit: —'
       security:
       - session: []
-      parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Success.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
+            Cache-Control: &id002
+              description: '`private, no-store`.'
+              schema:
+                type: string
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SessionSummaryPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                $ref: '#/components/schemas/SessionListEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: AUTH-07
       x-fundzim-auth: session
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
       x-fundzim-audit: —
       x-fundzim-error-codes:
       - AUTHENTICATION_REQUIRED
+      - INTERNAL_ERROR
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
   /me/sessions/{session_id}:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -419,10 +1220,11 @@ paths:
       - Authentication
       operationId: revokeMySession
       summary: Revoke one of my sessions
-      description: '**AUTH-08** · Auth: session · Authorization: Own sessions only (others → 404).
+      description: '**AUTH-08** · Auth: session · Authorization: Any live session (personal or staff). Own sessions only; another account''s (or
+        an unknown) session → `404 SESSION_NOT_FOUND`. Implemented in Stage 4.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` · Audit: auth.session.revoked (security)'
+        Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: auth.session.revoked (security)'
       security:
       - session: []
         csrfToken: []
@@ -434,12 +1236,10 @@ paths:
           $ref: '#/components/schemas/Uuid'
       responses:
         '204':
-          description: No content.
+          description: No content. When the current session is revoked, the session and CSRF cookies are cleared.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
-        '400':
-          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -450,15 +1250,24 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: AUTH-08
       x-fundzim-auth: session
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
       x-fundzim-audit: auth.session.revoked (security)
       x-fundzim-error-codes:
       - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
       - SESSION_NOT_FOUND
+      x-fundzim-status: IMPLEMENTED
   /admin/auth/login:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -467,7 +1276,10 @@ paths:
       - Authentication
       operationId: staffLogin
       summary: Staff password login (step 1; returns mandatory MFA challenge)
-      description: '**AUTH-09** · Auth: none · Authorization: STAFF accounts only (password, Argon2id; baseline §12 I-6); uniform failure.
+      description: '**Superseded.** Superseded by ADR-032: staff sign in with `POST /auth/login` (password) + `POST /auth/mfa/verify` (TOTP).
+
+
+        **AUTH-09** · Auth: none · Authorization: STAFF accounts only (password, Argon2id; baseline §12 I-6); uniform failure.
 
 
         Path is under /admin but reachable without a session (login).
@@ -513,6 +1325,8 @@ paths:
       - CSRF_TOKEN_INVALID
       - INVALID_CREDENTIALS
       - VALIDATION_FAILED
+      x-fundzim-status: SUPERSEDED
+      x-fundzim-status-note: 'Superseded by ADR-032: staff sign in with `POST /auth/login` (password) + `POST /auth/mfa/verify` (TOTP).'
   /admin/auth/mfa/verify:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -521,7 +1335,10 @@ paths:
       - Authentication
       operationId: staffMfaVerify
       summary: Complete staff MFA — WebAuthn or TOTP, never SMS/email (creates staff session)
-      description: '**AUTH-10** · Auth: none · Authorization: Holder of the MFA challenge.
+      description: '**Superseded.** Superseded by ADR-032: staff complete MFA with `POST /auth/mfa/verify` or `POST /auth/mfa/recovery`.
+
+
+        **AUTH-10** · Auth: none · Authorization: Holder of the MFA challenge.
 
 
         Idempotency: n/a · Rate-limit class: `RL-OTP-VERIFY` · Audit: auth.login.succeeded / auth.login.failed (security)'
@@ -564,6 +1381,8 @@ paths:
       - INVALID_CREDENTIALS
       - OTP_ATTEMPTS_EXCEEDED
       - VALIDATION_FAILED
+      x-fundzim-status: SUPERSEDED
+      x-fundzim-status-note: 'Superseded by ADR-032: staff complete MFA with `POST /auth/mfa/verify` or `POST /auth/mfa/recovery`.'
   /admin/auth/step-up:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -572,7 +1391,10 @@ paths:
       - Authentication
       operationId: staffStartStepUp
       summary: Staff step-up challenge (WebAuthn/TOTP)
-      description: '**AUTH-11** · Auth: staff + MFA · Authorization: Any staff.
+      description: '**Superseded.** Superseded by ADR-032: staff step up with a TOTP code at `POST /auth/step-up/verify`.
+
+
+        **AUTH-11** · Auth: staff + MFA · Authorization: Any staff.
 
 
         Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` · Audit: —'
@@ -609,6 +1431,8 @@ paths:
       - CSRF_TOKEN_INVALID
       - MFA_REQUIRED
       - PERMISSION_DENIED
+      x-fundzim-status: SUPERSEDED
+      x-fundzim-status-note: 'Superseded by ADR-032: staff step up with a TOTP code at `POST /auth/step-up/verify`.'
   /admin/auth/step-up/verify:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -617,7 +1441,10 @@ paths:
       - Authentication
       operationId: staffVerifyStepUp
       summary: Complete staff step-up
-      description: '**AUTH-12** · Auth: staff + MFA · Authorization: Any staff.
+      description: '**Superseded.** Superseded by ADR-032: staff step up with a TOTP code at `POST /auth/step-up/verify`.
+
+
+        **AUTH-12** · Auth: staff + MFA · Authorization: Any staff.
 
 
         Idempotency: n/a · Rate-limit class: `RL-OTP-VERIFY` · Audit: auth.step_up.succeeded (security)'
@@ -665,6 +1492,8 @@ paths:
       - OTP_ATTEMPTS_EXCEEDED
       - PERMISSION_DENIED
       - VALIDATION_FAILED
+      x-fundzim-status: SUPERSEDED
+      x-fundzim-status-note: 'Superseded by ADR-032: staff step up with a TOTP code at `POST /auth/step-up/verify`.'
   /admin/me:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -673,7 +1502,10 @@ paths:
       - Authentication
       operationId: getStaffSelf
       summary: Signed-in staff member, roles, permissions
-      description: '**AUTH-13** · Auth: staff + MFA · Authorization: Any staff.
+      description: '**Superseded.** Superseded by ADR-032: staff use `GET /me` (includes `roles`).
+
+
+        **AUTH-13** · Auth: staff + MFA · Authorization: Any staff.
 
 
         Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
@@ -708,6 +1540,8 @@ paths:
       - AUTHENTICATION_REQUIRED
       - MFA_REQUIRED
       - PERMISSION_DENIED
+      x-fundzim-status: SUPERSEDED
+      x-fundzim-status-note: 'Superseded by ADR-032: staff use `GET /me` (includes `roles`).'
   /admin/me/mfa-methods:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -716,7 +1550,11 @@ paths:
       - Authentication
       operationId: enrolMfaMethod
       summary: Enrol an MFA method (step-up)
-      description: '**AUTH-14** · Auth: staff + MFA + step-up · Authorization: Self.
+      description: '**Deferred.** WebAuthn enrolment is deferred (ADR-032); staff TOTP is enrolled while accepting the invitation, and recovery
+        codes are regenerated with `POST /me/mfa/recovery-codes`.
+
+
+        **AUTH-14** · Auth: staff + MFA + step-up · Authorization: Self.
 
 
         First enrolment happens in an onboarding flow with a one-time enrolment session (Stage 4).
@@ -767,6 +1605,9 @@ paths:
       - PERMISSION_DENIED
       - STEP_UP_REQUIRED
       - VALIDATION_FAILED
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: WebAuthn enrolment is deferred (ADR-032); staff TOTP is enrolled while accepting the invitation, and recovery codes
+        are regenerated with `POST /me/mfa/recovery-codes`.
   /admin/me/mfa-methods/{method_id}:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -775,7 +1616,10 @@ paths:
       - Authentication
       operationId: removeMfaMethod
       summary: Remove an MFA method (step-up; not the last)
-      description: '**AUTH-15** · Auth: staff + MFA + step-up · Authorization: Self.
+      description: '**Deferred.** Deferred (ADR-032): staff accounts cannot remove their only (TOTP) method; WebAuthn arrives later.
+
+
+        **AUTH-15** · Auth: staff + MFA + step-up · Authorization: Self.
 
 
         Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` · Audit: auth.mfa.removed (security)'
@@ -822,6 +1666,8 @@ paths:
       - MFA_REQUIRED
       - PERMISSION_DENIED
       - STEP_UP_REQUIRED
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: 'Deferred (ADR-032): staff accounts cannot remove their only (TOTP) method; WebAuthn arrives later.'
   /me:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -830,12 +1676,405 @@ paths:
       - User profiles
       operationId: getMe
       summary: Get my account
-      description: '**USR-01** · Auth: session · Authorization: Self.
+      description: '**USR-01** · Auth: session · Authorization: Any live session (personal or staff). Implemented in Stage 4.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-USER-READ` · Audit: —'
+        Idempotency: n/a · Rate-limit class: `RL-USER-READ` (policies: `global.ip`) · Audit: —'
       security:
       - session: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeViewEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: USR-01
+      x-fundzim-auth: session
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-USER-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - AUTHENTICATION_REQUIRED
+      - INTERNAL_ERROR
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
+    patch:
+      tags:
+      - User profiles
+      operationId: updateMe
+      summary: Update my display name
+      description: '**USR-08** · Auth: session · Authorization: Any live session (personal or staff). Implemented in Stage 4.
+
+
+        Idempotency: optional `Idempotency-Key` · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: user.profile.updated (business)'
+      security:
+      - session: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKeyOptional'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MePatchRequest'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeViewEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: USR-08
+      x-fundzim-auth: session
+      x-fundzim-idempotency: optional
+      x-fundzim-rate-limit-class: RL-USER-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: user.profile.updated (business)
+      x-fundzim-error-codes:
+      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - IDEMPOTENCY_KEY_INVALID
+      - IDEMPOTENCY_KEY_REUSED
+      - IDEMPOTENCY_REQUEST_IN_PROGRESS
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /me/password:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - User profiles
+      operationId: changeMyPassword
+      summary: Change my password
+      description: '**USR-09** · Auth: session · Authorization: Any live session (personal or staff). Requires the current password (wrong → `401
+        INVALID_CREDENTIALS`); revokes the account''s other sessions and refreshes this session''s step-up. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-SENSITIVE-USER` (policies: `global.ip`, `auth.step_up`) · Audit: auth.password.changed (security)'
+      security:
+      - session: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: No content.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: USR-09
+      x-fundzim-auth: session
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-SENSITIVE-USER
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.step_up
+      x-fundzim-audit: auth.password.changed (security)
+      x-fundzim-error-codes:
+      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - INVALID_CREDENTIALS
+      - MALFORMED_REQUEST
+      - PASSWORD_POLICY_VIOLATION
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /me/email-change:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - User profiles
+      operationId: requestEmailChange
+      summary: Request a sign-in address change
+      description: '**USR-10** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Requires
+        the current password. A confirmation link goes to the new address (the change happens at `POST /auth/verify-email`); the old address is
+        notified. An address used by another account also gets 202, without an email. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-SENSITIVE-USER` (policies: `global.ip`, `auth.step_up`) · Audit: auth.email.change_requested
+        (security)'
+      security:
+      - session: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmailChangeRequest'
+      responses:
+        '202':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerificationSentEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: USR-10
+      x-fundzim-auth: session
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-SENSITIVE-USER
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.step_up
+      x-fundzim-audit: auth.email.change_requested (security)
+      x-fundzim-error-codes:
+      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - INVALID_CREDENTIALS
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /me/security:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - User profiles
+      operationId: getMySecurity
+      summary: Get my security overview
+      description: '**USR-11** · Auth: session · Authorization: Any live session (personal or staff). Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-USER-READ` (policies: `global.ip`) · Audit: —'
+      security:
+      - session: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id002
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityOverviewEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: USR-11
+      x-fundzim-auth: session
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-USER-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - AUTHENTICATION_REQUIRED
+      - INTERNAL_ERROR
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
+  /me/phone/verify-request:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - User profiles
+      operationId: requestPhoneVerification
+      summary: Send a phone verification code
+      description: '**USR-12** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Sends
+        a 6-digit SMS code (development SMS provider only until Stage 15); a previous live code for the number is invalidated. `409 PHONE_ALREADY_VERIFIED`
+        when the number is already this account''s verified phone; `503` when the SMS could not be sent. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-OTP-SEND` (policies: `global.ip`, `auth.otp.send.user`, `auth.otp.send.phone`) · Audit: —'
+      security:
+      - session: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhoneVerifyRequest'
+      responses:
+        '202':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhoneVerifyRequestedEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: USR-12
+      x-fundzim-auth: session
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-OTP-SEND
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.otp.send.user
+      - auth.otp.send.phone
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
+      - PERMISSION_DENIED
+      - PHONE_ALREADY_VERIFIED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /me/phone/verify-confirm:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - User profiles
+      operationId: confirmPhoneVerification
+      summary: Confirm a phone verification code
+      description: '**USR-13** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Wrong,
+        expired or exhausted code (or malformed number/code) → `422 OTP_INVALID`; a number verified on another account → `409 PHONE_IN_USE`. Implemented
+        in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-OTP-VERIFY` (policies: `global.ip`, `auth.otp.verify`) · Audit: auth.phone.verified (security)'
+      security:
+      - session: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhoneVerifyConfirmRequest'
       responses:
         '200':
           description: Success.
@@ -845,22 +2084,312 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserEnvelope'
+                $ref: '#/components/schemas/PhoneVerifiedEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: USR-01
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: USR-13
       x-fundzim-auth: session
       x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-USER-READ
+      x-fundzim-rate-limit-class: RL-OTP-VERIFY
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.otp.verify
+      x-fundzim-audit: auth.phone.verified (security)
+      x-fundzim-error-codes:
+      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - OTP_INVALID
+      - PAYLOAD_TOO_LARGE
+      - PERMISSION_DENIED
+      - PHONE_IN_USE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /me/mfa/enroll:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - User profiles
+      operationId: enrollMfa
+      summary: Start TOTP enrolment
+      description: '**USR-14** · Auth: session + step-up · Authorization: Any live session (personal or staff). No request body. Discards any
+        earlier unconfirmed enrolment; MFA is not active until `POST /me/mfa/confirm`. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-SENSITIVE-USER` (policies: `global.ip`) · Audit: —'
+      security:
+      - session: []
+        csrfToken: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaEnrollmentEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: USR-14
+      x-fundzim-auth: session+step-up
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-SENSITIVE-USER
+      x-fundzim-rate-limit-policies:
+      - global.ip
       x-fundzim-audit: —
       x-fundzim-error-codes:
       - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - STEP_UP_REQUIRED
+      x-fundzim-status: IMPLEMENTED
+  /me/mfa/confirm:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - User profiles
+      operationId: confirmMfa
+      summary: Activate TOTP and get recovery codes
+      description: '**USR-15** · Auth: session + step-up · Authorization: Any live session (personal or staff). Replaces any previously confirmed
+        TOTP method and revokes the account''s other sessions. `404 MFA_ENROLLMENT_NOT_FOUND`, `401 MFA_CODE_INVALID`. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-SENSITIVE-USER` (policies: `global.ip`, `auth.step_up`) · Audit: auth.mfa.enabled (security)'
+      security:
+      - session: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaConfirmRequest'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryCodesEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: USR-15
+      x-fundzim-auth: session+step-up
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-SENSITIVE-USER
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.step_up
+      x-fundzim-audit: auth.mfa.enabled (security)
+      x-fundzim-error-codes:
+      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - MFA_CODE_INVALID
+      - MFA_ENROLLMENT_NOT_FOUND
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - STEP_UP_REQUIRED
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /me/mfa/disable:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - User profiles
+      operationId: disableMfa
+      summary: Turn off MFA
+      description: '**USR-16** · Auth: session + step-up · Authorization: Any live session (personal or staff). Staff accounts can never disable
+        MFA (`403 MFA_REQUIRED_FOR_ROLE`, checked before step-up). Needs a current TOTP or unused recovery code; revokes the account''s other
+        sessions. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-SENSITIVE-USER` (policies: `global.ip`, `auth.step_up`) · Audit: auth.mfa.disabled (security)'
+      security:
+      - session: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaDisableRequest'
+      responses:
+        '204':
+          description: No content.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: USR-16
+      x-fundzim-auth: session+step-up
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-SENSITIVE-USER
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - auth.step_up
+      x-fundzim-audit: auth.mfa.disabled (security)
+      x-fundzim-error-codes:
+      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - MFA_CODE_INVALID
+      - MFA_NOT_ENABLED
+      - MFA_REQUIRED_FOR_ROLE
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - STEP_UP_REQUIRED
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /me/mfa/recovery-codes:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - User profiles
+      operationId: regenerateRecoveryCodes
+      summary: Regenerate recovery codes
+      description: '**USR-17** · Auth: session + step-up · Authorization: Any live session (personal or staff). No request body. Supersedes the
+        previous batch. `409 MFA_NOT_ENABLED` without confirmed TOTP. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-SENSITIVE-USER` (policies: `global.ip`) · Audit: auth.mfa.recovery_codes_regenerated (security)'
+      security:
+      - session: []
+        csrfToken: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveryCodesEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: USR-17
+      x-fundzim-auth: session+step-up
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-SENSITIVE-USER
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: auth.mfa.recovery_codes_regenerated (security)
+      x-fundzim-error-codes:
+      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MFA_NOT_ENABLED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - STEP_UP_REQUIRED
+      x-fundzim-status: IMPLEMENTED
   /me/profile:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -869,7 +2398,10 @@ paths:
       - User profiles
       operationId: updateMyProfile
       summary: Update my profile
-      description: '**USR-02** · Auth: session · Authorization: Self.
+      description: '**Deferred.** Not implemented in Stage 4. Stage 4 implements `PATCH /me` (display name only).
+
+
+        **USR-02** · Auth: session · Authorization: Self.
 
 
         Idempotency: optional · Rate-limit class: `RL-USER-WRITE` · Audit: user.profile.updated (new)'
@@ -920,6 +2452,8 @@ paths:
       - CSRF_TOKEN_INVALID
       - VALIDATION_FAILED
       - VERSION_CONFLICT
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: Not implemented in Stage 4. Stage 4 implements `PATCH /me` (display name only).
   /me/contact-changes:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -928,7 +2462,10 @@ paths:
       - User profiles
       operationId: startContactChange
       summary: Start phone/email change (step-up)
-      description: '**USR-03** · Auth: session + step-up · Authorization: Self.
+      description: '**Deferred.** Not implemented in Stage 4. Stage 4 implements `POST /me/email-change` and `POST /me/phone/verify-request`.
+
+
+        **USR-03** · Auth: session + step-up · Authorization: Self.
 
 
         Idempotency: optional · Rate-limit class: `RL-SENSITIVE-USER` · Audit: auth.otp.sent (security)'
@@ -982,6 +2519,8 @@ paths:
       - CSRF_TOKEN_INVALID
       - STEP_UP_REQUIRED
       - VALIDATION_FAILED
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: Not implemented in Stage 4. Stage 4 implements `POST /me/email-change` and `POST /me/phone/verify-request`.
   /me/contact-changes/{contact_change_id}/verify:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -990,7 +2529,10 @@ paths:
       - User profiles
       operationId: verifyContactChange
       summary: Verify new contact; revokes other sessions; payout hold + cooling-off
-      description: '**USR-04** · Auth: session + step-up · Authorization: Self.
+      description: '**Deferred.** Not implemented in Stage 4. Stage 4 implements `POST /auth/verify-email` (email change) and `POST /me/phone/verify-confirm`.
+
+
+        **USR-04** · Auth: session + step-up · Authorization: Self.
 
 
         Idempotency: n/a · Rate-limit class: `RL-OTP-VERIFY` · Audit: user.phone.changed / user.email.changed + payout.hold.applied (system)'
@@ -1048,6 +2590,8 @@ paths:
       - OTP_INVALID
       - STEP_UP_REQUIRED
       - VALIDATION_FAILED
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: Not implemented in Stage 4. Stage 4 implements `POST /auth/verify-email` (email change) and `POST /me/phone/verify-confirm`.
   /me/activity:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -1056,7 +2600,10 @@ paths:
       - User profiles
       operationId: listMyActivity
       summary: My activity history (logins, security changes, payouts)
-      description: '**USR-05** · Auth: session · Authorization: Self.
+      description: '**Deferred.** Not implemented in Stage 4. `GET /me/security` lists recent security events.
+
+
+        **USR-05** · Auth: session · Authorization: Self.
 
 
         Idempotency: n/a · Rate-limit class: `RL-USER-READ` · Audit: —'
@@ -1111,6 +2658,8 @@ paths:
       - AUTHENTICATION_REQUIRED
       - INVALID_CURSOR
       - INVALID_FILTER
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: Not implemented in Stage 4. `GET /me/security` lists recent security events.
   /me/data-export-requests:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -1119,7 +2668,10 @@ paths:
       - User profiles
       operationId: requestDataExport
       summary: Request a personal-data export (step-up)
-      description: '**USR-06** · Auth: session + step-up · Authorization: Self.
+      description: '**Deferred.** Not implemented in Stage 4.
+
+
+        **USR-06** · Auth: session + step-up · Authorization: Self.
 
 
         Idempotency: optional · Rate-limit class: `RL-SENSITIVE-USER` · Audit: user.data_export.requested'
@@ -1160,6 +2712,8 @@ paths:
       - AUTHENTICATION_REQUIRED
       - CSRF_TOKEN_INVALID
       - STEP_UP_REQUIRED
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: Not implemented in Stage 4.
   /me/deletion-requests:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -1168,7 +2722,10 @@ paths:
       - User profiles
       operationId: requestAccountDeletion
       summary: Request account deletion (step-up)
-      description: '**USR-07** · Auth: session + step-up · Authorization: Self. Blocked while funds/payouts/cases exist (reason-free).
+      description: '**Deferred.** Not implemented in Stage 4.
+
+
+        **USR-07** · Auth: session + step-up · Authorization: Self. Blocked while funds/payouts/cases exist (reason-free).
 
 
         Idempotency: optional · Rate-limit class: `RL-SENSITIVE-USER` · Audit: user.deletion.requested'
@@ -1210,6 +2767,8 @@ paths:
       - AUTHENTICATION_REQUIRED
       - CSRF_TOKEN_INVALID
       - STEP_UP_REQUIRED
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: Not implemented in Stage 4.
   /organisations:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -1217,11 +2776,13 @@ paths:
       tags:
       - Organisations
       operationId: createOrganisation
-      summary: Create an organisation (caller becomes ORG_ADMIN)
-      description: '**ORG-01** · Auth: session · Authorization: IDENTITY_VERIFIED user.
+      summary: Create an organisation
+      description: '**ORG-01** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Verified
+        email required (`403 EMAIL_NOT_VERIFIED`); the caller becomes ORG_ADMIN; at most 20 per creator (`422 ORGANISATION_LIMIT_REACHED`). Implemented
+        in Stage 4.
 
 
-        Idempotency: optional · Rate-limit class: `RL-USER-WRITE` · Audit: organisation.created'
+        Idempotency: optional `Idempotency-Key` · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: organisation.created (business)'
       security:
       - session: []
         csrfToken: []
@@ -1232,7 +2793,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrganisationCreateRequest'
+              $ref: '#/components/schemas/OrganisationCreate'
       responses:
         '201':
           description: Success.
@@ -1244,30 +2805,52 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganisationEnvelope'
+                $ref: '#/components/schemas/MyOrganisationEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ORG-01
       x-fundzim-auth: session
       x-fundzim-idempotency: optional
       x-fundzim-rate-limit-class: RL-USER-WRITE
-      x-fundzim-audit: organisation.created
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: organisation.created (business)
       x-fundzim-error-codes:
-      - ACCOUNT_RESTRICTED
       - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
+      - EMAIL_NOT_VERIFIED
+      - IDEMPOTENCY_KEY_INVALID
+      - IDEMPOTENCY_KEY_REUSED
+      - IDEMPOTENCY_REQUEST_IN_PROGRESS
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - ORGANISATION_LIMIT_REACHED
+      - PAYLOAD_TOO_LARGE
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
       - VALIDATION_FAILED
-      - VERIFICATION_REQUIRED
+      x-fundzim-status: IMPLEMENTED
   /me/organisations:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -1276,15 +2859,13 @@ paths:
       - Organisations
       operationId: listMyOrganisations
       summary: List my organisations
-      description: '**ORG-02** · Auth: session · Authorization: Own memberships.
+      description: '**ORG-02** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Organisations
+        where the caller has an active membership, oldest first. Implemented in Stage 4.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-USER-READ` · Audit: —'
+        Idempotency: n/a · Rate-limit class: `RL-USER-READ` (policies: `global.ip`) · Audit: —'
       security:
       - session: []
-      parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Success.
@@ -1294,23 +2875,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganisationMembershipSummaryPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                $ref: '#/components/schemas/MyOrganisationListEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ORG-02
       x-fundzim-auth: session
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
       x-fundzim-audit: —
       x-fundzim-error-codes:
       - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
+      - INTERNAL_ERROR
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
   /organisations/{org_id}:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -1318,11 +2907,12 @@ paths:
       tags:
       - Organisations
       operationId: getOrganisation
-      summary: Get organisation (member view)
-      description: '**ORG-03** · Auth: session · Authorization: `org.view` (member); non-members → 404.
+      summary: Get an organisation
+      description: '**ORG-03** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Members
+        only; everyone else → `404 ORGANISATION_NOT_FOUND`. Implemented in Stage 4.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-USER-READ` · Audit: —'
+        Idempotency: n/a · Rate-limit class: `RL-USER-READ` (policies: `global.ip`) · Audit: —'
       security:
       - session: []
       parameters:
@@ -1340,31 +2930,43 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganisationEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                $ref: '#/components/schemas/MyOrganisationEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ORG-03
       x-fundzim-auth: session
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
       x-fundzim-audit: —
       x-fundzim-error-codes:
       - AUTHENTICATION_REQUIRED
+      - INTERNAL_ERROR
       - ORGANISATION_NOT_FOUND
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
     patch:
       tags:
       - Organisations
       operationId: updateOrganisation
       summary: Update organisation
-      description: '**ORG-04** · Auth: session · Authorization: `org.manage` (ORG_ADMIN). Members → 403.
+      description: '**Deferred.** Not implemented in Stage 4. Organisation settings arrive with KYB.
+
+
+        **ORG-04** · Auth: session · Authorization: `org.manage` (ORG_ADMIN). Members → 403.
 
 
         Idempotency: optional · Rate-limit class: `RL-USER-WRITE` · Audit: organisation.updated (new)'
@@ -1424,6 +3026,8 @@ paths:
       - PERMISSION_DENIED
       - VALIDATION_FAILED
       - VERSION_CONFLICT
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: Not implemented in Stage 4. Organisation settings arrive with KYB.
   /organisations/{org_id}/members:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -1432,10 +3036,12 @@ paths:
       - Organisations
       operationId: listOrganisationMembers
       summary: List members
-      description: '**ORG-05** · Auth: session · Authorization: `org.view`.
+      description: '**ORG-05** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Organisation
+        permission `org.view`. Non-members (and unknown or non-ACTIVE organisations) → `404 ORGANISATION_NOT_FOUND`; members without the organisation
+        permission → `403 PERMISSION_DENIED`. Implemented in Stage 4.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-USER-READ` · Audit: —'
+        Idempotency: n/a · Rate-limit class: `RL-USER-READ` (policies: `global.ip`) · Audit: —'
       security:
       - session: []
       parameters:
@@ -1444,8 +3050,6 @@ paths:
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Success.
@@ -1455,26 +3059,34 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganisationMemberPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                $ref: '#/components/schemas/OrgMemberListEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ORG-05
       x-fundzim-auth: session
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
       x-fundzim-audit: —
       x-fundzim-error-codes:
       - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
+      - INTERNAL_ERROR
       - ORGANISATION_NOT_FOUND
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
   /organisations/{org_id}/members/{member_id}:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -1483,10 +3095,13 @@ paths:
       - Organisations
       operationId: updateOrganisationMember
       summary: Change a member's role
-      description: '**ORG-06** · Auth: session + step-up · Authorization: `org.manage`; cannot remove last ORG_ADMIN.
+      description: '**ORG-06** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Organisation
+        permission `org.member.manage`. Non-members (and unknown or non-ACTIVE organisations) → `404 ORGANISATION_NOT_FOUND`; members without
+        the organisation permission → `403 PERMISSION_DENIED`. The organisation always keeps at least one ORG_ADMIN (`409 LAST_ORG_ADMIN`). Implemented
+        in Stage 4.
 
 
-        Idempotency: optional · Rate-limit class: `RL-USER-WRITE` · Audit: organisation.member.role_changed (new)'
+        Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: organisation.member.role_changed (business)'
       security:
       - session: []
         csrfToken: []
@@ -1501,25 +3116,18 @@ paths:
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKeyOptional'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrganisationMemberUpdate'
+              $ref: '#/components/schemas/OrgMemberRoleChange'
       responses:
-        '200':
-          description: Success.
+        '204':
+          description: No content.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OrganisationMemberEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1530,37 +3138,52 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ORG-06
-      x-fundzim-auth: session+step-up
-      x-fundzim-step-up: true
-      x-fundzim-idempotency: optional
+      x-fundzim-auth: session
+      x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-WRITE
-      x-fundzim-audit: organisation.member.role_changed (new)
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: organisation.member.role_changed (business)
       x-fundzim-error-codes:
       - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - LAST_ORG_ADMIN
+      - MALFORMED_REQUEST
+      - MEMBER_NOT_FOUND
       - ORGANISATION_NOT_FOUND
-      - ORG_LAST_ADMIN
-      - ORG_MEMBER_NOT_FOUND
+      - PAYLOAD_TOO_LARGE
       - PERMISSION_DENIED
-      - STEP_UP_REQUIRED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
       - VALIDATION_FAILED
-      - VERSION_CONFLICT
+      x-fundzim-status: IMPLEMENTED
     delete:
       tags:
       - Organisations
       operationId: removeOrganisationMember
       summary: Remove a member (or leave)
-      description: '**ORG-07** · Auth: session · Authorization: `org.manage`, or the member themself (leave).
+      description: '**ORG-07** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. `org.member.manage`,
+        or the caller''s own membership (leave). Non-members (and unknown or non-ACTIVE organisations) → `404 ORGANISATION_NOT_FOUND`; members
+        without the organisation permission → `403 PERMISSION_DENIED`. `409 LAST_ORG_ADMIN`. Implemented in Stage 4.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` · Audit: organisation.member.removed'
+        Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: organisation.member.removed (business)'
       security:
       - session: []
         csrfToken: []
@@ -1581,8 +3204,6 @@ paths:
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
-        '400':
-          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1595,18 +3216,27 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ORG-07
       x-fundzim-auth: session
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-WRITE
-      x-fundzim-audit: organisation.member.removed
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: organisation.member.removed (business)
       x-fundzim-error-codes:
       - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - LAST_ORG_ADMIN
+      - MEMBER_NOT_FOUND
       - ORGANISATION_NOT_FOUND
-      - ORG_LAST_ADMIN
-      - ORG_MEMBER_NOT_FOUND
       - PERMISSION_DENIED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
   /organisations/{org_id}/invitations:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -1614,11 +3244,15 @@ paths:
       tags:
       - Organisations
       operationId: createOrganisationInvitation
-      summary: Invite a member
-      description: '**ORG-08** · Auth: session · Authorization: `org.manage`.
+      summary: Invite a member by email
+      description: '**ORG-08** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Organisation
+        permission `org.member.manage`. Non-members (and unknown or non-ACTIVE organisations) → `404 ORGANISATION_NOT_FOUND`; members without
+        the organisation permission → `403 PERMISSION_DENIED`. Expires after 7 days; at most 50 pending per organisation. Implemented in Stage
+        4.
 
 
-        Idempotency: optional · Rate-limit class: `RL-USER-WRITE` · Audit: organisation.invitation.created (new)'
+        Idempotency: optional `Idempotency-Key` · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: organisation.member.invited
+        (business)'
       security:
       - session: []
         csrfToken: []
@@ -1634,7 +3268,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrganisationInvitationCreate'
+              $ref: '#/components/schemas/OrgInvitationCreate'
       responses:
         '201':
           description: Success.
@@ -1646,7 +3280,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganisationInvitationEnvelope'
+                $ref: '#/components/schemas/OrgInvitationCreatedEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1657,33 +3291,56 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ORG-08
       x-fundzim-auth: session
       x-fundzim-idempotency: optional
       x-fundzim-rate-limit-class: RL-USER-WRITE
-      x-fundzim-audit: organisation.invitation.created (new)
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: organisation.member.invited (business)
       x-fundzim-error-codes:
+      - ALREADY_MEMBER
       - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
+      - IDEMPOTENCY_KEY_INVALID
+      - IDEMPOTENCY_KEY_REUSED
+      - IDEMPOTENCY_REQUEST_IN_PROGRESS
+      - INTERNAL_ERROR
+      - INVITATION_LIMIT_REACHED
+      - INVITATION_PENDING
+      - MALFORMED_REQUEST
       - ORGANISATION_NOT_FOUND
-      - ORG_ALREADY_MEMBER
+      - PAYLOAD_TOO_LARGE
       - PERMISSION_DENIED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
       - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
     get:
       tags:
       - Organisations
       operationId: listOrganisationInvitations
-      summary: List invitations
-      description: '**ORG-09** · Auth: session · Authorization: `org.manage`.
+      summary: List pending invitations
+      description: '**ORG-09** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Organisation
+        permission `org.member.manage`. Non-members (and unknown or non-ACTIVE organisations) → `404 ORGANISATION_NOT_FOUND`; members without
+        the organisation permission → `403 PERMISSION_DENIED`. Implemented in Stage 4.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-USER-READ` · Audit: —'
+        Idempotency: n/a · Rate-limit class: `RL-USER-READ` (policies: `global.ip`) · Audit: —'
       security:
       - session: []
       parameters:
@@ -1692,15 +3349,6 @@ paths:
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      - name: status
-        in: query
-        required: false
-        schema:
-          type: string
-          description: Comma-separated allow-listed status values (OR).
-        description: Allow-listed filter.
       responses:
         '200':
           description: Success.
@@ -1710,9 +3358,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OrganisationInvitationPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                $ref: '#/components/schemas/OrgInvitationListEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1723,15 +3369,23 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ORG-09
       x-fundzim-auth: session
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
       x-fundzim-audit: —
       x-fundzim-error-codes:
       - AUTHENTICATION_REQUIRED
+      - INTERNAL_ERROR
       - ORGANISATION_NOT_FOUND
       - PERMISSION_DENIED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
   /organisations/{org_id}/invitations/{invitation_id}:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -1739,11 +3393,13 @@ paths:
       tags:
       - Organisations
       operationId: revokeOrganisationInvitation
-      summary: Revoke an invitation
-      description: '**ORG-10** · Auth: session · Authorization: `org.manage`.
+      summary: Revoke a pending invitation
+      description: '**ORG-10** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Organisation
+        permission `org.member.manage`. Non-members (and unknown or non-ACTIVE organisations) → `404 ORGANISATION_NOT_FOUND`; members without
+        the organisation permission → `403 PERMISSION_DENIED`. Implemented in Stage 4.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` · Audit: organisation.invitation.revoked (new)'
+        Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: organisation.invitation.revoked (business)'
       security:
       - session: []
         csrfToken: []
@@ -1764,8 +3420,6 @@ paths:
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
-        '400':
-          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1776,17 +3430,199 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ORG-10
       x-fundzim-auth: session
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-WRITE
-      x-fundzim-audit: organisation.invitation.revoked (new)
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: organisation.invitation.revoked (business)
       x-fundzim-error-codes:
       - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
       - INVITATION_NOT_FOUND
       - ORGANISATION_NOT_FOUND
       - PERMISSION_DENIED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
+  /me/organisation-invitations:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Organisations
+      operationId: listMyOrganisationInvitations
+      summary: List invitations addressed to me
+      description: '**ORG-11** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Pending
+        invitations for the caller''s verified sign-in address (empty list while the address is unverified). Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-USER-READ` (policies: `global.ip`) · Audit: —'
+      security:
+      - session: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgInvitationListEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: ORG-11
+      x-fundzim-auth: session
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-USER-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - AUTHENTICATION_REQUIRED
+      - INTERNAL_ERROR
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
+  /me/organisation-invitations/{invitation_id}/accept:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Organisations
+      operationId: acceptOrganisationInvitation
+      summary: Accept an invitation
+      description: '**ORG-12** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. No request
+        body. Only the signed-in owner of the invited, verified address (`403 EMAIL_NOT_VERIFIED` when unverified); anyone else, or an expired
+        invitation → `404 INVITATION_NOT_FOUND`. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: organisation.member.joined (business)'
+      security:
+      - session: []
+        csrfToken: []
+      parameters:
+      - name: invitation_id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyOrganisationEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: ORG-12
+      x-fundzim-auth: session
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-USER-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: organisation.member.joined (business)
+      x-fundzim-error-codes:
+      - ALREADY_MEMBER
+      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - EMAIL_NOT_VERIFIED
+      - INTERNAL_ERROR
+      - INVITATION_NOT_FOUND
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
+  /me/organisation-invitations/{invitation_id}/decline:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Organisations
+      operationId: declineOrganisationInvitation
+      summary: Decline an invitation
+      description: '**ORG-13** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. No request
+        body. Same addressee rules as accept. Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: organisation.invitation.declined (business)'
+      security:
+      - session: []
+        csrfToken: []
+      parameters:
+      - name: invitation_id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      responses:
+        '204':
+          description: No content.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: ORG-13
+      x-fundzim-auth: session
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-USER-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: organisation.invitation.declined (business)
+      x-fundzim-error-codes:
+      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - EMAIL_NOT_VERIFIED
+      - INTERNAL_ERROR
+      - INVITATION_NOT_FOUND
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
   /beneficiaries:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -13849,8 +15685,10 @@ paths:
       - Admin operations
       operationId: adminSearchUsers
       summary: Search users (masked)
-      description: '**ADM-01** · Auth: staff + MFA · Authorization: `user.view`. Exact-match search on phone/email via blind index; no partial
-        PII search.
+      description: '**Deferred.** Not implemented in Stage 4.
+
+
+        **ADM-01** · Auth: staff + MFA · Authorization: `user.view`. Exact-match search on phone/email via blind index; no partial PII search.
 
 
         Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: user.searched (new, sampled)'
@@ -13917,6 +15755,8 @@ paths:
       - INVALID_FILTER
       - MFA_REQUIRED
       - PERMISSION_DENIED
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: Not implemented in Stage 4.
   /admin/users/{user_id}:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -13924,11 +15764,12 @@ paths:
       tags:
       - Admin operations
       operationId: adminGetUser
-      summary: Get user (masked)
-      description: '**ADM-02** · Auth: staff + MFA · Authorization: `user.view`.
+      summary: View an account (masked)
+      description: '**ADM-02** · Auth: staff + MFA · Authorization: `user.view` (staff session; non-staff → `404 ROUTE_NOT_FOUND`). Personal or
+        staff account; `404 USER_NOT_FOUND`. Every view is audited. Implemented in Stage 4.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
+        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` (policies: `global.ip`) · Audit: admin.user.viewed (security)'
       security:
       - staffSession: []
       parameters:
@@ -13943,14 +15784,11 @@ paths:
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id002
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffUserViewEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                $ref: '#/components/schemas/AdminUserViewEnvelope'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -13959,17 +15797,24 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ADM-02
       x-fundzim-auth: staff+MFA
       x-fundzim-permission: user.view
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: admin.user.viewed (security)
       x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - MFA_REQUIRED
+      - INTERNAL_ERROR
       - PERMISSION_DENIED
+      - RATE_LIMITED
+      - ROUTE_NOT_FOUND
+      - SERVICE_UNAVAILABLE
       - USER_NOT_FOUND
+      x-fundzim-status: IMPLEMENTED
   /admin/users/{user_id}/suspend:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -13977,11 +15822,13 @@ paths:
       tags:
       - Admin operations
       operationId: suspendUser
-      summary: Suspend a user account
-      description: '**ADM-03** · Auth: staff + MFA + step-up · Authorization: `user.suspend`.
+      summary: Suspend a personal account
+      description: '**ADM-03** · Auth: staff + MFA + step-up · Authorization: `account.suspend` (staff session; non-staff → `404 ROUTE_NOT_FOUND`).
+        Personal (USER) accounts only (others → `404 USER_NOT_FOUND`); not yourself (`403 SELF_ACTION_FORBIDDEN`); must be ACTIVE (`409 INVALID_STATUS`).
+        Revokes every session; the owner is notified. Implemented in Stage 4.
 
 
-        Idempotency: optional · Rate-limit class: `RL-STAFF-WRITE` · Audit: user.suspended (J)'
+        Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` (policies: `global.ip`) · Audit: account.suspended (reason; security)'
       security:
       - staffSession: []
         csrfToken: []
@@ -13991,55 +15838,144 @@ paths:
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKeyOptional'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StaffActionRequest'
+              $ref: '#/components/schemas/AccountStatusChange'
       responses:
-        '200':
-          description: Success.
+        '204':
+          description: No content.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StaffUserViewEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ADM-03
       x-fundzim-auth: staff+MFA+step-up
-      x-fundzim-permission: user.suspend
+      x-fundzim-permission: account.suspend
       x-fundzim-step-up: true
-      x-fundzim-idempotency: optional
+      x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: user.suspended (J)
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: account.suspended (reason; security)
       x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
-      - JUSTIFICATION_REQUIRED
-      - MFA_REQUIRED
+      - INTERNAL_ERROR
+      - INVALID_STATUS
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
       - PERMISSION_DENIED
+      - RATE_LIMITED
+      - ROUTE_NOT_FOUND
+      - SELF_ACTION_FORBIDDEN
+      - SERVICE_UNAVAILABLE
       - STEP_UP_REQUIRED
+      - UNSUPPORTED_MEDIA_TYPE
       - USER_NOT_FOUND
       - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /admin/users/{user_id}/reactivate:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Admin operations
+      operationId: reactivateUser
+      summary: Reactivate a suspended personal account
+      description: '**ADM-25** · Auth: staff + MFA + step-up · Authorization: `account.reactivate` (staff session; non-staff → `404 ROUTE_NOT_FOUND`).
+        Personal accounts only; not yourself; must be SUSPENDED (`409 INVALID_STATUS`). Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` (policies: `global.ip`) · Audit: account.reactivated (reason; security)'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountStatusChange'
+      responses:
+        '204':
+          description: No content.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: ADM-25
+      x-fundzim-auth: staff+MFA+step-up
+      x-fundzim-permission: account.reactivate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-STAFF-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: account.reactivated (reason; security)
+      x-fundzim-error-codes:
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - INVALID_STATUS
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - ROUTE_NOT_FOUND
+      - SELF_ACTION_FORBIDDEN
+      - SERVICE_UNAVAILABLE
+      - STEP_UP_REQUIRED
+      - UNSUPPORTED_MEDIA_TYPE
+      - USER_NOT_FOUND
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
   /admin/users/{user_id}/sessions/revoke:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -14048,7 +15984,10 @@ paths:
       - Admin operations
       operationId: revokeUserSessions
       summary: Revoke all sessions of a user
-      description: '**ADM-04** · Auth: staff + MFA · Authorization: `session.revoke`.
+      description: '**Deferred.** Not implemented in Stage 4.
+
+
+        **ADM-04** · Auth: staff + MFA · Authorization: `session.revoke`.
 
 
         Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` · Audit: auth.session.revoked (J; security chain)'
@@ -14100,6 +16039,8 @@ paths:
       - PERMISSION_DENIED
       - USER_NOT_FOUND
       - VALIDATION_FAILED
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: Not implemented in Stage 4.
   /admin/users/{user_id}/account-recovery:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -14108,7 +16049,10 @@ paths:
       - Admin operations
       operationId: assistAccountRecovery
       summary: Support-mediated account recovery
-      description: '**ADM-05** · Auth: staff + MFA + step-up · Authorization: `account.recovery.assist`; places ACCOUNT/PAYOUT hold + cooling-off.
+      description: '**Deferred.** Not implemented in Stage 4.
+
+
+        **ADM-05** · Auth: staff + MFA + step-up · Authorization: `account.recovery.assist`; places ACCOUNT/PAYOUT hold + cooling-off.
 
 
         Idempotency: optional · Rate-limit class: `RL-STAFF-WRITE` · Audit: auth.recovery.started (J; security chain)'
@@ -14171,6 +16115,8 @@ paths:
       - STEP_UP_REQUIRED
       - USER_NOT_FOUND
       - VALIDATION_FAILED
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: Not implemented in Stage 4.
   /admin/organisations/{org_id}:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -14179,7 +16125,10 @@ paths:
       - Admin operations
       operationId: adminGetOrganisation
       summary: Get organisation (staff)
-      description: '**ADM-06** · Auth: staff + MFA · Authorization: `organisation.view`.
+      description: '**Deferred.** Not implemented in Stage 4.
+
+
+        **ADM-06** · Auth: staff + MFA · Authorization: `organisation.view`.
 
 
         Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
@@ -14224,6 +16173,8 @@ paths:
       - MFA_REQUIRED
       - ORGANISATION_NOT_FOUND
       - PERMISSION_DENIED
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: Not implemented in Stage 4.
   /admin/staff:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -14232,7 +16183,10 @@ paths:
       - Admin operations
       operationId: listStaff
       summary: List staff accounts and roles
-      description: '**ADM-07** · Auth: staff + MFA · Authorization: `role.view`.
+      description: '**Deferred.** Not implemented in Stage 4. (`POST /admin/staff` is implemented.)
+
+
+        **ADM-07** · Auth: staff + MFA · Authorization: `role.view`.
 
 
         Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
@@ -14287,18 +16241,19 @@ paths:
       - INVALID_FILTER
       - MFA_REQUIRED
       - PERMISSION_DENIED
-  /admin/role-assignment-requests:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: Not implemented in Stage 4. (`POST /admin/staff` is implemented.)
     post:
       tags:
       - Admin operations
-      operationId: requestRoleAssignment
-      summary: Propose a role grant (maker)
-      description: '**ADM-08** · Auth: staff + MFA + step-up · Authorization: `role.assign.request`; no self-grant; R-conflicts rejected.
+      operationId: inviteStaff
+      summary: Invite a staff member
+      description: '**ADM-23** · Auth: staff + MFA + step-up · Authorization: `staff.invite` (staff session; non-staff → `404 ROUTE_NOT_FOUND`).
+        Creates a STAFF account with no credentials; the invitee sets a password and enrols TOTP via `/auth/staff-invitation/*`. Roles are requested
+        separately (maker-checker). `409 EMAIL_IN_USE`. Implemented in Stage 4.
 
 
-        Idempotency: optional · Rate-limit class: `RL-STAFF-WRITE` · Audit: role.grant.requested (J; security chain)'
+        Idempotency: optional `Idempotency-Key` · Rate-limit class: `RL-STAFF-WRITE` (policies: `global.ip`) · Audit: staff.invited (J; security)'
       security:
       - staffSession: []
         csrfToken: []
@@ -14309,7 +16264,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RoleAssignmentRequestCreate'
+              $ref: '#/components/schemas/StaffInviteRequest'
       responses:
         '201':
           description: Success.
@@ -14321,23 +16276,112 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RoleAssignmentRequestEnvelope'
+                $ref: '#/components/schemas/StaffInvitedEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: ADM-23
+      x-fundzim-auth: staff+MFA+step-up
+      x-fundzim-permission: staff.invite
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: optional
+      x-fundzim-rate-limit-class: RL-STAFF-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: staff.invited (J; security)
+      x-fundzim-error-codes:
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - EMAIL_IN_USE
+      - IDEMPOTENCY_KEY_INVALID
+      - IDEMPOTENCY_KEY_REUSED
+      - IDEMPOTENCY_REQUEST_IN_PROGRESS
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - ROUTE_NOT_FOUND
+      - SERVICE_UNAVAILABLE
+      - STEP_UP_REQUIRED
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /admin/role-assignment-requests:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Admin operations
+      operationId: requestRoleAssignment
+      summary: Request a role grant or revocation (maker)
+      description: '**ADM-08** · Auth: staff + MFA + step-up · Authorization: `role.assign.request` (staff session; non-staff → `404 ROUTE_NOT_FOUND`).
+        No self-requests (`403 SELF_REQUEST_FORBIDDEN`); the target must be a staff account (`404 STAFF_NOT_FOUND`). Expires after 24 h. Implemented
+        in Stage 4.
+
+
+        Idempotency: optional `Idempotency-Key` · Rate-limit class: `RL-STAFF-WRITE` (policies: `global.ip`) · Audit: rbac.role_request.created
+        (J; security)'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKeyOptional'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleChangeRequestCreate'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleChangeRequestEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ADM-08
       x-fundzim-auth: staff+MFA+step-up
       x-fundzim-permission: role.assign.request
@@ -14345,18 +16389,80 @@ paths:
       x-fundzim-maker-checker: maker
       x-fundzim-idempotency: optional
       x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: role.grant.requested (J; security chain)
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: rbac.role_request.created (J; security)
       x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
-      - JUSTIFICATION_REQUIRED
-      - MFA_REQUIRED
+      - IDEMPOTENCY_KEY_INVALID
+      - IDEMPOTENCY_KEY_REUSED
+      - IDEMPOTENCY_REQUEST_IN_PROGRESS
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
       - PERMISSION_DENIED
-      - ROLE_COMBINATION_FORBIDDEN
-      - SELF_GRANT_FORBIDDEN
+      - RATE_LIMITED
+      - ROLE_ALREADY_ASSIGNED
+      - ROLE_NOT_ASSIGNED
+      - ROLE_REQUEST_PENDING
+      - ROUTE_NOT_FOUND
+      - SELF_REQUEST_FORBIDDEN
+      - SERVICE_UNAVAILABLE
+      - STAFF_NOT_FOUND
       - STEP_UP_REQUIRED
-      - USER_NOT_FOUND
+      - UNSUPPORTED_MEDIA_TYPE
       - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+    get:
+      tags:
+      - Admin operations
+      operationId: listRoleAssignmentRequests
+      summary: List pending role requests
+      description: '**ADM-24** · Auth: staff + MFA + step-up · Authorization: `role.assign.approve` (staff session; non-staff → `404 ROUTE_NOT_FOUND`).
+        Implemented in Stage 4.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` (policies: `global.ip`) · Audit: —'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleChangeRequestListEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: ADM-24
+      x-fundzim-auth: staff+MFA+step-up
+      x-fundzim-permission: role.assign.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-STAFF-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - INTERNAL_ERROR
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - ROUTE_NOT_FOUND
+      - SERVICE_UNAVAILABLE
+      - STEP_UP_REQUIRED
+      x-fundzim-status: IMPLEMENTED
   /admin/role-assignment-requests/{role_request_id}/approve:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -14364,11 +16470,13 @@ paths:
       tags:
       - Admin operations
       operationId: approveRoleAssignment
-      summary: Approve role grant (different SUPER_ADMIN)
-      description: '**ADM-09** · Auth: staff + MFA + step-up · Authorization: `role.assign.approve`; ≠ maker; ≠ grantee.
+      summary: Approve a role request (checker)
+      description: '**ADM-09** · Auth: staff + MFA + step-up · Authorization: `role.assign.approve` (staff session; non-staff → `404 ROUTE_NOT_FOUND`).
+        The requester and the target can never decide (`403 SELF_APPROVAL_FORBIDDEN`; also enforced in the database). Applies the grant/revocation
+        and revokes the target''s sessions. An expired request is marked EXPIRED → `409 ROLE_REQUEST_EXPIRED`. Implemented in Stage 4.
 
 
-        Idempotency: optional · Rate-limit class: `RL-STAFF-WRITE` · Audit: role.grant.approved (J; security chain; alert)'
+        Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` (policies: `global.ip`) · Audit: rbac.role_request.approved (security)'
       security:
       - staffSession: []
         csrfToken: []
@@ -14378,61 +16486,72 @@ paths:
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKeyOptional'
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StaffActionRequest'
+              $ref: '#/components/schemas/RoleChangeDecision'
       responses:
         '200':
           description: Success.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RoleAssignmentRequestEnvelope'
+                $ref: '#/components/schemas/RoleChangeRequestEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ADM-09
       x-fundzim-auth: staff+MFA+step-up
       x-fundzim-permission: role.assign.approve
       x-fundzim-step-up: true
       x-fundzim-maker-checker: checker
-      x-fundzim-idempotency: optional
+      x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: role.grant.approved (J; security chain; alert)
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: rbac.role_request.approved (security)
       x-fundzim-error-codes:
-      - APPROVAL_EXPIRED
-      - APPROVER_CONFLICT
-      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
-      - MFA_REQUIRED
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
       - PERMISSION_DENIED
-      - ROLE_COMBINATION_FORBIDDEN
+      - RATE_LIMITED
+      - ROLE_CONFLICT
+      - ROLE_NOT_ASSIGNED
+      - ROLE_REQUEST_DECIDED
+      - ROLE_REQUEST_EXPIRED
       - ROLE_REQUEST_NOT_FOUND
-      - SELF_GRANT_FORBIDDEN
+      - ROUTE_NOT_FOUND
+      - SELF_APPROVAL_FORBIDDEN
+      - SERVICE_UNAVAILABLE
       - STEP_UP_REQUIRED
+      - UNSUPPORTED_MEDIA_TYPE
       - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
   /admin/role-assignment-requests/{role_request_id}/reject:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -14440,11 +16559,12 @@ paths:
       tags:
       - Admin operations
       operationId: rejectRoleAssignment
-      summary: Reject role grant
-      description: '**ADM-10** · Auth: staff + MFA · Authorization: As ADM-09.
+      summary: Reject a role request (checker)
+      description: '**ADM-10** · Auth: staff + MFA + step-up · Authorization: `role.assign.approve` (staff session; non-staff → `404 ROUTE_NOT_FOUND`).
+        `reason` required (3–1000 characters). Same self-decision and expiry rules as approve. Implemented in Stage 4.
 
 
-        Idempotency: optional · Rate-limit class: `RL-STAFF-WRITE` · Audit: role.grant.rejected (new, J; security chain)'
+        Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` (policies: `global.ip`) · Audit: rbac.role_request.rejected (security)'
       security:
       - staffSession: []
         csrfToken: []
@@ -14454,54 +16574,70 @@ paths:
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKeyOptional'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StaffActionRequest'
+              $ref: '#/components/schemas/RoleChangeDecision'
       responses:
         '200':
           description: Success.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RoleAssignmentRequestEnvelope'
+                $ref: '#/components/schemas/RoleChangeRequestEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ADM-10
-      x-fundzim-auth: staff+MFA
+      x-fundzim-auth: staff+MFA+step-up
       x-fundzim-permission: role.assign.approve
+      x-fundzim-step-up: true
       x-fundzim-maker-checker: checker
-      x-fundzim-idempotency: optional
+      x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: role.grant.rejected (new, J; security chain)
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: rbac.role_request.rejected (security)
       x-fundzim-error-codes:
-      - APPROVER_CONFLICT
-      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
-      - MFA_REQUIRED
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
       - PERMISSION_DENIED
+      - RATE_LIMITED
+      - ROLE_REQUEST_DECIDED
+      - ROLE_REQUEST_EXPIRED
       - ROLE_REQUEST_NOT_FOUND
+      - ROUTE_NOT_FOUND
+      - SELF_APPROVAL_FORBIDDEN
+      - SERVICE_UNAVAILABLE
+      - STEP_UP_REQUIRED
+      - UNSUPPORTED_MEDIA_TYPE
       - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
   /admin/role-assignments/{role_assignment_id}/revoke:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -14510,7 +16646,10 @@ paths:
       - Admin operations
       operationId: revokeRoleAssignment
       summary: Revoke a role (immediate)
-      description: '**ADM-11** · Auth: staff + MFA + step-up · Authorization: `role.revoke`.
+      description: '**Deferred.** Not implemented in Stage 4. Revocation is a `REVOKE` action through `POST /admin/role-assignment-requests` (maker-checker).
+
+
+        **ADM-11** · Auth: staff + MFA + step-up · Authorization: `role.revoke`.
 
 
         Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` · Audit: role.revoked (J; security chain; alert)'
@@ -14565,6 +16704,8 @@ paths:
       - ROLE_ASSIGNMENT_NOT_FOUND
       - STEP_UP_REQUIRED
       - VALIDATION_FAILED
+      x-fundzim-status: DEFERRED
+      x-fundzim-status-note: Not implemented in Stage 4. Revocation is a `REVOKE` action through `POST /admin/role-assignment-requests` (maker-checker).
   /admin/staff/{user_id}/suspend:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -14573,10 +16714,12 @@ paths:
       - Admin operations
       operationId: suspendStaff
       summary: Suspend a staff account
-      description: '**ADM-12** · Auth: staff + MFA + step-up · Authorization: `staff.suspend`.
+      description: '**ADM-12** · Auth: staff + MFA + step-up · Authorization: `staff.suspend` (staff session; non-staff → `404 ROUTE_NOT_FOUND`).
+        Staff accounts only (others → `404 USER_NOT_FOUND`); not yourself; must be ACTIVE. Revokes every session. Staff reactivation is deferred
+        (maker-checker, admin console stage). Implemented in Stage 4.
 
 
-        Idempotency: optional · Rate-limit class: `RL-STAFF-WRITE` · Audit: staff.suspended (new, J; security chain)'
+        Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` (policies: `global.ip`) · Audit: account.suspended (reason; security)'
       security:
       - staffSession: []
         csrfToken: []
@@ -14586,55 +16729,64 @@ paths:
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKeyOptional'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StaffActionRequest'
+              $ref: '#/components/schemas/AccountStatusChange'
       responses:
-        '200':
-          description: Success.
+        '204':
+          description: No content.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StaffMemberEnvelope'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: ADM-12
       x-fundzim-auth: staff+MFA+step-up
       x-fundzim-permission: staff.suspend
       x-fundzim-step-up: true
-      x-fundzim-idempotency: optional
+      x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: staff.suspended (new, J; security chain)
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: account.suspended (reason; security)
       x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
+      - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
-      - JUSTIFICATION_REQUIRED
-      - MFA_REQUIRED
+      - INTERNAL_ERROR
+      - INVALID_STATUS
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
       - PERMISSION_DENIED
+      - RATE_LIMITED
+      - ROUTE_NOT_FOUND
+      - SELF_ACTION_FORBIDDEN
+      - SERVICE_UNAVAILABLE
       - STEP_UP_REQUIRED
+      - UNSUPPORTED_MEDIA_TYPE
       - USER_NOT_FOUND
       - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
   /admin/fee-schedules:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -17432,21 +19584,23 @@ components:
       type: apiKey
       in: cookie
       name: __Host-fz_session
-      description: 'Opaque server-side session (ADR-027): HttpOnly, Secure, SameSite=Lax, Path=/. USER sessions only; there are no guest sessions
-        (baseline §12 I-2). When the cookie is present on an unsafe request, `X-CSRF-Token` is required.'
+      description: 'Opaque server-side session (ADR-027, ADR-032): `fz_session` on local http, `__Host-fz_session` over https; HttpOnly, SameSite=Lax,
+        Path=/, Secure over https. There are no guest sessions (baseline §12 I-2). When the cookie is present on an unsafe request, `X-CSRF-Token`
+        is required.'
     staffSession:
       type: apiKey
       in: cookie
       name: __Host-fz_session
-      description: Same cookie, but the session must belong to a STAFF account and have completed MFA (WebAuthn/TOTP, never SMS). Idle 15 min
-        / absolute 12 h. Non-staff sessions get 404 on /admin routes.
+      description: Same cookie, but the session must belong to a STAFF account and have completed MFA (TOTP, ADR-032; never SMS; WebAuthn deferred).
+        Idle 15 min / absolute 12 h by default. Non-staff (and anonymous) requests get 404 ROUTE_NOT_FOUND on /admin routes.
       x-fundzim-requires-mfa: true
     csrfToken:
       type: apiKey
       in: header
       name: X-CSRF-Token
-      description: Synchroniser token bound to the session (from `GET /auth/session`). Required with the session cookie on POST/PUT/PATCH/DELETE,
-        together with Origin and Sec-Fetch-Site checks. Cookie-less guest requests are checked by Origin/Sec-Fetch-Site only.
+      description: Session-bound token (HMAC of the session ID), also set as the readable `fz_csrf` cookie (`__Host-fz_csrf` over https) at sign-in.
+        Required with the session cookie on POST/PUT/PATCH/DELETE (`403 CSRF_TOKEN_INVALID`), together with Origin and Sec-Fetch-Site checks (`403
+        CSRF_ORIGIN_MISMATCH`). Cookie-less requests are checked by Origin/Sec-Fetch-Site only.
     donationAccessToken:
       type: apiKey
       in: header
@@ -18486,21 +20640,6 @@ components:
       required:
       - purpose
       additionalProperties: false
-    StepUpVerifyRequest:
-      type: object
-      description: 'Complete step-up: OTP for users; WebAuthn assertion or TOTP for staff.'
-      properties:
-        challenge_id:
-          $ref: '#/components/schemas/Uuid'
-        code:
-          type: string
-          pattern: ^[0-9]{6,8}$
-        webauthn_assertion:
-          type: object
-          description: WebAuthn `PublicKeyCredential` JSON (staff).
-      required:
-      - challenge_id
-      additionalProperties: false
     StaffLoginRequest:
       type: object
       description: 'Staff login step 1: email + password (Argon2id). Always followed by mandatory WebAuthn or TOTP (baseline §12 I-6); no email/SMS
@@ -18602,33 +20741,6 @@ components:
       - kind
       - label
       additionalProperties: false
-    SessionSummary:
-      type: object
-      description: One of the caller's sessions (no token, no hash).
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        current:
-          type: boolean
-        created_at:
-          $ref: '#/components/schemas/Timestamp'
-        last_seen_at:
-          $ref: '#/components/schemas/Timestamp'
-        device_label:
-          type:
-          - string
-          - 'null'
-        ip_country:
-          type:
-          - string
-          - 'null'
-      required:
-      - id
-      - current
-      - created_at
-      - last_seen_at
-      - device_label
-      - ip_country
     User:
       type: object
       description: Self view of the signed-in user (`/me`). Only place full contact values are returned.
@@ -18919,37 +21031,6 @@ components:
       - name
       - org_type
       - verified_badge
-    OrganisationCreateRequest:
-      type: object
-      description: Create an organisation. Caller must be IDENTITY_VERIFIED and becomes ORG_ADMIN.
-      properties:
-        name:
-          type: string
-          minLength: 2
-          maxLength: 200
-        registered_name:
-          type: string
-          maxLength: 200
-        org_type:
-          type: string
-          enum:
-          - PVO
-          - TRUST
-          - COMPANY
-          - RELIGIOUS_BODY
-          - COMMUNITY_GROUP
-          - OTHER
-        description:
-          type: string
-          maxLength: 2000
-        website:
-          type: string
-          format: uri
-          maxLength: 2048
-      required:
-      - name
-      - org_type
-      additionalProperties: false
     OrganisationUpdateRequest:
       type: object
       description: Editable organisation fields. Changing `registered_name` resets KYB to re-verification.
@@ -18972,81 +21053,6 @@ components:
       required:
       - version
       additionalProperties: false
-    OrganisationMember:
-      type: object
-      description: Member list entry.
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        user_id:
-          $ref: '#/components/schemas/Uuid'
-        display_name:
-          type: string
-        role:
-          $ref: '#/components/schemas/OrgRole'
-        joined_at:
-          $ref: '#/components/schemas/Timestamp'
-        identity_verified:
-          type: boolean
-      required:
-      - id
-      - user_id
-      - display_name
-      - role
-      - joined_at
-      - identity_verified
-    OrganisationMemberUpdate:
-      type: object
-      description: Change a member's role.
-      properties:
-        role:
-          $ref: '#/components/schemas/OrgRole'
-        version:
-          type: integer
-      required:
-      - role
-      - version
-      additionalProperties: false
-    OrganisationInvitationCreate:
-      type: object
-      description: Invite a person by verified contact.
-      properties:
-        phone:
-          $ref: '#/components/schemas/PhoneE164'
-        email:
-          type: string
-          format: email
-          maxLength: 254
-        role:
-          $ref: '#/components/schemas/OrgRole'
-      required:
-      - role
-      additionalProperties: false
-    OrganisationInvitation:
-      type: object
-      description: Invitation (contact masked).
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        role:
-          $ref: '#/components/schemas/OrgRole'
-        contact:
-          $ref: '#/components/schemas/MaskedContact'
-        status:
-          type: string
-          enum:
-          - PENDING
-          - ACCEPTED
-          - REVOKED
-          - EXPIRED
-        expires_at:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - id
-      - role
-      - contact
-      - status
-      - expires_at
     StaffOrganisationView:
       type: object
       description: Staff organisation view (no KYB documents or person identifiers).
@@ -23262,68 +25268,6 @@ components:
       - roles
       - status
       - last_login_at
-    RoleAssignmentRequestCreate:
-      type: object
-      description: Propose a role grant (maker; no self-grant).
-      properties:
-        staff_user_id:
-          $ref: '#/components/schemas/Uuid'
-        role:
-          type: string
-          enum:
-          - REVIEWER
-          - KYC_REVIEWER
-          - SUPPORT
-          - COMPLIANCE
-          - FINANCE
-          - ADMIN
-          - SECURITY_ADMIN
-          - SUPER_ADMIN
-          - BUSINESS_APPROVER
-        justification:
-          type: string
-          minLength: 10
-          maxLength: 2000
-        expires_at:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - staff_user_id
-      - role
-      - justification
-      additionalProperties: false
-    RoleAssignmentRequest:
-      type: object
-      description: Role grant request.
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        staff_user_id:
-          $ref: '#/components/schemas/Uuid'
-        role:
-          type: string
-        status:
-          type: string
-          enum:
-          - PENDING_APPROVAL
-          - APPROVED
-          - REJECTED
-          - EXPIRED
-        requested_by:
-          $ref: '#/components/schemas/ActorRef'
-        decided_by:
-          oneOf:
-          - $ref: '#/components/schemas/ActorRef'
-          - type: 'null'
-        expires_at:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - id
-      - staff_user_id
-      - role
-      - status
-      - requested_by
-      - decided_by
-      - expires_at
     AccountRecoveryAssistRequest:
       type: object
       description: Support-mediated recovery (identity re-verification; payout hold + cooling-off).
@@ -24424,19 +26368,6 @@ components:
           $ref: '#/components/schemas/OtpChallenge'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
-    SessionSummaryPage:
-      type: object
-      description: Standard envelope (cursor page) for `SessionSummary`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/SessionSummary'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
     StaffMfaChallengeEnvelope:
       type: object
       description: Standard envelope for `StaffMfaChallenge`.
@@ -24527,67 +26458,6 @@ components:
           $ref: '#/components/schemas/Organisation'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
-    OrganisationMembershipSummaryPage:
-      type: object
-      description: Standard envelope (cursor page) for `OrganisationMembershipSummary`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/OrganisationMembershipSummary'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
-    OrganisationMemberPage:
-      type: object
-      description: Standard envelope (cursor page) for `OrganisationMember`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/OrganisationMember'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
-    OrganisationMemberEnvelope:
-      type: object
-      description: Standard envelope for `OrganisationMember`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/OrganisationMember'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    OrganisationInvitationEnvelope:
-      type: object
-      description: Standard envelope for `OrganisationInvitation`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/OrganisationInvitation'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    OrganisationInvitationPage:
-      type: object
-      description: Standard envelope (cursor page) for `OrganisationInvitation`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/OrganisationInvitation'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
     BeneficiaryEnvelope:
       type: object
       description: Standard envelope for `Beneficiary`.
@@ -25740,17 +27610,6 @@ components:
             $ref: '#/components/schemas/StaffUserView'
         meta:
           $ref: '#/components/schemas/PageMeta'
-    StaffUserViewEnvelope:
-      type: object
-      description: Standard envelope for `StaffUserView`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/StaffUserView'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
     StaffOrganisationViewEnvelope:
       type: object
       description: Standard envelope for `StaffOrganisationView`.
@@ -25775,28 +27634,6 @@ components:
             $ref: '#/components/schemas/StaffMember'
         meta:
           $ref: '#/components/schemas/PageMeta'
-    RoleAssignmentRequestEnvelope:
-      type: object
-      description: Standard envelope for `RoleAssignmentRequest`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/RoleAssignmentRequest'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    StaffMemberEnvelope:
-      type: object
-      description: Standard envelope for `StaffMember`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/StaffMember'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
     FeeSchedulePage:
       type: object
       description: Standard envelope (cursor page) for `FeeSchedule`.
@@ -26151,5 +27988,1180 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/WebhookAck'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    MeView:
+      type: object
+      description: The caller's own account (interface-contracts §4.2). Never includes credentials, token hashes, MFA secrets or full phone numbers.
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        account_kind:
+          type: string
+          enum:
+          - USER
+          - STAFF
+        email:
+          type: string
+          format: email
+          description: Current sign-in address.
+        email_verified:
+          type: boolean
+        display_name:
+          type: string
+        phone_masked:
+          type:
+          - string
+          - 'null'
+          description: Verified primary phone, masked (e.g. `+26377****567`); null when none.
+        phone_verified:
+          type: boolean
+        mfa_enabled:
+          type: boolean
+        roles:
+          type: array
+          items:
+            type: string
+            enum: &id013
+            - REVIEWER
+            - KYC_REVIEWER
+            - SUPPORT
+            - COMPLIANCE
+            - FINANCE
+            - ADMIN
+            - SECURITY_ADMIN
+            - BUSINESS_APPROVER
+            - SUPER_ADMIN
+          description: Staff accounts only (active role codes); omitted for personal accounts.
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - account_kind
+      - email
+      - email_verified
+      - display_name
+      - phone_masked
+      - phone_verified
+      - mfa_enabled
+      - created_at
+    MeViewEnvelope:
+      type: object
+      description: Standard envelope for `MeView`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/MeView'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    AuthSessionState:
+      type: object
+      description: 'Whether the request carries a live session. The CSRF token is not in the body: it is the readable `fz_csrf` cookie (`__Host-fz_csrf`
+        over https).'
+      properties:
+        authenticated:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/MeView'
+        mfa_pending:
+          type: boolean
+          description: 'Present (true) only when unauthenticated and an MFA challenge cookie is present: the client should show the second-factor
+            step.'
+      required:
+      - authenticated
+    AuthSessionStateEnvelope:
+      type: object
+      description: Standard envelope for `AuthSessionState`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/AuthSessionState'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    RegisterRequest:
+      type: object
+      description: Create a personal account (email + password, ADR-032).
+      properties:
+        email: &id003
+          type: string
+          format: email
+          maxLength: 254
+          description: Email address (trimmed; must be a bare address).
+        password: &id005
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 12
+          maxLength: 256
+          description: 'Password. Length bounds are configuration (`PASSWORD_MIN_LENGTH` default 12, `PASSWORD_MAX_LENGTH` default 256); common,
+            repetitive or personal-information passwords are rejected with `422 PASSWORD_POLICY_VIOLATION` (details: TOO_SHORT, TOO_LONG, COMMONLY_USED,
+            CONTAINS_PERSONAL_INFO, TOO_REPETITIVE, INVALID_CHARACTERS).'
+        display_name: &id012
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Display name; whitespace is collapsed; 1–100 characters, no control characters.
+        accept_terms:
+          type: boolean
+          const: true
+          description: Must be true (`MUST_ACCEPT`).
+      required:
+      - email
+      - password
+      - display_name
+      - accept_terms
+      additionalProperties: false
+    AuthTokenRequest:
+      type: object
+      description: A single-use emailed token.
+      properties:
+        token: &id004
+          type: string
+          format: password
+          writeOnly: true
+          maxLength: 256
+          description: Single-use token from an email link. Only its SHA-256 is stored server-side.
+      required:
+      - token
+      additionalProperties: false
+    AuthEmailRequest:
+      type: object
+      description: An email address (generic, enumeration-resistant flows).
+      properties:
+        email: *id003
+      required:
+      - email
+      additionalProperties: false
+    LoginRequest:
+      type: object
+      description: Email + password sign-in.
+      properties:
+        email: *id003
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          description: Password.
+      required:
+      - email
+      - password
+      additionalProperties: false
+    LoginResult:
+      description: Either a session was created (cookies set), or a second factor is required (`fz_mfa` challenge cookie set, no session yet).
+      oneOf:
+      - type: object
+        title: Authenticated
+        required:
+        - status
+        - user
+        properties:
+          status:
+            type: string
+            const: authenticated
+          user:
+            $ref: '#/components/schemas/MeView'
+      - type: object
+        title: MfaRequired
+        required:
+        - status
+        - methods
+        properties:
+          status:
+            type: string
+            const: mfa_required
+          methods:
+            type: array
+            items:
+              type: string
+              enum:
+              - totp
+              - recovery_code
+    LoginResultEnvelope:
+      type: object
+      description: Standard envelope for `LoginResult`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/LoginResult'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    AuthenticatedResult:
+      type: object
+      description: A session was created and the session/CSRF cookies set.
+      required:
+      - status
+      - user
+      properties:
+        status:
+          type: string
+          const: authenticated
+        user:
+          $ref: '#/components/schemas/MeView'
+    AuthenticatedResultEnvelope:
+      type: object
+      description: Standard envelope for `AuthenticatedResult`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/AuthenticatedResult'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    MfaCodeRequest:
+      type: object
+      description: TOTP code for the pending MFA challenge.
+      properties:
+        code: &id006
+          type: string
+          format: password
+          writeOnly: true
+          pattern: ^\s*[0-9]{6}\s*$
+          description: Six-digit TOTP code (RFC 6238, 30-second step, one step of skew; each step is accepted once). A malformed code is answered
+            like a wrong code.
+      required:
+      - code
+      additionalProperties: false
+    MfaRecoveryRequest:
+      type: object
+      description: Recovery code for the pending MFA challenge.
+      properties:
+        recovery_code:
+          type: string
+          format: password
+          writeOnly: true
+          maxLength: 64
+          description: One-time recovery code (`xxxxx-xxxxx`; case, spaces and the hyphen are normalised).
+      required:
+      - recovery_code
+      additionalProperties: false
+    ResetPasswordRequest:
+      type: object
+      description: Complete a password reset.
+      properties:
+        token: *id004
+        new_password: *id005
+      required:
+      - token
+      - new_password
+      additionalProperties: false
+    StepUpRequest:
+      type: object
+      description: Fresh factor. Personal accounts send `password` or `code` (TOTP, when MFA is enabled); staff send `code` only. When both are
+        sent, `code` is used. Neither (or a wrong one) → `401 STEP_UP_FAILED`.
+      properties:
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          description: Current password (personal accounts only).
+        code: *id006
+      additionalProperties: false
+    StepUpResult:
+      type: object
+      description: Step-up is fresh until this time (`STEP_UP_MAX_AGE`).
+      required:
+      - step_up_expires_at
+      properties:
+        step_up_expires_at:
+          $ref: '#/components/schemas/Timestamp'
+    StepUpResultEnvelope:
+      type: object
+      description: Standard envelope for `StepUpResult`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/StepUpResult'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    MePatchRequest:
+      type: object
+      description: Profile fields the user may change. Unknown fields (roles, status, verification flags, …) are rejected with `422 VALIDATION_FAILED`
+        / `UNKNOWN_FIELD`. An omitted or null field is left unchanged.
+      properties:
+        display_name:
+          type:
+          - string
+          - 'null'
+          minLength: 1
+          maxLength: 100
+          description: Display name; whitespace is collapsed; 1–100 characters, no control characters.
+      additionalProperties: false
+    ChangePasswordRequest:
+      type: object
+      description: Change the password.
+      properties:
+        current_password:
+          type: string
+          format: password
+          writeOnly: true
+          description: The current password (a fresh factor).
+        new_password: *id005
+      required:
+      - current_password
+      - new_password
+      additionalProperties: false
+    EmailChangeRequest:
+      type: object
+      description: Request a sign-in address change.
+      properties:
+        new_email: *id003
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          description: Current password.
+      required:
+      - new_email
+      - password
+      additionalProperties: false
+    SecurityOverview:
+      type: object
+      description: The caller's security overview.
+      properties:
+        email_verified:
+          type: boolean
+        phone_verified:
+          type: boolean
+        mfa_enabled:
+          type: boolean
+        recovery_codes_remaining:
+          type: integer
+          minimum: 0
+        password_changed_at: &id015
+          oneOf:
+          - $ref: '#/components/schemas/Timestamp'
+          - type: 'null'
+        recent_events:
+          type: array
+          maxItems: 20
+          description: Most recent security events first (type and time only).
+          items:
+            type: object
+            required:
+            - type
+            - occurred_at
+            properties:
+              type:
+                type: string
+                description: Security event type, e.g. LOGIN_SUCCEEDED, LOGIN_FAILED, MFA_ENROLLED, PASSWORD_CHANGED, STEP_UP_SUCCEEDED.
+              occurred_at:
+                $ref: '#/components/schemas/Timestamp'
+      required:
+      - email_verified
+      - phone_verified
+      - mfa_enabled
+      - recovery_codes_remaining
+      - password_changed_at
+      - recent_events
+    SecurityOverviewEnvelope:
+      type: object
+      description: Standard envelope for `SecurityOverview`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/SecurityOverview'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    SessionListItem:
+      type: object
+      description: One of the caller's live sessions (no token, no hash).
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        current:
+          type: boolean
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        last_seen_at:
+          $ref: '#/components/schemas/Timestamp'
+        ip_masked:
+          type: string
+          description: Network prefix only (/24 for IPv4, /48 for IPv6); empty when unknown.
+        user_agent:
+          type: string
+          maxLength: 120
+          description: User-Agent, truncated to 120 characters.
+        auth_method:
+          type: string
+          enum:
+          - password
+          - password+totp
+          - password+recovery_code
+        mfa:
+          type: boolean
+          description: The session completed a second factor.
+      required:
+      - id
+      - current
+      - created_at
+      - last_seen_at
+      - ip_masked
+      - user_agent
+      - auth_method
+      - mfa
+    SessionListEnvelope:
+      type: object
+      description: Standard envelope for a list of `SessionListItem` (not paginated; live sessions only, most recently seen first).
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionListItem'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    PhoneVerifyRequest:
+      type: object
+      description: Send a verification code to this number.
+      properties:
+        phone: &id007
+          type: string
+          maxLength: 32
+          description: Mobile number in E.164 or national format; numbers without a country code are parsed with region ZW. Must be a valid mobile-capable
+            number.
+      required:
+      - phone
+      additionalProperties: false
+    PhoneVerifyRequested:
+      type: object
+      description: Code sent.
+      required:
+      - phone_masked
+      - expires_at
+      properties:
+        phone_masked:
+          type: string
+        expires_at:
+          $ref: '#/components/schemas/Timestamp'
+    PhoneVerifyRequestedEnvelope:
+      type: object
+      description: Standard envelope for `PhoneVerifyRequested`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/PhoneVerifyRequested'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    PhoneVerifyConfirmRequest:
+      type: object
+      description: Confirm the code sent to this number.
+      properties:
+        phone: *id007
+        code:
+          type: string
+          format: password
+          writeOnly: true
+          pattern: ^[0-9]{6}$
+          description: Six-digit SMS code.
+      required:
+      - phone
+      - code
+      additionalProperties: false
+    PhoneVerified:
+      type: object
+      description: The number is now the verified primary phone. A verified phone is contact information only (not a login factor, not identity
+        verification; ADR-032).
+      required:
+      - phone_verified
+      - phone_masked
+      properties:
+        phone_verified:
+          type: boolean
+          const: true
+        phone_masked:
+          type: string
+    PhoneVerifiedEnvelope:
+      type: object
+      description: Standard envelope for `PhoneVerified`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/PhoneVerified'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    MfaEnrollment:
+      type: object
+      description: Pending (unconfirmed) TOTP enrolment.
+      required:
+      - enrollment_id
+      - secret
+      - otpauth_uri
+      properties:
+        enrollment_id: &id008
+          $ref: '#/components/schemas/Uuid'
+        secret: &id009
+          type: string
+          description: 'Base32 TOTP secret. Returned once (response is `Cache-Control: no-store`); never retrievable again.'
+        otpauth_uri: &id010
+          type: string
+          description: '`otpauth://totp/...` URI for QR display (contains the secret; do not log).'
+    MfaEnrollmentEnvelope:
+      type: object
+      description: Standard envelope for `MfaEnrollment`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/MfaEnrollment'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    MfaConfirmRequest:
+      type: object
+      description: Activate the pending TOTP enrolment.
+      properties:
+        enrollment_id:
+          $ref: '#/components/schemas/Uuid'
+        code: *id006
+      required:
+      - enrollment_id
+      - code
+      additionalProperties: false
+    RecoveryCodes:
+      type: object
+      description: 'Ten one-time recovery codes, returned once (`Cache-Control: no-store`). Only keyed hashes are stored; the previous batch is
+        superseded.'
+      required:
+      - recovery_codes
+      properties:
+        recovery_codes:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items:
+            type: string
+    RecoveryCodesEnvelope:
+      type: object
+      description: Standard envelope for `RecoveryCodes`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/RecoveryCodes'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    MfaDisableRequest:
+      type: object
+      description: Current TOTP code or an unused recovery code.
+      properties:
+        code:
+          type: string
+          format: password
+          writeOnly: true
+          maxLength: 64
+          description: A current TOTP code or an unused recovery code.
+      required:
+      - code
+      additionalProperties: false
+    StaffInvitationStartRequest:
+      type: object
+      description: The invitation token from the staff invitation email.
+      properties:
+        token: *id004
+      required:
+      - token
+      additionalProperties: false
+    StaffInvitationEnrollment:
+      type: object
+      description: Invitation is valid; TOTP enrolment for the new staff account (secret shown once). Calling start again replaces the pending
+        enrolment.
+      required:
+      - email
+      - display_name
+      - enrollment_id
+      - secret
+      - otpauth_uri
+      properties:
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+        enrollment_id: *id008
+        secret: *id009
+        otpauth_uri: *id010
+    StaffInvitationEnrollmentEnvelope:
+      type: object
+      description: Standard envelope for `StaffInvitationEnrollment`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/StaffInvitationEnrollment'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    StaffInvitationFinishRequest:
+      type: object
+      description: 'Accept the invitation: confirm TOTP and set the password in one step.'
+      properties:
+        token: *id004
+        enrollment_id:
+          $ref: '#/components/schemas/Uuid'
+        code: *id006
+        password: *id005
+      required:
+      - token
+      - enrollment_id
+      - code
+      - password
+      additionalProperties: false
+    StaffInvitationFinished:
+      type: object
+      description: Account activated; no session is created (sign in with password + TOTP).
+      required:
+      - status
+      - recovery_codes
+      properties:
+        status:
+          type: string
+          const: activated
+        recovery_codes:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items:
+            type: string
+          description: 'Returned once (`Cache-Control: no-store`).'
+    StaffInvitationFinishedEnvelope:
+      type: object
+      description: Standard envelope for `StaffInvitationFinished`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/StaffInvitationFinished'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    MyOrganisation:
+      type: object
+      description: An organisation as one of its members sees it (Stage 4 membership foundation; verification, logos and campaigns arrive in later
+        stages).
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        display_name:
+          type: string
+        slug:
+          type: string
+        org_type:
+          type: string
+          enum: &id011
+          - COMPANY
+          - TRUST
+          - PVO
+          - FAITH_BASED
+          - SCHOOL
+          - HEALTH_INSTITUTION
+          - COMMUNITY_BASED
+          - SPORTS_CLUB
+          - OTHER
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+        my_role:
+          $ref: '#/components/schemas/OrgRole'
+        my_permissions:
+          type: array
+          items:
+            type: string
+            enum:
+            - org.view
+            - org.settings.manage
+            - org.member.manage
+          description: Organisation permissions of the caller's role (never platform/staff permissions).
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - display_name
+      - slug
+      - org_type
+      - status
+      - my_role
+      - my_permissions
+      - created_at
+    MyOrganisationEnvelope:
+      type: object
+      description: Standard envelope for `MyOrganisation`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/MyOrganisation'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    MyOrganisationListEnvelope:
+      type: object
+      description: Standard envelope for a list of `MyOrganisation` (not paginated; at most 20 organisations per creator).
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MyOrganisation'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    OrganisationCreate:
+      type: object
+      description: Create an organisation; the caller (verified email required) becomes its first ORG_ADMIN.
+      properties:
+        display_name:
+          type: string
+          minLength: 2
+          maxLength: 150
+          description: Whitespace is collapsed; 2–150 characters.
+        org_type:
+          type: string
+          enum: *id011
+      required:
+      - display_name
+      - org_type
+      additionalProperties: false
+    OrgMember:
+      type: object
+      description: A membership as other members see it.
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        user_id:
+          $ref: '#/components/schemas/Uuid'
+        display_name:
+          type: string
+        role:
+          $ref: '#/components/schemas/OrgRole'
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+        joined_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - user_id
+      - display_name
+      - role
+      - status
+      - joined_at
+    OrgMemberListEnvelope:
+      type: object
+      description: Standard envelope for a list of `OrgMember` (not paginated; every non-removed member, oldest first).
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrgMember'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    OrgMemberRoleChange:
+      type: object
+      description: New organisation role.
+      properties:
+        role_code:
+          $ref: '#/components/schemas/OrgRole'
+      required:
+      - role_code
+      additionalProperties: false
+    OrgInvitationCreate:
+      type: object
+      description: 'Invite an email address. No token is emailed: the invitee accepts while signed in with that verified address.'
+      properties:
+        email: *id003
+        role_code:
+          $ref: '#/components/schemas/OrgRole'
+      required:
+      - email
+      - role_code
+      additionalProperties: false
+    OrgInvitationCreated:
+      type: object
+      description: Invitation recorded (valid 7 days).
+      required:
+      - id
+      - status
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        status:
+          type: string
+          const: PENDING
+    OrgInvitationCreatedEnvelope:
+      type: object
+      description: Standard envelope for `OrgInvitationCreated`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/OrgInvitationCreated'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    OrgInvitation:
+      type: object
+      description: A pending invitation. `email` appears only in the organisation's own list; `organisation_name` only in the invitee's list.
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        organisation_id:
+          $ref: '#/components/schemas/Uuid'
+        organisation_name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/OrgRole'
+        status:
+          type: string
+          enum:
+          - PENDING
+          - ACCEPTED
+          - DECLINED
+          - REVOKED
+          - EXPIRED
+        expires_at:
+          $ref: '#/components/schemas/Timestamp'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - organisation_id
+      - role
+      - status
+      - expires_at
+      - created_at
+    OrgInvitationListEnvelope:
+      type: object
+      description: Standard envelope for a list of `OrgInvitation` (not paginated; pending, unexpired invitations, oldest first).
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrgInvitation'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    StaffInviteRequest:
+      type: object
+      description: Invite a new staff account (work address; roles are requested separately through maker-checker).
+      properties:
+        email: *id003
+        display_name: *id012
+        justification: &id014
+          type: string
+          minLength: 10
+          maxLength: 1000
+          description: Mandatory free-text justification (trimmed; 10–1000 characters). Stored in the audit record.
+      required:
+      - email
+      - display_name
+      - justification
+      additionalProperties: false
+    StaffInvited:
+      type: object
+      description: Staff account created without credentials; invitation email queued.
+      required:
+      - user_id
+      - status
+      properties:
+        user_id:
+          $ref: '#/components/schemas/Uuid'
+        status:
+          type: string
+          const: invited
+    StaffInvitedEnvelope:
+      type: object
+      description: Standard envelope for `StaffInvited`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/StaffInvited'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    RoleChangeRequestCreate:
+      type: object
+      description: Maker request to grant or revoke a staff role (no self-requests; pending requests expire after 24 h).
+      properties:
+        user_id:
+          $ref: '#/components/schemas/Uuid'
+        role_code:
+          type: string
+          enum: *id013
+          description: Unknown codes → `422 VALIDATION_FAILED` (`UNKNOWN_ROLE`).
+        action:
+          type: string
+          enum:
+          - GRANT
+          - REVOKE
+        justification: *id014
+      required:
+      - user_id
+      - role_code
+      - action
+      - justification
+      additionalProperties: false
+    RoleChangeRequest:
+      type: object
+      description: A pending or decided role change request.
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        action:
+          type: string
+          enum:
+          - GRANT
+          - REVOKE
+        target_user_id:
+          $ref: '#/components/schemas/Uuid'
+        role_code:
+          type: string
+          enum: *id013
+        requested_by:
+          $ref: '#/components/schemas/Uuid'
+        justification:
+          type: string
+        status:
+          type: string
+          enum:
+          - PENDING
+          - APPROVED
+          - REJECTED
+          - EXPIRED
+          - WITHDRAWN
+        decided_by:
+          oneOf:
+          - $ref: '#/components/schemas/Uuid'
+          - type: 'null'
+        decided_at: *id015
+        decision_reason:
+          type:
+          - string
+          - 'null'
+        expires_at:
+          $ref: '#/components/schemas/Timestamp'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - action
+      - target_user_id
+      - role_code
+      - requested_by
+      - justification
+      - status
+      - decided_by
+      - decided_at
+      - decision_reason
+      - expires_at
+      - created_at
+    RoleChangeRequestEnvelope:
+      type: object
+      description: Standard envelope for `RoleChangeRequest`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/RoleChangeRequest'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    RoleChangeRequestListEnvelope:
+      type: object
+      description: Standard envelope for a list of `RoleChangeRequest` (pending, unexpired requests, oldest first; at most 200, not paginated).
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleChangeRequest'
+          maxItems: 200
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    RoleChangeDecision:
+      type: object
+      description: 'Checker decision. `reason` is optional on approve (≤ 1000 characters) and required on reject (3–1000). An approval may omit
+        the body entirely.'
+      properties:
+        reason:
+          type: string
+          maxLength: 1000
+      additionalProperties: false
+    AccountStatusChange:
+      type: object
+      description: Reason for a suspension or reactivation (stored in the audit record).
+      properties:
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 1000
+          description: Mandatory reason (trimmed; 10–1000 characters).
+      required:
+      - reason
+      additionalProperties: false
+    AdminUserView:
+      type: object
+      description: 'Staff view of an account: contact data masked, no credentials, no KYC values.'
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        account_kind:
+          type: string
+          enum:
+          - USER
+          - STAFF
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - PENDING_DELETION
+          - CLOSED
+        email_masked:
+          type: string
+          description: First character of the local part and the domain, e.g. `j***@example.org`.
+        email_verified:
+          type: boolean
+        display_name:
+          type: string
+        phone_masked:
+          type:
+          - string
+          - 'null'
+        mfa_enabled:
+          type: boolean
+        roles:
+          type: array
+          items:
+            type: string
+            enum: *id013
+          description: Staff accounts only.
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - account_kind
+      - status
+      - email_masked
+      - email_verified
+      - display_name
+      - phone_masked
+      - mfa_enabled
+      - created_at
+    AdminUserViewEnvelope:
+      type: object
+      description: Standard envelope for `AdminUserView`.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/AdminUserView'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    VerificationSentEnvelope:
+      type: object
+      description: 'Generic accepted response (`{status: "verification_sent"}`).'
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: object
+          required:
+          - status
+          properties:
+            status:
+              type: string
+              enum:
+              - verification_sent
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    EmailVerifiedEnvelope:
+      type: object
+      description: '`{status: "verified"}`.'
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: object
+          required:
+          - status
+          properties:
+            status:
+              type: string
+              enum:
+              - verified
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    ResetRequestedEnvelope:
+      type: object
+      description: 'Generic accepted response (`{status: "reset_requested"}`).'
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: object
+          required:
+          - status
+          properties:
+            status:
+              type: string
+              enum:
+              - reset_requested
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    PasswordResetEnvelope:
+      type: object
+      description: '`{status: "password_reset"}`.'
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: object
+          required:
+          - status
+          properties:
+            status:
+              type: string
+              enum:
+              - password_reset
         meta:
           $ref: '#/components/schemas/ResponseMeta'
