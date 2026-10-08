@@ -38,7 +38,7 @@ PATTERNS=(
   'sk-ant-[A-Za-z0-9_-]{20,}'                          # Anthropic API keys
   'AIza[0-9A-Za-z_-]{35}'                              # Google API keys
   'eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'  # JWTs
-  '[a-z]+://[^:/?#[:space:]"]+:[^@/[:space:]"<]{6,}@'  # credentials embedded in URLs
+  '[a-z]+://[^:/?#[:space:]"]+:[^@/[:space:]"<$][^@/[:space:]"]{5,}@'  # credentials embedded in URLs (<placeholder> and ${INTERPOLATION} are not credentials)
   '(password|passwd|secret|api_key|apikey|access_key|private_key|client_secret|webhook_secret)["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"'<$[:space:]{}]{8,}["'"'"']'
 )
 

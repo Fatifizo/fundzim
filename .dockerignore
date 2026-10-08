@@ -1,0 +1,14 @@
+# Build context for deploy/docker/api.Dockerfile (context = repository root). Keep secrets and bulky,
+# irrelevant trees out of the context sent to the Docker daemon.
+.env
+.env.*
+!.env.example
+*.env
+.git
+**/node_modules
+apps/web
+design
+docs
+bin
+dist
+**/*.log

@@ -1,0 +1,188 @@
+# FundZim local development environment — NOT for production.
+#
+#   ./scripts/dev-env-init.sh          # once: creates .env with generated local secrets (never overwrites)
+#   docker compose up -d --build       # postgres, redis (valkey), storage (garage), migrations, api, web
+#   docker compose --profile tools up -d fundzim-mail   # optional local mail catcher
+#
+# Every published port binds to 127.0.0.1 only. Images are pinned to exact versions.
+# Secrets come from .env (git-ignored). Nothing here may ever point at a real payment provider.
+name: fundzim
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+services:
+  fundzim-postgres:
+    image: postgres:17.11-alpine3.24
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?run scripts/dev-env-init.sh}
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      POSTGRES_MIGRATOR_PASSWORD: ${POSTGRES_MIGRATOR_PASSWORD:?}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?}
+      POSTGRES_WORKER_PASSWORD: ${POSTGRES_WORKER_PASSWORD:?}
+      POSTGRES_KYC_PASSWORD: ${POSTGRES_KYC_PASSWORD:?}
+      POSTGRES_COMPLIANCE_PASSWORD: ${POSTGRES_COMPLIANCE_PASSWORD:?}
+      POSTGRES_READONLY_PASSWORD: ${POSTGRES_READONLY_PASSWORD:?}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports: ["127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fundzim"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 1g
+    logging: *logging
+
+  fundzim-redis:
+    # Valkey: BSD-licensed, Redis-protocol compatible. Cache/rate-limit only, never authoritative.
+    image: valkey/valkey:9.0.6-alpine3.24
+    restart: unless-stopped
+    command: ["valkey-server", "--appendonly", "no", "--save", "", "--requirepass", "${REDIS_PASSWORD:?}", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    ports: ["127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"]
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+    mem_limit: 256m
+    logging: *logging
+
+  fundzim-storage:
+    # Garage: S3-compatible object storage (MinIO's community images are no longer published).
+    image: dxflrs/garage:v2.4.1
+    restart: unless-stopped
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?}
+    volumes:
+      - ./deploy/docker/garage/garage.toml:/etc/garage.toml:ro
+      - storage-meta:/var/lib/garage/meta
+      - storage-data:/var/lib/garage/data
+    ports: ["127.0.0.1:${STORAGE_HOST_PORT:-3900}:3900"]   # S3 API only; the admin API stays internal
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 512m
+    logging: *logging
+
+  fundzim-storage-init:
+    image: curlimages/curl:8.22.0
+    restart: "no"
+    depends_on:
+      fundzim-storage: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "/init.sh"]
+    volumes: ["./deploy/docker/garage/init.sh:/init.sh:ro"]
+    environment:
+      GARAGE_ADMIN_URL: http://fundzim-storage:3903
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?}
+      STORAGE_PUBLIC_BUCKET: ${STORAGE_PUBLIC_BUCKET:?}
+      STORAGE_PUBLIC_ACCESS_KEY_ID: ${STORAGE_PUBLIC_ACCESS_KEY_ID:?}
+      STORAGE_PUBLIC_SECRET_ACCESS_KEY: ${STORAGE_PUBLIC_SECRET_ACCESS_KEY:?}
+      STORAGE_KYC_BUCKET: ${STORAGE_KYC_BUCKET:?}
+      STORAGE_KYC_ACCESS_KEY_ID: ${STORAGE_KYC_ACCESS_KEY_ID:?}
+      STORAGE_KYC_SECRET_ACCESS_KEY: ${STORAGE_KYC_SECRET_ACCESS_KEY:?}
+      STORAGE_EVIDENCE_BUCKET: ${STORAGE_EVIDENCE_BUCKET:?}
+      STORAGE_EVIDENCE_ACCESS_KEY_ID: ${STORAGE_EVIDENCE_ACCESS_KEY_ID:?}
+      STORAGE_EVIDENCE_SECRET_ACCESS_KEY: ${STORAGE_EVIDENCE_SECRET_ACCESS_KEY:?}
+    logging: *logging
+
+  fundzim-migrate:
+    build: &api-build
+      context: .
+      dockerfile: deploy/docker/api.Dockerfile
+      args:
+        VERSION: ${APP_VERSION:-0.1.0-dev}
+        COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+    image: fundzim/api:local
+    restart: "no"
+    depends_on:
+      fundzim-postgres: { condition: service_healthy }
+    entrypoint: ["/usr/local/bin/fundzimctl", "migrate", "up"]
+    environment:
+      APP_ENV: development
+      DATABASE_MIGRATION_URL: postgres://fundzim_migrator:${POSTGRES_MIGRATOR_PASSWORD:?}@fundzim-postgres:5432/fundzim?sslmode=disable
+    healthcheck: { disable: true }
+    logging: *logging
+
+  fundzim-api:
+    build: *api-build
+    image: fundzim/api:local
+    restart: unless-stopped
+    depends_on:
+      fundzim-migrate: { condition: service_completed_successfully }
+      fundzim-storage-init: { condition: service_completed_successfully }
+      fundzim-redis: { condition: service_healthy }
+    environment:
+      APP_ENV: development
+      APP_NAME: FundZim
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "8080"
+      INTERNAL_HTTP_HOST: 0.0.0.0           # reachable only via the 127.0.0.1-bound port below
+      INTERNAL_HTTP_PORT: "9090"
+      LOG_FORMAT: json
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      REQUEST_TIMEOUT: 15s
+      SHUTDOWN_TIMEOUT: 20s
+      TRUSTED_PROXY_CIDRS: 172.16.0.0/12    # the web container's same-origin proxy on the compose network
+      DATABASE_URL: postgres://fundzim_app:${POSTGRES_APP_PASSWORD:?}@fundzim-postgres:5432/fundzim?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:?}@fundzim-redis:6379/0
+      REDIS_REQUIRED: "false"
+      STORAGE_ENDPOINT: http://fundzim-storage:3900
+      STORAGE_REGION: garage
+      STORAGE_FORCE_PATH_STYLE: "true"
+      STORAGE_PUBLIC_BUCKET: ${STORAGE_PUBLIC_BUCKET:?}
+      STORAGE_PUBLIC_ACCESS_KEY_ID: ${STORAGE_PUBLIC_ACCESS_KEY_ID:?}
+      STORAGE_PUBLIC_SECRET_ACCESS_KEY: ${STORAGE_PUBLIC_SECRET_ACCESS_KEY:?}
+      STORAGE_KYC_BUCKET: ${STORAGE_KYC_BUCKET:?}
+      STORAGE_KYC_ACCESS_KEY_ID: ${STORAGE_KYC_ACCESS_KEY_ID:?}
+      STORAGE_KYC_SECRET_ACCESS_KEY: ${STORAGE_KYC_SECRET_ACCESS_KEY:?}
+      STORAGE_EVIDENCE_BUCKET: ${STORAGE_EVIDENCE_BUCKET:?}
+      STORAGE_EVIDENCE_ACCESS_KEY_ID: ${STORAGE_EVIDENCE_ACCESS_KEY_ID:?}
+      STORAGE_EVIDENCE_SECRET_ACCESS_KEY: ${STORAGE_EVIDENCE_SECRET_ACCESS_KEY:?}
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-8080}:8080"
+      - "127.0.0.1:${API_INTERNAL_HOST_PORT:-9090}:9090"
+    stop_grace_period: 25s
+    mem_limit: 512m
+    logging: *logging
+
+  fundzim-web:
+    build:
+      context: apps/web
+      dockerfile: ../../deploy/docker/web.Dockerfile
+    image: fundzim/web:local
+    restart: unless-stopped
+    depends_on:
+      fundzim-api: { condition: service_healthy }
+    environment:
+      API_BASE_URL: http://fundzim-api:8080
+    ports: ["127.0.0.1:${WEB_HOST_PORT:-3000}:3000"]
+    mem_limit: 768m
+    logging: *logging
+
+  fundzim-mail:
+    # Optional local mail catcher (nothing sends mail in Stage 3).
+    image: axllent/mailpit:v1.31.4
+    profiles: ["tools"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MAIL_UI_HOST_PORT:-8025}:8025"
+      - "127.0.0.1:${MAIL_SMTP_HOST_PORT:-1025}:1025"
+    mem_limit: 128m
+    logging: *logging
+
+volumes:
+  postgres-data:
+  storage-meta:
+  storage-data:
