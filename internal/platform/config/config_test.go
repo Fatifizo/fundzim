@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -17,10 +18,20 @@ func env(m map[string]string) LookupFunc {
 // localTestPW is a test-only value, concatenated into URLs so secret scanners stay strict.
 const localTestPW = "pw-local"
 
+// testKeys are fake, test-only key values (hex, 32 bytes).
+var testKeys = map[string]string{
+	"CSRF_SECRET":                strings.Repeat("ab", 32),
+	"FIELD_ENCRYPTION_LOCAL_KEY": strings.Repeat("cd", 32),
+	"BLIND_INDEX_KEY":            strings.Repeat("ef", 32),
+}
+
 func localEnv() map[string]string {
 	return map[string]string{
-		"APP_ENV":      "development",
-		"DATABASE_URL": "postgres://fundzim_app:" + localTestPW + "@localhost:5432/fundzim?sslmode=disable",
+		"CSRF_SECRET":                testKeys["CSRF_SECRET"],
+		"FIELD_ENCRYPTION_LOCAL_KEY": testKeys["FIELD_ENCRYPTION_LOCAL_KEY"],
+		"BLIND_INDEX_KEY":            testKeys["BLIND_INDEX_KEY"],
+		"APP_ENV":                    "development",
+		"DATABASE_URL":               "postgres://fundzim_app:" + localTestPW + "@localhost:5432/fundzim?sslmode=disable",
 	}
 }
 
@@ -103,18 +114,30 @@ func TestProductionRefusesUnsafeSettings(t *testing.T) {
 	}
 }
 
-func TestProductionValid(t *testing.T) {
+func TestProductionOtherwiseValidRefusedOnlyForMissingKMS(t *testing.T) {
+	// Production cannot start until KMS envelope encryption exists (Stage 18): a fully hardened
+	// production configuration must be refused for exactly that one reason.
 	m := map[string]string{
 		"APP_ENV":               "production",
-		"DATABASE_URL":          "postgres://u:p@db:5432/fundzim?sslmode=verify-full",
+		"DATABASE_URL":          "postgres://u:" + localTestPW + "@db:5432/fundzim?sslmode=verify-full",
 		"STORAGE_ENDPOINT":      "https://s3.example.invalid",
 		"STORAGE_PUBLIC_BUCKET": "pub", "STORAGE_PUBLIC_ACCESS_KEY_ID": "a", "STORAGE_PUBLIC_SECRET_ACCESS_KEY": "b",
 		"STORAGE_KYC_BUCKET": "priv", "STORAGE_KYC_ACCESS_KEY_ID": "c", "STORAGE_KYC_SECRET_ACCESS_KEY": "d",
 		"STORAGE_EVIDENCE_BUCKET": "evid", "STORAGE_EVIDENCE_ACCESS_KEY_ID": "e", "STORAGE_EVIDENCE_SECRET_ACCESS_KEY": "f",
-		"CORS_ALLOWED_ORIGINS": "https://partner.example.invalid",
+		"CORS_ALLOWED_ORIGINS":      "https://partner.example.invalid",
+		"APP_PUBLIC_URL":            "https://fundzim.example",
+		"CSRF_SECRET":               testKeys["CSRF_SECRET"],
+		"BLIND_INDEX_KEY":           testKeys["BLIND_INDEX_KEY"],
+		"FIELD_ENCRYPTION_PROVIDER": "kms",
+		"SMTP_HOST":                 "smtp.example.com",
+		"SMTP_TLS":                  "starttls",
+		"EMAIL_FROM":                "FundZim <no-reply@fundzim.example>",
+		"SMS_PROVIDER":              "disabled",
 	}
-	if _, err := Load(env(m)); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := Load(env(m))
+	var v *ValidationError
+	if !errors.As(err, &v) || len(v.Problems) != 1 || !strings.Contains(v.Problems[0], "kms is not implemented") {
+		t.Fatalf("expected exactly the KMS refusal, got %v", err)
 	}
 }
 
@@ -195,5 +218,35 @@ func TestStorageBucketsMustBeSeparate(t *testing.T) {
 	}
 	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "three different buckets") {
 		t.Fatalf("expected bucket separation refusal, got %v", err)
+	}
+}
+
+func TestAuthDefaultsAndRefusals(t *testing.T) {
+	c, err := Load(env(localEnv()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Auth.SessionCookieName != "fz_session" || c.Auth.CookieSecure {
+		t.Fatalf("local http must use fz_session without Secure, got %q secure=%v", c.Auth.SessionCookieName, c.Auth.CookieSecure)
+	}
+	if c.Auth.PasswordMinLength != 12 || c.Auth.HashMemoryKiB != 65536 || c.SMS.Provider != "dev_mailpit" {
+		t.Fatalf("unexpected defaults %+v", c.Auth)
+	}
+	m := localEnv()
+	m["APP_PUBLIC_URL"] = "https://fundzim.example"
+	c, err = Load(env(m))
+	if err != nil || c.Auth.SessionCookieName != "__Host-fz_session" || !c.Auth.CookieSecure {
+		t.Fatalf("https origin must use a Secure __Host- cookie: %v %+v", err, c.Auth)
+	}
+	for k, v := range map[string]string{"CSRF_SECRET": "short", "BLIND_INDEX_KEY": testKeys["FIELD_ENCRYPTION_LOCAL_KEY"],
+		"SESSION_IDLE_TIMEOUT": "721h", "SMS_PROVIDER": "twilio", "SMTP_TLS": "maybe", "SESSION_COOKIE_NAME": "bad name"} {
+		m := localEnv()
+		m[k] = v
+		if _, err := Load(env(m)); err == nil {
+			t.Errorf("%s=%q accepted", k, v)
+		}
+	}
+	if s := fmt.Sprintf("%+v", c); strings.Contains(s, testKeys["CSRF_SECRET"]) || strings.Contains(s, testKeys["BLIND_INDEX_KEY"]) {
+		t.Fatal("key material leaked through the config dump")
 	}
 }

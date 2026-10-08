@@ -76,3 +76,4 @@ Bug fixes, refactors inside one module, and routine dependency upgrades do not n
 | [ADR-029](ADR-029-provider-capability-abstraction.md) | Provider capability abstraction (`psp` module) | Accepted (Stage 2) |
 | [ADR-030](ADR-030-reconciliation-architecture.md) | Financial reconciliation architecture | Accepted (Stage 2) |
 | [ADR-031](ADR-031-data-access-and-http-stack.md) | Data access and HTTP stack (pgx + sqlc, stdlib router) | Accepted (Stage 2) |
+| [ADR-032](ADR-032-email-password-totp-authentication.md) | Email + password primary login with TOTP MFA (amends ADR-027) | Accepted (Stage 4) |

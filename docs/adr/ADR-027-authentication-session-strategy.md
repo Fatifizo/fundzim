@@ -1,6 +1,6 @@
 # ADR-027: Authentication and session strategy
 
-- **Status:** Accepted
+- **Status:** Accepted (amended by ADR-032: email + password primary factor and TOTP for staff)
 - **Date:** 2026-10-08
 - **Deciders:** Technical lead (Stage 2); pending project-owner acceptance
 - **Stage:** 2 (design); implementation Stage 4

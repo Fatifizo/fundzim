@@ -297,7 +297,7 @@ func TestRouteWithoutPolicyPanics(t *testing.T) {
 			t.Fatal("expected panic")
 		}
 	}()
-	NewRouter(quietLogger(nil)).HandleFunc("GET /x", "", func(http.ResponseWriter, *http.Request) {})
+	NewRouter(quietLogger(nil)).HandleFunc("GET /x", Policy{}, func(http.ResponseWriter, *http.Request) {})
 }
 
 func TestTimeoutSetsDeadline(t *testing.T) {
@@ -307,4 +307,65 @@ func TestTimeoutSetsDeadline(t *testing.T) {
 		}
 	}))
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil))
+}
+
+func TestNonPublicRoutesDeniedWithoutAuthorizer(t *testing.T) {
+	rt := NewRouter(quietLogger(nil))
+	called := false
+	for _, p := range []Policy{Authenticated(), User(), Staff(), Permission("audit.read")} {
+		rt.HandleFunc("GET /p/"+string(p.Kind), p, func(http.ResponseWriter, *http.Request) { called = true })
+	}
+	for _, path := range []string{"/p/authenticated", "/p/user", "/p/staff", "/p/permission"} {
+		rec := httptest.NewRecorder()
+		testStack(quietLogger(nil), rt).ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		if rec.Code != 401 {
+			t.Errorf("%s: status %d, want 401", path, rec.Code)
+		}
+	}
+	if called {
+		t.Fatal("a protected handler ran without authorization")
+	}
+}
+
+func TestAuthorizerDecisionAndRouteMiddleware(t *testing.T) {
+	rt := NewRouter(quietLogger(nil))
+	var seen Policy
+	rt.SetAuthorizer(AuthorizerFunc(func(r *http.Request, p Policy) error {
+		seen = p
+		if r.Header.Get("X-Allow") == "1" {
+			return nil
+		}
+		return errs.New(errs.Forbidden, "PERMISSION_DENIED", "no")
+	}))
+	order := []string{}
+	mw := func(name string) Middleware {
+		return func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { order = append(order, name); next.ServeHTTP(w, r) })
+		}
+	}
+	rt.HandleFunc("POST /x", Permission("role.assign.approve"), func(w http.ResponseWriter, r *http.Request) {
+		order = append(order, "handler")
+		w.WriteHeader(204)
+	}, With(mw("limit"), mw("idem")))
+	rec := httptest.NewRecorder()
+	rt.ServeHTTP(rec, httptest.NewRequest("POST", "/x", nil))
+	if rec.Code != 403 || len(order) != 0 || seen.Permission != "role.assign.approve" {
+		t.Fatalf("denied request: code %d order %v policy %v", rec.Code, order, seen)
+	}
+	req := httptest.NewRequest("POST", "/x", nil)
+	req.Header.Set("X-Allow", "1")
+	rec = httptest.NewRecorder()
+	rt.ServeHTTP(rec, req)
+	if rec.Code != 204 || strings.Join(order, ",") != "limit,idem,handler" {
+		t.Fatalf("allowed request: code %d order %v", rec.Code, order)
+	}
+}
+
+func TestPermissionPolicyNeedsName(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic")
+		}
+	}()
+	NewRouter(quietLogger(nil)).HandleFunc("GET /x", Permission(""), func(http.ResponseWriter, *http.Request) {})
 }

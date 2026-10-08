@@ -53,6 +53,58 @@ type Config struct {
 	Storage   Storage
 	Log       Log
 	RateLimit RateLimit
+	Auth      Auth
+	Email     Email
+	SMS       SMS
+	Security  Security
+}
+
+// Auth configures authentication and sessions (ADR-027, ADR-032, SECURITY §4–§6).
+type Auth struct {
+	PublicURL                   string // web origin used in emailed links and as the allowed Origin for CSRF checks
+	SessionCookieName           string
+	CookieSecure                bool
+	SessionIdleTimeout          time.Duration
+	SessionAbsoluteTimeout      time.Duration
+	StaffSessionIdleTimeout     time.Duration
+	StaffSessionAbsoluteTimeout time.Duration
+	StepUpMaxAge                time.Duration
+	MFAChallengeTTL             time.Duration
+	EmailVerificationTTL        time.Duration
+	PasswordResetTTL            time.Duration
+	StaffInvitationTTL          time.Duration
+	OTPTTL                      time.Duration
+	OTPMaxAttempts              int
+	PasswordMinLength           int
+	PasswordMaxLength           int
+	HashMemoryKiB               uint32
+	HashIterations              uint32
+	HashParallelism             uint8
+	HashMaxConcurrent           int
+	CSRFSecret                  Secret
+}
+
+// Email configures outbound email. Local development uses Mailpit.
+type Email struct {
+	Provider string // smtp | disabled
+	SMTPHost string
+	SMTPPort int
+	SMTPUser string
+	SMTPPass Secret
+	SMTPTLS  string // none | starttls | tls
+	From     string
+}
+
+// SMS configures outbound SMS. Only the development provider exists (no real SMS provider is selected).
+type SMS struct {
+	Provider string // dev_mailpit | disabled
+}
+
+// Security holds application-level key material (DATA-CLASSIFICATION, data-protection-architecture).
+type Security struct {
+	FieldEncryptionProvider string // local (development/test only) | kms (not implemented yet)
+	FieldEncryptionKey      Secret // hex, 32 bytes, AES-256-GCM key for C3/C4 fields (TOTP secrets)
+	BlindIndexKey           Secret // hex, 32 bytes, HMAC key for tokens, OTP codes, recovery codes
 }
 
 type App struct {
@@ -368,6 +420,10 @@ func Load(get LookupFunc) (Config, error) {
 		l.fail("RATE_LIMIT_ENABLED=false is not allowed outside development and test")
 	}
 
+	loadAuth(l, &c, env)
+	loadEmailSMS(l, &c, env)
+	loadSecurity(l, &c, env)
+
 	if len(l.problems) > 0 {
 		sort.Strings(l.problems)
 		return Config{}, &ValidationError{Problems: l.problems}
@@ -395,4 +451,165 @@ func checkDatabaseURL(l *loader, key, raw string, env Env) {
 func IsValidationError(err error) bool {
 	var v *ValidationError
 	return errors.As(err, &v)
+}
+
+func loadAuth(l *loader, c *Config, env Env) {
+	a := Auth{
+		PublicURL:                   l.str("APP_PUBLIC_URL", "http://localhost:3000"),
+		SessionCookieName:           l.str("SESSION_COOKIE_NAME", ""),
+		SessionIdleTimeout:          l.duration("SESSION_IDLE_TIMEOUT", 168*time.Hour, 5*time.Minute, 720*time.Hour),
+		SessionAbsoluteTimeout:      l.duration("SESSION_ABSOLUTE_TIMEOUT", 720*time.Hour, 10*time.Minute, 2160*time.Hour),
+		StaffSessionIdleTimeout:     l.duration("STAFF_SESSION_IDLE_TIMEOUT", 15*time.Minute, time.Minute, 4*time.Hour),
+		StaffSessionAbsoluteTimeout: l.duration("STAFF_SESSION_ABSOLUTE_TIMEOUT", 12*time.Hour, 5*time.Minute, 24*time.Hour),
+		StepUpMaxAge:                l.duration("STEP_UP_MAX_AGE", 10*time.Minute, time.Minute, time.Hour),
+		MFAChallengeTTL:             l.duration("MFA_CHALLENGE_TTL", 5*time.Minute, time.Minute, 15*time.Minute),
+		EmailVerificationTTL:        l.duration("EMAIL_VERIFICATION_TTL", 24*time.Hour, 10*time.Minute, 72*time.Hour),
+		PasswordResetTTL:            l.duration("PASSWORD_RESET_TTL", 30*time.Minute, 5*time.Minute, 2*time.Hour),
+		StaffInvitationTTL:          l.duration("STAFF_INVITATION_TTL", 48*time.Hour, time.Hour, 168*time.Hour),
+		OTPTTL:                      l.duration("OTP_TTL", 5*time.Minute, time.Minute, 5*time.Minute),
+		OTPMaxAttempts:              l.integer("OTP_MAX_ATTEMPTS", 5, 1, 5),
+		PasswordMinLength:           l.integer("PASSWORD_MIN_LENGTH", 12, 8, 64),
+		PasswordMaxLength:           l.integer("PASSWORD_MAX_LENGTH", 256, 64, 1024),
+		HashMemoryKiB:               uint32(l.integer("PASSWORD_HASH_MEMORY_KIB", 64*1024, 19*1024, 1024*1024)),
+		HashIterations:              uint32(l.integer("PASSWORD_HASH_ITERATIONS", 3, 1, 10)),
+		HashParallelism:             uint8(l.integer("PASSWORD_HASH_PARALLELISM", 2, 1, 8)),
+		HashMaxConcurrent:           l.integer("PASSWORD_HASH_MAX_CONCURRENT", 4, 1, 64),
+		CSRFSecret:                  Secret(l.str("CSRF_SECRET", "")),
+	}
+	if u, err := url.Parse(a.PublicURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || (u.Path != "" && u.Path != "/") {
+		l.fail("APP_PUBLIC_URL must be an origin such as https://fundzim.example")
+	} else {
+		a.PublicURL = u.Scheme + "://" + u.Host
+		if u.Scheme != "https" && !env.IsLocal() {
+			l.fail("APP_PUBLIC_URL must use https outside development and test")
+		}
+	}
+	// Browsers reject __Host- cookies without Secure, and Secure cookies are not stored over plain http.
+	a.CookieSecure = !env.IsLocal() || strings.HasPrefix(a.PublicURL, "https://")
+	if a.SessionCookieName == "" {
+		a.SessionCookieName = "fz_session"
+		if a.CookieSecure {
+			a.SessionCookieName = "__Host-fz_session"
+		}
+	}
+	if !env.IsLocal() && !strings.HasPrefix(a.SessionCookieName, "__Host-") {
+		l.fail("SESSION_COOKIE_NAME must start with __Host- outside development and test")
+	}
+	if strings.HasPrefix(a.SessionCookieName, "__Host-") && !a.CookieSecure {
+		l.fail("SESSION_COOKIE_NAME with the __Host- prefix needs https (use fz_session for local http)")
+	}
+	if !validCookieName(a.SessionCookieName) {
+		l.fail("SESSION_COOKIE_NAME contains invalid characters")
+	}
+	if len(a.CSRFSecret.Reveal()) < 32 {
+		l.fail("CSRF_SECRET is required (at least 32 characters, e.g. 64 hex characters)")
+	}
+	if a.SessionIdleTimeout > a.SessionAbsoluteTimeout || a.StaffSessionIdleTimeout > a.StaffSessionAbsoluteTimeout {
+		l.fail("session idle timeouts must not exceed the absolute timeouts")
+	}
+	if a.PasswordMinLength > a.PasswordMaxLength {
+		l.fail("PASSWORD_MIN_LENGTH must not exceed PASSWORD_MAX_LENGTH")
+	}
+	if !env.IsLocal() && a.HashMemoryKiB < 64*1024 {
+		l.fail("PASSWORD_HASH_MEMORY_KIB must be at least 65536 outside development and test")
+	}
+	c.Auth = a
+}
+
+func validCookieName(n string) bool {
+	if n == "" {
+		return false
+	}
+	for _, r := range n {
+		if !(r == '_' || r == '-' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+func loadEmailSMS(l *loader, c *Config, env Env) {
+	e := Email{
+		Provider: l.str("EMAIL_PROVIDER", "smtp"),
+		SMTPHost: l.str("SMTP_HOST", "localhost"),
+		SMTPPort: l.integer("SMTP_PORT", 1025, 1, 65535),
+		SMTPUser: l.str("SMTP_USERNAME", ""),
+		SMTPPass: Secret(l.str("SMTP_PASSWORD", "")),
+		SMTPTLS:  l.str("SMTP_TLS", "none"),
+		From:     l.str("EMAIL_FROM", "FundZim <no-reply@fundzim.invalid>"),
+	}
+	switch e.Provider {
+	case "smtp", "disabled":
+	default:
+		l.fail("EMAIL_PROVIDER must be smtp or disabled")
+	}
+	switch e.SMTPTLS {
+	case "none", "starttls", "tls":
+	default:
+		l.fail("SMTP_TLS must be none, starttls or tls")
+	}
+	if !env.IsLocal() {
+		if e.Provider == "smtp" && e.SMTPTLS == "none" {
+			l.fail("SMTP_TLS=none is not allowed outside development and test")
+		}
+		h := strings.ToLower(e.SMTPHost)
+		if h == "localhost" || h == "127.0.0.1" || strings.Contains(h, "mailpit") || strings.Contains(h, "fundzim-mail") {
+			l.fail("SMTP_HOST points at local development mail infrastructure; not allowed outside development and test")
+		}
+		if strings.HasSuffix(strings.TrimRight(e.From, ">"), ".invalid") {
+			l.fail("EMAIL_FROM must be a real sending address outside development and test")
+		}
+	}
+	c.Email = e
+
+	s := SMS{Provider: l.str("SMS_PROVIDER", "dev_mailpit")}
+	switch s.Provider {
+	case "dev_mailpit", "disabled":
+	default:
+		l.fail("SMS_PROVIDER must be dev_mailpit or disabled (no real SMS provider is selected yet)")
+	}
+	if s.Provider == "dev_mailpit" && !env.IsLocal() {
+		l.fail("SMS_PROVIDER=dev_mailpit is refused outside development and test")
+	}
+	c.SMS = s
+}
+
+func loadSecurity(l *loader, c *Config, env Env) {
+	s := Security{
+		FieldEncryptionProvider: l.str("FIELD_ENCRYPTION_PROVIDER", "local"),
+		FieldEncryptionKey:      Secret(l.str("FIELD_ENCRYPTION_LOCAL_KEY", "")),
+		BlindIndexKey:           Secret(l.str("BLIND_INDEX_KEY", "")),
+	}
+	switch s.FieldEncryptionProvider {
+	case "local":
+		if !env.IsLocal() {
+			l.fail("FIELD_ENCRYPTION_PROVIDER=local is refused outside development and test (KMS envelope encryption is required; not implemented yet)")
+		}
+		if !hex32(s.FieldEncryptionKey.Reveal()) {
+			l.fail("FIELD_ENCRYPTION_LOCAL_KEY must be 64 hex characters (32 bytes)")
+		}
+	case "kms":
+		l.fail("FIELD_ENCRYPTION_PROVIDER=kms is not implemented yet (Stage 18)")
+	default:
+		l.fail("FIELD_ENCRYPTION_PROVIDER must be local or kms")
+	}
+	if !hex32(s.BlindIndexKey.Reveal()) {
+		l.fail("BLIND_INDEX_KEY must be 64 hex characters (32 bytes)")
+	}
+	if s.BlindIndexKey != "" && s.BlindIndexKey == s.FieldEncryptionKey {
+		l.fail("BLIND_INDEX_KEY and FIELD_ENCRYPTION_LOCAL_KEY must differ")
+	}
+	c.Security = s
+}
+
+func hex32(v string) bool {
+	if len(v) != 64 {
+		return false
+	}
+	for _, r := range v {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f' || r >= 'A' && r <= 'F') {
+			return false
+		}
+	}
+	return true
 }
