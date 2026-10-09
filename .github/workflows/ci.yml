@@ -98,9 +98,9 @@ jobs:
         run: npm ci --no-audit --no-fund && node run.mjs && node catalogue.mjs
 
   integration:
-    name: Integration (real PostgreSQL, Valkey, Garage via docker compose)
+    name: Integration (real PostgreSQL, Valkey, Garage, ClamAV via docker compose)
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -111,6 +111,8 @@ jobs:
       - name: Start infrastructure, initialise storage, migrate
         run: |
           docker compose up -d --wait fundzim-postgres fundzim-redis fundzim-storage fundzim-mail
+          # ClamAV downloads its signatures on first start (several minutes); the worker scans uploads with it
+          docker compose up -d fundzim-clamav
           docker compose up --exit-code-from fundzim-storage-init fundzim-storage-init
           docker compose up --build --exit-code-from fundzim-migrate fundzim-migrate
       - name: Start the API on the runner
@@ -119,17 +121,24 @@ jobs:
           go build -o bin/api ./apps/api/cmd/api
           LOG_FORMAT=json ./bin/api > api.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8080/api/v1/ready && break; sleep 1; done
+      - name: Wait for ClamAV signatures (real malware scanning for the Stage 5 document tests)
+        run: |
+          for i in $(seq 1 60); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q fundzim-clamav)")" = healthy ] && exit 0
+            sleep 10
+          done
+          echo "::error::ClamAV did not become healthy"; exit 1
       - name: Start the worker on the runner
         run: |
           set -a; . ./.env; set +a
           go build -o bin/worker ./apps/api/cmd/worker
           LOG_FORMAT=json ./bin/worker > worker.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:9091/readyz && break; sleep 1; done
-      - name: Integration tests (identity end to end via the running worker and Mailpit)
+      - name: Integration tests (identity and verification end to end via the running worker, ClamAV and Mailpit)
         run: |
           set -a; . ./.env; set +a
-          FUNDZIM_IT_API_URL=http://127.0.0.1:8080 \
-            go test -tags integration -count=1 -v ./tests/integration/...
+          FUNDZIM_IT_API_URL=http://127.0.0.1:8080 FUNDZIM_IT_PERF=1 \
+            go test -tags integration -count=1 -timeout 30m -v ./tests/integration/...
       - name: Destructive migration round trip (after stopping the API and worker; throwaway database)
         run: |
           pkill -f bin/worker || true
