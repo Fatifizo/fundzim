@@ -3,7 +3,7 @@ name: ci
 
 on:
   push:
-    branches: [main, "stage-*"]
+    branches: [main, "stage-**"]   # `*` does not match `/`; stage branches are stage-N/name
   pull_request:
 
 permissions:
