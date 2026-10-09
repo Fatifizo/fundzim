@@ -33,6 +33,16 @@ x-common-env: &common-env
   FIELD_ENCRYPTION_PROVIDER: local
   FIELD_ENCRYPTION_LOCAL_KEY: ${FIELD_ENCRYPTION_LOCAL_KEY:?run scripts/dev-env-init.sh}
   BLIND_INDEX_KEY: ${BLIND_INDEX_KEY:?run scripts/dev-env-init.sh}
+  # Stage 5: restricted pools (ADR-035) and per-purpose keys
+  DATABASE_KYC_URL: postgres://fundzim_kyc:${POSTGRES_KYC_PASSWORD:?}@fundzim-postgres:5432/fundzim?sslmode=disable
+  DATABASE_COMPLIANCE_URL: postgres://fundzim_compliance:${POSTGRES_COMPLIANCE_PASSWORD:?}@fundzim-postgres:5432/fundzim?sslmode=disable
+  KYC_FIELD_ENCRYPTION_LOCAL_KEY: ${KYC_FIELD_ENCRYPTION_LOCAL_KEY:?run scripts/dev-env-init.sh}
+  KYC_BLIND_INDEX_KEY: ${KYC_BLIND_INDEX_KEY:?run scripts/dev-env-init.sh}
+  COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY: ${COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY:?run scripts/dev-env-init.sh}
+  DOCUMENT_TICKET_KEY: ${DOCUMENT_TICKET_KEY:?run scripts/dev-env-init.sh}
+  MALWARE_SCANNER: ${MALWARE_SCANNER:-clamd}   # real ClamAV (fundzim-clamav); dev = EICAR-only test scanner
+  CLAMAV_ADDR: fundzim-clamav:3310
+  STORAGE_SSE_C_KEY: ${STORAGE_SSE_C_KEY:?run scripts/dev-env-init.sh}   # SSE-C for private objects (local key; KMS in Stage 18)
 
 services:
   fundzim-postgres:
@@ -200,7 +210,17 @@ services:
       fundzim-mail: { condition: service_started }
     entrypoint: ["/usr/local/bin/worker"]
     environment:
-      <<: *common-env                      # no storage or Redis credentials: the worker does not use them
+      <<: *common-env                      # no Redis or public-media credentials: the worker does not use them
+      # malware scanning and promotion of private documents (Stage 5)
+      STORAGE_ENDPOINT: http://fundzim-storage:3900
+      STORAGE_REGION: garage
+      STORAGE_FORCE_PATH_STYLE: "true"
+      STORAGE_KYC_BUCKET: ${STORAGE_KYC_BUCKET:?}
+      STORAGE_KYC_ACCESS_KEY_ID: ${STORAGE_KYC_ACCESS_KEY_ID:?}
+      STORAGE_KYC_SECRET_ACCESS_KEY: ${STORAGE_KYC_SECRET_ACCESS_KEY:?}
+      STORAGE_EVIDENCE_BUCKET: ${STORAGE_EVIDENCE_BUCKET:?}
+      STORAGE_EVIDENCE_ACCESS_KEY_ID: ${STORAGE_EVIDENCE_ACCESS_KEY_ID:?}
+      STORAGE_EVIDENCE_SECRET_ACCESS_KEY: ${STORAGE_EVIDENCE_SECRET_ACCESS_KEY:?}
       DATABASE_WORKER_URL: postgres://fundzim_worker:${POSTGRES_WORKER_PASSWORD:?}@fundzim-postgres:5432/fundzim?sslmode=disable
       WORKER_INTERNAL_HTTP_PORT: "9091"
       WORKER_CONCURRENCY: "4"
@@ -244,6 +264,29 @@ services:
     mem_limit: 128m
     logging: *logging
 
+  fundzim-clamav:
+    # Malware scanner for uploaded documents (clamd INSTREAM on TCP 3310; Stage 5, ADR-035 §5). The official
+    # image runs freshclam, which DOWNLOADS SIGNATURES FROM THE INTERNET on first start (several hundred MB,
+    # a few minutes) and keeps them in the clamav-db volume; until they load, clamd is not healthy and scans
+    # fail (documents stay FAILED_SCAN and are retried — never treated as clean). Needs ~1.5–2 GB RAM while
+    # signatures load. The 127.0.0.1 port exists only for host-run integration tests.
+    image: clamav/clamav:1.5.3@sha256:d06c1d6a451d616e1dd79b42f44c8c8c291bba9cf4e75ebc4d0e43c1c6dd87bb
+    restart: unless-stopped
+    environment:
+      CLAMAV_NO_MILTERD: "true"
+      CLAMD_STARTUP_TIMEOUT: "600"
+    volumes:
+      - clamav-db:/var/lib/clamav
+    ports: ["127.0.0.1:${CLAMAV_HOST_PORT:-3310}:3310"]
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      start_period: 600s
+      retries: 3
+    mem_limit: 3g
+    logging: *logging
+
 networks:
   default:
     ipam:
@@ -258,3 +301,4 @@ volumes:
   postgres-data:
   storage-meta:
   storage-data:
+  clamav-db:

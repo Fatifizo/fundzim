@@ -27,14 +27,20 @@ func testDeps(t *testing.T) *Deps {
 	t.Helper()
 	cfg, err := config.Load(func(k string) (string, bool) {
 		v, ok := map[string]string{
-			"APP_ENV":                    "test",
-			"CSRF_SECRET":                strings.Repeat("ab", 32),
-			"FIELD_ENCRYPTION_LOCAL_KEY": strings.Repeat("cd", 32),
-			"BLIND_INDEX_KEY":            strings.Repeat("ef", 32),
-			"DATABASE_URL":               "postgres://fundzim_app:" + apiTestPW + "@127.0.0.1:1/fundzim?sslmode=disable",
-			"DATABASE_CONNECT_TIMEOUT":   "500ms",
-			"HTTP_PORT":                  "18080",
-			"INTERNAL_HTTP_PORT":         "19090",
+			"APP_ENV":                               "test",
+			"CSRF_SECRET":                           strings.Repeat("ab", 32),
+			"FIELD_ENCRYPTION_LOCAL_KEY":            strings.Repeat("cd", 32),
+			"BLIND_INDEX_KEY":                       strings.Repeat("ef", 32),
+			"KYC_FIELD_ENCRYPTION_LOCAL_KEY":        strings.Repeat("a1", 32),
+			"KYC_BLIND_INDEX_KEY":                   strings.Repeat("b2", 32),
+			"COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY": strings.Repeat("c3", 32),
+			"DOCUMENT_TICKET_KEY":                   strings.Repeat("d4", 32),
+			"DATABASE_KYC_URL":                      "postgres://fundzim_kyc:" + apiTestPW + "@127.0.0.1:1/fundzim?sslmode=disable",
+			"DATABASE_COMPLIANCE_URL":               "postgres://fundzim_compliance:" + apiTestPW + "@127.0.0.1:1/fundzim?sslmode=disable",
+			"DATABASE_URL":                          "postgres://fundzim_app:" + apiTestPW + "@127.0.0.1:1/fundzim?sslmode=disable",
+			"DATABASE_CONNECT_TIMEOUT":              "500ms",
+			"HTTP_PORT":                             "18080",
+			"INTERNAL_HTTP_PORT":                    "19090",
 		}[k]
 		return v, ok
 	})

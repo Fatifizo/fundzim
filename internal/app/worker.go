@@ -24,6 +24,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/metrics"
 	"github.com/Fatifizo/fundzim/internal/platform/outbox"
 	"github.com/Fatifizo/fundzim/internal/platform/version"
+	"github.com/Fatifizo/fundzim/internal/storage"
 	"github.com/Fatifizo/fundzim/migrations"
 )
 
@@ -46,6 +47,8 @@ type WorkerDeps struct {
 
 	Registry *outbox.Registry
 	River    *river.Client[pgx.Tx]
+	// Stage 5: verification modules (consumers, scans, sweeps)
+	Verification *VerificationModules
 
 	riverRunning atomic.Bool
 }
@@ -94,12 +97,20 @@ func (d *WorkerDeps) buildRiver() error {
 	workers := river.NewWorkers()
 	relay := &outbox.Relay{Pool: d.DB, Registry: d.Registry, Metrics: d.OutboxMetrics, Logger: d.Logger}
 	river.AddWorker(workers, &outbox.RelayWorker{Relay: relay})
-	river.AddWorker(workers, &outbox.DeliverWorker{Pool: d.DB, Registry: d.Registry, Logger: d.Logger})
+	// a delivery may run a malware scan: allow the scan timeout plus margin (default 30 s otherwise)
+	river.AddWorker(workers, &outbox.DeliverWorker{Pool: d.DB, Registry: d.Registry, Logger: d.Logger,
+		JobLimit: d.Config.Verification.ScanTimeout + 30*time.Second})
 	river.AddWorker(workers, &outbox.PurgeWorker{Pool: d.DB, Logger: d.Logger, Metrics: d.OutboxMetrics,
 		Retention: d.Worker.OutboxRetention})
 	river.AddWorker(workers, &jobs.PurgeIdempotencyKeysWorker{Pool: d.DB, Logger: d.Logger})
 
 	periodic := append([]*river.PeriodicJob{outbox.PeriodicRelay(time.Second)}, outbox.PeriodicMaintenance(10*time.Minute)...)
+	if d.Verification != nil {
+		d.Verification.Storage.AddWorkers(workers)
+		river.AddWorker(workers, &VerificationSweepWorker{M: d.Verification, Logger: d.Logger})
+		periodic = append(periodic, storage.PeriodicJobs()...)
+		periodic = append(periodic, verificationPeriodic()...)
+	}
 	client, err := jobs.NewWorkerClient(jobs.WorkerConfig{
 		Pool: d.DB, Logger: d.Logger, Metrics: d.JobMetrics, Workers: workers,
 		Queues: jobs.DefaultQueues(d.Worker.Concurrency), PeriodicJobs: periodic,
@@ -113,6 +124,7 @@ func (d *WorkerDeps) buildRiver() error {
 
 // Close releases dependency resources.
 func (d *WorkerDeps) Close() {
+	d.Verification.Close()
 	if d.DB != nil {
 		d.DB.Close()
 	}

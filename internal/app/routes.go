@@ -48,6 +48,9 @@ func NewRouter(d *Deps, checker *health.Checker) *httpx.Router {
 		r.SetAuthorizer(d.Auth)
 		registerIdentityRoutes(r, d.Auth, d.Orgs, d.Idempotency, d.Logger)
 	}
+	if d.Verification != nil {
+		registerVerificationRoutes(r, d.Verification, d.Idempotency, d.Logger)
+	}
 	return r
 }
 
@@ -85,7 +88,7 @@ func PublicHandler(d *Deps, router http.Handler) http.Handler {
 		httpx.Recover(d.Logger, d.Metrics.PanicRecovered),
 		httpx.SecurityHeaders(!cfg.App.Env.IsLocal()),
 		httpx.CORS(cfg.HTTP.CORSAllowedOrigins),
-		httpx.BodyLimit(cfg.HTTP.MaxBodyBytes, d.Logger),
+		httpx.BodyLimitWithExemptions(cfg.HTTP.MaxBodyBytes, uploadExemptions(cfg), d.Logger),
 		httpx.Timeout(cfg.HTTP.RequestTimeout),
 	}
 	if cfg.RateLimit.Enabled {

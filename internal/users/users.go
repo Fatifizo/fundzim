@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/Fatifizo/fundzim/internal/platform/db"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
@@ -322,5 +323,25 @@ func RecordAcceptance(ctx context.Context, tx pgx.Tx, userID, document, version 
 	_, err := tx.Exec(ctx, `INSERT INTO app.user_terms_acceptances (id, user_id, document, version, accepted_at, ip)
 		VALUES ($1, $2, $3, $4, $5, $6::inet) ON CONFLICT (user_id, document, version) DO NOTHING`,
 		ids.New(), userID, document, version, at, ip)
+	return err
+}
+
+// PersonalAccount returns the personal (USER) account linked to a staff account ("" when none).
+func PersonalAccount(ctx context.Context, q Querier, staffID string) (string, error) {
+	var id *string
+	err := q.QueryRow(ctx, `SELECT staff_personal_user_id FROM app.users WHERE id = $1`, staffID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) || id == nil {
+		return "", nil
+	}
+	return *id, err
+}
+
+// SetKYCMirror updates the read-only verification mirror on app.users (written only from kyc.level_changed
+// events; the kyc schema stays authoritative).
+func SetKYCMirror(ctx context.Context, q interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}, userID, level, status string, at time.Time) error {
+	_, err := q.Exec(ctx, `UPDATE app.users SET kyc_level = $2, kyc_status = $3, kyc_mirror_updated_at = $4
+		WHERE id = $1 AND (kyc_mirror_updated_at IS NULL OR kyc_mirror_updated_at <= $4)`, userID, level, status, at)
 	return err
 }

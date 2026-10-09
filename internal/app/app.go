@@ -51,6 +51,8 @@ type Deps struct {
 	Idempotency *idempotency.Store
 	Auth        *auth.Service
 	Orgs        *organisations.Service
+	// Stage 5 verification modules (nil only in platform-only tests)
+	Verification *VerificationModules
 }
 
 // NewDeps connects the dependencies described by cfg. The database pool is lazy: a database that is
@@ -93,6 +95,9 @@ func NewDeps(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Deps
 	if cfg.Storage.Enabled() {
 		creds := map[storage.Class]storage.Credential{}
 		add := func(class storage.Class, c config.StorageCredential) {
+			if c.Bucket == "" { // optional public credential omitted by this process (config enforces all-or-nothing)
+				return
+			}
 			creds[class] = storage.Credential{Bucket: c.Bucket, AccessKeyID: c.AccessKeyID.Reveal(), SecretAccessKey: c.SecretAccessKey.Reveal()}
 		}
 		add(storage.PublicCampaignMedia, cfg.Storage.Public)
@@ -130,11 +135,18 @@ func NewDeps(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Deps
 		d.Close()
 		return nil, err
 	}
+	d.Verification, err = NewVerificationModules(ctx, VerificationDeps{AppPool: pool, Config: cfg, Clock: clock.System, Logger: logger,
+		Registry: d.Metrics.Registry, Blobs: d.Storage, Orgs: d.Orgs, Auth: d.Auth})
+	if err != nil {
+		d.Close()
+		return nil, err
+	}
 	return d, nil
 }
 
 // Close releases dependency resources.
 func (d *Deps) Close() {
+	d.Verification.Close()
 	if d.DB != nil {
 		d.DB.Close()
 	}

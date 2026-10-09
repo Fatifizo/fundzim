@@ -20,18 +20,28 @@ const localTestPW = "pw-local"
 
 // testKeys are fake, test-only key values (hex, 32 bytes).
 var testKeys = map[string]string{
-	"CSRF_SECRET":                strings.Repeat("ab", 32),
-	"FIELD_ENCRYPTION_LOCAL_KEY": strings.Repeat("cd", 32),
-	"BLIND_INDEX_KEY":            strings.Repeat("ef", 32),
+	"CSRF_SECRET":                           strings.Repeat("ab", 32),
+	"FIELD_ENCRYPTION_LOCAL_KEY":            strings.Repeat("cd", 32),
+	"BLIND_INDEX_KEY":                       strings.Repeat("ef", 32),
+	"KYC_FIELD_ENCRYPTION_LOCAL_KEY":        strings.Repeat("a1", 32),
+	"KYC_BLIND_INDEX_KEY":                   strings.Repeat("b2", 32),
+	"COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY": strings.Repeat("c3", 32),
+	"DOCUMENT_TICKET_KEY":                   strings.Repeat("d4", 32),
 }
 
 func localEnv() map[string]string {
 	return map[string]string{
-		"CSRF_SECRET":                testKeys["CSRF_SECRET"],
-		"FIELD_ENCRYPTION_LOCAL_KEY": testKeys["FIELD_ENCRYPTION_LOCAL_KEY"],
-		"BLIND_INDEX_KEY":            testKeys["BLIND_INDEX_KEY"],
-		"APP_ENV":                    "development",
-		"DATABASE_URL":               "postgres://fundzim_app:" + localTestPW + "@localhost:5432/fundzim?sslmode=disable",
+		"CSRF_SECRET":                           testKeys["CSRF_SECRET"],
+		"FIELD_ENCRYPTION_LOCAL_KEY":            testKeys["FIELD_ENCRYPTION_LOCAL_KEY"],
+		"BLIND_INDEX_KEY":                       testKeys["BLIND_INDEX_KEY"],
+		"KYC_FIELD_ENCRYPTION_LOCAL_KEY":        testKeys["KYC_FIELD_ENCRYPTION_LOCAL_KEY"],
+		"KYC_BLIND_INDEX_KEY":                   testKeys["KYC_BLIND_INDEX_KEY"],
+		"COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY": testKeys["COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY"],
+		"DOCUMENT_TICKET_KEY":                   testKeys["DOCUMENT_TICKET_KEY"],
+		"DATABASE_KYC_URL":                      "postgres://fundzim_kyc:" + localTestPW + "@localhost:5432/fundzim?sslmode=disable",
+		"DATABASE_COMPLIANCE_URL":               "postgres://fundzim_compliance:" + localTestPW + "@localhost:5432/fundzim?sslmode=disable",
+		"APP_ENV":                               "development",
+		"DATABASE_URL":                          "postgres://fundzim_app:" + localTestPW + "@localhost:5432/fundzim?sslmode=disable",
 	}
 }
 
@@ -129,6 +139,12 @@ func TestProductionOtherwiseValidRefusedOnlyForMissingKMS(t *testing.T) {
 		"CSRF_SECRET":               testKeys["CSRF_SECRET"],
 		"BLIND_INDEX_KEY":           testKeys["BLIND_INDEX_KEY"],
 		"FIELD_ENCRYPTION_PROVIDER": "kms",
+		"KYC_BLIND_INDEX_KEY":       testKeys["KYC_BLIND_INDEX_KEY"],
+		"DOCUMENT_TICKET_KEY":       testKeys["DOCUMENT_TICKET_KEY"],
+		"DATABASE_KYC_URL":          "postgres://k:" + localTestPW + "@db:5432/fundzim?sslmode=verify-full",
+		"DATABASE_COMPLIANCE_URL":   "postgres://c:" + localTestPW + "@db:5432/fundzim?sslmode=verify-full",
+		"MALWARE_SCANNER":           "clamd",
+		"CLAMAV_ADDR":               "clamav.internal:3310",
 		"SMTP_HOST":                 "smtp.example.com",
 		"SMTP_TLS":                  "starttls",
 		"EMAIL_FROM":                "FundZim <no-reply@fundzim.example>",
@@ -248,5 +264,51 @@ func TestAuthDefaultsAndRefusals(t *testing.T) {
 	}
 	if s := fmt.Sprintf("%+v", c); strings.Contains(s, testKeys["CSRF_SECRET"]) || strings.Contains(s, testKeys["BLIND_INDEX_KEY"]) {
 		t.Fatal("key material leaked through the config dump")
+	}
+}
+
+func TestStage5KeysDistinctAndScannerPolicy(t *testing.T) {
+	m := localEnv()
+	m["KYC_BLIND_INDEX_KEY"] = m["BLIND_INDEX_KEY"]
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "must differ") {
+		t.Fatalf("reused key must be refused: %v", err)
+	}
+	m = localEnv()
+	m["DATABASE_KYC_URL"] = m["DATABASE_URL"]
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "fundzim_kyc") {
+		t.Fatalf("shared pool URL must be refused: %v", err)
+	}
+	m = localEnv()
+	m["MALWARE_SCANNER"] = "clamd"
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "CLAMAV_ADDR") {
+		t.Fatalf("clamd without address must be refused: %v", err)
+	}
+	c, err := Load(env(localEnv()))
+	if err != nil || c.Verification.Scanner != "dev" || c.Verification.UploadMaxBytes != 10<<20 || c.Verification.DocumentTicketTTL != time.Minute {
+		t.Fatalf("defaults: %+v %v", c.Verification, err)
+	}
+}
+
+func TestStoragePublicCredentialOptionalButAllOrNothing(t *testing.T) {
+	base := map[string]string{
+		"STORAGE_ENDPOINT":   "http://localhost:9000",
+		"STORAGE_KYC_BUCKET": "priv", "STORAGE_KYC_ACCESS_KEY_ID": "c", "STORAGE_KYC_SECRET_ACCESS_KEY": "d",
+		"STORAGE_EVIDENCE_BUCKET": "evid", "STORAGE_EVIDENCE_ACCESS_KEY_ID": "e", "STORAGE_EVIDENCE_SECRET_ACCESS_KEY": "f",
+	}
+	m := localEnv()
+	for k, v := range base {
+		m[k] = v
+	}
+	if _, err := Load(env(m)); err != nil {
+		t.Fatalf("a process without the public credential (worker) must load: %v", err)
+	}
+	m["STORAGE_PUBLIC_BUCKET"] = "pub"
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "set together or not at all") {
+		t.Fatalf("expected partial public credential refusal, got %v", err)
+	}
+	delete(m, "STORAGE_PUBLIC_BUCKET")
+	delete(m, "STORAGE_KYC_SECRET_ACCESS_KEY")
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "STORAGE_KYC_BUCKET") {
+		t.Fatalf("expected missing private credential refusal, got %v", err)
 	}
 }

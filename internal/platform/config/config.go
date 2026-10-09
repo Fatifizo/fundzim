@@ -46,17 +46,18 @@ func (s Secret) Reveal() string { return string(s) }
 
 // Config is the complete runtime configuration.
 type Config struct {
-	App       App
-	HTTP      HTTP
-	Database  Database
-	Redis     Redis
-	Storage   Storage
-	Log       Log
-	RateLimit RateLimit
-	Auth      Auth
-	Email     Email
-	SMS       SMS
-	Security  Security
+	App          App
+	HTTP         HTTP
+	Database     Database
+	Redis        Redis
+	Storage      Storage
+	Log          Log
+	RateLimit    RateLimit
+	Auth         Auth
+	Email        Email
+	SMS          SMS
+	Verification Verification
+	Security     Security
 }
 
 // Auth configures authentication and sessions (ADR-027, ADR-032, SECURITY §4–§6).
@@ -95,6 +96,16 @@ type Email struct {
 	From     string
 }
 
+// Verification configures document uploads and malware scanning (Stage 5, ADR-035).
+type Verification struct {
+	UploadMaxBytes    int64         // per-file cap for verification documents
+	UploadTTL         time.Duration // an UPLOADED object not completed within this is deleted
+	Scanner           string        // clamd | dev (dev is refused in production: it is not malware protection)
+	ClamAVAddr        string        // host:port of clamd (Scanner=clamd)
+	ScanTimeout       time.Duration
+	DocumentTicketTTL time.Duration // lifetime of a document access ticket
+}
+
 // SMS configures outbound SMS. Only the development provider exists (no real SMS provider is selected).
 type SMS struct {
 	Provider string // dev_mailpit | disabled
@@ -105,6 +116,11 @@ type Security struct {
 	FieldEncryptionProvider string // local (development/test only) | kms (not implemented yet)
 	FieldEncryptionKey      Secret // hex, 32 bytes, AES-256-GCM key for C3/C4 fields (TOTP secrets)
 	BlindIndexKey           Secret // hex, 32 bytes, HMAC key for tokens, OTP codes, recovery codes
+	KYCFieldKey             Secret // hex, 32 bytes, AES-256-GCM key for KYC identity data (kyc module only, ADR-035)
+	KYCBlindIndexKey        Secret // hex, 32 bytes, HMAC key for KYC blind indexes (ID numbers, account numbers)
+	ComplianceFieldKey      Secret // hex, 32 bytes, AES-256-GCM key for compliance notes
+	DocumentTicketKey       Secret // hex, 32 bytes, HMAC key for document access tickets
+	StorageSSEKey           Secret // hex, 32 bytes, optional: SSE-C master key for private objects (refused outside dev/test until KMS)
 }
 
 type App struct {
@@ -136,6 +152,8 @@ func (h HTTP) InternalAddr() string {
 type Database struct {
 	URL            Secret // contains credentials
 	MigrationURL   Secret // used only by `fundzimctl migrate`
+	KYCURL         Secret // role fundzim_kyc: kyc schema only (ADR-035)
+	ComplianceURL  Secret // role fundzim_compliance: compliance schema only (ADR-035)
 	MaxConns       int32
 	ConnectTimeout time.Duration
 }
@@ -330,10 +348,20 @@ func Load(get LookupFunc) (Config, error) {
 	c.Database = Database{
 		URL:            Secret(l.required("DATABASE_URL")),
 		MigrationURL:   Secret(l.str("DATABASE_MIGRATION_URL", "")),
+		KYCURL:         Secret(l.required("DATABASE_KYC_URL")),
+		ComplianceURL:  Secret(l.required("DATABASE_COMPLIANCE_URL")),
 		MaxConns:       int32(l.integer("DATABASE_MAX_CONNS", 20, 1, 500)),
 		ConnectTimeout: l.duration("DATABASE_CONNECT_TIMEOUT", 5*time.Second, 500*time.Millisecond, time.Minute),
 	}
 	checkDatabaseURL(l, "DATABASE_URL", c.Database.URL.Reveal(), env)
+	checkDatabaseURL(l, "DATABASE_KYC_URL", c.Database.KYCURL.Reveal(), env)
+	checkDatabaseURL(l, "DATABASE_COMPLIANCE_URL", c.Database.ComplianceURL.Reveal(), env)
+	if c.Database.KYCURL != "" && (c.Database.KYCURL == c.Database.URL || c.Database.KYCURL == c.Database.ComplianceURL) {
+		l.fail("DATABASE_KYC_URL must use its own role (fundzim_kyc), distinct from DATABASE_URL and DATABASE_COMPLIANCE_URL")
+	}
+	if c.Database.ComplianceURL != "" && c.Database.ComplianceURL == c.Database.URL {
+		l.fail("DATABASE_COMPLIANCE_URL must use its own role (fundzim_compliance), distinct from DATABASE_URL")
+	}
 	if c.Database.MigrationURL != "" {
 		checkDatabaseURL(l, "DATABASE_MIGRATION_URL", c.Database.MigrationURL.Reveal(), env)
 	}
@@ -369,18 +397,22 @@ func Load(get LookupFunc) (Config, error) {
 		} else if u.Scheme != "https" && !env.IsLocal() {
 			l.fail("STORAGE_ENDPOINT must use https outside development and test")
 		}
-		for name, cred := range map[string]StorageCredential{"PUBLIC": c.Storage.Public, "KYC": c.Storage.KYC, "EVIDENCE": c.Storage.Evidence} {
+		// The private credentials are always required. The public one may be omitted entirely by a process
+		// that never touches public media (the worker: least privilege), but never set partially.
+		for name, cred := range map[string]StorageCredential{"KYC": c.Storage.KYC, "EVIDENCE": c.Storage.Evidence} {
 			if !cred.configured() {
 				l.fail("STORAGE_%s_BUCKET, STORAGE_%s_ACCESS_KEY_ID and STORAGE_%s_SECRET_ACCESS_KEY are required when STORAGE_ENDPOINT is set", name, name, name)
 			}
 		}
+		if p := c.Storage.Public; !p.configured() && (p.Bucket != "" || p.AccessKeyID != "" || p.SecretAccessKey != "") {
+			l.fail("STORAGE_PUBLIC_BUCKET, STORAGE_PUBLIC_ACCESS_KEY_ID and STORAGE_PUBLIC_SECRET_ACCESS_KEY must be set together or not at all")
+		}
 		b := c.Storage
-		if b.Public.Bucket != "" && (b.Public.Bucket == b.KYC.Bucket || b.Public.Bucket == b.Evidence.Bucket || b.KYC.Bucket == b.Evidence.Bucket) {
+		if b.KYC.Bucket == b.Evidence.Bucket || (b.Public.Bucket != "" && (b.Public.Bucket == b.KYC.Bucket || b.Public.Bucket == b.Evidence.Bucket)) {
 			l.fail("STORAGE_PUBLIC_BUCKET, STORAGE_KYC_BUCKET and STORAGE_EVIDENCE_BUCKET must be three different buckets (I-26)")
 		}
-		ids := map[Secret]bool{b.Public.AccessKeyID: true, b.KYC.AccessKeyID: true, b.Evidence.AccessKeyID: true}
-		if b.Public.AccessKeyID != "" && len(ids) != 3 {
-			l.fail("the three STORAGE_*_ACCESS_KEY_ID credentials must all be different (I-19)")
+		if b.KYC.AccessKeyID == b.Evidence.AccessKeyID || (b.Public.AccessKeyID != "" && (b.Public.AccessKeyID == b.KYC.AccessKeyID || b.Public.AccessKeyID == b.Evidence.AccessKeyID)) {
+			l.fail("the STORAGE_*_ACCESS_KEY_ID credentials must all be different (I-19)")
 		}
 	} else if !env.IsLocal() {
 		l.fail("STORAGE_ENDPOINT is required outside development and test")
@@ -423,6 +455,7 @@ func Load(get LookupFunc) (Config, error) {
 	loadAuth(l, &c, env)
 	loadEmailSMS(l, &c, env)
 	loadSecurity(l, &c, env)
+	loadVerification(l, &c, env)
 
 	if len(l.problems) > 0 {
 		sort.Strings(l.problems)
@@ -579,6 +612,14 @@ func loadSecurity(l *loader, c *Config, env Env) {
 		FieldEncryptionProvider: l.str("FIELD_ENCRYPTION_PROVIDER", "local"),
 		FieldEncryptionKey:      Secret(l.str("FIELD_ENCRYPTION_LOCAL_KEY", "")),
 		BlindIndexKey:           Secret(l.str("BLIND_INDEX_KEY", "")),
+		KYCFieldKey:             Secret(l.str("KYC_FIELD_ENCRYPTION_LOCAL_KEY", "")),
+		KYCBlindIndexKey:        Secret(l.str("KYC_BLIND_INDEX_KEY", "")),
+		ComplianceFieldKey:      Secret(l.str("COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY", "")),
+		DocumentTicketKey:       Secret(l.str("DOCUMENT_TICKET_KEY", "")),
+		StorageSSEKey:           Secret(l.str("STORAGE_SSE_C_KEY", "")),
+	}
+	if s.StorageSSEKey != "" && !hex32(s.StorageSSEKey.Reveal()) {
+		l.fail("STORAGE_SSE_C_KEY must be 64 hex characters (32 bytes)")
 	}
 	switch s.FieldEncryptionProvider {
 	case "local":
@@ -599,6 +640,32 @@ func loadSecurity(l *loader, c *Config, env Env) {
 	if s.BlindIndexKey != "" && s.BlindIndexKey == s.FieldEncryptionKey {
 		l.fail("BLIND_INDEX_KEY and FIELD_ENCRYPTION_LOCAL_KEY must differ")
 	}
+	keys := []struct {
+		name string
+		v    Secret
+	}{{"FIELD_ENCRYPTION_LOCAL_KEY", s.FieldEncryptionKey}, {"BLIND_INDEX_KEY", s.BlindIndexKey},
+		{"KYC_FIELD_ENCRYPTION_LOCAL_KEY", s.KYCFieldKey}, {"KYC_BLIND_INDEX_KEY", s.KYCBlindIndexKey},
+		{"COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY", s.ComplianceFieldKey}, {"DOCUMENT_TICKET_KEY", s.DocumentTicketKey},
+		{"STORAGE_SSE_C_KEY", s.StorageSSEKey}}
+	seen := map[Secret]string{}
+	for _, k := range keys[2:6] {
+		local := k.name == "KYC_FIELD_ENCRYPTION_LOCAL_KEY" || k.name == "COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY"
+		if local && s.FieldEncryptionProvider != "local" {
+			continue // KMS-managed in production (Stage 18)
+		}
+		if !hex32(k.v.Reveal()) {
+			l.fail("%s must be 64 hex characters (32 bytes)", k.name)
+		}
+	}
+	for _, k := range keys {
+		if k.v == "" {
+			continue
+		}
+		if other, dup := seen[k.v]; dup {
+			l.fail("%s and %s must differ (one key per purpose)", k.name, other)
+		}
+		seen[k.v] = k.name
+	}
 	c.Security = s
 }
 
@@ -612,4 +679,28 @@ func hex32(v string) bool {
 		}
 	}
 	return true
+}
+
+func loadVerification(l *loader, c *Config, env Env) {
+	v := Verification{
+		UploadMaxBytes:    int64(l.integer("UPLOAD_MAX_BYTES", 10<<20, 1<<10, 50<<20)),
+		UploadTTL:         l.duration("UPLOAD_TTL", 15*time.Minute, time.Minute, 24*time.Hour),
+		Scanner:           l.str("MALWARE_SCANNER", "dev"),
+		ClamAVAddr:        l.str("CLAMAV_ADDR", ""),
+		ScanTimeout:       l.duration("MALWARE_SCAN_TIMEOUT", 60*time.Second, time.Second, 10*time.Minute),
+		DocumentTicketTTL: l.duration("DOCUMENT_TICKET_TTL", 60*time.Second, 10*time.Second, 10*time.Minute),
+	}
+	switch v.Scanner {
+	case "clamd":
+		if v.ClamAVAddr == "" {
+			l.fail("CLAMAV_ADDR is required when MALWARE_SCANNER=clamd")
+		}
+	case "dev":
+		if !env.IsLocal() {
+			l.fail("MALWARE_SCANNER=dev is refused outside development and test (it is not malware protection)")
+		}
+	default:
+		l.fail("MALWARE_SCANNER must be clamd or dev")
+	}
+	c.Verification = v
 }

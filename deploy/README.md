@@ -6,7 +6,7 @@ root.
 
 | Path | Purpose |
 |---|---|
-| `docker/api.Dockerfile` | API image (build context: repo root). Go 1.27.1 build, distroless `static-debian12:nonroot` runtime pinned by digest, uid 65532, binaries `api` and `fundzimctl`, health check via `fundzimctl healthcheck` |
+| `docker/api.Dockerfile` | API image (build context: repo root). Go 1.27.2 build (`golang:1.27.2-alpine3.24`), distroless `static-debian12:nonroot` runtime pinned by digest, uid 65532, binaries `api` and `fundzimctl`, health check via `fundzimctl healthcheck` |
 | `docker/web.Dockerfile` | Web image (build context: `apps/web`). Next.js standalone on `node:24.21.0-bookworm-slim`, runs as `node`, read-only app files, health check on `/healthz`; `API_BASE_URL` is read at runtime |
 | `docker/postgres/init/10-roles.sh` | Runs once on an empty Postgres volume: creates `fundzim_migrator` (database owner, not superuser) and the runtime roles with passwords from `.env` and role-level timeouts, creates the `fundzim` database |
 | `docker/garage/garage.toml` | Single-node Garage configuration (local only; S3 API on 3900, admin API 3903 not published) |

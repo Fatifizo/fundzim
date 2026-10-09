@@ -192,3 +192,23 @@ func Consume(ctx context.Context, tx pgx.Tx, consumer string, d Delivery) (first
 	}
 	return tag.RowsAffected() == 1, nil
 }
+
+// WriteGateway is Write for the restricted roles (fundzim_kyc, fundzim_compliance), which have no privilege
+// on app.outbox_events: it calls the SECURITY DEFINER gateway app.enqueue_outbox in the caller's transaction
+// (ADR-035). The gateway restricts event types by caller and rejects C3-looking payload keys.
+func WriteGateway(ctx context.Context, tx pgx.Tx, e Event) (string, error) {
+	payload, err := validate(e)
+	if err != nil {
+		return "", err
+	}
+	id := ids.New()
+	var corr *string
+	if e.CorrelationID != "" {
+		corr = &e.CorrelationID
+	}
+	if _, err := tx.Exec(ctx, `SELECT app.enqueue_outbox($1, $2, $3, $4, $5, $6, $7)`,
+		id, e.AggregateType, e.AggregateID, e.EventType, payload, corr, e.OccurredAt.UTC()); err != nil {
+		return "", fmt.Errorf("outbox: gateway write %s: %w", e.EventType, err)
+	}
+	return id, nil
+}

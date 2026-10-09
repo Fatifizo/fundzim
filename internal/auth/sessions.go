@@ -298,3 +298,20 @@ func userAgentSummary(ua string) string {
 	}
 	return ua
 }
+
+// StaffHasPermission reports whether an active staff account currently holds perm (role assignments and
+// active break-glass grants), for other modules' maker-checker eligibility checks.
+func (s *Service) StaffHasPermission(ctx context.Context, staffID, perm string) (bool, error) {
+	acct, err := users.ByID(ctx, s.Pool, staffID)
+	if errors.Is(err, users.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if acct.Kind != users.KindStaff || acct.Status != users.StatusActive || acct.IsSystem {
+		return false, nil
+	}
+	perms, err := s.staffPermissions(ctx, staffID, s.now())
+	return perms[perm], err
+}

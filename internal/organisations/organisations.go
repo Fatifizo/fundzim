@@ -759,3 +759,79 @@ func (s *Service) InvitationEmailConsumer(mail Mailer) func(ctx context.Context,
 				s.PublicURL+"/dashboard to accept or decline. The invitation expires in 7 days.\n\nIf you were not expecting this, you can ignore this email.")
 	}
 }
+
+// ---- public interface for other modules (kyc, beneficiaries, payouts, verification) ---------------------
+
+// MemberRole returns the caller's active organisation role (ORG_ADMIN, ORG_MEMBER) in an ACTIVE organisation,
+// or "" when the user is not an active member.
+func (s *Service) MemberRole(ctx context.Context, orgID, userID string) (string, error) {
+	m, err := s.member(ctx, s.Pool, orgID, userID, false)
+	if isOrgNotFound(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return m.Role, nil
+}
+
+// IsAdmin reports whether userID is an active ORG_ADMIN of orgID.
+func (s *Service) IsAdmin(ctx context.Context, orgID, userID string) (bool, error) {
+	r, err := s.MemberRole(ctx, orgID, userID)
+	return r == RoleAdmin, err
+}
+
+// Summary returns an organisation's display name, type and status (ErrNotFound-style 404 error if missing).
+func (s *Service) Summary(ctx context.Context, orgID string) (name, orgType, status string, err error) {
+	if !ids.Valid(orgID) {
+		return "", "", "", errOrgNotFound()
+	}
+	err = s.Pool.QueryRow(ctx, `SELECT display_name, org_type, status FROM app.organisations WHERE id = $1`, orgID).Scan(&name, &orgType, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", "", errOrgNotFound()
+	}
+	return name, orgType, status, err
+}
+
+// AdminIDs returns the user ids of the organisation's active ORG_ADMINs (notification recipients).
+func (s *Service) AdminIDs(ctx context.Context, orgID string) ([]string, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT user_id FROM app.organisation_members WHERE organisation_id = $1 AND status = 'ACTIVE'
+		AND organisation_role_id = md5('org_role:ORG_ADMIN')::uuid`, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// OrganisationsOf returns the ids of organisations where userID is an active member.
+func (s *Service) OrganisationsOf(ctx context.Context, userID string) ([]string, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT m.organisation_id FROM app.organisation_members m JOIN app.organisations o ON o.id = m.organisation_id
+		WHERE m.user_id = $1 AND m.status = 'ACTIVE' AND o.status = 'ACTIVE'`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+func isOrgNotFound(err error) bool {
+	var e *errs.Error
+	return errors.As(err, &e) && e.Code == "ORGANISATION_NOT_FOUND"
+}

@@ -30,6 +30,14 @@ var allowedImports = map[string][]string{
 	"organisations": {"platform", "audit", "users"},
 	"notifications": {"platform", "audit", "users"},
 	"auth":          {"platform", "audit", "users", "notifications"},
+	"storage":       {"platform", "audit"},
+	"risk":          {"platform", "audit"},
+	"kyc":           {"platform", "audit", "storage", "users", "organisations"},
+	"beneficiaries": {"platform", "audit", "users", "organisations", "kyc"},
+	"compliance":    {"platform", "audit", "users", "organisations", "kyc", "risk", "storage"},
+	"payouts":       {"platform", "audit", "users", "organisations", "kyc", "beneficiaries", "compliance", "risk", "storage"},
+	// orchestration layer (no tables; like `admin`, composes public services) — Stage 5, ADR-035
+	"verification": {"platform", "audit", "users", "organisations", "kyc", "beneficiaries", "payouts", "storage", "risk", "compliance"},
 }
 
 // ownedTables is design-baseline §5 (plus the Stage 4 additions recorded in docs/stage-4/implementation.md:
@@ -44,6 +52,18 @@ var ownedTables = map[string][]string{
 		"app.organisation_verifications"},
 	"audit":         {"audit.audit_events", "audit.security_audit_events", "audit.evidence_records", "audit.evidence_holds"},
 	"notifications": {},
+	"storage":       {"app.stored_objects", "app.upload_sessions"},
+	"kyc": {"kyc.verification_profiles", "kyc.kyb_organisations", "kyc.identities", "kyc.kyc_cases", "kyc.kyb_cases", "kyc.case_events",
+		"kyc.profile_events", "kyc.information_requests", "kyc.review_notes", "kyc.organisation_persons", "kyc.beneficial_owners",
+		"kyc.representative_authorities", "kyc.consents", "kyc.v_consents_current", "kyc.kyc_documents", "kyc.kyc_checks", "kyc.kyb_checks",
+		"kyc.kyc_decisions", "kyc.verification_policies"},
+	"risk": {"risk.limits", "risk.limit_change_requests", "risk.risk_signals", "risk.risk_assessments", "risk.risk_decisions"},
+	"compliance": {"compliance.compliance_cases", "compliance.compliance_case_events", "compliance.compliance_case_links",
+		"compliance.compliance_case_notes", "compliance.compliance_case_triggers", "compliance.case_number_seq"},
+	"beneficiaries": {"app.beneficiaries", "app.beneficiary_relationships", "app.beneficiary_events", "app.beneficiary_information_requests",
+		"app.beneficiary_verifications"},
+	"payouts":      {"app.payout_destinations", "app.payout_destination_checks", "app.payout_destination_events"},
+	"verification": {},
 }
 
 // moduleOf maps a repository-relative directory to its module ("" = not a constrained module).
@@ -61,10 +81,15 @@ func moduleOf(dir string) string {
 	return parts[1]
 }
 
+// sqlRE recognises SQL statements (not identifiers such as the audit action "kyc.case.updated").
+var sqlRE = regexp.MustCompile(`(?i)\b(SELECT\s|INSERT\s+INTO\s|UPDATE\s+[a-z_.]+\s+(SET|[a-z]+\s+SET)\s|DELETE\s+FROM\s|FROM\s+[a-z_]+\.[a-z_]+)`)
+
 var tableRE = regexp.MustCompile(`\b(app|audit|kyc|ledger|risk|compliance|recon)\.([a-z_][a-z0-9_]*)\b`)
 
 // functions in the app/audit schemas that any module may call (not tables)
-var sharedRoutines = map[string]bool{"audit.verify_chain": true}
+var sharedRoutines = map[string]bool{"audit.verify_chain": true,
+	// SECURITY DEFINER write gateways for the restricted pools (ADR-035)
+	"audit.append_event": true, "audit.record_evidence": true, "app.enqueue_outbox": true}
 
 type pkgFile struct {
 	module string
@@ -171,9 +196,7 @@ func TestModuleSQLOnlyTouchesOwnedTables(t *testing.T) {
 			if err != nil {
 				return true
 			}
-			upper := strings.ToUpper(s)
-			if !strings.Contains(upper, "SELECT") && !strings.Contains(upper, "INSERT") && !strings.Contains(upper, "UPDATE") &&
-				!strings.Contains(upper, "DELETE") && !strings.Contains(upper, " FROM ") {
+			if !sqlRE.MatchString(s) {
 				return true
 			}
 			for _, m := range tableRE.FindAllString(s, -1) {

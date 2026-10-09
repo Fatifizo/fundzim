@@ -172,7 +172,7 @@ func (b *browser) do(method, path string, body any, hdr ...string) apiResp {
 func (b *browser) expect(r apiResp, status int, code string) {
 	b.t.Helper()
 	if r.Status != status || (code != "" && r.Error.Code != code) {
-		b.t.Fatalf("want %d %s, got %d %s (%s)", status, code, r.Status, r.Error.Code, r.Data)
+		b.t.Fatalf("want %d %s, got %d %s %v (%s)", status, code, r.Status, r.Error.Code, r.Error.Details, r.Data)
 	}
 }
 

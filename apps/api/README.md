@@ -1,7 +1,7 @@
 # apps/api — Go entrypoints
 
 Wiring only; business logic lives in `internal/`. One Go module at the repository root
-(`github.com/Fatifizo/fundzim`, Go 1.27.1).
+(`github.com/Fatifizo/fundzim`, Go 1.27.1 language version, built with the go1.27.2 toolchain).
 
 | Command | Purpose |
 |---|---|
