@@ -515,6 +515,19 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 > Reviewers cannot act on their own verification, including through a linked personal account. No verification
 > vendor is integrated. Review: [stage-5/security-review.md](stage-5/security-review.md).
 
+## 21a. Campaign security (Stage 6, summary)
+
+> **Stage 6 as built:** campaign access is object-level (owner or organisation member to read, owner or ORG_ADMIN
+> to write; everyone else 404); PATCH needs `If-Match`; every transition is guarded in the database and audited;
+> self-review is refused in Go and by SECURITY DEFINER triggers that include linked staff ↔ personal accounts
+> (`app.actor_identities`); HIGH-tier approvals need a second approver with `campaign.decide.high`; compliance
+> restrictions are enforced at every gated action and fail closed, without disclosing reasons; content is plain text
+> (HTML, entities, script/data URLs and bidi/zero-width characters refused) and rendered escaped; campaign images are
+> scanned, decoded within pixel limits and re-encoded (metadata stripped) before they are served with nosniff and a
+> sandbox CSP — ClamAV does not detect payloads embedded in valid images, so the re-encode is the control; public
+> endpoints expose approved snapshots only and no private data. Full analysis:
+> [stage-6/campaign-security.md](stage-6/campaign-security.md).
+
 ## 22. Incident response outline
 
 Full runbooks in Stage 18. Outline:

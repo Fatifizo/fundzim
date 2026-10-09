@@ -449,6 +449,17 @@ setting.
 | ADR-013 – ADR-020 | Stage 1 regulatory and financial decisions (see [adr/README.md](adr/README.md)) |
 | ADR-021 – ADR-031 | Stage 2 system architecture decisions (see [adr/README.md](adr/README.md)) |
 
+> **Stage 6 as built (campaign engine; [ADR-036](adr/ADR-036-campaign-lifecycle-and-publication.md),
+> [ADR-037](adr/ADR-037-basic-verification-restrictions-and-staff-links.md)).** New module `campaigns` (app pool) with
+> subpackages `campaigns/media` and `campaigns/updates`; the core reaches media through an injected `MediaInfo`
+> interface and reads restrictions, age attestation and feature flags through adapters in `internal/app`. Allowed
+> imports: platform, audit, users, organisations, kyc, beneficiaries, compliance, risk, storage. Compliance owns the
+> new `subject_restrictions` projection (events `compliance.restriction_applied/_lifted`); kyc owns
+> `age_attestations`; auth owns `staff_link_requests`; `app.actor_identities()` is a shared routine. Worker consumers:
+> restriction enforcement (suspends affected campaigns), campaign notifications, media scan/processing and a 30 s
+> media sweep, BASIC re-evaluation and registration attestations. Campaigns hold no financial state. Details:
+> [stage-6/implementation.md](stage-6/implementation.md).
+
 ## 14. Decisions deferred
 
 | Decision | Stage |

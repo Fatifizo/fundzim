@@ -46,8 +46,9 @@ local development; no key rotation yet (an object under a different key id canno
 key (development/test only) objects are stored unencrypted and the row says so
 (`none/garage-at-rest-unencrypted-dev`); `STORAGE_SSE_C_KEY` is required everywhere else.
 
-Credentials are scoped per bucket class (public media, KYC, evidence: three different buckets and keys); the
-worker holds only the KYC and evidence credentials.
+Credentials are scoped per bucket class (public media, KYC, evidence: three different buckets and keys). Until
+Stage 6 the worker held only the KYC and evidence credentials; since Stage 6 (stream M, campaign media) it also holds
+the public-media credential, because it scans the public-media quarantine and stores re-encoded image derivatives.
 
 ## 4. Access control
 

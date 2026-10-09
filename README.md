@@ -11,19 +11,19 @@ providers.
 FundZim is **not** an investment, lending, equity or rewards platform, and it is not a wallet or a payment
 provider.
 
-> **Status: Stage 5 — KYC, KYB & Verification (complete; awaiting acceptance).** On top of Stage 4
-> (registration, email + password login with TOTP MFA, sessions, staff with maker-checker roles,
-> organisations, worker and outbox), the repository now has individual identity verification (KYC),
-> organisation verification (KYB), beneficiary verification (including minors with two reviewers), payout
-> **destination** verification, a secure document pipeline (quarantine, ClamAV scanning, encrypted private
-> storage, short-lived audited download tickets), a staff review engine, compliance cases and a risk-signal
-> foundation, with dashboards for users, organisations and reviewers. There are **no campaigns, donations,
-> payments or payouts** yet, and no real money is handled: no payout destination is ever eligible for a
-> payout. No identity, sanctions-screening or account-lookup provider is integrated (screening is recorded as
-> not performed). Production start-up is refused until KMS key management exists (Stage 18). Nothing here is
-> a claim of regulatory approval or compliance — open legal questions are tracked in
-> [`docs/COMPLIANCE.md`](docs/COMPLIANCE.md). What exists in detail:
-> [`docs/stage-5/implementation.md`](docs/stage-5/implementation.md).
+> **Status: Stage 6 — Campaign Engine & Fundraising Lifecycle (complete; awaiting acceptance).** On top of
+> Stages 4–5 (identity, staff roles, organisations, KYC/KYB, beneficiary and payout-destination verification,
+> secure documents, compliance cases and risk signals), the repository now has campaigns: an age declaration and
+> BASIC verification, drafts with exact money goals (USD; ZWG unavailable until its minor units are verified), a
+> guided creation wizard, beneficiary association with change control, campaign images (ClamAV scan + re-encoding
+> that strips metadata), a review engine with conflict-of-interest checks (including linked staff accounts) and four
+> eyes for high-risk categories, controlled publication, public campaign pages and search, owner updates with
+> moderation, pause/suspend/complete/archive, and enforcement of compliance restrictions. There are **no donations,
+> payments, payouts or totals**: every campaign page says "Donations are not yet available." Raising funds for
+> someone else as an individual stays disabled pending legal advice (LR-046 – LR-048). GitHub Actions now runs on
+> stage branches. Production start-up is refused until KMS key management exists (Stage 18). Nothing here is a claim
+> of regulatory approval or compliance — open legal questions are tracked in [`docs/COMPLIANCE.md`](docs/COMPLIANCE.md).
+> What exists in detail: [`docs/stage-6/implementation.md`](docs/stage-6/implementation.md).
 
 ## Stack
 
@@ -202,11 +202,12 @@ Reset deletes the Postgres and Garage volumes (database, roles, objects). `.env`
 | [DATA-CLASSIFICATION](docs/DATA-CLASSIFICATION.md) · [PRIVACY](docs/PRIVACY.md) | Data classes, handling, privacy architecture |
 | [OBSERVABILITY](docs/OBSERVABILITY.md) · [FRONTEND](docs/FRONTEND.md) · [TESTING](docs/TESTING.md) · [DEVELOPMENT](docs/DEVELOPMENT.md) | Operating, building and testing standards |
 | [ADRs](docs/adr/README.md) | Architecture Decision Records |
+| [Stage 6 implementation](docs/stage-6/implementation.md) · [lifecycle](docs/stage-6/campaign-lifecycle.md) · [eligibility](docs/stage-6/campaign-eligibility.md) · [moderation](docs/stage-6/campaign-moderation.md) · [media](docs/stage-6/campaign-media.md) · [security](docs/stage-6/campaign-security.md) · [testing](docs/stage-6/testing.md) · [known issues](docs/stage-6/known-issues.md) | Campaign engine, age attestation, restriction enforcement, staff links |
 | [Stage 5 implementation](docs/stage-5/implementation.md) · [security review](docs/stage-5/security-review.md) · [testing](docs/stage-5/testing.md) · [known issues](docs/stage-5/known-issues.md) | KYC, KYB, beneficiaries, payout destinations, documents, review engine, compliance cases, risk foundation |
 | [Stage 4 implementation](docs/stage-4/implementation.md) · [security review](docs/stage-4/security-review.md) · [testing](docs/stage-4/testing.md) | Authentication, sessions, RBAC, MFA, organisations, worker, distributed limits |
 | [Stage 3 implementation](docs/stage-3/implementation.md) · [security review](docs/stage-3/security-review.md) | What Stage 3 built, deviations, endpoint status, security baseline findings |
 | [Configuration](docs/development/configuration.md) · [Migrations](docs/development/migrations.md) · [Seed data](docs/development/seed-data.md) | Environment variables and refusals, migration guide, development data rules |
-| [Stage handovers](docs/stage-handover/STAGE-5-TO-STAGE-6.md) | Stage 5 → 6 (campaign engine); earlier handovers in the same folder |
+| [Stage handovers](docs/stage-handover/STAGE-6-TO-STAGE-7.md) | Stage 6 → 7 (public fundraising experience); earlier handovers in the same folder |
 
 ## Licence
 

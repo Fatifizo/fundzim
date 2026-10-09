@@ -206,6 +206,15 @@ each release from Stage 7.
 
 ---
 
+## 10a. Stage 6 pages (as built)
+
+Creator dashboard and 8-step wizard (`/dashboard/campaigns…`), age declaration (`/dashboard/verification/age`),
+staff link confirmation, staff review and update moderation (`/admin/campaigns…`), and public `/campaigns` and
+`/campaigns/[slug]`. User text is always rendered escaped (never `dangerouslySetInnerHTML`, never auto-linked);
+money is formatted from `amount_minor` with integer/string arithmetic; the public page shows a disabled "Donations
+are not yet available." button and no totals. Details: `apps/web/README.md`; contracts:
+[stage-6/interface-contracts.md](stage-6/interface-contracts.md).
+
 ## 11. Testing (see [TESTING.md](TESTING.md))
 
 - Vitest + React Testing Library for components; axe checks in component tests.

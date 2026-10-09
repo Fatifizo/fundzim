@@ -241,6 +241,23 @@ Notes on ordering:
 
 ## Stage 6 — Campaign Engine
 
+> **Status: implemented (awaiting acceptance).** Built per [ADR-036](adr/ADR-036-campaign-lifecycle-and-publication.md)
+> and [ADR-037](adr/ADR-037-basic-verification-restrictions-and-staff-links.md): first the Stage 5 remediation (age
+> attestation and BASIC_VERIFIED, compliance restriction projection and enforcement, staff ↔ personal account links,
+> the CI trigger fix), then categories, a versioned campaign policy, drafts with exact money goals, beneficiary
+> association with change control, the lifecycle state machine (Stage 2 names plus CHANGES_REQUESTED, PAUSED,
+> ARCHIVED) guarded in the database, approved version snapshots with re-review of live edits, eligibility per action,
+> a review engine with DB-enforced conflict checks and four eyes for the HIGH tier, controlled publication, public
+> pages and search, owner updates with moderation, and the public media pipeline (scan, re-encode, metadata strip),
+> with creator, staff and public UI. Summary: [stage-6/implementation.md](stage-6/implementation.md); evidence:
+> [stage-6/testing.md](stage-6/testing.md); review: [stage-6/campaign-security.md](stage-6/campaign-security.md); open
+> items: [stage-6/known-issues.md](stage-6/known-issues.md); handover:
+> [stage-handover/STAGE-6-TO-STAGE-7.md](stage-handover/STAGE-6-TO-STAGE-7.md). **Not met / deviations:** fundraising-
+> authority records are not built (campaigns record a declared `fundraising_basis`; individual-for-others stays
+> disabled); no end dates; FROZEN is reserved for the ledger stages; rich text is replaced by plain text; the
+> BASIC device-risk input is dropped; ZWG goals are unavailable (LR-043); exhaustive transition tests compare the Go
+> and SQL edge lists rather than exercising every forbidden pair through the API.
+
 - **Objective:** Campaign creation, editing, review and the full lifecycle state machine.
 - **Dependencies:** Stages 4, 5.
 - **Stage 1 inputs:** [campaign-approval-policy.md](compliance/campaign-approval-policy.md). The campaign engine

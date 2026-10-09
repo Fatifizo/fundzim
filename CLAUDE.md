@@ -15,16 +15,17 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
-**Stage 5 — KYC, KYB, Beneficiary & Payout-Destination Verification, Documents & Compliance Cases
-(complete; awaiting acceptance).** Stage 0 is complete; Stages 1–4 are complete but their acceptance has not
-been recorded (`docs/stage-5/prerequisite-assessment.md`). What Stage 5 built: `docs/stage-5/implementation.md`
-(workflows, document security, compliance/risk, security review, testing and known issues alongside it);
-Stage 6 starts from `docs/stage-handover/STAGE-5-TO-STAGE-6.md`. GitHub Actions is not running for the
-repository (KI-S5-01 / KI-S4-01) — never report CI as green without seeing a run. Stage 5 verifies; it never
-pays: no payment processing, no payouts (`eligible_for_payout` is always false), no live identity, screening or
-account-lookup provider (screening is recorded as NOT_PERFORMED; the payout dev mock is non-production and can
-never confirm ownership). A documentation-stage PASS is never permission to operate a live crowdfunding
-business or to move real money.
+**Stage 6 — Campaign Engine, Fundraising Lifecycle, Moderation, Eligibility & Publishing (complete; awaiting
+acceptance).** Stage 0 is complete; Stages 1–5 are complete but their acceptance has not been recorded
+(`docs/stage-6/prerequisite-assessment.md`). What Stage 6 built: `docs/stage-6/implementation.md` (lifecycle,
+eligibility, moderation, media, security review, testing and known issues alongside it); Stage 7 starts from
+`docs/stage-handover/STAGE-6-TO-STAGE-7.md`. GitHub Actions now runs on `main` and `stage-**` branches (the old
+`stage-*` filter never matched `stage-N/name`) — still never report CI as green without seeing the run. Campaigns hold
+**no financial state**: no donations, totals, balances, payments or payouts; the goal is `amount_minor` + currency and
+the public page shows a disabled "Donations are not yet available." button. Gate on `kyc.Service.Level`, enforce
+compliance restrictions through `compliance.Service.Restrictions`, and check self-review with
+`kyc.Service.ActorIdentities` / `app.actor_identities()` (linked staff accounts). A documentation-stage PASS is never
+permission to operate a live crowdfunding business or to move real money.
 Do not start a stage until the user explicitly asks for it. Do not implement work belonging to a later stage
 "while you're there". Each stage ends with a completion report (template in `docs/DEVELOPMENT.md`) and then
 STOPS.
@@ -35,7 +36,7 @@ STOPS.
 |---|---|
 | `apps/web/` | Next.js 16 (App Router, TypeScript, Tailwind v4). **Presentation only.** Has its own `AGENTS.md` — read it: this Next.js version differs from older training data; consult `apps/web/node_modules/next/dist/docs/` before writing Next.js code. |
 | `apps/api/` | Go entrypoints: `cmd/api` (HTTP API), `cmd/worker` (River jobs, outbox relay/delivery), `cmd/fundzimctl` (config check, migrations, `bootstrap-admins`, healthcheck). |
-| `internal/` | Go code: `app/` (composition root), `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, crypto, authz, clock, ratelimit, idempotency, outbox, jobs, version) and domain modules `users`, `auth`, `organisations`, `audit`, `notifications`, `storage` (documents: quarantine, ClamAV scanning, SSE-C, download tickets), `kyc` (KYC/KYB cases, identities, review engine, verification policy — `fundzim_kyc` pool only), `beneficiaries`, `payouts` (payout **destinations** only), `risk` (signals, versioned model, routing decisions), `compliance` (compliance cases — `fundzim_compliance` pool only) and `verification` (HTTP orchestration; owns no tables). `archtest/` enforces the module import graph and table ownership — register every new module there. One Go module (`github.com/Fatifizo/fundzim`) rooted at repo root. |
+| `internal/` | Go code: `app/` (composition root), `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, crypto, authz, clock, ratelimit, idempotency, outbox, jobs, version) and domain modules `users`, `auth`, `organisations`, `audit`, `notifications`, `storage` (documents: quarantine, ClamAV scanning, SSE-C, download tickets), `kyc` (KYC/KYB cases, identities, review engine, verification policy — `fundzim_kyc` pool only), `beneficiaries`, `payouts` (payout **destinations** only), `risk` (signals, versioned model, routing decisions), `compliance` (compliance cases and the subject-restriction projection — `fundzim_compliance` pool only), `verification` (HTTP orchestration; owns no tables) and `campaigns` (core: lifecycle, eligibility, review, publication, public read/search; subpackages `campaigns/media` — image upload, scan, re-encode, serving — and `campaigns/updates` — owner updates and moderation; no financial state). `archtest/` enforces the module import graph and table ownership — register every new module there. One Go module (`github.com/Fatifizo/fundzim`) rooted at repo root. |
 | `migrations/` | Executable goose SQL migrations, embedded and run by `fundzimctl migrate` as `fundzim_migrator` (`docs/development/migrations.md`). |
 | `docs/` | Specifications. `docs/adr/` holds Architecture Decision Records. |
 | `api/openapi/` | OpenAPI 3.1 contract for `/api/v1` (source of truth, ADR-026). |

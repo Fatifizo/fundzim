@@ -80,3 +80,5 @@ Bug fixes, refactors inside one module, and routine dependency upgrades do not n
 | [ADR-033](ADR-033-per-request-nonce-csp.md) | Per-request nonce CSP; Next.js `cacheComponents` disabled | Accepted (Stage 4) |
 | [ADR-034](ADR-034-verification-state-models.md) | Verification state models and vocabularies (brief statuses canonical; amendments 2026-10-09) | Accepted (Stage 5) |
 | [ADR-035](ADR-035-restricted-data-access-and-documents.md) | Restricted data access: kyc/compliance roles, gateways, document storage and tickets | Accepted (Stage 5) |
+| [ADR-036](ADR-036-campaign-lifecycle-and-publication.md) | Campaign lifecycle (Stage 2 names + CHANGES_REQUESTED, PAUSED, ARCHIVED; FROZEN reserved), approved versions, controlled publication, restriction-driven suspension | Accepted (Stage 6) |
+| [ADR-037](ADR-037-basic-verification-restrictions-and-staff-links.md) | Age attestation and BASIC_VERIFIED, compliance restriction projection and enforcement, staff ↔ personal account links | Accepted (Stage 6) |
