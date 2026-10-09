@@ -4,15 +4,20 @@
 > towards. Almost nothing here is implemented yet. Where a choice is deferred, the stage that decides it is
 > named. Significant changes require an ADR (see [`docs/adr/`](adr/)).
 
-> **Stage 4 implementation status.** In code: Go binaries `api`, `worker` (River on PostgreSQL, outbox relay
-> and delivery, purge jobs) and `fundzimctl` (config, migrations, health, `bootstrap-admins`); `internal/app`
-> (composition root), `internal/platform` (config, logging, errors, HTTP middleware incl. trusted client IP,
-> distributed rate limiting, idempotency, health, db, cache, storage, metrics, money, ids, crypto, outbox,
-> jobs, authz, clock) and the first domain modules `users`, `auth`, `organisations`, `audit`,
-> `notifications`; identity, RBAC and organisation migrations; the Next.js app with authentication pages,
-> protected routes and a nonce CSP. Module boundaries are enforced by `internal/archtest`. **Not yet built:**
-> every financial module (payments, ledger, payouts, fees), KYC/KYB, campaigns, tracing export. Details:
-> [stage-4/implementation.md](stage-4/implementation.md) (Stage 3: [stage-3/implementation.md](stage-3/implementation.md)).
+> **Stage 5 implementation status.** In code: Go binaries `api`, `worker` (River on PostgreSQL, outbox relay
+> and delivery, purge, scan, rescan and verification-sweep jobs) and `fundzimctl`; `internal/app` (composition
+> root), `internal/platform` (config, logging, errors, HTTP middleware incl. trusted client IP and per-route
+> body-limit exemptions, distributed rate limiting, idempotency, health, db, cache, storage incl. SSE-C,
+> metrics, money, ids, crypto, outbox, jobs, authz, clock, verifcase) and the domain modules `users`, `auth`,
+> `organisations`, `audit`, `notifications`, `storage`, `kyc`, `beneficiaries`, `payouts` (destinations
+> only), `risk`, `compliance` and the orchestration package `verification`. The `kyc` and `compliance`
+> modules run on their own restricted database roles and pools and reach audit/outbox only through
+> SECURITY DEFINER gateways (ADR-035). ClamAV runs as a compose service. The Next.js app has authentication,
+> verification, organisation and staff review pages. Module boundaries are enforced by `internal/archtest`.
+> **Not yet built:** campaigns and every financial module (payments, ledger, payouts, fees), identity /
+> screening / account-lookup provider integrations, tracing export. Details:
+> [stage-5/implementation.md](stage-5/implementation.md) (Stage 4: [stage-4/implementation.md](stage-4/implementation.md);
+> Stage 3: [stage-3/implementation.md](stage-3/implementation.md)).
 
 Related: [MONEY.md](MONEY.md) · [LEDGER.md](LEDGER.md) · [PAYMENTS.md](PAYMENTS.md) · [SECURITY.md](SECURITY.md) ·
 [THREAT-MODEL.md](THREAT-MODEL.md) · [DATABASE.md](DATABASE.md) · [AUDIT.md](AUDIT.md) ·

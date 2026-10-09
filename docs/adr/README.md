@@ -78,3 +78,5 @@ Bug fixes, refactors inside one module, and routine dependency upgrades do not n
 | [ADR-031](ADR-031-data-access-and-http-stack.md) | Data access and HTTP stack (pgx + sqlc, stdlib router) | Accepted (Stage 2) |
 | [ADR-032](ADR-032-email-password-totp-authentication.md) | Email + password primary login with TOTP MFA (amends ADR-027) | Accepted (Stage 4) |
 | [ADR-033](ADR-033-per-request-nonce-csp.md) | Per-request nonce CSP; Next.js `cacheComponents` disabled | Accepted (Stage 4) |
+| [ADR-034](ADR-034-verification-state-models.md) | Verification state models and vocabularies (brief statuses canonical; amendments 2026-10-09) | Accepted (Stage 5) |
+| [ADR-035](ADR-035-restricted-data-access-and-documents.md) | Restricted data access: kyc/compliance roles, gateways, document storage and tickets | Accepted (Stage 5) |

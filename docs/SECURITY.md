@@ -455,6 +455,17 @@ Two upload classes with different treatment ([ARCHITECTURE.md](ARCHITECTURE.md),
 Uploads never reach application servers’ local disks in production. The scanning worker has read access to
 quarantine and write access to the promoted prefix only.
 
+> **Stage 5 as built (private documents; [ADR-035](adr/ADR-035-restricted-data-access-and-documents.md),
+> [stage-5/document-security.md](stage-5/document-security.md)):** uploads go **through the API** (multipart,
+> fields first) instead of presigned PUTs, so the subject is authorised before any byte is stored and the
+> content is size-capped, hashed and magic-byte sniffed in one pass; the user filename is **not** kept at all.
+> Bytes land in the private bucket's `quarantine/` prefix (SSE-C encrypted), are scanned by ClamAV in the
+> worker, and only CLEAN objects are promoted and can be opened; scanner errors become FAILED_SCAN and are
+> retried, never treated as clean. Access is a 60-second HMAC ticket bound to the object, user **and session**,
+> re-authorised and audited at download and served as an attachment with `nosniff` and `CSP: sandbox` — no
+> presigned URL ever reaches a browser. PDF active-content checks are not implemented (PDFs are never rendered
+> inline). Campaign-media uploads (public class) arrive with campaigns (Stage 6/7).
+
 ## 19. Dependency, supply-chain and container security
 
 - Lockfiles committed (`package-lock.json`, `go.sum`). Exact versions for runtime dependencies.
@@ -494,6 +505,15 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 - verification vendor (if any) receives data under contract; vendor choice and cross-border transfer are
   LEGAL_REVIEW_REQUIRED (LR-011, LR-033; [COMPLIANCE.md](COMPLIANCE.md), [PRIVACY.md](PRIVACY.md));
 - KYC media is never used for training, analytics or marketing.
+
+> **Stage 5 as built:** `kyc` schema owned by the `fundzim_kyc` role with its own pool; audit, evidence and
+> outbox only through SECURITY DEFINER gateways with per-role prefix allow-lists. Identity numbers, KYC drafts,
+> addresses and reviewer notes are AES-256-GCM encrypted (row/field AAD) with KYC-specific local keys and an
+> HMAC blind index; KMS is still Stage 18. Document access needs `kyc.document.view`, a fresh step-up **and
+> case assignment**; the full identity number needs `kyc.identity_number.reveal` (COMPLIANCE), step-up and a
+> justification; both are security-audited. SUPPORT, ADMIN and SUPER_ADMIN hold none of these permissions.
+> Reviewers cannot act on their own verification, including through a linked personal account. No verification
+> vendor is integrated. Review: [stage-5/security-review.md](stage-5/security-review.md).
 
 ## 22. Incident response outline
 

@@ -16,7 +16,7 @@ Related: [CLAUDE.md](../CLAUDE.md) (binding engineering rules) · [ARCHITECTURE.
 | Tool | Version | Needed for | Status on the current dev machine (2026-10-08) |
 |---|---|---|---|
 | Git | any recent | everything | Installed; identity configured (`Fatifizo`) |
-| Go | **1.27.1** (`go.mod`) | API, `fundzimctl`, Go tests | Installed **user-local** at `~/.local/go` from the official tarball (checksum verified). Add `export PATH="$HOME/.local/go/bin:$PATH"` to your shell profile |
+| Go | **1.27.2** toolchain (`go.mod`: `go 1.27.1` + `toolchain go1.27.2`; 1.27.2 fixes GO-2026-6617) | API, `fundzimctl`, Go tests | Installed **user-local** at `~/.local/go` from the official tarball (checksum verified). Add `export PATH="$HOME/.local/go/bin:$PATH"` to your shell profile |
 | Node.js via nvm | **24.21.0** | `apps/web`, OpenAPI lint, SQL draft validation | Installed (nvm, default alias `lts/*`) |
 | npm | 11.x (ships with Node 24) | `apps/web` | Installed |
 | Docker Engine + Compose v2 | recent | local stack, integration tests, image builds | Installed. **Docker-group access for the dev user is being set up by the owner:** `sudo usermod -aG docker $USER`, then log out and in again — or, in the current session, prefix commands with `sg docker -c "…"` |
@@ -31,7 +31,7 @@ Shell setup for a new terminal:
 ```bash
 export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"   # already in ~/.bashrc
 nvm use default                                   # node v24.21.0
-export PATH="$HOME/.local/go/bin:$PATH"          # go1.27.1
+export PATH="$HOME/.local/go/bin:$PATH"          # go1.27.2 (an older local Go downloads the go1.27.2 toolchain automatically unless GOTOOLCHAIN=local)
 ```
 
 ---

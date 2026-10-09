@@ -203,6 +203,23 @@ Notes on ordering:
 
 ## Stage 5 — KYC & Verification
 
+> **Status: implemented (awaiting acceptance).** Built per [ADR-034](adr/ADR-034-verification-state-models.md)
+> and [ADR-035](adr/ADR-035-restricted-data-access-and-documents.md): KYC and KYB cases with a staff review
+> engine (assignment, information requests, four eyes, escalation, suspension/revocation, expiry), beneficiary
+> and payout-destination verification, a versioned maker-checker verification policy, the `kyc` schema on its
+> own role, field encryption with blind index, private documents with quarantine, ClamAV scanning, SSE-C and
+> session-bound audited download tickets, compliance cases and a risk-signal foundation, plus user,
+> organisation and reviewer UI. Summary: [stage-5/implementation.md](stage-5/implementation.md); evidence:
+> [stage-5/testing.md](stage-5/testing.md); review: [stage-5/security-review.md](stage-5/security-review.md);
+> open items: [stage-5/known-issues.md](stage-5/known-issues.md); handover:
+> [stage-handover/STAGE-5-TO-STAGE-6.md](stage-handover/STAGE-5-TO-STAGE-6.md). **Not met / deviations:**
+> no verification vendor or sanctions-screening provider was selected, so there is no vendor adapter and
+> screening is recorded as not performed (approvals carry that condition); ownership lookup for payout
+> destinations has only a non-production mock; `BASIC_VERIFIED` is never granted (no age attestation or
+> device-risk input — KI-S5-17); uploads go through the API with session-bound tickets instead of presigned
+> URLs; key rotation is not implemented (KMS is Stage 18); PVO fundraising-authority records are not built;
+> **CI green** is not met (Actions not running).
+
 - **Objective:** Individual and organisation verification workflows with segregated, protected storage.
 - **Dependencies:** Stage 4; Stage 1 (KYC thresholds, vendor/legal constraints).
 - **Stage 1 inputs:** [kyc-architecture.md](compliance/kyc-architecture.md) (levels + status overlay,

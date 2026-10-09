@@ -11,16 +11,19 @@ providers.
 FundZim is **not** an investment, lending, equity or rewards platform, and it is not a wallet or a payment
 provider.
 
-> **Status: Stage 4 — Authentication & Identity (complete; awaiting acceptance).** On top of the Stage 3
-> platform foundation, the repository now has user registration and email verification, email + password
-> login with optional TOTP MFA, server-side sessions with CSRF protection, password reset, phone verification
-> (development SMS provider), staff accounts with mandatory TOTP created by invitation, maker-checker role
-> grants, organisations with membership isolation, a background worker with a transactional outbox, and
-> distributed rate limiting. There are **no campaigns, donations, payments, payouts or KYC features** yet,
-> and no real money is handled. Production start-up is refused until KMS key management exists (Stage 18).
-> Nothing here is a claim of regulatory approval or compliance — open legal questions are tracked in
+> **Status: Stage 5 — KYC, KYB & Verification (complete; awaiting acceptance).** On top of Stage 4
+> (registration, email + password login with TOTP MFA, sessions, staff with maker-checker roles,
+> organisations, worker and outbox), the repository now has individual identity verification (KYC),
+> organisation verification (KYB), beneficiary verification (including minors with two reviewers), payout
+> **destination** verification, a secure document pipeline (quarantine, ClamAV scanning, encrypted private
+> storage, short-lived audited download tickets), a staff review engine, compliance cases and a risk-signal
+> foundation, with dashboards for users, organisations and reviewers. There are **no campaigns, donations,
+> payments or payouts** yet, and no real money is handled: no payout destination is ever eligible for a
+> payout. No identity, sanctions-screening or account-lookup provider is integrated (screening is recorded as
+> not performed). Production start-up is refused until KMS key management exists (Stage 18). Nothing here is
+> a claim of regulatory approval or compliance — open legal questions are tracked in
 > [`docs/COMPLIANCE.md`](docs/COMPLIANCE.md). What exists in detail:
-> [`docs/stage-4/implementation.md`](docs/stage-4/implementation.md).
+> [`docs/stage-5/implementation.md`](docs/stage-5/implementation.md).
 
 ## Stack
 
@@ -54,7 +57,7 @@ docs/                  Specifications, roadmap, ADRs, stage reports and handover
 
 | Tool | Version | Notes |
 |---|---|---|
-| Go | 1.27.1 (`go.mod`) | Official tarball. On the current dev machine it is user-local in `~/.local/go`: `export PATH="$HOME/.local/go/bin:$PATH"` |
+| Go | 1.27.2 toolchain (`go.mod`: `go 1.27.1`, `toolchain go1.27.2`) | Official tarball. On the current dev machine it is user-local in `~/.local/go`: `export PATH="$HOME/.local/go/bin:$PATH"` |
 | Node.js | 24.21.0 (via nvm) | `nvm use default`; npm 11 ships with it |
 | Docker Engine + Compose v2 | recent | Your user must be able to run `docker` without sudo: `sudo usermod -aG docker $USER`, then log out and in again (or run commands through `sg docker -c "…"` in the current session) |
 | GNU make | 4.x, **optional** | `sudo apt install make`. Every target has a plain-command equivalent below |
@@ -116,6 +119,9 @@ npm --prefix apps/web run dev        # web on http://localhost:3000
 ```
 
 (Stop any containerised `fundzim-api`/`fundzim-web` first, or they will hold ports 8080/3000.)
+Verification documents are scanned by the **worker** with ClamAV (`MALWARE_SCANNER=clamd`, `CLAMAV_ADDR=127.0.0.1:3310`
+in `.env`): also run `docker compose up -d fundzim-clamav` (the first start downloads signatures for several
+minutes) and `go run ./apps/api/cmd/worker`, otherwise uploads stay unscanned and cannot be submitted.
 
 ## Migrations
 
@@ -196,10 +202,11 @@ Reset deletes the Postgres and Garage volumes (database, roles, objects). `.env`
 | [DATA-CLASSIFICATION](docs/DATA-CLASSIFICATION.md) · [PRIVACY](docs/PRIVACY.md) | Data classes, handling, privacy architecture |
 | [OBSERVABILITY](docs/OBSERVABILITY.md) · [FRONTEND](docs/FRONTEND.md) · [TESTING](docs/TESTING.md) · [DEVELOPMENT](docs/DEVELOPMENT.md) | Operating, building and testing standards |
 | [ADRs](docs/adr/README.md) | Architecture Decision Records |
+| [Stage 5 implementation](docs/stage-5/implementation.md) · [security review](docs/stage-5/security-review.md) · [testing](docs/stage-5/testing.md) · [known issues](docs/stage-5/known-issues.md) | KYC, KYB, beneficiaries, payout destinations, documents, review engine, compliance cases, risk foundation |
 | [Stage 4 implementation](docs/stage-4/implementation.md) · [security review](docs/stage-4/security-review.md) · [testing](docs/stage-4/testing.md) | Authentication, sessions, RBAC, MFA, organisations, worker, distributed limits |
 | [Stage 3 implementation](docs/stage-3/implementation.md) · [security review](docs/stage-3/security-review.md) | What Stage 3 built, deviations, endpoint status, security baseline findings |
 | [Configuration](docs/development/configuration.md) · [Migrations](docs/development/migrations.md) · [Seed data](docs/development/seed-data.md) | Environment variables and refusals, migration guide, development data rules |
-| [Stage handovers](docs/stage-handover/STAGE-4-TO-STAGE-5.md) | Stage 4 → 5 (KYC and verification); earlier handovers in the same folder |
+| [Stage handovers](docs/stage-handover/STAGE-5-TO-STAGE-6.md) | Stage 5 → 6 (campaign engine); earlier handovers in the same folder |
 
 ## Licence
 
