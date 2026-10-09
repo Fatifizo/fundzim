@@ -174,7 +174,7 @@ STOPS.
 ## Commands
 
 `make help` lists targets; `make` is optional and **not installed** on the current dev machine — every target's
-plain command is in `docs/DEVELOPMENT.md` §3. Go (toolchain 1.27.2, `go.mod` `toolchain go1.27.2`) is user-local (`export PATH="$HOME/.local/go/bin:$PATH"`);
+plain command is in `docs/DEVELOPMENT.md` §3. Go 1.27.2 (`go.mod` `go 1.27.2`) is user-local (`export PATH="$HOME/.local/go/bin:$PATH"`);
 Node 24.21.0 via nvm. Docker needs docker-group access (`sudo usermod -aG docker $USER`, re-login, or `sg docker`).
 
 ```bash

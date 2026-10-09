@@ -57,7 +57,7 @@ docs/                  Specifications, roadmap, ADRs, stage reports and handover
 
 | Tool | Version | Notes |
 |---|---|---|
-| Go | 1.27.2 toolchain (`go.mod`: `go 1.27.1`, `toolchain go1.27.2`) | Official tarball. On the current dev machine it is user-local in `~/.local/go`: `export PATH="$HOME/.local/go/bin:$PATH"` |
+| Go | 1.27.2 (`go.mod`: `go 1.27.2`) | Official tarball. On the current dev machine it is user-local in `~/.local/go`: `export PATH="$HOME/.local/go/bin:$PATH"` |
 | Node.js | 24.21.0 (via nvm) | `nvm use default`; npm 11 ships with it |
 | Docker Engine + Compose v2 | recent | Your user must be able to run `docker` without sudo: `sudo usermod -aG docker $USER`, then log out and in again (or run commands through `sg docker -c "…"` in the current session) |
 | GNU make | 4.x, **optional** | `sudo apt install make`. Every target has a plain-command equivalent below |
