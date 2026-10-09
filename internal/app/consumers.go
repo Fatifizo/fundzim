@@ -29,11 +29,15 @@ func registerConsumers(ctx context.Context, d *WorkerDeps, reg *outbox.Registry)
 		return fmt.Errorf("verification consumers: %w", err)
 	}
 	registerVerificationConsumers(reg, d.Verification, d.DB, o, mailAdapter{d.Email}, d.Clock)
+	registerRemediationConsumers(reg, d.Verification)                             // Stage 6 stream R (ADR-037)
+	registerCampaignConsumers(reg, d.Verification, d.DB, o, mailAdapter{d.Email}) // Stage 6 campaigns (ADR-036)
+	registerCampaignMediaConsumers(reg, d.Verification)                           // Stage 6 stream M
 	return nil
 }
 
-// privateBlobs builds a storage client with only the private-bucket credentials (the worker scans and
-// promotes private documents; it never holds the public-media credential).
+// privateBlobs builds the worker's storage client: the private-bucket credentials (it scans and promotes private
+// documents) and, when configured, the public-media credential (Stage 6 stream M: it scans campaign images and
+// stores their re-encoded derivatives). Config enforces the STORAGE_PUBLIC_* trio all-or-nothing.
 func privateBlobs(cfg config.Config) (*pstorage.Client, error) {
 	if !cfg.Storage.Enabled() {
 		return nil, nil
@@ -46,6 +50,7 @@ func privateBlobs(cfg config.Config) (*pstorage.Client, error) {
 	}
 	add(pstorage.PrivateIdentityDocuments, cfg.Storage.KYC)
 	add(pstorage.PrivateComplianceDocuments, cfg.Storage.Evidence)
+	add(pstorage.PublicCampaignMedia, cfg.Storage.Public) // Stage 6 stream M
 	return pstorage.New(pstorage.Options{Endpoint: cfg.Storage.Endpoint, Region: cfg.Storage.Region, ForcePathStyle: cfg.Storage.ForcePathStyle,
 		Credentials: creds})
 }

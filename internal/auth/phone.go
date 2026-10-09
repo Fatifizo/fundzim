@@ -164,7 +164,10 @@ func (s *Service) PhoneVerifyConfirm(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		ok = true
-		return audit.Record(ctx, tx, audit.Event{Stream: audit.Security, Action: "auth.phone.verified", TargetType: "user", TargetID: p.UserID})
+		if err := audit.Record(ctx, tx, audit.Event{Stream: audit.Security, Action: "auth.phone.verified", TargetType: "user", TargetID: p.UserID}); err != nil {
+			return err
+		}
+		return s.emit(ctx, tx, EvPhoneVerified, p.UserID, map[string]any{"user_id": p.UserID})
 	})
 	if err != nil {
 		httpx.WriteError(w, r, s.Logger, err)

@@ -30,6 +30,12 @@ const (
 	EvEmailChangeRequested       = "identity.email_change_requested"
 	EvStaffInvited               = "identity.staff_invited"
 	EvAccountSuspended           = "identity.account_suspended"
+	// Stage 6 (ADR-037): facts the kyc module re-evaluates BASIC_VERIFIED on, and the registration attestation
+	// (auth cannot import kyc; a kyc consumer records it). Payloads carry user_id only.
+	EvEmailVerified           = "identity.email_verified"
+	EvPhoneVerified           = "identity.phone_verified"
+	EvAccountReactivated      = "identity.account_reactivated"
+	EvRegistrationAgeAttested = "identity.registration_age_attested"
 )
 
 func (s *Service) tx(ctx context.Context, fn func(ctx context.Context, tx pgx.Tx) error) error {
@@ -94,6 +100,9 @@ type registerReq struct {
 	Password    string `json:"password"`
 	DisplayName string `json:"display_name"`
 	AcceptTerms bool   `json:"accept_terms"`
+	// AgeAttestation is the optional "I am at least the minimum age" box (ADR-037 §1). Only true is recorded
+	// (source REGISTRATION, by the kyc module from the outbox); absent or false records nothing.
+	AgeAttestation *bool `json:"age_attestation,omitempty"`
 }
 
 // Register creates an unverified account and queues the verification email. The response is identical
@@ -160,6 +169,11 @@ func (s *Service) Register(w http.ResponseWriter, r *http.Request) {
 		if err := audit.Record(ctx, tx, audit.Event{Stream: audit.Security, Action: "auth.user.registered", ActorType: "user",
 			ActorID: userID, TargetType: "user", TargetID: userID, Metadata: map[string]any{"terms_version": users.CurrentTermsVersion}}); err != nil {
 			return err
+		}
+		if req.AgeAttestation != nil && *req.AgeAttestation {
+			if err := s.emit(ctx, tx, EvRegistrationAgeAttested, userID, map[string]any{"user_id": userID}); err != nil {
+				return err
+			}
 		}
 		return s.emit(ctx, tx, EvEmailVerificationRequested, userID, map[string]any{"user_id": userID, "email_id": emailID})
 	})
@@ -231,8 +245,11 @@ func (s *Service) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		} else if err := users.MarkEmailVerified(ctx, tx, userID, *emailID, now); err != nil {
 			return err
 		}
-		return audit.Record(ctx, tx, audit.Event{Stream: audit.Security, Action: action, ActorType: "user", ActorID: userID,
-			TargetType: "user", TargetID: userID})
+		if err := audit.Record(ctx, tx, audit.Event{Stream: audit.Security, Action: action, ActorType: "user", ActorID: userID,
+			TargetType: "user", TargetID: userID}); err != nil {
+			return err
+		}
+		return s.emit(ctx, tx, EvEmailVerified, userID, map[string]any{"user_id": userID})
 	})
 	if err != nil {
 		if e := errs.As(err); e.Code == "TOKEN_INVALID" {
@@ -373,6 +390,9 @@ func (s *Service) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		}
 		if emailID != nil {
 			if err := users.MarkEmailVerified(ctx, tx, userID, *emailID, s.now()); err != nil && !errors.Is(err, users.ErrNotFound) {
+				return err
+			}
+			if err := s.emit(ctx, tx, EvEmailVerified, userID, map[string]any{"user_id": userID}); err != nil {
 				return err
 			}
 		}

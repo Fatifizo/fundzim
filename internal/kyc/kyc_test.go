@@ -7,8 +7,17 @@ import (
 	"testing"
 )
 
-// seededRules extracts the v1 policy JSON from the migration, so the shipped baseline is what is validated.
+// seededRules is the currently shipped policy: v1 from 20261009150200 plus the `basic` section that
+// 20261009170000 adds in v2 (ADR-037), so what the migrations approve is what is validated.
 func seededRules(t *testing.T) PolicyRules {
+	t.Helper()
+	r := seededV1Rules(t)
+	r.Basic = seededBasic(t)
+	return r
+}
+
+// seededV1Rules extracts the v1 policy JSON from the migration.
+func seededV1Rules(t *testing.T) PolicyRules {
 	t.Helper()
 	raw, err := os.ReadFile("../../migrations/20261009150200_kyc.sql")
 	if err != nil {

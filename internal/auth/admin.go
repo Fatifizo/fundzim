@@ -646,7 +646,7 @@ func (s *Service) changeStatus(w http.ResponseWriter, r *http.Request, kind stri
 		if suspend {
 			return s.emit(ctx, tx, EvAccountSuspended, target, map[string]any{"user_id": target})
 		}
-		return nil
+		return s.emit(ctx, tx, EvAccountReactivated, target, map[string]any{"user_id": target})
 	})
 	if err != nil {
 		httpx.WriteError(w, r, s.Logger, err)

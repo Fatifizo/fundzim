@@ -31,6 +31,9 @@ type eventPayload struct {
 	EmailID string `json:"email_id"`
 	Change  string `json:"change"`
 	Via     string `json:"via"`
+	// staff links (ADR-037 §4)
+	RequestID      string `json:"request_id"`
+	PersonalUserID string `json:"personal_user_id"`
 }
 
 // Consumers lists the auth module's outbox consumers; internal/app registers them with the outbox
@@ -89,6 +92,22 @@ func (s *Service) Consumers(mail Mailer) []Consumer {
 			return s.sendTokenEmail(ctx, mail, p.UserID, p.EmailID, "STAFF_INVITATION", s.Cfg.StaffInvitationTTL, "/staff/accept-invitation",
 				"Your FundZim staff account invitation",
 				"You have been invited to a FundZim staff account. Set your password and two-step verification within %s:\n\n%s\n\nIf you were not expecting this, ignore this email and tell the FundZim security team.")
+		})},
+		{"identity.send_staff_link_email", EvStaffLinkRequested, h(func(ctx context.Context, p eventPayload) error {
+			return s.sendStaffLinkEmail(ctx, mail, p.RequestID)
+		})},
+		{"identity.send_staff_link_confirmed_notice", EvStaffLinkConfirmed, h(func(ctx context.Context, p eventPayload) error {
+			if err := s.sendNotice(ctx, mail, p.UserID, "Your FundZim staff account is now linked",
+				"Your staff account was linked to your personal FundZim account. You will not be able to review or decide anything "+
+					"that concerns that personal account. Links cannot be removed.\n\nIf you did not do this, contact the FundZim security team now."); err != nil {
+				return err
+			}
+			if !ids.Valid(p.PersonalUserID) {
+				return nil
+			}
+			return s.sendNotice(ctx, mail, p.PersonalUserID, "Your FundZim account is now linked to a staff account",
+				"Your personal FundZim account was linked to a FundZim staff account at your confirmation. Links cannot be removed.\n\n"+
+					"If you did not do this, reset your password at "+s.link("/forgot-password", "")+" and contact support.")
 		})},
 		{"identity.send_account_suspended_notice", EvAccountSuspended, h(func(ctx context.Context, p eventPayload) error {
 			return s.sendNotice(ctx, mail, p.UserID, "Your FundZim account has been suspended",

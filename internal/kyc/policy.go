@@ -49,7 +49,30 @@ type PolicyRules struct {
 		Provider *string `json:"provider"`
 		Status   string  `json:"status"`
 	} `json:"screening"`
+	// Basic holds the BASIC_VERIFIED rules (ADR-037 §2; policy v2 onwards). Nil in v1: BASIC_VERIFIED is then
+	// never granted (fail closed).
+	Basic *BasicRules `json:"basic,omitempty"`
 }
+
+// BASIC_VERIFIED conditions (ADR-037 §2). Every one of them is required; a policy cannot drop one (a change to
+// the conditions needs an ADR, not a policy edit).
+const (
+	BasicEmailVerified = "EMAIL_VERIFIED"
+	BasicPhoneVerified = "PHONE_VERIFIED"
+	BasicAgeAttested   = "AGE_ATTESTED"
+	BasicAccountActive = "ACCOUNT_ACTIVE"
+)
+
+var basicConditions = []string{BasicEmailVerified, BasicPhoneVerified, BasicAgeAttested, BasicAccountActive}
+
+// BasicRules is the policy's `basic` section.
+type BasicRules struct {
+	Requires []string `json:"requires"`
+	// AgeStatementVersion identifies the age statement text users currently attest to.
+	AgeStatementVersion string `json:"age_statement_version"`
+}
+
+var statementVersionRe = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{0,63}$`)
 
 // Policy is an approved policy version.
 type Policy struct {
@@ -109,6 +132,25 @@ func (r PolicyRules) Validate() error {
 	}
 	if r.AdultAge < 1 || r.AdultAge > 30 {
 		problems = append(problems, "adult_age missing or out of range")
+	}
+	if r.Basic == nil {
+		problems = append(problems, "basic missing")
+	} else {
+		have := map[string]bool{}
+		for _, c := range r.Basic.Requires {
+			have[c] = true
+		}
+		for _, c := range basicConditions {
+			if !have[c] {
+				problems = append(problems, "basic.requires must include "+c)
+			}
+		}
+		if len(have) != len(basicConditions) {
+			problems = append(problems, "basic.requires has unknown conditions")
+		}
+		if !statementVersionRe.MatchString(r.Basic.AgeStatementVersion) {
+			problems = append(problems, "basic.age_statement_version missing or malformed")
+		}
 	}
 	if r.InformationRequestExpiryDays < 1 || r.InformationRequestExpiryDays > 365 {
 		problems = append(problems, "information_request_expiry_days out of range")

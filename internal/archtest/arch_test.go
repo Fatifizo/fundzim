@@ -38,6 +38,8 @@ var allowedImports = map[string][]string{
 	"payouts":       {"platform", "audit", "users", "organisations", "kyc", "beneficiaries", "compliance", "risk", "storage"},
 	// orchestration layer (no tables; like `admin`, composes public services) — Stage 5, ADR-035
 	"verification": {"platform", "audit", "users", "organisations", "kyc", "beneficiaries", "payouts", "storage", "risk", "compliance"},
+	// Stage 6 campaign engine (interface-contracts §1): core, media and updates packages
+	"campaigns": {"platform", "audit", "users", "organisations", "kyc", "beneficiaries", "compliance", "risk", "storage"},
 }
 
 // ownedTables is design-baseline §5 (plus the Stage 4 additions recorded in docs/stage-4/implementation.md:
@@ -47,7 +49,8 @@ var ownedTables = map[string][]string{
 	"auth": {"app.authentication_identities", "app.password_credentials", "app.otp_challenges", "app.sessions", "app.mfa_methods",
 		"app.recovery_codes", "app.roles", "app.permissions", "app.role_permissions", "app.role_assignments",
 		"app.role_assignment_requests", "app.break_glass_grants", "app.staff_conflict_declarations", "app.security_events",
-		"app.auth_tokens", "app.mfa_login_challenges", "app.session_events"},
+		"app.auth_tokens", "app.mfa_login_challenges", "app.session_events",
+		"app.staff_link_requests"},
 	"organisations": {"app.organisations", "app.organisation_roles", "app.organisation_members", "app.organisation_invitations",
 		"app.organisation_verifications"},
 	"audit":         {"audit.audit_events", "audit.security_audit_events", "audit.evidence_records", "audit.evidence_holds"},
@@ -56,14 +59,19 @@ var ownedTables = map[string][]string{
 	"kyc": {"kyc.verification_profiles", "kyc.kyb_organisations", "kyc.identities", "kyc.kyc_cases", "kyc.kyb_cases", "kyc.case_events",
 		"kyc.profile_events", "kyc.information_requests", "kyc.review_notes", "kyc.organisation_persons", "kyc.beneficial_owners",
 		"kyc.representative_authorities", "kyc.consents", "kyc.v_consents_current", "kyc.kyc_documents", "kyc.kyc_checks", "kyc.kyb_checks",
-		"kyc.kyc_decisions", "kyc.verification_policies"},
+		"kyc.kyc_decisions", "kyc.verification_policies", "kyc.age_attestations"},
 	"risk": {"risk.limits", "risk.limit_change_requests", "risk.risk_signals", "risk.risk_assessments", "risk.risk_decisions"},
 	"compliance": {"compliance.compliance_cases", "compliance.compliance_case_events", "compliance.compliance_case_links",
-		"compliance.compliance_case_notes", "compliance.compliance_case_triggers", "compliance.case_number_seq"},
+		"compliance.compliance_case_notes", "compliance.compliance_case_triggers", "compliance.case_number_seq",
+		"compliance.subject_restrictions"},
 	"beneficiaries": {"app.beneficiaries", "app.beneficiary_relationships", "app.beneficiary_events", "app.beneficiary_information_requests",
 		"app.beneficiary_verifications"},
 	"payouts":      {"app.payout_destinations", "app.payout_destination_checks", "app.payout_destination_events"},
 	"verification": {},
+	// Stage 6 (interface-contracts §1): core (lead), campaign_media (stream M), campaign updates (stream U)
+	"campaigns": {"app.campaign_categories", "app.campaign_policies", "app.campaigns", "app.campaign_goals", "app.campaign_versions",
+		"app.campaign_beneficiaries", "app.campaign_reviews", "app.campaign_status_history", "app.campaign_eligibility_evaluations",
+		"app.campaign_media", "app.campaign_media_events", "app.campaign_updates", "app.campaign_update_events"},
 }
 
 // moduleOf maps a repository-relative directory to its module ("" = not a constrained module).
@@ -89,7 +97,9 @@ var tableRE = regexp.MustCompile(`\b(app|audit|kyc|ledger|risk|compliance|recon)
 // functions in the app/audit schemas that any module may call (not tables)
 var sharedRoutines = map[string]bool{"audit.verify_chain": true,
 	// SECURITY DEFINER write gateways for the restricted pools (ADR-035)
-	"audit.append_event": true, "audit.record_evidence": true, "app.enqueue_outbox": true}
+	"audit.append_event": true, "audit.record_evidence": true, "app.enqueue_outbox": true,
+	// identity resolution for self-decision checks (ADR-037 §4; read-only SECURITY DEFINER)
+	"app.actor_identities": true}
 
 type pkgFile struct {
 	module string

@@ -345,3 +345,43 @@ func SetKYCMirror(ctx context.Context, q interface {
 		WHERE id = $1 AND (kyc_mirror_updated_at IS NULL OR kyc_mirror_updated_at <= $4)`, userID, level, status, at)
 	return err
 }
+
+// StaffForPersonal returns the staff account linked to a personal account ("" when none).
+func StaffForPersonal(ctx context.Context, q Querier, personalID string) (string, error) {
+	var id string
+	err := q.QueryRow(ctx, `SELECT id FROM app.users WHERE staff_personal_user_id = $1`, personalID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	return id, err
+}
+
+// Errors of LinkStaffPersonal.
+var (
+	ErrStaffAlreadyLinked    = errors.New("users: staff account already linked to a personal account")
+	ErrPersonalAlreadyLinked = errors.New("users: personal account already linked to a staff account")
+)
+
+// LinkStaffPersonal records that staffID and personalID are the same person (ADR-037 §4). A link is set once
+// and never changed or removed by the application (also enforced by trg_users_staff_link_guard).
+func LinkStaffPersonal(ctx context.Context, tx pgx.Tx, staffID, personalID string) error {
+	if _, err := tx.Exec(ctx, `SAVEPOINT link_staff`); err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx, `UPDATE app.users SET staff_personal_user_id = $2 WHERE id = $1 AND account_kind = 'STAFF'
+		AND staff_personal_user_id IS NULL AND EXISTS (SELECT 1 FROM app.users p WHERE p.id = $2 AND p.account_kind = 'USER')`, staffID, personalID)
+	if err != nil {
+		_, _ = tx.Exec(ctx, `ROLLBACK TO SAVEPOINT link_staff`)
+		if db.IsUniqueViolation(err, "uq_users_staff_personal_user_id") {
+			return ErrPersonalAlreadyLinked
+		}
+		return err
+	}
+	if _, err := tx.Exec(ctx, `RELEASE SAVEPOINT link_staff`); err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrStaffAlreadyLinked
+	}
+	return nil
+}

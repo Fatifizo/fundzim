@@ -34,6 +34,8 @@ type verifStaff struct {
 	adminA, adminB        staffCred
 	rev1, rev2, support   staffCred
 	compliance, linkedRev staffCred
+	campRev1, campRev2    staffCred // Stage 6: REVIEWER (campaign.review / decide / publish)
+	compliance2           staffCred // second COMPLIANCE officer (maker-checker)
 }
 
 var (
@@ -87,11 +89,34 @@ func staffFixture(t *testing.T, s *itServer) *verifStaff {
 		f.support = inviteStaff(t, s, a, b, "Support Agent", "SUPPORT")
 		f.compliance = inviteStaff(t, s, a, b, "Compliance Officer", "COMPLIANCE")
 		f.linkedRev = inviteStaff(t, s, a, b, "Linked Reviewer", "KYC_REVIEWER")
+		f.campRev1 = inviteStaff(t, s, a, b, "Campaign Reviewer One", "REVIEWER")
+		f.campRev2 = inviteStaff(t, s, a, b, "Campaign Reviewer Two", "REVIEWER")
+		f.compliance2 = inviteStaff(t, s, a, b, "Compliance Officer Two", "COMPLIANCE")
 		vStaff = f
 		ok = true
 	})
 	if vStaff == nil {
 		t.Fatal(vStaffErr)
+	}
+	// TestIdentityRBACStaffMakerChecker resets super admins (bootstrap ceremony): re-bootstrap the fixture
+	// admins if they were revoked since (the other fixture staff keep their roles).
+	var active bool
+	if err := pool(t, os.Getenv("DATABASE_MIGRATION_URL")).QueryRow(ctx(t), `SELECT EXISTS (SELECT 1 FROM app.role_assignments
+		WHERE user_id = $1 AND revoked_at IS NULL AND role_id = md5('role:SUPER_ADMIN')::uuid)`, vStaff.adminA.id).Scan(&active); err != nil {
+		t.Fatal(err)
+	}
+	if !active {
+		resetSuperAdmins(t)
+		a, b := staffCred{email: uniqueEmail("vsa-a")}, staffCred{email: uniqueEmail("vsa-b")}
+		got, err := s.d.Auth.BootstrapSuperAdmins(ctx(t), auth.BootstrapAdmin{Email: a.email, DisplayName: "Verif Admin A"},
+			auth.BootstrapAdmin{Email: b.email, DisplayName: "Verif Admin B"}, "stage 6 verification integration fixture (re-bootstrap)")
+		if err != nil {
+			t.Fatal(err)
+		}
+		a.id, b.id = got[0], got[1]
+		a.secret = acceptStaffInvitation(t, s, a.email)
+		b.secret = acceptStaffInvitation(t, s, b.email)
+		vStaff.adminA, vStaff.adminB = a, b
 	}
 	return vStaff
 }

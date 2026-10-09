@@ -14,6 +14,7 @@ import (
 
 	"github.com/Fatifizo/fundzim/internal/auth"
 	"github.com/Fatifizo/fundzim/internal/beneficiaries"
+	"github.com/Fatifizo/fundzim/internal/campaigns"
 	"github.com/Fatifizo/fundzim/internal/compliance"
 	"github.com/Fatifizo/fundzim/internal/kyc"
 	"github.com/Fatifizo/fundzim/internal/organisations"
@@ -65,6 +66,11 @@ type VerificationModules struct {
 	Risk                    *risk.Service
 	Compliance              *compliance.Service
 	HTTP                    *verification.Service
+	Campaigns               *campaigns.Service    // Stage 6 (internal/app/campaigns.go)
+	CampaignMedia           *CampaignMediaService // Stage 6 stream M (internal/app/campaign_media.go)
+
+	// Stage 6 stream U (internal/app/campaign_updates.go)
+	CampaignUpdates *CampaignUpdatesService
 }
 
 // Close closes the restricted pools.
@@ -188,12 +194,17 @@ func NewVerificationModules(ctx context.Context, d VerificationDeps) (*Verificat
 	if d.Auth != nil {
 		m.HTTP.StaffCan = d.Auth.StaffHasPermission
 	}
+	m.Campaigns = newCampaigns(m, d)
+	m.CampaignMedia = newCampaignMedia(m, d) // Stage 6 stream M
+	// Stage 6 stream U
+	m.CampaignUpdates = newCampaignUpdates(m, d)
 	return m, nil
 }
 
 // uploadExemptions lets the document upload route exceed the global JSON body limit (S stream).
 func uploadExemptions(cfg config.Config) []httpx.BodyLimitExemption {
-	return []httpx.BodyLimitExemption{{Pattern: "POST /api/v1/verification/documents", Max: cfg.Verification.UploadMaxBytes + 64<<10}}
+	return append([]httpx.BodyLimitExemption{{Pattern: "POST /api/v1/verification/documents", Max: cfg.Verification.UploadMaxBytes + 64<<10}},
+		campaignMediaExemptions(cfg)...) // Stage 6 stream M
 }
 
 // registerVerificationRoutes registers the Stage 5 routes (contract §7). Object-level authorisation is in the

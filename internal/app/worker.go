@@ -110,6 +110,7 @@ func (d *WorkerDeps) buildRiver() error {
 		river.AddWorker(workers, &VerificationSweepWorker{M: d.Verification, Logger: d.Logger})
 		periodic = append(periodic, storage.PeriodicJobs()...)
 		periodic = append(periodic, verificationPeriodic()...)
+		periodic = append(periodic, campaignMediaJobs(workers, d.Verification)...) // Stage 6 stream M
 	}
 	client, err := jobs.NewWorkerClient(jobs.WorkerConfig{
 		Pool: d.DB, Logger: d.Logger, Metrics: d.JobMetrics, Workers: workers,

@@ -80,12 +80,13 @@ const (
 var (
 	CaseTypes = map[string]bool{"KYC_REVIEW": true, "KYB_REVIEW": true, "BENEFICIARY_REVIEW": true, "PAYOUT_DESTINATION_REVIEW": true,
 		"RISK_REVIEW": true, "SANCTIONS": true, "PEP_EDD": true, "FRAUD_CAMPAIGN": true, "ACCOUNT_TAKEOVER": true, "AML_MONITORING": true,
-		"PAYOUT_REVIEW": true, "FUNDRAISING_AUTHORITY": true, "REGULATOR_REQUEST": true, "OTHER": true}
+		"PAYOUT_REVIEW": true, "FUNDRAISING_AUTHORITY": true, "REGULATOR_REQUEST": true, "OTHER": true,
+		"CAMPAIGN_REVIEW": true}
 	Severities = map[string]int{"S3": 1, "S2": 2, "S1": 3} // higher = more severe
 	// party subjects (PRIMARY_SUBJECT / RELATED_SUBJECT) and related objects (RELATED_OBJECT)
 	PartyTypes  = map[string]bool{"USER": true, "ORGANISATION": true, "BENEFICIARY": true, "PAYOUT_DESTINATION": true, "CAMPAIGN": true}
 	ObjectTypes = map[string]bool{"KYC_CASE": true, "KYB_CASE": true, "RISK_DECISION": true, "RISK_ASSESSMENT": true, "PAYMENT": true,
-		"PAYOUT": true}
+		"PAYOUT": true, "CAMPAIGN_REVIEW": true}
 )
 
 // Confidentiality levels.

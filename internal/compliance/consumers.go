@@ -20,6 +20,7 @@ const (
 	EvKYCCaseEscalated          = "kyc.case_escalated"
 	EvBeneficiaryEscalated      = "beneficiaries.verification_escalated"
 	EvRiskEscalationRecommended = "risk.escalation_recommended"
+	EvCampaignReviewEscalated   = "campaigns.review_escalated"
 	// ConsumerOpenCase is the consumer name (dedupe key in compliance.compliance_case_triggers). Never rename.
 	ConsumerOpenCase = "compliance.open_case"
 )
@@ -50,6 +51,11 @@ type escalationPayload struct {
 	AssessmentID  string `json:"assessment_id"`
 	DecisionID    string `json:"decision_id"`
 	Rating        string `json:"rating"`
+	// campaigns.review_escalated
+	CampaignID          string `json:"campaign_id"`
+	OwnerUserID         string `json:"owner_user_id"`
+	OwnerOrganisationID string `json:"owner_organisation_id"`
+	ReviewID            string `json:"review_id"`
 }
 
 func partyType(t string) (string, bool) {
@@ -126,6 +132,24 @@ func TriggerFromEvent(eventType string, raw json.RawMessage) (Trigger, error) {
 			Links: []LinkInput{subject, {SubjectType: "RISK_DECISION", SubjectID: p.DecisionID, Role: "RELATED_OBJECT"},
 				{SubjectType: "RISK_ASSESSMENT", SubjectID: p.AssessmentID, Role: "RELATED_OBJECT"}},
 			Anchors: []LinkInput{subject}}, nil
+	case EvCampaignReviewEscalated:
+		// the campaign is the primary subject (a restriction applies to it); the owner is a related subject
+		if !ids.Valid(p.CampaignID) || !ids.Valid(p.ReviewID) {
+			return bad("campaign_id and review_id are required")
+		}
+		var owner LinkInput
+		switch {
+		case ids.Valid(p.OwnerUserID) && p.OwnerOrganisationID == "":
+			owner = LinkInput{SubjectType: "USER", SubjectID: p.OwnerUserID, Role: "RELATED_SUBJECT"}
+		case ids.Valid(p.OwnerOrganisationID) && p.OwnerUserID == "":
+			owner = LinkInput{SubjectType: "ORGANISATION", SubjectID: p.OwnerOrganisationID, Role: "RELATED_SUBJECT"}
+		default:
+			return bad("exactly one of owner_user_id and owner_organisation_id is required")
+		}
+		campaign := LinkInput{SubjectType: "CAMPAIGN", SubjectID: p.CampaignID, Role: "PRIMARY_SUBJECT"}
+		review := LinkInput{SubjectType: "CAMPAIGN_REVIEW", SubjectID: p.ReviewID, Role: "RELATED_OBJECT"}
+		return Trigger{CaseType: "CAMPAIGN_REVIEW", Severity: "S2", Source: "CAMPAIGN_ESCALATION", ReasonCode: reasonOr("CAMPAIGN_REVIEW_ESCALATED"),
+			Links: []LinkInput{campaign, owner, review}, Anchors: []LinkInput{campaign}}, nil
 	}
 	return bad("unsupported event type")
 }
@@ -140,7 +164,7 @@ type Consumer struct {
 // case of the same subject, once per event.
 func (s *Service) Consumers() []Consumer {
 	var out []Consumer
-	for _, ev := range []string{EvKYCCaseEscalated, EvBeneficiaryEscalated, EvRiskEscalationRecommended} {
+	for _, ev := range []string{EvKYCCaseEscalated, EvBeneficiaryEscalated, EvRiskEscalationRecommended, EvCampaignReviewEscalated} {
 		out = append(out, Consumer{Name: ConsumerOpenCase, EventType: ev, Handle: s.HandleEscalation})
 	}
 	return out

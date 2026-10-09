@@ -744,14 +744,19 @@ func (s *Service) Resolve(ctx context.Context, op Op) (Case, error) {
 			payload: map[string]any{"decision": op.Decision, "resolution_status": status},
 			md:      map[string]any{"decision": op.Decision, "resolution_status": status}}
 		if status == ResolutionApproved {
-			ch.after = s.emitResolved(op.Decision)
+			ch.after = s.emitResolved(op.Actor, op.Decision)
 		}
 		return ch, nil
 	})
 }
 
-func (s *Service) emitResolved(decision string) func(ctx context.Context, tx pgx.Tx, c caseRow, v int) error {
-	return func(ctx context.Context, tx pgx.Tx, c caseRow, _ int) error {
+// emitResolved runs when a resolution becomes APPROVED: it maintains the case's restrictions (ADR-037 §3) and
+// emits compliance.case_resolved, in the approving transaction.
+func (s *Service) emitResolved(actor Actor, decision string) func(ctx context.Context, tx pgx.Tx, c caseRow, v int) error {
+	return func(ctx context.Context, tx pgx.Tx, c caseRow, v int) error {
+		if err := s.syncRestrictions(ctx, tx, actor, c.ID, decision, v); err != nil {
+			return err
+		}
 		links, err := s.currentLinks(ctx, tx, c.ID)
 		if err != nil {
 			return err
@@ -777,7 +782,7 @@ func (s *Service) ApproveResolution(ctx context.Context, op Op) (Case, error) {
 		return change{evType: "RESOLUTION_APPROVED", reason: deref(c.decisionReason), action: "compliance.case.resolution_approved",
 			set:     map[string]any{"resolution_status": ResolutionApproved, "approved_by": op.Actor.ID, "approved_at": s.now()},
 			payload: map[string]any{"decision": decision, "decided_by": deref(c.decidedBy)},
-			md:      map[string]any{"decision": decision}, after: s.emitResolved(decision)}, nil
+			md:      map[string]any{"decision": decision}, after: s.emitResolved(op.Actor, decision)}, nil
 	})
 }
 
