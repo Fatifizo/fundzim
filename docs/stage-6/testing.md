@@ -10,14 +10,14 @@
 
 | Suite | Command | Result |
 |---|---|---|
-| Go unit + architecture | `go test -count=1 ./apps/api/... ./internal/... ./migrations/...` | pass (final count: see completion report) |
+| Go unit + architecture | `go test -count=1 ./apps/api/... ./internal/... ./migrations/...` | final run: **194 top-level tests passed, 0 failed** (with `-race`, in the golang:1.27.2 container) |
 | Race detector | `-race` is not runnable locally (no cgo); run in the `golang:1.27.2` container: `docker run … golang:1.27.2 go test -race …` | found a real data race in a notifications test helper (fixed, F-S6-02); the GitHub Actions `-race` unit job then passed |
-| Integration | `set -a; . ./.env; set +a; FUNDZIM_IT_PERF=1 FUNDZIM_IT_API_URL=… FUNDZIM_IT_WEB_URL=… go test -tags integration -count=1 -timeout 40m ./tests/integration/...` | first full run: 95 PASS, 2 FAIL, 2 SKIP. Both failures passed in isolation (§4). Final full-suite count: see completion report |
+| Integration | `set -a; . ./.env; set +a; FUNDZIM_IT_PERF=1 FUNDZIM_IT_API_URL=… FUNDZIM_IT_WEB_URL=… go test -tags integration -count=1 -timeout 40m ./tests/integration/...` | first full run: 95 PASS, 2 FAIL, 2 SKIP. Both failures passed in isolation (§4) and the causes were fixed or isolated. **Final full run (after the migration round trip, on rebuilt containers): 97 PASS, 0 FAIL, 2 SKIP** (320 s; skips: the scale-test-profile and container-stop tests) |
 | Route ↔ contract | `TestEveryRouteHasAPolicyAndIsInOpenAPI` | pass after the Stage 6 OpenAPI update (60 operations) |
 | OpenAPI lint | `npx @redocly/cli@2.54.3 lint api/openapi/fundzim-v1.yaml --config api/openapi/redocly.yaml` | valid; the 2 pre-existing `/healthz` `/readyz` warnings |
-| Web | `npm --prefix apps/web run lint`, `typecheck`, `test`, `test:e2e` | reported by the frontend stream: lint clean, typecheck passes from a clean checkout, Vitest 325 passed (30 files), Playwright 107 passed / 1 skipped (pre-existing mobile-only skip). Final numbers after alignment: see completion report |
-| Migrations | goose up / down / up per migration (each stream) | clean; final all-Stage-6 round trip: see completion report |
-| Secrets, dependencies | `scripts/check-secrets.sh`, gitleaks, govulncheck, npm audit | see completion report |
+| Web | `npm --prefix apps/web run lint`, `typecheck`, `test`, `test:e2e` | reported by the frontend stream: lint clean, typecheck passes from a clean checkout, Vitest 325 passed (30 files), Playwright 107 passed / 1 skipped (pre-existing mobile-only skip). Final, re-run by the lead after the real-backend alignment on a clean `.next`: lint clean, typecheck passes, **Vitest 331 passed (30 files)**, **Playwright 107 passed / 1 skipped** |
+| Migrations | goose up / down / up per migration (each stream) | clean; final round trip of all six Stage 6 migrations (down ×6, up, up = no pending) clean |
+| Secrets, dependencies | `scripts/check-secrets.sh`, gitleaks, govulncheck, npm audit | check-secrets: none; gitleaks on staged changes: none (history scan in the completion report); govulncheck: 0 reachable; `npm audit --omit=dev`: 0 (dev-only lint chain KI-03 unchanged) |
 
 ## 2. New unit tests
 
@@ -81,4 +81,4 @@ page retrieval were exercised in the lifecycle test but not timed separately.
 - Two-replica limiter and Valkey-stop tests (not re-run in Stage 6).
 - PostgreSQL outage and worker outage were not injected directly; the restriction-reader failure and scanner outage
   stand in for dependency failures, and the outbox retry behaviour is covered by the Stage 3/4 worker tests.
-- Staff admin pages against the real API: see completion report (frontend smoke).
+- Staff admin pages against the real API: **not smoke-tested** (no staff session was created on the shared dev DB); they are covered by mock-API e2e and by the backend integration tests of the same endpoints. Owner and public flows were smoke-tested on the real stack.

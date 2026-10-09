@@ -34,7 +34,7 @@
 | KI-S6-16 | Campaign policy changes have no admin API (migration only), although `app.campaign_policies` is maker-checker ready | Policy changes need a deploy | OPEN |
 | KI-S6-17 | Categories: staff can change only name, description, order and active flag; tiers/moderation policy change by migration | By design for now | ACCEPTED |
 | KI-S6-18 | Search uses the `simple` text configuration (no stemming, no Shona/Ndebele handling); advanced discovery is Stage 16 | Search quality | OPEN |
-| KI-S6-19 | Staff admin pages: tested on the mock API; real-stack coverage per the completion report | — | see completion report |
+| KI-S6-19 | Staff admin pages are tested on the mock API only; their backend endpoints are covered by integration tests, but the pages were not smoke-tested against the real API | UI/API shape drift possible | OPEN — real-stack staff E2E in Stage 7 |
 | KI-S6-20 | `TestWorkerCrashedJobIsRescued` is load-sensitive (30 s deadline) when the whole suite shares one worker | Flake risk | OPEN |
 | KI-S6-21 | Review checklists are manual; no per-check result rows (`campaign_review_check_results`) | Less structured evidence | OPEN |
 | KI-S6-22 | Retention of removed media and archived campaigns is not implemented (soft delete only) | Data kept longer | OPEN — **LEGAL_REVIEW_REQUIRED** (LR-012) |

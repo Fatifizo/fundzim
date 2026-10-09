@@ -137,8 +137,9 @@ jobs:
       - name: Integration tests (identity and verification end to end via the running worker, ClamAV and Mailpit)
         run: |
           set -a; . ./.env; set +a
+          set -o pipefail
           FUNDZIM_IT_API_URL=http://127.0.0.1:8080 FUNDZIM_IT_PERF=1 \
-            go test -tags integration -count=1 -timeout 30m -v ./tests/integration/...
+            go test -tags integration -count=1 -timeout 40m -json ./tests/integration/... | python3 scripts/ci/go-test-annotate.py
       - name: Destructive migration round trip (after stopping the API and worker; throwaway database)
         run: |
           pkill -f bin/worker || true
