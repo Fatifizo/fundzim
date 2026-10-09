@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"regexp"
 	"slices"
 	"time"
@@ -84,7 +85,7 @@ var (
 	ErrNotFound      = errs.New(errs.NotFound, "UPDATE_NOT_FOUND", "No such campaign update.")
 	ErrNotEditable   = errs.New(errs.Conflict, "UPDATE_NOT_EDITABLE", "Only drafts and updates awaiting moderation can be changed.")
 	ErrUpdateStatus  = errs.New(errs.Conflict, "INVALID_STATUS", "This action is not allowed in the update's current status.")
-	ErrVersion       = errs.New(errs.Conflict, "VERSION_CONFLICT", "The update changed in the meantime. Reload and try again.")
+	ErrVersion       = httpx.ErrPreconditionFailed // stale If-Match (ADR-038 §7)
 	ErrRestricted    = errs.New(errs.Forbidden, "ACCOUNT_RESTRICTED", "This action is not available for this campaign.")
 	ErrRestrictedNow = errs.New(errs.Conflict, "ACCOUNT_RESTRICTED", "The campaign or its owner is restricted; this update cannot be published.")
 	ErrMedia         = errs.New(errs.Unprocessable, "MEDIA_NOT_APPROVED", "Every attached image must be an approved image of this campaign.")
@@ -97,6 +98,7 @@ type Core interface {
 	OwnerAccess(ctx context.Context, userID, campaignID string, write bool) (campaigns.Access, error)
 	Load(ctx context.Context, campaignID string) (campaigns.Access, error)
 	PublicBySlug(ctx context.Context, slug string) (campaigns.Access, error)
+	WritePublic(w http.ResponseWriter, r *http.Request, data any, cacheControl string)
 	Restricted(ctx context.Context, a campaigns.Access) (string, error)
 }
 

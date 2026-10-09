@@ -4825,12 +4825,13 @@ paths:
       operationId: updateCampaign
       summary: Edit my campaign
       description: '**CMP-04** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Owner or ORG_ADMIN.
-        `If-Match` (version) is required: missing → `422 IF_MATCH_REQUIRED`; stale → `409 CAMPAIGN_STATE_CHANGED`. DRAFT / CHANGES_REQUESTED are edited in place;
-        ACTIVE / PAUSED edits stay off the public page until a re-review approves them (material change); APPROVED / COMPLETED accept a `visibility` change
-        only; anything else → `409 INVALID_STATUS`. The goal currency cannot change after submission (detail CURRENCY_LOCKED). Validation → `422 VALIDATION_FAILED`
-        details (title/summary length and plain-text codes, category INVALID_VALUE, goal MISSING_FIELD, `goal.currency` CURRENCY_NOT_AVAILABLE — e.g. ZWG, LR-043
-        — `goal.amount_minor` INVALID_FORMAT or GOAL_OUT_OF_RANGE). Gated actions → `422 NOT_ELIGIBLE` with `details[{field?, code}]` listing the unmet reason
-        codes (CampaignEligibilityReasonCode); `ACCOUNT_RESTRICTED` never discloses why. Implemented in Stage 6.
+        `If-Match` (version) is required: missing or unparsable → `428 PRECONDITION_REQUIRED`; stale → `412 PRECONDITION_FAILED`. The If-Match check comes before
+        the body is read, so a 428 is returned first. DRAFT / CHANGES_REQUESTED are edited in place; ACTIVE / PAUSED edits stay off the public page until a
+        re-review approves them (material change); APPROVED / COMPLETED accept a `visibility` change only; anything else → `409 INVALID_STATUS`. The goal currency
+        cannot change after submission (detail CURRENCY_LOCKED). Validation → `422 VALIDATION_FAILED` details (title/summary length and plain-text codes, category
+        INVALID_VALUE, goal MISSING_FIELD, `goal.currency` CURRENCY_NOT_AVAILABLE — e.g. ZWG, LR-043 — `goal.amount_minor` INVALID_FORMAT or GOAL_OUT_OF_RANGE).
+        Gated actions → `422 NOT_ELIGIBLE` with `details[{field?, code}]` listing the unmet reason codes (CampaignEligibilityReasonCode); `ACCOUNT_RESTRICTED`
+        never discloses why. Implemented in Stage 6.
 
 
         Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: campaign.updated'
@@ -4849,7 +4850,8 @@ paths:
         required: true
         schema:
           type: string
-        description: Quoted campaign `version` from the ETag.
+        description: Quoted campaign `version` from the ETag. Missing or unparsable → `428 PRECONDITION_REQUIRED`; stale → `412 PRECONDITION_FAILED` (ADR-038
+          §7).
       requestBody:
         required: true
         content:
@@ -4884,12 +4886,16 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '415':
           $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -4909,13 +4915,14 @@ paths:
       - CAMPAIGN_STATE_CHANGED
       - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
-      - IF_MATCH_REQUIRED
       - INTERNAL_ERROR
       - INVALID_STATUS
       - MALFORMED_REQUEST
       - NOT_ELIGIBLE
       - PAYLOAD_TOO_LARGE
       - PERMISSION_DENIED
+      - PRECONDITION_FAILED
+      - PRECONDITION_REQUIRED
       - RATE_LIMITED
       - SERVICE_UNAVAILABLE
       - UNSUPPORTED_MEDIA_TYPE
@@ -4929,7 +4936,7 @@ paths:
       - Campaign creation
       operationId: createCampaignMediaUpload
       summary: Presigned upload slot for campaign media
-      description: '**Superseded.** Superseded by the Stage 6 implementation (ADR-036, ADR-037; docs/stage-6/interface-contracts.md §6): use `POST /campaigns/{id}/media`
+      description: '**Superseded.** Superseded by the Stage 6 implementation (ADR-036, ADR-037; docs/stage-6/interface-contracts.md §6): use `POST /campaigns/{campaign_id}/media`
         (CMP-06, multipart upload).
 
 
@@ -4990,9 +4997,9 @@ paths:
       - CSRF_TOKEN_INVALID
       - VALIDATION_FAILED
       x-fundzim-status: SUPERSEDED
-      x-fundzim-status-note: 'Superseded by the Stage 6 implementation (ADR-036, ADR-037; docs/stage-6/interface-contracts.md §6): use `POST /campaigns/{id}/media`
+      x-fundzim-status-note: 'Superseded by the Stage 6 implementation (ADR-036, ADR-037; docs/stage-6/interface-contracts.md §6): use `POST /campaigns/{campaign_id}/media`
         (CMP-06, multipart upload).'
-  /campaigns/{id}/media:
+  /campaigns/{campaign_id}/media:
     parameters:
     - $ref: '#/components/parameters/RequestId'
     post:
@@ -5013,12 +5020,12 @@ paths:
       - session: []
         csrfToken: []
       parameters:
-      - name: id
+      - name: campaign_id
         in: path
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-        description: Campaign id (this handler names it `id`). Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
+        description: Campaign id. Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
       requestBody:
         required: true
         content:
@@ -5109,12 +5116,12 @@ paths:
       security:
       - session: []
       parameters:
-      - name: id
+      - name: campaign_id
         in: path
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-        description: Campaign id (this handler names it `id`). Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
+        description: Campaign id. Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
       responses:
         '200':
           description: Success.
@@ -5156,7 +5163,7 @@ paths:
       - RATE_LIMITED
       - SERVICE_UNAVAILABLE
       x-fundzim-status: IMPLEMENTED
-  /campaigns/{id}/media/{media_id}:
+  /campaigns/{campaign_id}/media/{media_id}:
     parameters:
     - $ref: '#/components/parameters/RequestId'
     patch:
@@ -5165,8 +5172,8 @@ paths:
       operationId: updateCampaignMedia
       summary: Reorder an image or change its alt text
       description: '**MED-02** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Owner or ORG_ADMIN.
-        `If-Match` (media version) is required: missing → `400 PRECONDITION_REQUIRED`; malformed → `422 VALIDATION_FAILED` (If-Match INVALID_VERSION); stale
-        → `409 MEDIA_STATE_CHANGED`. Empty change → `422` detail NOTHING_TO_UPDATE. Implemented in Stage 6.
+        `If-Match` (media version) is required: missing or unparsable → `428 PRECONDITION_REQUIRED`; stale → `412 PRECONDITION_FAILED`. A concurrent status
+        change during the write → `409 MEDIA_STATE_CHANGED`. Empty change → `422` detail NOTHING_TO_UPDATE. Implemented in Stage 6.
 
 
         Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: campaign.media_updated'
@@ -5174,12 +5181,12 @@ paths:
       - session: []
         csrfToken: []
       parameters:
-      - name: id
+      - name: campaign_id
         in: path
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-        description: Campaign id (this handler names it `id`). Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
+        description: Campaign id. Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
       - name: media_id
         in: path
         required: true
@@ -5190,7 +5197,8 @@ paths:
         required: true
         schema:
           type: string
-        description: Quoted media `version` from the ETag.
+        description: Quoted media `version` from the ETag. Missing or unparsable → `428 PRECONDITION_REQUIRED`; stale → `412 PRECONDITION_FAILED` (ADR-038
+          §7).
       requestBody:
         required: true
         content:
@@ -5225,12 +5233,16 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '415':
           $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -5257,6 +5269,7 @@ paths:
       - MEDIA_STATE_CHANGED
       - PAYLOAD_TOO_LARGE
       - PERMISSION_DENIED
+      - PRECONDITION_FAILED
       - PRECONDITION_REQUIRED
       - RATE_LIMITED
       - SERVICE_UNAVAILABLE
@@ -5277,12 +5290,12 @@ paths:
       - session: []
         csrfToken: []
       parameters:
-      - name: id
+      - name: campaign_id
         in: path
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-        description: Campaign id (this handler names it `id`). Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
+        description: Campaign id. Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
       - name: media_id
         in: path
         required: true
@@ -6071,7 +6084,7 @@ paths:
       - CAMPAIGN_NOT_FOUND
       - INVALID_FILTER
       - PERMISSION_DENIED
-  /campaigns/{id}/updates:
+  /campaigns/{campaign_id}/updates:
     parameters:
     - $ref: '#/components/parameters/RequestId'
     post:
@@ -6090,12 +6103,12 @@ paths:
       - session: []
         csrfToken: []
       parameters:
-      - name: id
+      - name: campaign_id
         in: path
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-        description: Campaign id (this handler names it `id`). Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
+        description: Campaign id. Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
       requestBody:
         required: true
         content:
@@ -6178,12 +6191,12 @@ paths:
       security:
       - session: []
       parameters:
-      - name: id
+      - name: campaign_id
         in: path
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-        description: Campaign id (this handler names it `id`). Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
+        description: Campaign id. Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
       - name: cursor
         in: query
         required: false
@@ -6239,7 +6252,7 @@ paths:
       - SERVICE_UNAVAILABLE
       - VALIDATION_FAILED
       x-fundzim-status: IMPLEMENTED
-  /campaigns/{id}/updates/{update_id}:
+  /campaigns/{campaign_id}/updates/{update_id}:
     parameters:
     - $ref: '#/components/parameters/RequestId'
     patch:
@@ -6248,8 +6261,8 @@ paths:
       operationId: editCampaignUpdate
       summary: Edit a draft or pending update
       description: '**UPD-03** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Owner or ORG_ADMIN.
-        DRAFT or PENDING_MODERATION only (`409 UPDATE_NOT_EDITABLE`). `If-Match` is required: missing → `422 VALIDATION_FAILED` (If-Match REQUIRED); malformed
-        → INVALID_VERSION; stale → `409 VERSION_CONFLICT`. Implemented in Stage 6.
+        DRAFT or PENDING_MODERATION only (`409 UPDATE_NOT_EDITABLE`). `If-Match` is required: missing or unparsable → `428 PRECONDITION_REQUIRED`; stale →
+        `412 PRECONDITION_FAILED`. Implemented in Stage 6.
 
 
         Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: campaign.update_edited'
@@ -6257,12 +6270,12 @@ paths:
       - session: []
         csrfToken: []
       parameters:
-      - name: id
+      - name: campaign_id
         in: path
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-        description: Campaign id (this handler names it `id`). Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
+        description: Campaign id. Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
       - name: update_id
         in: path
         required: true
@@ -6273,7 +6286,8 @@ paths:
         required: true
         schema:
           type: string
-        description: Quoted update `version`.
+        description: Quoted update `version` from the ETag. Missing or unparsable → `428 PRECONDITION_REQUIRED`; stale → `412 PRECONDITION_FAILED` (ADR-038
+          §7).
       requestBody:
         required: true
         content:
@@ -6304,12 +6318,16 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '415':
           $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -6337,6 +6355,8 @@ paths:
       - MEDIA_NOT_APPROVED
       - PAYLOAD_TOO_LARGE
       - PERMISSION_DENIED
+      - PRECONDITION_FAILED
+      - PRECONDITION_REQUIRED
       - RATE_LIMITED
       - SERVICE_UNAVAILABLE
       - UNSAFE_LINK
@@ -6344,7 +6364,6 @@ paths:
       - UPDATE_NOT_EDITABLE
       - UPDATE_NOT_FOUND
       - VALIDATION_FAILED
-      - VERSION_CONFLICT
       x-fundzim-status: IMPLEMENTED
     delete:
       tags:
@@ -6352,7 +6371,8 @@ paths:
       operationId: withdrawCampaignUpdate
       summary: Delete an update (soft)
       description: '**UPD-04** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Owner or ORG_ADMIN.
-        Soft delete (DELETED; history kept). Optional `If-Match` → `409 VERSION_CONFLICT`. Implemented in Stage 6.
+        Soft delete (DELETED; history kept). `If-Match` is required: missing or unparsable → `428 PRECONDITION_REQUIRED`; stale → `412 PRECONDITION_FAILED`.
+        Implemented in Stage 6.
 
 
         Idempotency: n/a · Rate-limit class: `RL-USER-WRITE` (policies: `global.ip`) · Audit: campaign.update_deleted'
@@ -6360,12 +6380,12 @@ paths:
       - session: []
         csrfToken: []
       parameters:
-      - name: id
+      - name: campaign_id
         in: path
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-        description: Campaign id (this handler names it `id`). Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
+        description: Campaign id. Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
       - name: update_id
         in: path
         required: true
@@ -6373,10 +6393,11 @@ paths:
           $ref: '#/components/schemas/Uuid'
       - name: If-Match
         in: header
-        required: false
+        required: true
         schema:
           type: string
-        description: Quoted update `version` (optional).
+        description: Quoted update `version` from the ETag. Missing or unparsable → `428 PRECONDITION_REQUIRED`; stale → `412 PRECONDITION_FAILED` (ADR-038
+          §7).
       responses:
         '204':
           description: No content.
@@ -6395,8 +6416,10 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -6419,11 +6442,11 @@ paths:
       - INTERNAL_ERROR
       - INVALID_STATUS
       - PERMISSION_DENIED
+      - PRECONDITION_FAILED
+      - PRECONDITION_REQUIRED
       - RATE_LIMITED
       - SERVICE_UNAVAILABLE
       - UPDATE_NOT_FOUND
-      - VALIDATION_FAILED
-      - VERSION_CONFLICT
       x-fundzim-status: IMPLEMENTED
   /public/campaigns/{slug}/updates:
     parameters:
@@ -6462,16 +6485,35 @@ paths:
           minimum: 1
           maximum: 100
           default: 20
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
       responses:
         '200':
           description: Success.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, no-cache` (revalidate every time; data disappears as soon as a campaign leaves public view, ADR-038 §1).'
+              schema:
+                type: string
+            ETag:
+              description: Strong ETag over the response data; send it as `If-None-Match` to get `304`.
+              schema:
+                type: string
+            Vary:
+              description: '`Accept-Encoding`.'
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CampaignUpdatePublicPageEnvelope'
+        '304':
+          description: Not modified (`If-None-Match` matched the ETag).
         '404':
           $ref: '#/components/responses/NotFound'
         '422':
@@ -6505,9 +6547,11 @@ paths:
       operationId: listPublicCampaigns
       summary: Search public campaigns
       description: '**DIS-01** · Auth: none · Authorization: Public. ACTIVE, PAUSED and COMPLETED campaigns with visibility PUBLIC (UNLISTED are never listed),
-        searched over their approved versions. Keyset pagination: pass `data.next_cursor` back unchanged (malformed → `422` cursor INVALID_FORMAT). Owner and
-        public views never carry raised, total or balance amounts: `donations` is always `{available: false, message: "Donations are not yet available."}` (no
-        payment processing exists). Implemented in Stage 6.
+        searched over their approved versions. `category` is a category code or slug (≤ 40 characters). `q` ≤ 100 characters, markup included (`422 VALIDATION_FAILED`,
+        q INVALID_LENGTH); control characters → `422` (markup itself is simply matched as text). `total` is an exact count capped at 1000. A search over the
+        2 s statement timeout → `503 SEARCH_TIMEOUT`. Keyset pagination: pass `data.next_cursor` back unchanged (malformed → `422` cursor INVALID_FORMAT). Owner
+        and public views never carry raised, total or balance amounts: `donations` is always `{available: false, message: "Donations are not yet available."}`
+        (no payment processing exists). Implemented in Stage 6.
 
 
         Idempotency: n/a · Rate-limit class: `RL-PUBLIC-READ` (policies: `global.ip`) · Audit: —'
@@ -6524,6 +6568,8 @@ paths:
         required: false
         schema:
           type: string
+          maxLength: 40
+        description: Category code or slug.
       - name: sort
         in: query
         required: false
@@ -6548,6 +6594,11 @@ paths:
         schema:
           type: string
           maxLength: 512
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
       responses:
         '200':
           description: Success.
@@ -6555,13 +6606,23 @@ paths:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
             Cache-Control:
-              description: '`public, max-age=30`.'
+              description: '`public, no-cache` (revalidate every time; data disappears as soon as a campaign leaves public view, ADR-038 §1).'
+              schema:
+                type: string
+            ETag:
+              description: Strong ETag over the response data; send it as `If-None-Match` to get `304`.
+              schema:
+                type: string
+            Vary:
+              description: '`Accept-Encoding`.'
               schema:
                 type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CampaignSearchEnvelope'
+        '304':
+          description: Not modified (`If-None-Match` matched the ETag).
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         '429':
@@ -6580,6 +6641,7 @@ paths:
       x-fundzim-error-codes:
       - INTERNAL_ERROR
       - RATE_LIMITED
+      - SEARCH_TIMEOUT
       - SERVICE_UNAVAILABLE
       - VALIDATION_FAILED
       x-fundzim-status: IMPLEMENTED
@@ -6592,8 +6654,9 @@ paths:
       operationId: getPublicCampaign
       summary: Public campaign page
       description: '**DIS-02** · Auth: none · Authorization: Public. The approved version of an ACTIVE, PAUSED or COMPLETED campaign (PUBLIC or UNLISTED);
-        anything else → `404 CAMPAIGN_NOT_FOUND` (existence not revealed). Owner and public views never carry raised, total or balance amounts: `donations`
-        is always `{available: false, message: "Donations are not yet available."}` (no payment processing exists). Implemented in Stage 6.
+        anything else → `404 CAMPAIGN_NOT_FOUND` (existence not revealed). A non-canonical slug whose trailing public code identifies a public campaign returns
+        that campaign with its `canonical_slug`. Trust indicators are computed live. Owner and public views never carry raised, total or balance amounts:
+        `donations` is always `{available: false, message: "Donations are not yet available."}` (no payment processing exists). Implemented in Stage 6.
 
 
         Idempotency: n/a · Rate-limit class: `RL-PUBLIC-READ` (policies: `global.ip`) · Audit: —'
@@ -6606,6 +6669,11 @@ paths:
           type: string
           maxLength: 120
         description: Public slug `<title-slug>-<public code>`. Anything not publicly exposed → `404` (existence not revealed).
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
       responses:
         '200':
           description: Success.
@@ -6613,13 +6681,23 @@ paths:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
             Cache-Control:
-              description: '`public, max-age=30`.'
+              description: '`public, no-cache` (revalidate every time; data disappears as soon as a campaign leaves public view, ADR-038 §1).'
+              schema:
+                type: string
+            ETag:
+              description: Strong ETag over the response data; send it as `If-None-Match` to get `304`.
+              schema:
+                type: string
+            Vary:
+              description: '`Accept-Encoding`.'
               schema:
                 type: string
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CampaignPublicViewEnvelope'
+        '304':
+          description: Not modified (`If-None-Match` matched the ETag).
         '404':
           $ref: '#/components/responses/NotFound'
         '429':
@@ -6831,8 +6909,11 @@ paths:
       - Campaign discovery
       operationId: reportCampaign
       summary: Report a campaign
-      description: '**DIS-07** · Auth: none or user session · Authorization: Anyone; Origin checks (and CSRF token if a session cookie is sent);
-        challenge after threshold.
+      description: '**Superseded.** Superseded by the Stage 6 implementation (ADR-036, ADR-037; docs/stage-6/interface-contracts.md §6): use `POST /public/campaigns/{slug}/reports`
+        (DIS-17, Stage 7, ADR-038 §3).
+
+
+        **DIS-07** · Auth: none or user session · Authorization: Anyone; Origin checks (and CSRF token if a session cookie is sent); challenge after threshold.
 
 
         Idempotency: n/a · Rate-limit class: `RL-PUBLIC-WRITE` · Audit: campaign.reported'
@@ -6886,6 +6967,9 @@ paths:
       - CHALLENGE_REQUIRED
       - CSRF_TOKEN_INVALID
       - VALIDATION_FAILED
+      x-fundzim-status: SUPERSEDED
+      x-fundzim-status-note: 'Superseded by the Stage 6 implementation (ADR-036, ADR-037; docs/stage-6/interface-contracts.md §6): use `POST /public/campaigns/{slug}/reports`
+        (DIS-17, Stage 7, ADR-038 §3).'
   /admin/campaigns:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -6895,7 +6979,7 @@ paths:
       operationId: adminListCampaigns
       summary: List campaigns (staff)
       description: '**MOD-01** · Auth: staff + MFA · Authorization: `campaign.view` (staff session; non-staff → `404 ROUTE_NOT_FOUND`). Any status, newest first;
-        `q` matches title, id or slug. Not paginated (`limit` ≤ 100, default 50). Implemented in Stage 6.
+        `q` matches title, id or slug. Keyset cursor (malformed → `422` cursor INVALID_FORMAT). Implemented in Stage 6.
 
 
         Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` (policies: `global.ip`) · Audit: —'
@@ -6921,6 +7005,12 @@ paths:
           minimum: 1
           maximum: 100
           default: 50
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
       responses:
         '200':
           description: Success.
@@ -6939,6 +7029,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -6959,6 +7051,7 @@ paths:
       - RATE_LIMITED
       - ROUTE_NOT_FOUND
       - SERVICE_UNAVAILABLE
+      - VALIDATION_FAILED
       x-fundzim-status: IMPLEMENTED
   /admin/campaigns/{campaign_id}:
     parameters:
@@ -7980,7 +8073,11 @@ paths:
       - Campaign moderation (staff)
       operationId: listAbuseReports
       summary: Abuse report queue
-      description: '**MOD-15** · Auth: staff + MFA · Authorization: `campaign.review`.
+      description: '**Superseded.** Superseded by the Stage 6 implementation (ADR-036, ADR-037; docs/stage-6/interface-contracts.md §6): use `GET /admin/campaigns/reports`
+        (MOD-35, Stage 7).
+
+
+        **MOD-15** · Auth: staff + MFA · Authorization: `campaign.review`.
 
 
         Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
@@ -8049,6 +8146,9 @@ paths:
       - INVALID_FILTER
       - MFA_REQUIRED
       - PERMISSION_DENIED
+      x-fundzim-status: SUPERSEDED
+      x-fundzim-status-note: 'Superseded by the Stage 6 implementation (ADR-036, ADR-037; docs/stage-6/interface-contracts.md §6): use `GET /admin/campaigns/reports`
+        (MOD-35, Stage 7).'
   /admin/abuse-reports/{abuse_report_id}/resolve:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -8057,7 +8157,11 @@ paths:
       - Campaign moderation (staff)
       operationId: resolveAbuseReport
       summary: Resolve an abuse report
-      description: '**MOD-16** · Auth: staff + MFA · Authorization: `campaign.review`.
+      description: '**Superseded.** Superseded by the Stage 6 implementation (ADR-036, ADR-037; docs/stage-6/interface-contracts.md §6): use `POST /admin/campaigns/reports/{report_id}/dismiss`
+        or `/escalate` (MOD-36/37, Stage 7).
+
+
+        **MOD-16** · Auth: staff + MFA · Authorization: `campaign.review`.
 
 
         Idempotency: optional · Rate-limit class: `RL-STAFF-WRITE` · Audit: campaign.report.resolved (new, J)'
@@ -8116,6 +8220,9 @@ paths:
       - MFA_REQUIRED
       - PERMISSION_DENIED
       - VALIDATION_FAILED
+      x-fundzim-status: SUPERSEDED
+      x-fundzim-status-note: 'Superseded by the Stage 6 implementation (ADR-036, ADR-037; docs/stage-6/interface-contracts.md §6): use `POST /admin/campaigns/reports/{report_id}/dismiss`
+        or `/escalate` (MOD-36/37, Stage 7).'
   /admin/campaigns/{campaign_id}/status-history:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -24841,12 +24948,18 @@ paths:
       - Campaign discovery
       operationId: listCampaignCategories
       summary: List active campaign categories
-      description: '**DIS-08** · Auth: none · Authorization: Public. Active categories only; risk tier and moderation policy are omitted. Implemented in Stage
-        6.
+      description: '**DIS-08** · Auth: none · Authorization: Public. Compatibility alias kept from Stage 6: served by the same handler as `GET /public/categories`
+        (DIS-11), same response (`{items, next_cursor: null}` with `live_campaigns`). Implemented in Stage 6.
 
 
         Idempotency: n/a · Rate-limit class: `RL-PUBLIC-READ` (policies: `global.ip`) · Audit: —'
       security: []
+      parameters:
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
       responses:
         '200':
           description: Success.
@@ -24857,10 +24970,16 @@ paths:
               description: '`public, max-age=300`.'
               schema:
                 type: string
+            ETag:
+              description: Strong ETag over the response data; send it as `If-None-Match` to get `304`.
+              schema:
+                type: string
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CampaignCategoryListEnvelope'
+                $ref: '#/components/schemas/PublicCategoryListEnvelope'
+        '304':
+          description: Not modified (`If-None-Match` matched the ETag).
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -24934,8 +25053,8 @@ paths:
       operationId: listMineCampaigns
       summary: List my and my organisations' campaigns
       description: '**CMP-16** · Auth: session · Authorization: Personal (USER) account only; staff sessions → `403 PERMISSION_DENIED`. Own campaigns plus
-        those of every organisation the caller belongs to, or one organisation with `?organisation_id=` (non-member → `404 ORGANISATION_NOT_FOUND`). Not paginated
-        (at most 200, newest first). Implemented in Stage 6.
+        those of every organisation the caller belongs to, or one organisation with `?organisation_id=` (non-member → `404 ORGANISATION_NOT_FOUND`). Newest
+        first; keyset cursor (malformed → `422` cursor INVALID_FORMAT). Implemented in Stage 6.
 
 
         Idempotency: n/a · Rate-limit class: `RL-USER-READ` (policies: `global.ip`) · Audit: —'
@@ -24947,6 +25066,21 @@ paths:
         required: false
         schema:
           $ref: '#/components/schemas/Uuid'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+        description: Out-of-range values fall back to 50.
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
       responses:
         '200':
           description: Success.
@@ -25822,7 +25956,7 @@ paths:
       - UNSUPPORTED_MEDIA_TYPE
       - VALIDATION_FAILED
       x-fundzim-status: IMPLEMENTED
-  /campaigns/{id}/media/{media_id}/content:
+  /campaigns/{campaign_id}/media/{media_id}/content:
     parameters:
     - $ref: '#/components/parameters/RequestId'
     get:
@@ -25839,12 +25973,12 @@ paths:
       - session: []
       - staffSession: []
       parameters:
-      - name: id
+      - name: campaign_id
         in: path
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-        description: Campaign id (this handler names it `id`). Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
+        description: Campaign id. Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
       - name: media_id
         in: path
         required: true
@@ -25927,7 +26061,7 @@ paths:
       - RATE_LIMITED
       - SERVICE_UNAVAILABLE
       x-fundzim-status: IMPLEMENTED
-  /admin/campaigns/{id}/media/all:
+  /admin/campaigns/{campaign_id}/media/all:
     parameters:
     - $ref: '#/components/parameters/RequestId'
     get:
@@ -25943,12 +26077,12 @@ paths:
       security:
       - staffSession: []
       parameters:
-      - name: id
+      - name: campaign_id
         in: path
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-        description: Campaign id (this handler names it `id`). Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
+        description: Campaign id. Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
       responses:
         '200':
           description: Success.
@@ -25989,7 +26123,7 @@ paths:
       - ROUTE_NOT_FOUND
       - SERVICE_UNAVAILABLE
       x-fundzim-status: IMPLEMENTED
-  /admin/campaigns/{id}/media/{media_id}/remove:
+  /admin/campaigns/{campaign_id}/media/{media_id}/remove:
     parameters:
     - $ref: '#/components/parameters/RequestId'
     post:
@@ -26007,12 +26141,12 @@ paths:
       - staffSession: []
         csrfToken: []
       parameters:
-      - name: id
+      - name: campaign_id
         in: path
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
-        description: Campaign id (this handler names it `id`). Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
+        description: Campaign id. Not the caller's → `404 CAMPAIGN_NOT_FOUND`.
       - name: media_id
         in: path
         required: true
@@ -26126,7 +26260,7 @@ paths:
               schema:
                 type: string
             Cache-Control:
-              description: '`public, max-age=<CAMPAIGN_MEDIA public max age>`.'
+              description: '`public, no-cache` (revalidate every time; ADR-038 §1).'
               schema:
                 type: string
             Content-Disposition:
@@ -27768,8 +27902,8 @@ paths:
       operationId: updateCampaignCategory
       summary: Change a category's presentation or active flag
       description: '**MOD-34** · Auth: staff + MFA + step-up · Authorization: `campaign.category.manage` with a fresh step-up (staff session; non-staff →
-        `404 ROUTE_NOT_FOUND`). Optional `If-Match` (category version) → `409 CAMPAIGN_STATE_CHANGED`; unknown → `404 CATEGORY_NOT_FOUND`. Returns the full
-        staff category list. Implemented in Stage 6.
+        `404 ROUTE_NOT_FOUND`). `If-Match` (category version) is required: missing or unparsable → `428 PRECONDITION_REQUIRED`; stale → `412 PRECONDITION_FAILED`.
+        Unknown → `404 CATEGORY_NOT_FOUND`. Returns the full staff category list. Implemented in Stage 6.
 
 
         Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` (policies: `global.ip`) · Audit: campaign.category_updated'
@@ -27785,10 +27919,11 @@ paths:
           maxLength: 64
       - name: If-Match
         in: header
-        required: false
+        required: true
         schema:
           type: string
-        description: Quoted category `version` (optional).
+        description: Quoted category `version` from the ETag. Missing or unparsable → `428 PRECONDITION_REQUIRED`; stale → `412 PRECONDITION_FAILED` (ADR-038
+          §7).
       requestBody:
         required: true
         content:
@@ -27817,12 +27952,16 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
         '415':
           $ref: '#/components/responses/UnsupportedMediaType'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -27839,7 +27978,6 @@ paths:
       - global.ip
       x-fundzim-audit: campaign.category_updated
       x-fundzim-error-codes:
-      - CAMPAIGN_STATE_CHANGED
       - CATEGORY_NOT_FOUND
       - CSRF_ORIGIN_MISMATCH
       - CSRF_TOKEN_INVALID
@@ -27847,6 +27985,8 @@ paths:
       - MALFORMED_REQUEST
       - PAYLOAD_TOO_LARGE
       - PERMISSION_DENIED
+      - PRECONDITION_FAILED
+      - PRECONDITION_REQUIRED
       - RATE_LIMITED
       - ROUTE_NOT_FOUND
       - SERVICE_UNAVAILABLE
@@ -28184,6 +28324,963 @@ paths:
       - UNSUPPORTED_MEDIA_TYPE
       - VALIDATION_FAILED
       x-fundzim-status: IMPLEMENTED
+  /public/categories:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Campaign discovery
+      operationId: listPublicCategories
+      summary: List active categories with live campaign counts
+      description: '**DIS-11** · Auth: none · Authorization: Public. Active categories with `live_campaigns` (exact count of live PUBLIC campaigns). Implemented
+        in Stage 6.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-READ` (policies: `global.ip`) · Audit: —'
+      security: []
+      parameters:
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, max-age=300`.'
+              schema:
+                type: string
+            ETag:
+              description: Strong ETag over the response data; send it as `If-None-Match` to get `304`.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicCategoryListEnvelope'
+        '304':
+          description: Not modified (`If-None-Match` matched the ETag).
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: DIS-11
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - INTERNAL_ERROR
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
+  /public/categories/{slug}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Campaign discovery
+      operationId: getPublicCategory
+      summary: Get one active category
+      description: '**DIS-12** · Auth: none · Authorization: Public. Unknown or inactive → `404 CATEGORY_NOT_FOUND`. Implemented in Stage 6.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-READ` (policies: `global.ip`) · Audit: —'
+      security: []
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 40
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, max-age=300`.'
+              schema:
+                type: string
+            ETag:
+              description: Strong ETag over the response data; send it as `If-None-Match` to get `304`.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicCategoryEnvelope'
+        '304':
+          description: Not modified (`If-None-Match` matched the ETag).
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: DIS-12
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - CATEGORY_NOT_FOUND
+      - INTERNAL_ERROR
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
+  /public/campaigns/featured:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Campaign discovery
+      operationId: listFeaturedCampaigns
+      summary: Featured campaigns (staff picks, then recently published)
+      description: '**DIS-13** · Auth: none · Authorization: Public. Staff picks first (by position), then recently published live PUBLIC campaigns to fill
+        the list; each item says which (`selection`). No popularity, ranking or paid promotion; a pick never overrides visibility. A staff pick made while
+        the campaign was live stays listed after it is COMPLETED (still PUBLIC); new picks of COMPLETED campaigns are refused. Implemented in Stage 6.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-READ` (policies: `global.ip`) · Audit: —'
+      security: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 12
+          default: 6
+        description: Out-of-range values fall back to 6.
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, no-cache` (revalidate every time; data disappears as soon as a campaign leaves public view, ADR-038 §1).'
+              schema:
+                type: string
+            ETag:
+              description: Strong ETag over the response data; send it as `If-None-Match` to get `304`.
+              schema:
+                type: string
+            Vary:
+              description: '`Accept-Encoding`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignFeaturedEnvelope'
+        '304':
+          description: Not modified (`If-None-Match` matched the ETag).
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: DIS-13
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - INTERNAL_ERROR
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
+  /public/campaign-codes/{code}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Campaign discovery
+      operationId: resolveCampaignCode
+      summary: Resolve a public code to the canonical slug
+      description: '**DIS-14** · Auth: none · Authorization: Public. Backs the `/c/{public_code}` short link. Not public → `404 CAMPAIGN_NOT_FOUND`. Implemented
+        in Stage 6.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-READ` (policies: `global.ip`) · Audit: —'
+      security: []
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 16
+        description: The campaign's 10-character public code.
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, no-cache` (revalidate every time; data disappears as soon as a campaign leaves public view, ADR-038 §1).'
+              schema:
+                type: string
+            ETag:
+              description: Strong ETag over the response data; send it as `If-None-Match` to get `304`.
+              schema:
+                type: string
+            Vary:
+              description: '`Accept-Encoding`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignCanonicalEnvelope'
+        '304':
+          description: Not modified (`If-None-Match` matched the ETag).
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: DIS-14
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - CAMPAIGN_NOT_FOUND
+      - INTERNAL_ERROR
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
+  /public/sitemap:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Campaign discovery
+      operationId: getPublicSitemap
+      summary: Sitemap data
+      description: '**DIS-15** · Auth: none · Authorization: Public. Live PUBLIC campaigns (cap 50 000) and active categories. Sitemap data may lag by minutes;
+        the pages themselves return 404 immediately when a campaign leaves public view. Implemented in Stage 6.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-READ` (policies: `global.ip`) · Audit: —'
+      security: []
+      parameters:
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, max-age=300`.'
+              schema:
+                type: string
+            ETag:
+              description: Strong ETag over the response data; send it as `If-None-Match` to get `304`.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicSitemapEnvelope'
+        '304':
+          description: Not modified (`If-None-Match` matched the ETag).
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: DIS-15
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - INTERNAL_ERROR
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      x-fundzim-status: IMPLEMENTED
+  /public/events:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Campaign discovery
+      operationId: recordPublicEvent
+      summary: Record an anonymous page/share/search event
+      description: '**DIS-16** · Auth: none · Authorization: Public, first-party analytics: increments daily aggregate counters only; no cookies, IP address,
+        user id or search text is stored. Unknown campaigns or categories are ignored silently (still 204). Extra rate-limit policy `public.event.ip` (120/minute).
+        Implemented in Stage 6.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-WRITE` (policies: `global.ip`) · Audit: —'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicEventInput'
+      responses:
+        '204':
+          description: Recorded (or ignored).
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: DIS-16
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - public.event.ip
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /public/campaigns/{slug}/reports:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Campaign discovery
+      operationId: reportPublicCampaign
+      summary: Report a public campaign
+      description: '**DIS-17** · Auth: none · Authorization: Public (anonymous or signed in). The per-IP limit `public.report.ip` (5/hour) is checked first,
+        before anything else (invalid submissions and honeypot hits count) → `429`. Then: not public → `404 CAMPAIGN_NOT_FOUND`; validation → `422`; per-campaign
+        limit `public.report.campaign` (50/hour) → `429`. `202 {received: true}` for accepted reports, same-day duplicates and honeypot hits alike. A report
+        never changes the campaign''s status; staff triage it. Implemented in Stage 6.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-PUBLIC-WRITE` (policies: `global.ip`) · Audit: campaign.report_received'
+      security:
+      - {}
+      - session: []
+        csrfToken: []
+      parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          maxLength: 120
+        description: Public slug `<title-slug>-<public code>`. Anything not publicly exposed → `404` (existence not revealed).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignReportInput'
+      responses:
+        '202':
+          description: Received.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignReportReceivedEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: DIS-17
+      x-fundzim-auth: none
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-PUBLIC-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      - public.report.ip
+      - public.report.campaign
+      x-fundzim-audit: campaign.report_received
+      x-fundzim-error-codes:
+      - CAMPAIGN_NOT_FOUND
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /admin/campaigns/reports:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Campaign moderation (staff)
+      operationId: listCampaignReports
+      summary: Campaign report triage queue
+      description: '**MOD-35** · Auth: staff + MFA · Authorization: `campaign.review` (staff session; non-staff → `404 ROUTE_NOT_FOUND`). Contact emails are
+        never returned (`has_contact` only). Invalid status → `422`; opaque cursor (malformed → `422` cursor INVALID_FORMAT). Implemented in Stage 6.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` (policies: `global.ip`) · Audit: —'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - ESCALATED
+          - DISMISSED
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 512
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store` (verification data is never cached).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignReportPageEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: MOD-35
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: campaign.review
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-STAFF-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - INTERNAL_ERROR
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - ROUTE_NOT_FOUND
+      - SERVICE_UNAVAILABLE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /admin/campaigns/reports/{report_id}/dismiss:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Campaign moderation (staff)
+      operationId: dismissCampaignReport
+      summary: Dismiss a report
+      description: '**MOD-36** · Auth: staff + MFA · Authorization: `campaign.review` (staff session; non-staff → `404 ROUTE_NOT_FOUND`). OPEN → DISMISSED.
+        Body `{reason_code, note}` (`422 VALIDATION_FAILED`). Unknown → `404 REPORT_NOT_FOUND`; already triaged → `409 REPORT_ALREADY_TRIAGED`; staff connected
+        to the campaign → `403 SELF_DECISION_FORBIDDEN`. Never changes the campaign''s status. Implemented in Stage 6.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` (policies: `global.ip`) · Audit: campaign.report_dismissed'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignTriageDecision'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store` (verification data is never cached).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignReportTriageEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: MOD-36
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: campaign.review
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-STAFF-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: campaign.report_dismissed
+      x-fundzim-error-codes:
+      - CAMPAIGN_NOT_FOUND
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - REPORT_ALREADY_TRIAGED
+      - REPORT_NOT_FOUND
+      - ROUTE_NOT_FOUND
+      - SELF_DECISION_FORBIDDEN
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /admin/campaigns/reports/{report_id}/escalate:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Campaign moderation (staff)
+      operationId: escalateCampaignReport
+      summary: Escalate a report to compliance
+      description: '**MOD-37** · Auth: staff + MFA · Authorization: `campaign.review` (staff session; non-staff → `404 ROUTE_NOT_FOUND`). OPEN → ESCALATED;
+        emits `campaigns.report_escalated` so compliance opens a case (CAMPAIGN primary subject). Body `{reason_code, note}` (`422 VALIDATION_FAILED`). Unknown
+        → `404 REPORT_NOT_FOUND`; already triaged → `409 REPORT_ALREADY_TRIAGED`; staff connected to the campaign → `403 SELF_DECISION_FORBIDDEN`. Never changes
+        the campaign''s status. Implemented in Stage 6.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` (policies: `global.ip`) · Audit: campaign.report_escalated'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: report_id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignTriageDecision'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store` (verification data is never cached).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignReportTriageEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: MOD-37
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: campaign.review
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-STAFF-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: campaign.report_escalated
+      x-fundzim-error-codes:
+      - CAMPAIGN_NOT_FOUND
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - PAYLOAD_TOO_LARGE
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - REPORT_ALREADY_TRIAGED
+      - REPORT_NOT_FOUND
+      - ROUTE_NOT_FOUND
+      - SELF_DECISION_FORBIDDEN
+      - SERVICE_UNAVAILABLE
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+  /admin/campaigns/featured:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Campaign moderation (staff)
+      operationId: listStaffPicks
+      summary: List active staff picks
+      description: '**MOD-38** · Auth: staff + MFA + step-up · Authorization: `campaign.feature` with a fresh step-up (staff session; non-staff → `404 ROUTE_NOT_FOUND`).
+        Implemented in Stage 6.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` (policies: `global.ip`) · Audit: —'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store` (verification data is never cached).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignStaffPickListEnvelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: MOD-38
+      x-fundzim-auth: staff+MFA+step-up
+      x-fundzim-permission: campaign.feature
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-STAFF-READ
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: —
+      x-fundzim-error-codes:
+      - INTERNAL_ERROR
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - ROUTE_NOT_FOUND
+      - SERVICE_UNAVAILABLE
+      - STEP_UP_REQUIRED
+      x-fundzim-status: IMPLEMENTED
+  /admin/campaigns/{campaign_id}/feature:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Campaign moderation (staff)
+      operationId: featureCampaign
+      summary: Add a staff pick
+      description: '**MOD-39** · Auth: staff + MFA + step-up · Authorization: `campaign.feature` with a fresh step-up (staff session; non-staff → `404 ROUTE_NOT_FOUND`).
+        Body `{position 1–100, note 3–500}` (`422`). Only live (ACTIVE or PAUSED) PUBLIC campaigns (`409 NOT_FEATURABLE`); already picked → `409 ALREADY_FEATURED`.
+        Returns the staff pick list. Implemented in Stage 6.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` (policies: `global.ip`) · Audit: campaign.featured'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignFeatureInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store` (verification data is never cached).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignStaffPickListEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: MOD-39
+      x-fundzim-auth: staff+MFA+step-up
+      x-fundzim-permission: campaign.feature
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-STAFF-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: campaign.featured
+      x-fundzim-error-codes:
+      - ALREADY_FEATURED
+      - CAMPAIGN_NOT_FOUND
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - NOT_FEATURABLE
+      - PAYLOAD_TOO_LARGE
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - ROUTE_NOT_FOUND
+      - SERVICE_UNAVAILABLE
+      - STEP_UP_REQUIRED
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
+    delete:
+      tags:
+      - Campaign moderation (staff)
+      operationId: unfeatureCampaign
+      summary: Remove a staff pick
+      description: '**MOD-40** · Auth: staff + MFA + step-up · Authorization: `campaign.feature` with a fresh step-up (staff session; non-staff → `404 ROUTE_NOT_FOUND`).
+        JSON body `{reason}` (3–500 characters) is required (`422`); not picked → `404 NOT_FEATURED`. Returns the staff pick list (200). Implemented in Stage
+        6.
+
+
+        Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` (policies: `global.ip`) · Audit: campaign.unfeatured'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/Uuid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CampaignFeatureInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store` (verification data is never cached).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignStaffPickListEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-endpoint-id: MOD-40
+      x-fundzim-auth: staff+MFA+step-up
+      x-fundzim-permission: campaign.feature
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-rate-limit-class: RL-STAFF-WRITE
+      x-fundzim-rate-limit-policies:
+      - global.ip
+      x-fundzim-audit: campaign.unfeatured
+      x-fundzim-error-codes:
+      - CAMPAIGN_NOT_FOUND
+      - CSRF_ORIGIN_MISMATCH
+      - CSRF_TOKEN_INVALID
+      - INTERNAL_ERROR
+      - MALFORMED_REQUEST
+      - NOT_FEATURED
+      - PAYLOAD_TOO_LARGE
+      - PERMISSION_DENIED
+      - RATE_LIMITED
+      - ROUTE_NOT_FOUND
+      - SERVICE_UNAVAILABLE
+      - STEP_UP_REQUIRED
+      - UNSUPPORTED_MEDIA_TYPE
+      - VALIDATION_FAILED
+      x-fundzim-status: IMPLEMENTED
   /health:
     get:
       tags:
@@ -28471,6 +29568,11 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+      headers:
+        Cache-Control:
+          description: '`no-store`: error responses are never cacheable.'
+          schema:
+            type: string
     Unauthorized:
       description: Unauthenticated (or webhook signature invalid). Possible codes are listed per operation in `x-fundzim-error-codes`; full catalogue
         in docs/api/error-model.md.
@@ -28478,6 +29580,11 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+      headers:
+        Cache-Control:
+          description: '`no-store`: error responses are never cacheable.'
+          schema:
+            type: string
     Forbidden:
       description: Authenticated but not permitted (incl. CSRF, MFA, step-up, SoD conflicts). Possible codes are listed per operation in `x-fundzim-error-codes`;
         full catalogue in docs/api/error-model.md.
@@ -28485,6 +29592,11 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+      headers:
+        Cache-Control:
+          description: '`no-store`: error responses are never cacheable.'
+          schema:
+            type: string
     NotFound:
       description: Not found — also returned instead of 403 where existence is sensitive (404-vs-403 rule). Possible codes are listed per operation
         in `x-fundzim-error-codes`; full catalogue in docs/api/error-model.md.
@@ -28492,6 +29604,11 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+      headers:
+        Cache-Control:
+          description: '`no-store`: error responses are never cacheable.'
+          schema:
+            type: string
     Conflict:
       description: State conflict, version conflict or idempotency conflict. Possible codes are listed per operation in `x-fundzim-error-codes`;
         full catalogue in docs/api/error-model.md.
@@ -28500,6 +29617,10 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
       headers:
+        Cache-Control:
+          description: '`no-store`: error responses are never cacheable.'
+          schema:
+            type: string
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
     PayloadTooLarge:
@@ -28508,12 +29629,22 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+      headers:
+        Cache-Control:
+          description: '`no-store`: error responses are never cacheable.'
+          schema:
+            type: string
     UnsupportedMediaType:
       description: Unsupported media type. Possible codes are listed per operation in `x-fundzim-error-codes`; full catalogue in docs/api/error-model.md.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+      headers:
+        Cache-Control:
+          description: '`no-store`: error responses are never cacheable.'
+          schema:
+            type: string
     UnprocessableEntity:
       description: Validation or business-rule failure. Possible codes are listed per operation in `x-fundzim-error-codes`; full catalogue in
         docs/api/error-model.md.
@@ -28521,6 +29652,11 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+      headers:
+        Cache-Control:
+          description: '`no-store`: error responses are never cacheable.'
+          schema:
+            type: string
     TooManyRequests:
       description: Rate limited. Honour `Retry-After`. Possible codes are listed per operation in `x-fundzim-error-codes`; full catalogue in docs/api/error-model.md.
       content:
@@ -28528,6 +29664,10 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
       headers:
+        Cache-Control:
+          description: '`no-store`: error responses are never cacheable.'
+          schema:
+            type: string
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
     InternalError:
@@ -28537,6 +29677,11 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+      headers:
+        Cache-Control:
+          description: '`no-store`: error responses are never cacheable.'
+          schema:
+            type: string
     ServiceUnavailable:
       description: Service or provider unavailable. Honour `Retry-After`. Possible codes are listed per operation in `x-fundzim-error-codes`;
         full catalogue in docs/api/error-model.md.
@@ -28545,8 +29690,34 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
       headers:
+        Cache-Control:
+          description: '`no-store`: error responses are never cacheable.'
+          schema:
+            type: string
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
+    PreconditionRequired:
+      description: '`If-Match` missing or unparsable (`PRECONDITION_REQUIRED`, ADR-038 §7). Possible codes are listed per operation in `x-fundzim-error-codes`.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      headers:
+        Cache-Control:
+          description: '`no-store`: error responses are never cacheable.'
+          schema:
+            type: string
+    PreconditionFailed:
+      description: '`If-Match` does not match the current version (`PRECONDITION_FAILED`, ADR-038 §7). Possible codes are listed per operation in `x-fundzim-error-codes`.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+      headers:
+        Cache-Control:
+          description: '`no-store`: error responses are never cacheable.'
+          schema:
+            type: string
   examples:
     DonationCreateEcoCashUsd:
       summary: 'Guest donates US$25.00 via EcoCash (send with `Idempotency-Key: 6f1c2a9e-4b7d-4e2a-9c3f-0d8e7b6a5f41`).'
@@ -39772,12 +40943,22 @@ components:
       - meta
       properties:
         data:
-          type: array
-          items:
-            $ref: '#/components/schemas/CampaignSummary'
+          type: object
+          required:
+          - items
+          - next_cursor
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CampaignSummary'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: 'Opaque cursor: pass it back unchanged as `cursor`; null when there are no more items. Keyset cursor (`created_at|id`), newest first.'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
-      description: Not paginated (at most 200 / `limit`), newest first.
     CampaignCategoryView:
       type: object
       required:
@@ -39826,9 +41007,20 @@ components:
       - meta
       properties:
         data:
-          type: array
-          items:
-            $ref: '#/components/schemas/CampaignCategoryView'
+          type: object
+          required:
+          - items
+          - next_cursor
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CampaignCategoryView'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: 'Always null: not paginated.'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
     CampaignCurrencyListEnvelope:
@@ -40007,6 +41199,28 @@ components:
           type: string
           minLength: 3
           maxLength: 500
+    CampaignTrust:
+      type: object
+      required:
+      - organiser_identity_verified
+      - organisation_verified
+      - beneficiary_verified
+      - campaign_reviewed
+      description: Trust indicators, computed live and true only now (ADR-038 §5). They state what FundZim checked; they do NOT guarantee the campaign's claims,
+        the use of funds or the outcome, and there are no other badges.
+      properties:
+        organiser_identity_verified:
+          type: boolean
+          description: The individual organiser is IDENTITY_VERIFIED (active, not expired).
+        organisation_verified:
+          type: boolean
+          description: The organising organisation is ORG_KYB_VERIFIED (active).
+        beneficiary_verified:
+          type: boolean
+          description: The beneficiary's verification is APPROVED (a SELF beneficiary counts when the organiser is identity verified).
+        campaign_reviewed:
+          type: boolean
+          description: A reviewer approved the content shown (an approved version exists). Not an endorsement.
     CampaignPublicView:
       type: object
       description: 'The approved version only; nothing private (no owner/beneficiary ids, documents, identity, payout, risk or compliance data). Owner and public
@@ -40014,6 +41228,10 @@ components:
         processing exists).'
       required:
       - slug
+      - canonical_slug
+      - public_code
+      - category_name
+      - trust
       - title
       - summary
       - story
@@ -40031,6 +41249,36 @@ components:
       properties:
         slug:
           type: string
+        canonical_slug:
+          type: string
+          description: The campaign's fixed slug. When the requested slug differs but its trailing public code identifies this campaign, the data is returned
+            and the web app redirects permanently to this slug.
+        public_code:
+          type: string
+          pattern: ^[0-9A-Z]{10}$
+        category_name:
+          type: string
+        trust:
+          $ref: '#/components/schemas/CampaignTrust'
+        media:
+          type: array
+          description: Approved-version images still APPROVED, in order.
+          items:
+            type: object
+            required:
+            - id
+            - kind
+            - alt_text
+            properties:
+              id:
+                $ref: '#/components/schemas/Uuid'
+              kind:
+                type: string
+                enum:
+                - COVER
+                - GALLERY
+              alt_text:
+                type: string
         title:
           type: string
         summary:
@@ -40078,27 +41326,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Uuid'
-          description: Fetch with `GET /public/campaigns/{slug}/media/{media_id}`. Only media of the approved version that are still APPROVED
-            (media removed or rejected since approval drop out).
-        media:
-          type: array
-          description: The same media as `media_ids`, in order, with kind and alt text for accessible rendering.
-          items:
-            type: object
-            required:
-            - id
-            - kind
-            - alt_text
-            properties:
-              id:
-                $ref: '#/components/schemas/Uuid'
-              kind:
-                type: string
-                enum:
-                - COVER
-                - GALLERY
-              alt_text:
-                type: string
+          description: Fetch with `GET /public/campaigns/{slug}/media/{media_id}`.
         published_at:
           oneOf:
           - $ref: '#/components/schemas/Timestamp'
@@ -40131,7 +41359,26 @@ components:
       - cover_media_id
       - published_at
       - created_at
+      - organiser
+      - trust
       properties:
+        organiser:
+          type: object
+          required:
+          - type
+          - display_name
+          properties:
+            type:
+              type: string
+              enum:
+              - INDIVIDUAL
+              - ORGANISATION
+            display_name:
+              type: string
+        trust:
+          oneOf:
+          - $ref: '#/components/schemas/CampaignTrust'
+          - type: 'null'
         slug:
           type: string
         title:
@@ -40169,6 +41416,7 @@ components:
           required:
           - items
           - next_cursor
+          - total
           properties:
             items:
               type: array
@@ -40179,6 +41427,18 @@ components:
               - string
               - 'null'
               description: 'Opaque cursor: pass it back unchanged as `cursor`; null when there are no more items.'
+            total:
+              type: object
+              required:
+              - value
+              - capped
+              description: 'Exact count of matching campaigns, capped at 1000 for cost (`capped: true` means "1000 or more").'
+              properties:
+                value:
+                  type: integer
+                  minimum: 0
+                capped:
+                  type: boolean
         meta:
           $ref: '#/components/schemas/ResponseMeta'
     CampaignReviewQueueItem:
@@ -40452,7 +41712,7 @@ components:
           $ref: '#/components/schemas/Timestamp'
         content_url:
           type: string
-          description: 'APPROVED only: `/api/v1/campaigns/{id}/media/{media_id}/content`.'
+          description: 'APPROVED only: `/api/v1/campaigns/{campaign_id}/media/{media_id}/content`.'
     CampaignMediaItemEnvelope:
       type: object
       required:
@@ -40472,12 +41732,18 @@ components:
         data:
           type: object
           required:
-          - media
+          - items
+          - next_cursor
           properties:
-            media:
+            items:
               type: array
               items:
                 $ref: '#/components/schemas/CampaignMediaItem'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: 'Always null: media lists are not paginated.'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
     CampaignMediaUpload:
@@ -40612,10 +41878,10 @@ components:
         data:
           type: object
           required:
-          - updates
+          - items
           - next_cursor
           properties:
-            updates:
+            items:
               type: array
               items:
                 $ref: '#/components/schemas/CampaignUpdateItem'
@@ -40657,10 +41923,10 @@ components:
         data:
           type: object
           required:
-          - updates
+          - items
           - next_cursor
           properties:
-            updates:
+            items:
               type: array
               items:
                 $ref: '#/components/schemas/CampaignUpdateQueueItem'
@@ -40704,10 +41970,10 @@ components:
         data:
           type: object
           required:
-          - updates
+          - items
           - next_cursor
           properties:
-            updates:
+            items:
               type: array
               items:
                 $ref: '#/components/schemas/CampaignUpdatePublic'
@@ -40964,3 +42230,427 @@ components:
               $ref: '#/components/schemas/Uuid'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
+    PublicCategory:
+      type: object
+      required:
+      - code
+      - slug
+      - name
+      - description
+      - display_order
+      - sensitive
+      - live_campaigns
+      properties:
+        code:
+          type: string
+        slug:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        display_order:
+          type: integer
+        sensitive:
+          type: boolean
+        live_campaigns:
+          type: integer
+          minimum: 0
+          description: Exact count of live PUBLIC campaigns in the category.
+    PublicCategoryEnvelope:
+      type: object
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          $ref: '#/components/schemas/PublicCategory'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    PublicCategoryListEnvelope:
+      type: object
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: object
+          required:
+          - items
+          - next_cursor
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PublicCategory'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: 'Always null: the category list is not paginated.'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    CampaignFeaturedCard:
+      allOf:
+      - $ref: '#/components/schemas/CampaignPublicCard'
+      - type: object
+        required:
+        - selection
+        properties:
+          selection:
+            type: string
+            enum:
+            - STAFF_PICK
+            - RECENTLY_PUBLISHED
+            description: 'Why it is listed: a staff pick, or recently published to fill the list. No popularity, ranking or paid promotion exists; being featured
+              is not an endorsement.'
+    CampaignFeaturedEnvelope:
+      type: object
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: object
+          required:
+          - items
+          - next_cursor
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CampaignFeaturedCard'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: Always null.
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    CampaignCanonicalEnvelope:
+      type: object
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: object
+          required:
+          - canonical_slug
+          properties:
+            canonical_slug:
+              type: string
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    PublicSitemapEnvelope:
+      type: object
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: object
+          required:
+          - campaigns
+          - categories
+          properties:
+            campaigns:
+              type: array
+              maxItems: 50000
+              items:
+                type: object
+                required:
+                - slug
+                - updated_at
+                properties:
+                  slug:
+                    type: string
+                  updated_at:
+                    $ref: '#/components/schemas/Timestamp'
+            categories:
+              type: array
+              items:
+                type: object
+                required:
+                - slug
+                - updated_at
+                properties:
+                  slug:
+                    type: string
+                  updated_at:
+                    $ref: '#/components/schemas/Timestamp'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      description: Live PUBLIC campaigns only (cap 50 000) and active categories.
+    PublicEventInput:
+      type: object
+      required:
+      - type
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          enum:
+          - CAMPAIGN_PAGE_VIEW
+          - CAMPAIGN_SHARE_CLICK
+          - CAMPAIGN_SEARCH
+          - CATEGORY_VIEW
+        slug:
+          type: string
+          description: Campaign slug (page view, share click).
+        category:
+          type: string
+          description: Category code or slug (category view); for searches only whether one was set is kept.
+        channel:
+          type: string
+          enum:
+          - WHATSAPP
+          - FACEBOOK
+          - X
+          - EMAIL
+          - COPY_LINK
+          - WEB_SHARE
+          description: Required for CAMPAIGN_SHARE_CLICK.
+    CampaignReportInput:
+      type: object
+      required:
+      - reason
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          enum:
+          - MISLEADING_INFORMATION
+          - IMPERSONATION
+          - SUSPICIOUS_ACTIVITY
+          - INAPPROPRIATE_CONTENT
+          - PRIVACY_CONCERN
+          - OTHER
+        details:
+          type: string
+          maxLength: 2000
+          description: Plain text; required (10–2000 characters) when reason is OTHER.
+        contact_email:
+          type: string
+          format: email
+          description: Optional; stored only as a blind index plus an encrypted value for follow-up; never shown to the owner or in staff lists.
+        website:
+          type: string
+          maxLength: 0
+          description: 'Honeypot: must be empty. A filled value is silently dropped (still 202).'
+    CampaignReportReceivedEnvelope:
+      type: object
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: object
+          required:
+          - received
+          properties:
+            received:
+              type: boolean
+              const: true
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      description: Identical for accepted reports, same-day duplicates and honeypot hits.
+    CampaignReportItem:
+      type: object
+      required:
+      - id
+      - campaign_id
+      - campaign_title
+      - campaign_slug
+      - status
+      - reason
+      - details
+      - has_contact
+      - reporter_signed_in
+      - created_at
+      - triaged_at
+      - triage_reason_code
+      - triage_note
+      - campaign_status
+      properties:
+        id:
+          $ref: '#/components/schemas/Uuid'
+        campaign_id:
+          $ref: '#/components/schemas/Uuid'
+        campaign_title:
+          type: string
+        campaign_slug:
+          type: string
+        status:
+          type: string
+          enum:
+          - OPEN
+          - ESCALATED
+          - DISMISSED
+        reason:
+          type: string
+        details:
+          type:
+          - string
+          - 'null'
+        has_contact:
+          type: boolean
+          description: The contact email itself is never returned.
+        reporter_signed_in:
+          type: boolean
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        triaged_at:
+          oneOf:
+          - $ref: '#/components/schemas/Timestamp'
+          - type: 'null'
+        triage_reason_code:
+          type:
+          - string
+          - 'null'
+        triage_note:
+          type:
+          - string
+          - 'null'
+        campaign_status:
+          $ref: '#/components/schemas/CampaignLifecycleStatus'
+    CampaignReportPageEnvelope:
+      type: object
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: object
+          required:
+          - items
+          - next_cursor
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CampaignReportItem'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: 'Opaque cursor: pass it back unchanged as `cursor`; null when there are no more items.'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    CampaignReportTriageEnvelope:
+      type: object
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: object
+          required:
+          - report_id
+          - status
+          properties:
+            report_id:
+              $ref: '#/components/schemas/Uuid'
+            status:
+              type: string
+              enum:
+              - DISMISSED
+              - ESCALATED
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    CampaignTriageDecision:
+      type: object
+      required:
+      - reason_code
+      - note
+      additionalProperties: false
+      properties:
+        reason_code:
+          type: string
+          pattern: ^[A-Z][A-Z0-9_]{2,63}$
+        note:
+          type: string
+          minLength: 3
+          maxLength: 5000
+        user_message:
+          type: string
+        assignee_id:
+          $ref: '#/components/schemas/Uuid'
+      description: Same decision body as the review actions; only `reason_code` and `note` are used.
+    CampaignFeatureInput:
+      type: object
+      additionalProperties: false
+      properties:
+        position:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: 'POST: required.'
+        note:
+          type: string
+          minLength: 3
+          maxLength: 500
+          description: 'POST: required.'
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+          description: 'DELETE: required.'
+    CampaignStaffPickListEnvelope:
+      type: object
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: object
+          required:
+          - items
+          - next_cursor
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CampaignStaffPick'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: Always null.
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    CampaignStaffPick:
+      type: object
+      required:
+      - campaign_id
+      - title
+      - slug
+      - status
+      - visibility
+      - position
+      - note
+      - added_by
+      - added_at
+      - shown
+      properties:
+        campaign_id:
+          $ref: '#/components/schemas/Uuid'
+        title:
+          type: string
+        slug:
+          type: string
+        status:
+          $ref: '#/components/schemas/CampaignLifecycleStatus'
+        visibility:
+          type: string
+        position:
+          type: integer
+        note:
+          type: string
+        added_by:
+          $ref: '#/components/schemas/Uuid'
+        added_at:
+          $ref: '#/components/schemas/Timestamp'
+        shown:
+          type: boolean
+          description: 'Whether the pick is currently shown (a pick never overrides visibility: it is skipped unless the campaign is live and PUBLIC).'

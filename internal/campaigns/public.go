@@ -2,10 +2,13 @@ package campaigns
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/Fatifizo/fundzim/internal/audit"
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
@@ -16,21 +19,25 @@ import (
 // PublicCampaign is what anyone may see: the approved version only, and nothing private (no ids of the owner,
 // beneficiary or reviewers, no documents, no identity or payout details, no risk or compliance data).
 type PublicCampaign struct {
-	Slug        string         `json:"slug"`
-	Title       string         `json:"title"`
-	Summary     string         `json:"summary"`
-	Story       string         `json:"story"`
-	Category    string         `json:"category"`
-	Goal        Money          `json:"goal"`
-	Status      string         `json:"status"` // ACTIVE | PAUSED | COMPLETED
-	Organiser   map[string]any `json:"organiser"`
-	Beneficiary map[string]any `json:"beneficiary"`
-	CoverMedia  *string        `json:"cover_media_id"`
-	MediaIDs    []string       `json:"media_ids"`
-	Media       []PublicMedia  `json:"media"`
-	PublishedAt *time.Time     `json:"published_at"`
-	CompletedAt *time.Time     `json:"completed_at"`
-	Donations   map[string]any `json:"donations"`
+	Slug          string         `json:"slug"`
+	CanonicalSlug string         `json:"canonical_slug"`
+	PublicCode    string         `json:"public_code"`
+	CategoryName  string         `json:"category_name"`
+	Trust         Trust          `json:"trust"`
+	Title         string         `json:"title"`
+	Summary       string         `json:"summary"`
+	Story         string         `json:"story"`
+	Category      string         `json:"category"`
+	Goal          Money          `json:"goal"`
+	Status        string         `json:"status"` // ACTIVE | PAUSED | COMPLETED
+	Organiser     map[string]any `json:"organiser"`
+	Beneficiary   map[string]any `json:"beneficiary"`
+	CoverMedia    *string        `json:"cover_media_id"`
+	MediaIDs      []string       `json:"media_ids"`
+	Media         []PublicMedia  `json:"media"`
+	PublishedAt   *time.Time     `json:"published_at"`
+	CompletedAt   *time.Time     `json:"completed_at"`
+	Donations     map[string]any `json:"donations"`
 }
 
 // PublicMedia is an image of the approved version that is still APPROVED (removed media drop out).
@@ -55,7 +62,7 @@ func (s *Service) publicMedia(ctx context.Context, ids []string) ([]PublicMedia,
 
 // PublicView returns a live campaign by slug (404 for anything not public; existence is not revealed).
 func (s *Service) PublicView(ctx context.Context, slug string) (PublicCampaign, error) {
-	a, err := s.PublicBySlug(ctx, slug)
+	a, err := s.resolvePublic(ctx, slug)
 	if err != nil {
 		return PublicCampaign{}, err
 	}
@@ -70,7 +77,7 @@ func (s *Service) PublicView(ctx context.Context, slug string) (PublicCampaign, 
 	if err != nil {
 		return PublicCampaign{}, err
 	}
-	p := PublicCampaign{Slug: c.Slug, Title: v.Title, Summary: v.Summary, Story: v.Story, Category: v.Category, Goal: v.Goal, Status: c.Status,
+	p := PublicCampaign{Slug: c.Slug, CanonicalSlug: c.Slug, PublicCode: strings.ToLower(c.PublicCode), Title: v.Title, Summary: v.Summary, Story: v.Story, Category: v.Category, Goal: v.Goal, Status: c.Status,
 		MediaIDs: []string{}, PublishedAt: c.PublishedAt, CompletedAt: c.CompletedAt, Donations: donationsNotAvailable()}
 	if p.Media, err = s.publicMedia(ctx, v.MediaIDs); err != nil {
 		return p, err
@@ -82,6 +89,12 @@ func (s *Service) PublicView(ctx context.Context, slug string) (PublicCampaign, 
 		}
 	}
 	if p.Organiser, err = s.organiser(ctx, c); err != nil {
+		return p, err
+	}
+	if p.Trust, err = s.trust(ctx, c.OwnerUserID, c.OwnerOrgID, v.BeneficiaryID, true); err != nil {
+		return p, err
+	}
+	if err := s.Pool.QueryRow(ctx, `SELECT name FROM app.campaign_categories WHERE code = $1`, v.Category).Scan(&p.CategoryName); err != nil {
 		return p, err
 	}
 	p.Beneficiary = map[string]any{"disclosed": false}
@@ -114,15 +127,17 @@ func (s *Service) organiser(ctx context.Context, c campaignRow) (map[string]any,
 
 // PublicCard is a search result.
 type PublicCard struct {
-	Slug        string     `json:"slug"`
-	Title       string     `json:"title"`
-	Summary     string     `json:"summary"`
-	Category    string     `json:"category"`
-	Goal        Money      `json:"goal"`
-	Status      string     `json:"status"`
-	CoverMedia  *string    `json:"cover_media_id"`
-	PublishedAt *time.Time `json:"published_at"`
-	CreatedAt   time.Time  `json:"created_at"`
+	Slug        string         `json:"slug"`
+	Title       string         `json:"title"`
+	Summary     string         `json:"summary"`
+	Category    string         `json:"category"`
+	Goal        Money          `json:"goal"`
+	Status      string         `json:"status"`
+	CoverMedia  *string        `json:"cover_media_id"`
+	PublishedAt *time.Time     `json:"published_at"`
+	CreatedAt   time.Time      `json:"created_at"`
+	Organiser   map[string]any `json:"organiser"`
+	Trust       *Trust         `json:"trust"`
 }
 
 // SearchInput is GET /public/campaigns.
@@ -131,8 +146,10 @@ type SearchInput struct {
 	Limit                     int
 }
 
-// Search lists live, PUBLIC (listed) campaigns. Text search runs over the approved snapshots only.
-func (s *Service) Search(ctx context.Context, in SearchInput) ([]PublicCard, string, error) {
+// Search lists live, PUBLIC (listed) campaigns. Text search runs over the approved snapshots only; the
+// query is bounded (length, statement timeout, page size) and the count is exact up to a cap.
+func (s *Service) Search(ctx context.Context, in SearchInput) ([]PublicCard, string, Count, error) {
+	var total Count
 	if in.Limit <= 0 || in.Limit > 50 {
 		in.Limit = 20
 	}
@@ -142,11 +159,21 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]PublicCard, str
 	case "created":
 		orderCol = "c.created_at"
 	default:
-		return nil, "", httpx.Validation(errs.Detail{Field: "sort", Code: "INVALID_VALUE"})
+		return nil, "", total, httpx.Validation(errs.Detail{Field: "sort", Code: "INVALID_VALUE"})
 	}
-	q := strings.TrimSpace(in.Q)
-	if len(q) > 100 {
-		return nil, "", httpx.Validation(errs.Detail{Field: "q", Code: "INVALID_LENGTH"})
+	q, code := CleanText(in.Q, 0, 100, false)
+	if code != "" && code != "HTML_NOT_ALLOWED" && code != "UNSAFE_LINK" {
+		return nil, "", total, httpx.Validation(errs.Detail{Field: "q", Code: code})
+	}
+	if code != "" {
+		q = strings.Join(strings.Fields(in.Q), " ") // markup in a search box is just text to match (never rendered as HTML)
+		if utf8.RuneCountInString(q) > 100 {
+			return nil, "", total, httpx.Validation(errs.Detail{Field: "q", Code: "INVALID_LENGTH"})
+		}
+	}
+	category := strings.TrimSpace(in.Category)
+	if len(category) > 40 {
+		return nil, "", total, httpx.Validation(errs.Detail{Field: "category", Code: "INVALID_LENGTH"})
 	}
 	var before *time.Time
 	beforeID := "ffffffff-ffff-ffff-ffff-ffffffffffff"
@@ -154,43 +181,49 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]PublicCard, str
 		ts, id, _ := strings.Cut(in.Cursor, "|")
 		t, err := time.Parse(time.RFC3339Nano, ts)
 		if err != nil || !validID(id) {
-			return nil, "", httpx.Validation(errs.Detail{Field: "cursor", Code: "INVALID_FORMAT"})
+			return nil, "", total, httpx.Validation(errs.Detail{Field: "cursor", Code: "INVALID_FORMAT"})
 		}
 		before, beforeID = &t, id
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT c.id, c.slug, v.title, v.summary, v.category_code, v.goal_amount_minor, v.goal_currency, c.status,
-		(SELECT u.m::text FROM unnest(v.media_ids) WITH ORDINALITY AS u(m, o) JOIN app.campaign_media cm ON cm.id = u.m
-		   AND cm.status = 'APPROVED' AND cm.kind = 'COVER' ORDER BY u.o LIMIT 1), c.published_at, c.created_at, `+orderCol+`
-		FROM app.campaigns c JOIN app.campaign_versions v ON v.id = c.approved_version_id
+	const where = ` FROM app.campaigns c JOIN app.campaign_versions v ON v.id = c.approved_version_id
 		WHERE c.status IN ('ACTIVE','PAUSED','COMPLETED') AND c.visibility = 'PUBLIC'
-		  AND ($1 = '' OR v.category_code = $1)
-		  AND ($2 = '' OR to_tsvector('simple', v.title || ' ' || v.summary) @@ websearch_to_tsquery('simple', $2))
-		  AND ($3::timestamptz IS NULL OR (`+orderCol+`, c.id) < ($3, $4::uuid))
-		ORDER BY `+orderCol+` DESC, c.id DESC LIMIT $5`, in.Category, q, before, beforeID, in.Limit)
-	if err != nil {
-		return nil, "", err
-	}
-	defer rows.Close()
-	out := []PublicCard{}
-	var lastKey time.Time
-	var lastID string
-	for rows.Next() {
-		var p PublicCard
-		var id string
-		var amount int64
-		if err := rows.Scan(&id, &p.Slug, &p.Title, &p.Summary, &p.Category, &amount, &p.Goal.Currency, &p.Status, &p.CoverMedia, &p.PublishedAt,
-			&p.CreatedAt, &lastKey); err != nil {
-			return nil, "", err
+		  AND ($1 = '' OR v.category_code = $1 OR v.category_code = (SELECT code FROM app.campaign_categories WHERE slug = $1))
+		  AND ($2 = '' OR v.search_tsv @@ websearch_to_tsquery('simple', $2))`
+	var rows []cardRow
+	err := s.tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		// bounded and always planned for the actual parameters (a cached generic plan ignores the GIN index;
+		// performance.md R4)
+		if _, err := tx.Exec(ctx, `SET LOCAL statement_timeout = '2s'; SET LOCAL plan_cache_mode = force_custom_plan`); err != nil {
+			return err
 		}
-		p.Goal.AmountMinor = itoa(amount)
-		lastID = id
-		out = append(out, p)
+		r, err := tx.Query(ctx, cardSelect+`, `+orderCol+where+`
+		  AND ($3::timestamptz IS NULL OR (`+orderCol+`, c.id) < ($3, $4::uuid))
+		ORDER BY `+orderCol+` DESC, c.id DESC LIMIT $5`, category, q, before, beforeID, in.Limit)
+		if err != nil {
+			return err
+		}
+		if rows, err = scanCards(r, true); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `SELECT count(*) FROM (SELECT 1`+where+` LIMIT `+itoa(searchCountCap+1)+`) x`, category, q).Scan(&total.Value)
+	})
+	var pg *pgconn.PgError
+	if errors.As(err, &pg) && pg.Code == "57014" {
+		return nil, "", total, errs.New(errs.Unavailable, "SEARCH_TIMEOUT", "Search took too long. Try a simpler search.")
+	}
+	if err != nil {
+		return nil, "", total, err
+	}
+	if total.Value > searchCountCap {
+		total = Count{Value: searchCountCap, Capped: true}
 	}
 	next := ""
-	if len(out) == in.Limit {
-		next = lastKey.UTC().Format(time.RFC3339Nano) + "|" + lastID
+	if len(rows) == in.Limit {
+		last := rows[len(rows)-1]
+		next = last.orderKey.UTC().Format(time.RFC3339Nano) + "|" + last.id
 	}
-	return out, next, rows.Err()
+	cards, err := s.enrichCards(ctx, rows)
+	return cards, next, total, err
 }
 
 // Category is a campaign category.
@@ -278,8 +311,8 @@ func (s *Service) UpdateCategory(ctx context.Context, staffID, code string, p Ca
 	}
 	return s.tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		args = append(args, ifMatch)
-		tag, err := tx.Exec(ctx, `UPDATE app.campaign_categories SET `+strings.Join(sets, ", ")+` WHERE code = $1 AND ($`+itoa(int64(len(args)))+
-			` = 0 OR version = $`+itoa(int64(len(args)))+`)`, args...)
+		tag, err := tx.Exec(ctx, `UPDATE app.campaign_categories SET `+strings.Join(sets, ", ")+` WHERE code = $1 AND version = $`+
+			itoa(int64(len(args))), args...)
 		if err != nil {
 			return err
 		}
@@ -289,7 +322,7 @@ func (s *Service) UpdateCategory(ctx context.Context, staffID, code string, p Ca
 			if !exists {
 				return errs.New(errs.NotFound, "CATEGORY_NOT_FOUND", "No such category.")
 			}
-			return ErrStateChanged
+			return httpx.ErrPreconditionFailed
 		}
 		return audit.Record(ctx, tx, audit.Event{Action: "campaign.category_updated", ActorType: "staff", ActorID: staffID, TargetType: "campaign_category",
 			TargetID: "", Metadata: map[string]any{"code": code, "fields": len(sets)}})

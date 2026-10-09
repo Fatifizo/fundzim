@@ -269,7 +269,7 @@ func cuCreate(t *testing.T, u cuUser, campaignID, title string, publish bool, wa
 }
 
 type cuPublicList struct {
-	Updates []map[string]any `json:"updates"`
+	Updates []map[string]any `json:"items"`
 	Next    string           `json:"next_cursor"`
 }
 
@@ -329,8 +329,8 @@ func TestCampaignUpdatesPublishDirectAndPreModerated(t *testing.T) {
 	// draft, then publish through PATCH (If-Match required and checked)
 	draft := cuCreate(t, owner, std.id, "Draft news item", false, "DRAFT")
 	path := "/campaigns/" + std.id + "/updates/" + draft.ID
-	owner.expect(owner.do("PATCH", path, map[string]any{"publish": true}), 422, "VALIDATION_FAILED")
-	owner.expect(owner.do("PATCH", path, map[string]any{"publish": true}, "If-Match", `"9"`), 409, "VERSION_CONFLICT")
+	owner.expect(owner.do("PATCH", path, map[string]any{"publish": true}), 428, "PRECONDITION_REQUIRED")
+	owner.expect(owner.do("PATCH", path, map[string]any{"publish": true}, "If-Match", `"9"`), 412, "PRECONDITION_FAILED")
 	r := owner.do("PATCH", path, map[string]any{"title": "Draft news, now final", "publish": true}, "If-Match", fmt.Sprintf(`"%d"`, draft.Version))
 	owner.expect(r, 200, "")
 	if up := cuDecode[cuUpdate](t, r); up.Status != "PUBLISHED" || up.Title != "Draft news, now final" || up.Version != draft.Version+1 {
@@ -375,7 +375,7 @@ func TestCampaignUpdatesPublishDirectAndPreModerated(t *testing.T) {
 			Updates []struct {
 				ID       string `json:"id"`
 				AuthorID string `json:"author_id"`
-			} `json:"updates"`
+			} `json:"items"`
 			Next string `json:"next_cursor"`
 		}
 		_ = json.Unmarshal(q.Data, &ql)
@@ -446,7 +446,7 @@ func TestCampaignUpdatesSuspendedCampaignRefused(t *testing.T) {
 	}
 	owner.expect(owner.do("PATCH", "/campaigns/"+live.id+"/updates/"+draft.ID, map[string]any{"title": "Edited after suspension"},
 		"If-Match", fmt.Sprint(draft.Version)), 409, "INVALID_STATUS")
-	owner.expect(owner.do("DELETE", "/campaigns/"+live.id+"/updates/"+draft.ID, nil), 409, "INVALID_STATUS")
+	owner.expect(owner.do("DELETE", "/campaigns/"+live.id+"/updates/"+draft.ID, nil, "If-Match", "1"), 409, "INVALID_STATUS")
 	m1 := s.staff(t, mods.mod1)
 	m1.expect(m1.do("POST", "/admin/campaigns/updates/"+pend.ID+"/approve", cuDecision("CONTENT_OK")), 409, "INVALID_STATUS")
 	// staff can still hide content on a suspended campaign
@@ -467,13 +467,13 @@ func TestCampaignUpdatesIDOR(t *testing.T) {
 	other.expect(other.do("GET", "/campaigns/"+mine.id+"/updates", nil), 404, "CAMPAIGN_NOT_FOUND")
 	for _, id := range []string{draft.ID, pub.ID} {
 		other.expect(other.do("PATCH", "/campaigns/"+mine.id+"/updates/"+id, map[string]any{"title": "Hijacked title"}, "If-Match", "1"), 404, "CAMPAIGN_NOT_FOUND")
-		other.expect(other.do("DELETE", "/campaigns/"+mine.id+"/updates/"+id, nil), 404, "CAMPAIGN_NOT_FOUND")
+		other.expect(other.do("DELETE", "/campaigns/"+mine.id+"/updates/"+id, nil, "If-Match", "1"), 404, "CAMPAIGN_NOT_FOUND")
 		// through their own campaign id: the update is not found there
 		other.expect(other.do("PATCH", "/campaigns/"+theirs.id+"/updates/"+id, map[string]any{"title": "Hijacked title"}, "If-Match", "1"), 404, "UPDATE_NOT_FOUND")
-		other.expect(other.do("DELETE", "/campaigns/"+theirs.id+"/updates/"+id, nil), 404, "UPDATE_NOT_FOUND")
+		other.expect(other.do("DELETE", "/campaigns/"+theirs.id+"/updates/"+id, nil, "If-Match", "1"), 404, "UPDATE_NOT_FOUND")
 	}
 	// the owner's own path mixing campaigns is refused too
-	owner.expect(owner.do("DELETE", "/campaigns/"+theirs.id+"/updates/"+draft.ID, nil), 404, "CAMPAIGN_NOT_FOUND")
+	owner.expect(owner.do("DELETE", "/campaigns/"+theirs.id+"/updates/"+draft.ID, nil, "If-Match", "1"), 404, "CAMPAIGN_NOT_FOUND")
 	// anonymous callers get 401 on owner routes
 	anon := s.browser(t)
 	if r := anon.do("GET", "/campaigns/"+mine.id+"/updates", nil); r.Status != 401 {
@@ -486,7 +486,8 @@ func TestCampaignUpdatesIDOR(t *testing.T) {
 	}
 	// the owner's soft delete keeps the row
 	owner.expect(owner.do("DELETE", "/campaigns/"+mine.id+"/updates/"+draft.ID, nil, "If-Match", "1"), 204, "")
-	owner.expect(owner.do("DELETE", "/campaigns/"+mine.id+"/updates/"+draft.ID, nil), 404, "UPDATE_NOT_FOUND")
+	owner.expect(owner.do("DELETE", "/campaigns/"+mine.id+"/updates/"+draft.ID, nil), 428, "PRECONDITION_REQUIRED") // If-Match required (ADR-038 §7)
+	owner.expect(owner.do("DELETE", "/campaigns/"+mine.id+"/updates/"+draft.ID, nil, "If-Match", "1"), 404, "UPDATE_NOT_FOUND")
 	if n := cuCount(t, `SELECT count(*) FROM app.campaign_updates WHERE id = $1 AND status = 'DELETED' AND deleted_by = $2`, draft.ID, owner.id); n != 1 {
 		t.Fatal("soft delete not recorded")
 	}
@@ -505,7 +506,7 @@ func TestCampaignUpdatesPublicListingAndHide(t *testing.T) {
 	second := cuCreate(t, owner, c.id, "Second public news", true, "PUBLISHED")
 	draft := cuCreate(t, owner, c.id, "Unpublished draft", false, "DRAFT")
 	gone := cuCreate(t, owner, c.id, "Published then deleted", true, "PUBLISHED")
-	owner.expect(owner.do("DELETE", "/campaigns/"+c.id+"/updates/"+gone.ID, nil), 204, "")
+	owner.expect(owner.do("DELETE", "/campaigns/"+c.id+"/updates/"+gone.ID, nil, "If-Match", fmt.Sprint(gone.Version)), 204, "")
 
 	r, l := cuPublic(t, s, c.slug, "")
 	if r.Status != 200 {
@@ -554,7 +555,7 @@ func TestCampaignUpdatesPublicListingAndHide(t *testing.T) {
 	ol := owner.do("GET", "/campaigns/"+c.id+"/updates", nil)
 	owner.expect(ol, 200, "")
 	var own struct {
-		Updates []cuUpdate `json:"updates"`
+		Updates []cuUpdate `json:"items"`
 	}
 	_ = json.Unmarshal(ol.Data, &own)
 	found := false

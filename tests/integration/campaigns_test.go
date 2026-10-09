@@ -183,8 +183,8 @@ func TestCampaignLifecycleEndToEnd(t *testing.T) {
 	}
 
 	// optimistic concurrency and content safety on edits
-	u.expect(u.do("PATCH", "/campaigns/"+id, map[string]any{"story": storyText}), 422, "IF_MATCH_REQUIRED")
-	u.expect(u.do("PATCH", "/campaigns/"+id, map[string]any{"story": storyText}, "If-Match", `"99"`), 409, "CAMPAIGN_STATE_CHANGED")
+	u.expect(u.do("PATCH", "/campaigns/"+id, map[string]any{"story": storyText}), 428, "PRECONDITION_REQUIRED")
+	u.expect(u.do("PATCH", "/campaigns/"+id, map[string]any{"story": storyText}, "If-Match", `"99"`), 412, "PRECONDITION_FAILED")
 	u.expect(u.do("PATCH", "/campaigns/"+id, map[string]any{"story": storyText + " <script>alert(1)</script>"}, "If-Match", etag), 422, "VALIDATION_FAILED")
 	u.expect(u.do("PATCH", "/campaigns/"+id, map[string]any{"story": storyText + " javascript:alert(1)"}, "If-Match", etag), 422, "VALIDATION_FAILED")
 	r = u.do("PATCH", "/campaigns/"+id, map[string]any{"story": storyText}, "If-Match", etag)
@@ -441,7 +441,7 @@ func TestCampaignConcurrency(t *testing.T) {
 	codes = parallelDo(5, func(i int) int {
 		return u.do("PATCH", "/campaigns/"+id, map[string]any{"summary": fmt.Sprintf("Edited concurrently by writer number %d", i)}, "If-Match", etag).Status
 	})
-	if codes[200] != 1 || codes[409] != 4 {
+	if codes[200] != 1 || codes[412] != 4 {
 		t.Fatalf("concurrent edits: %v", codes)
 	}
 
@@ -662,7 +662,7 @@ func TestCampaignSecurityRechecks(t *testing.T) {
 		Media []struct {
 			ID      string `json:"id"`
 			Version int    `json:"version"`
-		} `json:"media"`
+		} `json:"items"`
 	}
 	_ = json.Unmarshal(mr.Data, &ml)
 	etag := ""

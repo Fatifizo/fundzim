@@ -71,7 +71,8 @@ var ownedTables = map[string][]string{
 	// Stage 6 (interface-contracts §1): core (lead), campaign_media (stream M), campaign updates (stream U)
 	"campaigns": {"app.campaign_categories", "app.campaign_policies", "app.campaigns", "app.campaign_goals", "app.campaign_versions",
 		"app.campaign_beneficiaries", "app.campaign_reviews", "app.campaign_status_history", "app.campaign_eligibility_evaluations",
-		"app.campaign_media", "app.campaign_media_events", "app.campaign_updates", "app.campaign_update_events"},
+		"app.campaign_media", "app.campaign_media_events", "app.campaign_updates", "app.campaign_update_events",
+		"app.campaign_reports", "app.campaign_featured", "app.public_event_counters"}, // Stage 7
 }
 
 // moduleOf maps a repository-relative directory to its module ("" = not a constrained module).

@@ -136,7 +136,7 @@ func NewDeps(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Deps
 		return nil, err
 	}
 	d.Verification, err = NewVerificationModules(ctx, VerificationDeps{AppPool: pool, Config: cfg, Clock: clock.System, Logger: logger,
-		Registry: d.Metrics.Registry, Blobs: d.Storage, Orgs: d.Orgs, Auth: d.Auth})
+		Registry: d.Metrics.Registry, Blobs: d.Storage, Orgs: d.Orgs, Auth: d.Auth, Limiter: d.Limiter})
 	if err != nil {
 		d.Close()
 		return nil, err

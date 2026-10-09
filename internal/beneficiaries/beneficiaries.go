@@ -663,3 +663,34 @@ func (b Beneficiary) AssignedTo() *string { return b.assignedTo }
 
 // Status returns the verification status.
 func (b Beneficiary) Status() string { return b.status }
+
+// StatusOf returns a beneficiary's type and verification status without loading documents (public trust
+// indicators; never exposes details).
+func (s *Service) StatusOf(ctx context.Context, id string) (beneficiaryType, status string, err error) {
+	err = s.Pool.QueryRow(ctx, `SELECT beneficiary_type, status FROM app.beneficiaries WHERE id = $1`, id).Scan(&beneficiaryType, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", ErrNotFound
+	}
+	return beneficiaryType, status, err
+}
+
+// StatusesOf is StatusOf for many beneficiaries in one query: id → [type, status].
+func (s *Service) StatusesOf(ctx context.Context, ids []string) (map[string][2]string, error) {
+	out := make(map[string][2]string, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT id::text, beneficiary_type, status FROM app.beneficiaries WHERE id = ANY ($1::uuid[])`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, t, st string
+		if err := rows.Scan(&id, &t, &st); err != nil {
+			return nil, err
+		}
+		out[id] = [2]string{t, st}
+	}
+	return out, rows.Err()
+}

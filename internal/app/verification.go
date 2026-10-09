@@ -27,6 +27,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/idempotency"
 	"github.com/Fatifizo/fundzim/internal/platform/jobs"
 	"github.com/Fatifizo/fundzim/internal/platform/outbox"
+	"github.com/Fatifizo/fundzim/internal/platform/ratelimit"
 	pstorage "github.com/Fatifizo/fundzim/internal/platform/storage"
 	"github.com/Fatifizo/fundzim/internal/risk"
 	"github.com/Fatifizo/fundzim/internal/storage"
@@ -52,8 +53,9 @@ type VerificationDeps struct {
 	Registry  prometheus.Registerer
 	Blobs     *pstorage.Client
 	Orgs      *organisations.Service
-	Auth      *auth.Service // StaffHasPermission for compliance eligibility (nil in the worker is tolerated)
-	WithScans bool          // worker: build the malware scanner
+	Auth      *auth.Service     // StaffHasPermission for compliance eligibility (nil in the worker is tolerated)
+	WithScans bool              // worker: build the malware scanner
+	Limiter   ratelimit.Limiter // API: public report and analytics throttles (Stage 7; nil in the worker)
 }
 
 // VerificationModules is the built Stage 5 module set.
@@ -68,6 +70,8 @@ type VerificationModules struct {
 	HTTP                    *verification.Service
 	Campaigns               *campaigns.Service    // Stage 6 (internal/app/campaigns.go)
 	CampaignMedia           *CampaignMediaService // Stage 6 stream M (internal/app/campaign_media.go)
+	appAEAD                 *crypto.AEAD          // app field key (payout destinations, campaign report contacts)
+	appKeyed                *crypto.Keyed         // app blind-index key
 
 	// Stage 6 stream U (internal/app/campaign_updates.go)
 	CampaignUpdates *CampaignUpdatesService
@@ -182,6 +186,7 @@ func NewVerificationModules(ctx context.Context, d VerificationDeps) (*Verificat
 	m.KYC = kyc.New(kyc.Deps{Pool: m.KYCPool, AppPool: d.AppPool, Orgs: d.Orgs, Storage: m.Storage, AEAD: kycAEAD, Keyed: kycKeyed, Clock: d.Clock, Logger: d.Logger})
 	m.Beneficiaries = &beneficiaries.Service{Pool: d.AppPool, KYC: m.KYC, Orgs: d.Orgs, Clock: d.Clock, Logger: d.Logger}
 	m.Payouts = &payouts.Service{Pool: d.AppPool, KYC: m.KYC, Benefs: m.Beneficiaries, Orgs: d.Orgs, AEAD: appAEAD, Keyed: appKeyed, Clock: d.Clock, Logger: d.Logger}
+	m.appAEAD, m.appKeyed = appAEAD, appKeyed
 	m.Risk = risk.New(d.AppPool, d.Clock, d.Logger)
 	m.Compliance, err = compliance.New(compliance.Deps{Pool: m.CompliancePool, Clock: d.Clock, Logger: d.Logger, NotesAEAD: notesAEAD,
 		Relations: relations{pool: d.AppPool, orgs: d.Orgs, auth: d.Auth}, StepUpMaxAge: cfg.Auth.StepUpMaxAge})

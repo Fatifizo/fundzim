@@ -143,7 +143,7 @@ type Patch struct {
 // approves them (ADR-036 §3).
 func (s *Service) Update(ctx context.Context, userID, id string, p Patch, ifMatch int) error {
 	if ifMatch <= 0 {
-		return errs.New(errs.Unprocessable, "IF_MATCH_REQUIRED", "Send If-Match with the version you are editing.")
+		return httpx.ErrPreconditionRequired
 	}
 	pol, err := s.ActivePolicy(ctx)
 	if err != nil {
@@ -155,7 +155,7 @@ func (s *Service) Update(ctx context.Context, userID, id string, p Patch, ifMatc
 			return err
 		}
 		if c.Version != ifMatch {
-			return ErrStateChanged
+			return httpx.ErrPreconditionFailed
 		}
 		live := c.Status == StatusActive || c.Status == StatusPaused
 		contentChange := p.Title != nil || p.Summary != nil || p.Story != nil || p.Category != nil || p.Goal != nil

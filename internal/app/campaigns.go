@@ -69,7 +69,7 @@ func (f campaignFlags) Enabled(ctx context.Context, key string) (bool, error) {
 func newCampaigns(m *VerificationModules, d VerificationDeps) *campaigns.Service {
 	svc := campaigns.New(campaigns.Deps{Pool: d.AppPool, KYC: m.KYC, Beneficiaries: m.Beneficiaries, Orgs: d.Orgs,
 		Restrictions: campaignRestrictions{m.Compliance}, Age: campaignAge{m.KYC}, Flags: campaignFlags{d.AppPool},
-		Clock: d.Clock, Logger: d.Logger})
+		Limiter: d.Limiter, AEAD: m.appAEAD, Keyed: m.appKeyed, Clock: d.Clock, Logger: d.Logger})
 	if d.Auth != nil {
 		svc.StaffCan = d.Auth.StaffHasPermission
 	}

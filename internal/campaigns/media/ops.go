@@ -250,7 +250,7 @@ type UpdateInput struct {
 // Update changes position and alt text of non-removed, non-rejected media (optimistic concurrency).
 func (s *Service) Update(ctx context.Context, in UpdateInput) (Media, error) {
 	if in.IfVersion < 1 {
-		return Media{}, ErrVersionRequired
+		return Media{}, httpx.ErrPreconditionRequired
 	}
 	if in.Position == nil && in.AltText == nil {
 		return Media{}, httpx.Validation(errs.Detail{Field: "body", Code: "NOTHING_TO_UPDATE"})
@@ -281,7 +281,7 @@ func (s *Service) Update(ctx context.Context, in UpdateInput) (Media, error) {
 		return Media{}, ErrInvalidStatus
 	}
 	if cur.Version != in.IfVersion {
-		return Media{}, ErrStateChanged
+		return Media{}, httpx.ErrPreconditionFailed
 	}
 	if isLive && cur.Status == StatusApproved {
 		if err := s.d.MaterialChanges.RecordMaterialChange(ctx, in.CampaignID, materialChangeKindMedia, in.UserID); err != nil {
@@ -302,7 +302,7 @@ func (s *Service) Update(ctx context.Context, in UpdateInput) (Media, error) {
 			return err
 		}
 		if m.Version != in.IfVersion {
-			return ErrStateChanged
+			return httpx.ErrPreconditionFailed
 		}
 		if m.Status == StatusRemoved || m.Status == StatusRejected {
 			return ErrInvalidStatus

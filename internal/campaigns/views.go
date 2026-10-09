@@ -177,32 +177,66 @@ func scanSummary(rows pgx.Rows) ([]Summary, error) {
 	return out, rows.Err()
 }
 
-// Mine lists the user's own campaigns and those of their organisations (or one organisation).
-func (s *Service) Mine(ctx context.Context, userID, orgID string) ([]Summary, error) {
+// parseNewestCursor parses a "<created_at RFC3339Nano>|<id>" keyset cursor (newest-first lists).
+func parseNewestCursor(cursor string) (*time.Time, string, error) {
+	if cursor == "" {
+		return nil, "ffffffff-ffff-ffff-ffff-ffffffffffff", nil
+	}
+	ts, id, _ := strings.Cut(cursor, "|")
+	t, err := time.Parse(time.RFC3339Nano, ts)
+	if err != nil || !validID(id) {
+		return nil, "", httpx.Validation(errs.Detail{Field: "cursor", Code: "INVALID_FORMAT"})
+	}
+	return &t, id, nil
+}
+
+func pageLimit(limit int) int {
+	if limit <= 0 || limit > 100 {
+		return 50
+	}
+	return limit
+}
+
+func nextNewest(items []Summary, limit int) string {
+	if len(items) < limit || len(items) == 0 {
+		return ""
+	}
+	last := items[len(items)-1]
+	return last.CreatedAt.UTC().Format(time.RFC3339Nano) + "|" + last.ID
+}
+
+// Mine lists the user's own campaigns and those of their organisations (or one organisation), newest first.
+func (s *Service) Mine(ctx context.Context, userID, orgID, cursor string, limit int) ([]Summary, string, error) {
+	before, beforeID, err := parseNewestCursor(cursor)
+	if err != nil {
+		return nil, "", err
+	}
+	limit = pageLimit(limit)
+	var orgs []string
+	owner := userID
 	if orgID != "" {
 		role, err := s.Orgs.MemberRole(ctx, orgID, userID)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		if role == "" {
-			return nil, errs.New(errs.NotFound, "ORGANISATION_NOT_FOUND", "No such organisation.")
+			return nil, "", errs.New(errs.NotFound, "ORGANISATION_NOT_FOUND", "No such organisation.")
 		}
-		rows, err := s.Pool.Query(ctx, summarySelect+` WHERE owner_organisation_id = $1 ORDER BY created_at DESC LIMIT 200`, orgID)
-		if err != nil {
-			return nil, err
-		}
-		return scanSummary(rows)
+		orgs, owner = []string{orgID}, "00000000-0000-0000-0000-000000000000"
+	} else if orgs, err = s.Orgs.OrganisationsOf(ctx, userID); err != nil {
+		return nil, "", err
 	}
-	orgs, err := s.Orgs.OrganisationsOf(ctx, userID)
+	rows, err := s.Pool.Query(ctx, summarySelect+` WHERE (owner_user_id = $1 OR owner_organisation_id = ANY ($2::uuid[]))
+		AND ($3::timestamptz IS NULL OR (created_at, id) < ($3, $4::uuid)) ORDER BY created_at DESC, id DESC LIMIT $5`,
+		owner, orgs, before, beforeID, limit)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	rows, err := s.Pool.Query(ctx, summarySelect+` WHERE owner_user_id = $1 OR owner_organisation_id = ANY ($2::uuid[]) ORDER BY created_at DESC LIMIT 200`,
-		userID, orgs)
+	items, err := scanSummary(rows)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return scanSummary(rows)
+	return items, nextNewest(items, limit), nil
 }
 
 // ---- staff ------------------------------------------------------------------------------------------------
@@ -276,16 +310,23 @@ func (s *Service) Queue(ctx context.Context, staffID, assigned, category, cursor
 }
 
 // AdminList lists campaigns of any status for staff with campaign.view (newest first, simple filters).
-func (s *Service) AdminList(ctx context.Context, status, q string, limit int) ([]Summary, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 50
-	}
-	rows, err := s.Pool.Query(ctx, summarySelect+` WHERE ($1 = '' OR status = $1) AND ($2 = '' OR title ILIKE '%' || $2 || '%' OR id::text = $2 OR slug = $2)
-		ORDER BY created_at DESC LIMIT $3`, status, escapeLike(q), limit)
+func (s *Service) AdminList(ctx context.Context, status, q, cursor string, limit int) ([]Summary, string, error) {
+	before, beforeID, err := parseNewestCursor(cursor)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return scanSummary(rows)
+	limit = pageLimit(limit)
+	rows, err := s.Pool.Query(ctx, summarySelect+` WHERE ($1 = '' OR status = $1) AND ($2 = '' OR title ILIKE '%' || $2 || '%' OR id::text = $2 OR slug = $2)
+		AND ($3::timestamptz IS NULL OR (created_at, id) < ($3, $4::uuid)) ORDER BY created_at DESC, id DESC LIMIT $5`,
+		status, escapeLike(q), before, beforeID, limit)
+	if err != nil {
+		return nil, "", err
+	}
+	items, err := scanSummary(rows)
+	if err != nil {
+		return nil, "", err
+	}
+	return items, nextNewest(items, limit), nil
 }
 
 func escapeLike(q string) string {

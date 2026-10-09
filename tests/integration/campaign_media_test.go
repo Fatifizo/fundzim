@@ -328,7 +328,7 @@ func cmList(t *testing.T, b *browser, path string) []cmMedia {
 	r := b.do("GET", path, nil)
 	b.expect(r, 200, "")
 	var out struct {
-		Media []cmMedia `json:"media"`
+		Media []cmMedia `json:"items"`
 	}
 	if err := json.Unmarshal(r.Data, &out); err != nil {
 		t.Fatal(err)
@@ -565,7 +565,7 @@ func TestCampaignMediaApprovedStrippedAndServed(t *testing.T) {
 	cmPublish(t, c, approved...)
 	p := cmPublicContent(t, s, c.slug, cover.ID)
 	if p.status != 200 || !bytes.Equal(p.body, r.body) || p.header.Get("Content-Type") != "image/jpeg" ||
-		p.header.Get("X-Content-Type-Options") != "nosniff" || !strings.HasPrefix(p.header.Get("Cache-Control"), "public, max-age=") ||
+		p.header.Get("X-Content-Type-Options") != "nosniff" || p.header.Get("Cache-Control") != "public, no-cache" ||
 		!strings.Contains(p.header.Get("Content-Security-Policy"), "default-src 'none'") || p.header.Get("ETag") == "" ||
 		p.header.Get("Set-Cookie") != "" {
 		t.Fatalf("public content: %d %v", p.status, p.header)
@@ -772,10 +772,10 @@ func TestCampaignMediaIDORAndValidation(t *testing.T) {
 		422, "FILE_TYPE_MISMATCH")
 
 	// PATCH: If-Match required and checked; HTML refused
-	owner.expect(owner.do("PATCH", "/campaigns/"+c.id+"/media/"+m.ID, map[string]any{"alt_text": "Students outside"}), 400, "PRECONDITION_REQUIRED")
+	owner.expect(owner.do("PATCH", "/campaigns/"+c.id+"/media/"+m.ID, map[string]any{"alt_text": "Students outside"}), 428, "PRECONDITION_REQUIRED")
 	cur, _ := cmFind(cmList(t, owner.browser, "/campaigns/"+c.id+"/media"), m.ID)
 	owner.expect(owner.do("PATCH", "/campaigns/"+c.id+"/media/"+m.ID, map[string]any{"alt_text": "Students outside"}, "If-Match",
-		fmt.Sprintf(`"%d"`, cur.Version-1)), 409, "MEDIA_STATE_CHANGED")
+		fmt.Sprintf(`"%d"`, cur.Version-1)), 412, "PRECONDITION_FAILED")
 	owner.expect(owner.do("PATCH", "/campaigns/"+c.id+"/media/"+m.ID, map[string]any{"alt_text": "<script>x</script>"}, "If-Match",
 		fmt.Sprintf(`"%d"`, cur.Version)), 422, "VALIDATION_FAILED")
 	r := owner.do("PATCH", "/campaigns/"+c.id+"/media/"+m.ID, map[string]any{"alt_text": "Students outside the school"}, "If-Match",

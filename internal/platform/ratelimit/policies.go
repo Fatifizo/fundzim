@@ -34,6 +34,9 @@ type Policies struct {
 	AuthStepUp               Policy // auth.step_up — step-up verification attempts per user
 	AuthTokenIP              Policy // auth.token.ip — link-token submissions (verify email, reset, staff invitation) per IP
 	AuthVerifyResendIP       Policy // auth.verify_resend.ip — resend-verification requests per IP
+	PublicReportIP           Policy // public.report.ip — campaign reports per client IP (Stage 7)
+	PublicReportCampaign     Policy // public.report.campaign — campaign reports per campaign (Stage 7)
+	PublicEventIP            Policy // public.event.ip — first-party analytics events per client IP (Stage 7)
 }
 
 // DefaultPolicies returns the Stage 4 starting values.
@@ -55,6 +58,9 @@ func DefaultPolicies() Policies {
 		AuthStepUp:               Policy{Name: "auth.step_up", Limit: 5, Window: 15 * time.Minute, Protective: true},
 		AuthTokenIP:              Policy{Name: "auth.token.ip", Limit: 20, Window: 15 * time.Minute, Protective: true},
 		AuthVerifyResendIP:       Policy{Name: "auth.verify_resend.ip", Limit: 10, Window: time.Hour, Protective: true},
+		PublicReportIP:           Policy{Name: "public.report.ip", Limit: 5, Window: time.Hour, Protective: true},
+		PublicReportCampaign:     Policy{Name: "public.report.campaign", Limit: 50, Window: time.Hour, Protective: true},
+		PublicEventIP:            Policy{Name: "public.event.ip", Limit: 120, Window: time.Minute, Protective: true},
 	}
 }
 
@@ -62,7 +68,8 @@ func DefaultPolicies() Policies {
 func (ps Policies) All() []Policy {
 	return []Policy{ps.GlobalIP, ps.AuthLoginIP, ps.AuthLoginAccount, ps.AuthRegisterIP, ps.AuthPasswordResetIP,
 		ps.AuthPasswordResetAccount, ps.AuthVerifyResendAccount, ps.AuthMFAChallenge, ps.AuthOTPSendPhone,
-		ps.AuthOTPSendUser, ps.AuthOTPVerify, ps.AuthStepUp, ps.AuthTokenIP, ps.AuthVerifyResendIP}
+		ps.AuthOTPSendUser, ps.AuthOTPVerify, ps.AuthStepUp, ps.AuthTokenIP, ps.AuthVerifyResendIP, ps.PublicReportIP,
+		ps.PublicReportCampaign, ps.PublicEventIP}
 }
 
 // Validate checks every policy.

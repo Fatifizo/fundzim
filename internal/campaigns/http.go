@@ -3,7 +3,6 @@ package campaigns
 import (
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/Fatifizo/fundzim/internal/platform/authz"
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
@@ -28,7 +27,7 @@ func (s *Service) Routes() []Route {
 	const own = "/api/v1/campaigns/{campaign_id}"
 	const adm = "/api/v1/admin/campaigns/{campaign_id}"
 	rs := []Route{
-		{Pattern: "GET /api/v1/campaign-categories", Policy: public, Handler: s.handleCategories},
+		{Pattern: "GET /api/v1/campaign-categories", Policy: public, Handler: s.handlePublicCategories}, // compatibility alias of /public/categories
 		{Pattern: "POST /api/v1/campaigns", Policy: user, Handler: s.handleCreate, Idempotent: true},
 		{Pattern: "GET /api/v1/campaigns/mine", Policy: user, Handler: s.handleMine},
 		{Pattern: "GET /api/v1/campaign-currencies", Policy: public, Handler: s.handleCurrencies},
@@ -47,6 +46,20 @@ func (s *Service) Routes() []Route {
 		{Pattern: "PATCH /api/v1/admin/campaign-categories/{code}", Policy: perm("campaign.category.manage"), Handler: s.handleUpdateCategory},
 		{Pattern: "GET /api/v1/public/campaigns", Policy: public, Handler: s.handleSearch},
 		{Pattern: "GET /api/v1/public/campaigns/{slug}", Policy: public, Handler: s.handlePublic},
+		// Stage 7 (ADR-038)
+		{Pattern: "GET /api/v1/public/campaigns/featured", Policy: public, Handler: s.handleFeatured},
+		{Pattern: "GET /api/v1/public/campaign-codes/{code}", Policy: public, Handler: s.handleByCode},
+		{Pattern: "GET /api/v1/public/categories", Policy: public, Handler: s.handlePublicCategories},
+		{Pattern: "GET /api/v1/public/categories/{slug}", Policy: public, Handler: s.handlePublicCategory},
+		{Pattern: "GET /api/v1/public/sitemap", Policy: public, Handler: s.handleSitemap},
+		{Pattern: "POST /api/v1/public/events", Policy: public, Handler: s.handleEvent},
+		{Pattern: "POST /api/v1/public/campaigns/{slug}/reports", Policy: public, Handler: s.handleReport},
+		{Pattern: "GET /api/v1/admin/campaigns/reports", Policy: perm("campaign.review"), Handler: s.handleReports},
+		{Pattern: "POST /api/v1/admin/campaigns/reports/{report_id}/dismiss", Policy: perm("campaign.review"), Handler: s.triageHandler(false)},
+		{Pattern: "POST /api/v1/admin/campaigns/reports/{report_id}/escalate", Policy: perm("campaign.review"), Handler: s.triageHandler(true)},
+		{Pattern: "GET /api/v1/admin/campaigns/featured", Policy: perm("campaign.feature"), Handler: s.handleFeaturedAdmin},
+		{Pattern: "POST /api/v1/admin/campaigns/{campaign_id}/feature", Policy: perm("campaign.feature"), Handler: s.featureHandler(true)},
+		{Pattern: "DELETE /api/v1/admin/campaigns/{campaign_id}/feature", Policy: perm("campaign.feature"), Handler: s.featureHandler(false)},
 	}
 	for _, a := range []string{"cancel", "publish", "pause", "resume", "complete", "archive"} {
 		rs = append(rs, Route{Pattern: "POST " + own + "/" + a, Policy: user, Handler: s.ownerAction(a)})
@@ -68,11 +81,6 @@ func (s *Service) fail(w http.ResponseWriter, r *http.Request, err error) {
 
 func noStore(w http.ResponseWriter) { w.Header().Set("Cache-Control", "private, no-store") }
 
-func ifMatch(r *http.Request) int {
-	n, _ := strconv.Atoi(strings.Trim(r.Header.Get("If-Match"), `" `))
-	return n
-}
-
 func (s *Service) writeOwner(w http.ResponseWriter, r *http.Request, id string, status int) {
 	v, err := s.Get(r.Context(), principal(r).UserID, id)
 	if err != nil {
@@ -82,16 +90,6 @@ func (s *Service) writeOwner(w http.ResponseWriter, r *http.Request, id string, 
 	noStore(w)
 	w.Header().Set("ETag", strconv.Quote(strconv.Itoa(v.Version)))
 	httpx.WriteData(w, r, status, v)
-}
-
-func (s *Service) handleCategories(w http.ResponseWriter, r *http.Request) {
-	cs, err := s.Categories(r.Context(), false)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	w.Header().Set("Cache-Control", "public, max-age=300")
-	httpx.WriteData(w, r, http.StatusOK, cs)
 }
 
 func (s *Service) handleCurrencies(w http.ResponseWriter, r *http.Request) {
@@ -124,13 +122,14 @@ func (s *Service) handleMine(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, httpx.Validation(errs.Detail{Field: "organisation_id", Code: "INVALID_FORMAT"}))
 		return
 	}
-	out, err := s.Mine(r.Context(), principal(r).UserID, org)
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	out, next, err := s.Mine(r.Context(), principal(r).UserID, org, r.URL.Query().Get("cursor"), limit)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	noStore(w)
-	httpx.WriteData(w, r, http.StatusOK, out)
+	httpx.WriteData(w, r, http.StatusOK, Page(out, next))
 }
 
 func (s *Service) handleGet(w http.ResponseWriter, r *http.Request) {
@@ -152,13 +151,18 @@ func (s *Service) handleEligibility(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleUpdate(w http.ResponseWriter, r *http.Request) {
+	version, err := httpx.RequireIfMatch(r) // precondition first (ADR-038 §7)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var p Patch
 	if err := httpx.DecodeJSON(r, &p); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	id := r.PathValue("campaign_id")
-	if err := s.Update(r.Context(), principal(r).UserID, id, p, ifMatch(r)); err != nil {
+	if err := s.Update(r.Context(), principal(r).UserID, id, p, version); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -239,13 +243,13 @@ func (s *Service) handleUnlinkBeneficiary(w http.ResponseWriter, r *http.Request
 func (s *Service) handleAdminList(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
-	out, err := s.AdminList(r.Context(), q.Get("status"), q.Get("q"), limit)
+	out, next, err := s.AdminList(r.Context(), q.Get("status"), q.Get("q"), q.Get("cursor"), limit)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	noStore(w)
-	httpx.WriteData(w, r, http.StatusOK, out)
+	httpx.WriteData(w, r, http.StatusOK, Page(out, next))
 }
 
 func (s *Service) handleQueue(w http.ResponseWriter, r *http.Request) {
@@ -257,11 +261,7 @@ func (s *Service) handleQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	noStore(w)
-	var nc any
-	if next != "" {
-		nc = next
-	}
-	httpx.WriteData(w, r, http.StatusOK, map[string]any{"items": items, "next_cursor": nc})
+	httpx.WriteData(w, r, http.StatusOK, Page(items, next))
 }
 
 func (s *Service) handleReviewDetail(w http.ResponseWriter, r *http.Request) {
@@ -330,7 +330,7 @@ func (s *Service) handleAdminCategories(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	noStore(w)
-	httpx.WriteData(w, r, http.StatusOK, cs)
+	httpx.WriteData(w, r, http.StatusOK, Page(cs, ""))
 }
 
 func (s *Service) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {
@@ -339,7 +339,12 @@ func (s *Service) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.UpdateCategory(r.Context(), principal(r).UserID, r.PathValue("code"), p, ifMatch(r)); err != nil {
+	version, err := httpx.RequireIfMatch(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.UpdateCategory(r.Context(), principal(r).UserID, r.PathValue("code"), p, version); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -351,17 +356,14 @@ func (s *Service) handleUpdateCategory(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleSearch(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
-	items, next, err := s.Search(r.Context(), SearchInput{Q: q.Get("q"), Category: q.Get("category"), Sort: q.Get("sort"), Cursor: q.Get("cursor"), Limit: limit})
+	items, next, total, err := s.Search(r.Context(), SearchInput{Q: q.Get("q"), Category: q.Get("category"), Sort: q.Get("sort"), Cursor: q.Get("cursor"), Limit: limit})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	var nc any
-	if next != "" {
-		nc = next
-	}
-	w.Header().Set("Cache-Control", "public, max-age=30")
-	httpx.WriteData(w, r, http.StatusOK, map[string]any{"items": items, "next_cursor": nc})
+	page := Page(items, next)
+	page["total"] = total
+	s.writePublic(w, r, page, cacheRevalidate)
 }
 
 func (s *Service) handlePublic(w http.ResponseWriter, r *http.Request) {
@@ -370,6 +372,168 @@ func (s *Service) handlePublic(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=30")
-	httpx.WriteData(w, r, http.StatusOK, p)
+	s.writePublic(w, r, p, cacheRevalidate)
 }
+
+func (s *Service) handleFeatured(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	items, err := s.Featured(r.Context(), limit)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.writePublic(w, r, Page(items, ""), cacheRevalidate)
+}
+
+func (s *Service) handleByCode(w http.ResponseWriter, r *http.Request) {
+	slug, err := s.CanonicalByCode(r.Context(), r.PathValue("code"))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.writePublic(w, r, map[string]string{"canonical_slug": slug}, cacheRevalidate)
+}
+
+func (s *Service) handlePublicCategories(w http.ResponseWriter, r *http.Request) {
+	cs, err := s.PublicCategories(r.Context(), "")
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.writePublic(w, r, Page(cs, ""), cacheConfig)
+}
+
+func (s *Service) handlePublicCategory(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	if !validSlug(slug) || len(slug) > 40 {
+		s.fail(w, r, errs.New(errs.NotFound, "CATEGORY_NOT_FOUND", "No such category."))
+		return
+	}
+	cs, err := s.PublicCategories(r.Context(), slug)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if len(cs) != 1 {
+		s.fail(w, r, errs.New(errs.NotFound, "CATEGORY_NOT_FOUND", "No such category."))
+		return
+	}
+	s.writePublic(w, r, cs[0], cacheConfig)
+}
+
+func (s *Service) handleSitemap(w http.ResponseWriter, r *http.Request) {
+	camps, cats, err := s.Sitemap(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.writePublic(w, r, map[string]any{"campaigns": camps, "categories": cats}, cacheConfig)
+}
+
+func (s *Service) handleEvent(w http.ResponseWriter, r *http.Request) {
+	var in EventInput
+	if err := httpx.DecodeJSON(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.RecordEvent(r.Context(), in); err != nil {
+		s.failRated(w, r, err)
+		return
+	}
+	noStore(w)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Service) handleReport(w http.ResponseWriter, r *http.Request) {
+	var in ReportInput
+	if err := httpx.DecodeJSON(r, &in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.Report(r.Context(), r.PathValue("slug"), in); err != nil {
+		s.failRated(w, r, err)
+		return
+	}
+	noStore(w)
+	httpx.WriteData(w, r, http.StatusAccepted, map[string]bool{"received": true})
+}
+
+func (s *Service) handleReports(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	items, next, err := s.Reports(r.Context(), q.Get("status"), q.Get("cursor"), limit)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	noStore(w)
+	httpx.WriteData(w, r, http.StatusOK, Page(items, next))
+}
+
+func (s *Service) triageHandler(escalate bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var d Decision
+		if err := httpx.DecodeJSON(r, &d); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if err := s.TriageReport(r.Context(), principal(r).UserID, r.PathValue("report_id"), escalate, d); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		noStore(w)
+		status := "DISMISSED"
+		if escalate {
+			status = "ESCALATED"
+		}
+		httpx.WriteData(w, r, http.StatusOK, map[string]string{"report_id": r.PathValue("report_id"), "status": status})
+	}
+}
+
+func (s *Service) featureHandler(add bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var in FeatureInput
+		if r.ContentLength != 0 {
+			if err := httpx.DecodeJSON(r, &in); err != nil {
+				s.fail(w, r, err)
+				return
+			}
+		}
+		if err := s.Feature(r.Context(), principal(r).UserID, r.PathValue("campaign_id"), add, in); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.handleFeaturedAdmin(w, r)
+	}
+}
+
+func (s *Service) handleFeaturedAdmin(w http.ResponseWriter, r *http.Request) {
+	items, err := s.FeaturedAdmin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	noStore(w)
+	httpx.WriteData(w, r, http.StatusOK, Page(items, ""))
+}
+
+// Page is the standard list envelope (ADR-038 §7): {items, next_cursor} with a null cursor on the last page.
+func Page[T any](items []T, next string) map[string]any {
+	var nc any
+	if next != "" {
+		nc = next
+	}
+	if items == nil {
+		items = []T{}
+	}
+	return map[string]any{"items": items, "next_cursor": nc}
+}
+
+// WritePublic writes public data with a strong ETag and the given Cache-Control (304 on If-None-Match). It is
+// shared by the media and updates packages (ADR-038 §1).
+func (s *Service) WritePublic(w http.ResponseWriter, r *http.Request, data any, cacheControl string) {
+	s.writePublic(w, r, data, cacheControl)
+}
+
+// CacheRevalidate is the public campaign-state cache policy (revalidate on every use).
+const CacheRevalidate = cacheRevalidate

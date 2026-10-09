@@ -108,7 +108,6 @@ var (
 	ErrRestricted       = errs.New(errs.Forbidden, "ACCOUNT_RESTRICTED", "This action is not available on your account.")
 	ErrCoverExists      = errs.New(errs.Conflict, "COVER_ALREADY_EXISTS", "The campaign already has a cover image. Remove it first.")
 	ErrGalleryFull      = errs.New(errs.Unprocessable, "GALLERY_LIMIT_REACHED", "The campaign has the maximum number of gallery images.")
-	ErrVersionRequired  = errs.New(errs.Invalid, "PRECONDITION_REQUIRED", "Send If-Match with the media version.")
 	ErrStateChanged     = errs.New(errs.Conflict, "MEDIA_STATE_CHANGED", "The media changed in the meantime. Reload and try again.")
 	ErrInvalidStatus    = errs.New(errs.Conflict, "INVALID_STATUS", "This action is not allowed in the media's current status.")
 	ErrNotAvailable     = errs.New(errs.NotFound, "MEDIA_NOT_AVAILABLE", "This image is not available.")

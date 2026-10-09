@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -101,8 +102,8 @@ func (t *throttler) Allow(ctx context.Context, policy, key string) error {
 		return errs.Wrap(err, errs.Internal, errs.CodeInternal, "An unexpected error occurred.")
 	}
 	if !d.Allowed {
-		return errs.New(errs.RateLimited, errs.CodeRateLimited, fmt.Sprintf("Too many attempts. Try again in %d seconds.",
-			ratelimit.RetryAfterSeconds(d.RetryAfter)))
+		return limitedErr{after: d.RetryAfter, err: errs.New(errs.RateLimited, errs.CodeRateLimited, fmt.Sprintf("Too many attempts. Try again in %d seconds.",
+			ratelimit.RetryAfterSeconds(d.RetryAfter)))}
 	}
 	return nil
 }
@@ -197,3 +198,13 @@ func registerIdentityConsumers(reg *outbox.Registry, a *auth.Service, o *organis
 	reg.Subscribe("organisations.send_invitation_email", organisations.EvMemberInvited,
 		func(ctx context.Context, del outbox.Delivery) error { return h(ctx, del.Payload) })
 }
+
+// limitedErr carries the limiter's wait so the error writer sends an accurate Retry-After.
+type limitedErr struct {
+	after time.Duration
+	err   *errs.Error
+}
+
+func (e limitedErr) Error() string             { return e.err.Error() }
+func (e limitedErr) Unwrap() error             { return e.err }
+func (e limitedErr) RetryAfter() time.Duration { return e.after }

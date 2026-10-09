@@ -60,6 +60,7 @@ func TestDefaultPolicyValues(t *testing.T) {
 		"auth.verify_resend.account": {3, time.Hour}, "auth.mfa.challenge": {5, 5 * time.Minute}, "auth.otp.send.phone": {3, time.Hour},
 		"auth.otp.send.user": {5, time.Hour}, "auth.otp.verify": {5, 15 * time.Minute}, "auth.step_up": {5, 15 * time.Minute},
 		"auth.token.ip": {20, 15 * time.Minute}, "auth.verify_resend.ip": {10, time.Hour},
+		"public.report.ip": {5, time.Hour}, "public.report.campaign": {50, time.Hour}, "public.event.ip": {120, time.Minute},
 	}
 	seen := map[string]bool{}
 	for _, p := range ps.All() {

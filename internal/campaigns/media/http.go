@@ -25,7 +25,7 @@ type Route struct {
 }
 
 // UploadPattern is the upload route; it needs a body-limit exemption (multipart file).
-const UploadPattern = "POST /api/v1/campaigns/{id}/media"
+const UploadPattern = "POST /api/v1/campaigns/{campaign_id}/media"
 
 // Routes lists the campaign media API (interface-contracts §6). Object-level authorisation is in the handlers:
 // owner routes go through campaigns OwnerAccess (404 for anyone else), staff routes through the route permission.
@@ -33,14 +33,14 @@ func (s *Service) Routes() []Route {
 	user := httpx.User()
 	return []Route{
 		{UploadPattern, user, s.HandleUpload},
-		{"GET /api/v1/campaigns/{id}/media", user, s.HandleList},
-		{"PATCH /api/v1/campaigns/{id}/media/{media_id}", user, s.HandleUpdate},
-		{"DELETE /api/v1/campaigns/{id}/media/{media_id}", user, s.HandleRemove},
-		{"GET /api/v1/campaigns/{id}/media/{media_id}/content", httpx.Authenticated(), s.HandleContent},
-		// "/admin/campaigns/{id}/media" would conflict with the core's "GET /admin/campaigns/review/{campaign_id}"
+		{"GET /api/v1/campaigns/{campaign_id}/media", user, s.HandleList},
+		{"PATCH /api/v1/campaigns/{campaign_id}/media/{media_id}", user, s.HandleUpdate},
+		{"DELETE /api/v1/campaigns/{campaign_id}/media/{media_id}", user, s.HandleRemove},
+		{"GET /api/v1/campaigns/{campaign_id}/media/{media_id}/content", httpx.Authenticated(), s.HandleContent},
+		// kept at …/media/all for compatibility (the conflicting core route moved to /admin/campaigns/{campaign_id}/review)
 		// (ServeMux: overlapping, neither more specific), hence the extra segment.
-		{"GET /api/v1/admin/campaigns/{id}/media/all", httpx.Permission(PermView), s.HandleStaffList},
-		{"POST /api/v1/admin/campaigns/{id}/media/{media_id}/remove", httpx.Permission(PermModerate), s.HandleStaffRemove},
+		{"GET /api/v1/admin/campaigns/{campaign_id}/media/all", httpx.Permission(PermView), s.HandleStaffList},
+		{"POST /api/v1/admin/campaigns/{campaign_id}/media/{media_id}/remove", httpx.Permission(PermModerate), s.HandleStaffRemove},
 		{"GET /api/v1/public/campaigns/{slug}/media/{media_id}", httpx.Public(), s.HandlePublicContent},
 	}
 }
@@ -70,7 +70,7 @@ func (s *Service) withURLs(list []Media) []Media {
 	return list
 }
 
-// HandleUpload: POST /campaigns/{id}/media (multipart: kind, position?, alt_text, depicts_minor, then file).
+// HandleUpload: POST /campaigns/{campaign_id}/media (multipart: kind, position?, alt_text, depicts_minor, then file).
 func (s *Service) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	up, err := storage.ParseMultipart(w, r, storage.MultipartSpec{FileField: "file",
 		Fields:   []string{"kind", "position", "alt_text", "depicts_minor"},
@@ -79,7 +79,7 @@ func (s *Service) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	in := UploadInput{CampaignID: r.PathValue("id"), UserID: principal(r).UserID, Kind: up.Fields["kind"], AltText: up.Fields["alt_text"],
+	in := UploadInput{CampaignID: r.PathValue("campaign_id"), UserID: principal(r).UserID, Kind: up.Fields["kind"], AltText: up.Fields["alt_text"],
 		DeclaredContentType: up.DeclaredContentType, Body: up.File}
 	switch up.Fields["depicts_minor"] {
 	case "false":
@@ -107,15 +107,15 @@ func (s *Service) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteData(w, r, http.StatusCreated, s.withURL(m))
 }
 
-// HandleList: GET /campaigns/{id}/media (owner or organisation member; every status).
+// HandleList: GET /campaigns/{campaign_id}/media (owner or organisation member; every status).
 func (s *Service) HandleList(w http.ResponseWriter, r *http.Request) {
-	list, err := s.List(r.Context(), principal(r).UserID, r.PathValue("id"))
+	list, err := s.List(r.Context(), principal(r).UserID, r.PathValue("campaign_id"))
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	noStore(w)
-	httpx.WriteData(w, r, http.StatusOK, map[string]any{"media": s.withURLs(list)})
+	httpx.WriteData(w, r, http.StatusOK, map[string]any{"items": s.withURLs(list), "next_cursor": nil})
 }
 
 type updateReq struct {
@@ -123,19 +123,9 @@ type updateReq struct {
 	AltText  *string `json:"alt_text"`
 }
 
-func ifMatch(r *http.Request) (int, error) {
-	v := strings.TrimSpace(r.Header.Get("If-Match"))
-	if v == "" {
-		return 0, ErrVersionRequired
-	}
-	n, err := strconv.Atoi(strings.Trim(strings.TrimPrefix(v, "W/"), `"`))
-	if err != nil || n < 1 {
-		return 0, httpx.Validation(errs.Detail{Field: "If-Match", Code: "INVALID_VERSION"})
-	}
-	return n, nil
-}
+func ifMatch(r *http.Request) (int, error) { return httpx.RequireIfMatch(r) }
 
-// HandleUpdate: PATCH /campaigns/{id}/media/{media_id} {position?, alt_text?} with If-Match.
+// HandleUpdate: PATCH /campaigns/{campaign_id}/media/{media_id} {position?, alt_text?} with If-Match.
 func (s *Service) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	v, err := ifMatch(r)
 	if err != nil {
@@ -147,7 +137,7 @@ func (s *Service) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	m, err := s.Update(r.Context(), UpdateInput{CampaignID: r.PathValue("id"), MediaID: r.PathValue("media_id"), UserID: principal(r).UserID,
+	m, err := s.Update(r.Context(), UpdateInput{CampaignID: r.PathValue("campaign_id"), MediaID: r.PathValue("media_id"), UserID: principal(r).UserID,
 		Position: req.Position, AltText: req.AltText, IfVersion: v})
 	if err != nil {
 		s.fail(w, r, err)
@@ -158,24 +148,24 @@ func (s *Service) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteData(w, r, http.StatusOK, s.withURL(m))
 }
 
-// HandleRemove: DELETE /campaigns/{id}/media/{media_id} (owner; soft).
+// HandleRemove: DELETE /campaigns/{campaign_id}/media/{media_id} (owner; soft).
 func (s *Service) HandleRemove(w http.ResponseWriter, r *http.Request) {
-	if err := s.Remove(r.Context(), principal(r).UserID, r.PathValue("id"), r.PathValue("media_id")); err != nil {
+	if err := s.Remove(r.Context(), principal(r).UserID, r.PathValue("campaign_id"), r.PathValue("media_id")); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// HandleStaffList: GET /admin/campaigns/{id}/media/all (campaign.view).
+// HandleStaffList: GET /admin/campaigns/{campaign_id}/media/all (campaign.view).
 func (s *Service) HandleStaffList(w http.ResponseWriter, r *http.Request) {
-	list, err := s.StaffList(r.Context(), r.PathValue("id"))
+	list, err := s.StaffList(r.Context(), r.PathValue("campaign_id"))
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	noStore(w)
-	httpx.WriteData(w, r, http.StatusOK, map[string]any{"media": s.withURLs(list)})
+	httpx.WriteData(w, r, http.StatusOK, map[string]any{"items": s.withURLs(list), "next_cursor": nil})
 }
 
 type removeReq struct {
@@ -185,7 +175,7 @@ type removeReq struct {
 
 var reasonRe = regexp.MustCompile(`^[A-Z][A-Z0-9_]{2,63}$`)
 
-// HandleStaffRemove: POST /admin/campaigns/{id}/media/{media_id}/remove {reason_code, note} (content.moderate).
+// HandleStaffRemove: POST /admin/campaigns/{campaign_id}/media/{media_id}/remove {reason_code, note} (content.moderate).
 func (s *Service) HandleStaffRemove(w http.ResponseWriter, r *http.Request) {
 	var req removeReq
 	if err := httpx.DecodeJSON(r, &req); err != nil {
@@ -204,7 +194,7 @@ func (s *Service) HandleStaffRemove(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, httpx.Validation(details...))
 		return
 	}
-	m, err := s.StaffRemove(r.Context(), principal(r).UserID, r.PathValue("id"), r.PathValue("media_id"), req.ReasonCode, note)
+	m, err := s.StaffRemove(r.Context(), principal(r).UserID, r.PathValue("campaign_id"), r.PathValue("media_id"), req.ReasonCode, note)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -213,12 +203,12 @@ func (s *Service) HandleStaffRemove(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteData(w, r, http.StatusOK, m)
 }
 
-// HandleContent: GET /campaigns/{id}/media/{media_id}/content — owner (or organisation member) or staff with
+// HandleContent: GET /campaigns/{campaign_id}/media/{media_id}/content — owner (or organisation member) or staff with
 // campaign.view; only the processed derivative of APPROVED media, never the original.
 func (s *Service) HandleContent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	p := principal(r)
-	campaignID, mediaID := r.PathValue("id"), r.PathValue("media_id")
+	campaignID, mediaID := r.PathValue("campaign_id"), r.PathValue("media_id")
 	if s.d.Core == nil {
 		s.fail(w, r, ErrNotConfigured)
 		return
@@ -267,7 +257,7 @@ func (s *Service) HandlePublicContent(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.serve(w, r, obj, "public, max-age="+strconv.Itoa(int(s.d.PublicMaxAge.Seconds())), "cross-origin")
+	s.serve(w, r, obj, "public, no-cache", "cross-origin") // revalidate every time: hidden as soon as the campaign is not public (ADR-038 §1)
 }
 
 // serve streams a CLEAN derivative with strict headers. The ETag is the content SHA-256, so a conditional request

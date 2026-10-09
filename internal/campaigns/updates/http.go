@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Fatifizo/fundzim/internal/campaigns"
 	"github.com/Fatifizo/fundzim/internal/platform/authz"
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
 	"github.com/Fatifizo/fundzim/internal/platform/httpx"
@@ -24,10 +25,10 @@ type Route struct {
 func (s *Service) Routes() []Route {
 	user, mod, public := httpx.User(), httpx.Permission(PermModerate), httpx.Public()
 	return []Route{
-		{"POST /api/v1/campaigns/{id}/updates", user, s.HandleCreate},
-		{"GET /api/v1/campaigns/{id}/updates", user, s.HandleListOwner},
-		{"PATCH /api/v1/campaigns/{id}/updates/{update_id}", user, s.HandleEdit},
-		{"DELETE /api/v1/campaigns/{id}/updates/{update_id}", user, s.HandleDelete},
+		{"POST /api/v1/campaigns/{campaign_id}/updates", user, s.HandleCreate},
+		{"GET /api/v1/campaigns/{campaign_id}/updates", user, s.HandleListOwner},
+		{"PATCH /api/v1/campaigns/{campaign_id}/updates/{update_id}", user, s.HandleEdit},
+		{"DELETE /api/v1/campaigns/{campaign_id}/updates/{update_id}", user, s.HandleDelete},
 		{"GET /api/v1/admin/campaigns/updates/moderation", mod, s.HandleModerationQueue},
 		{"POST /api/v1/admin/campaigns/updates/{update_id}/approve", mod, s.HandleApprove},
 		{"POST /api/v1/admin/campaigns/updates/{update_id}/hide", mod, s.HandleHide},
@@ -63,7 +64,7 @@ func ifMatch(r *http.Request) (int, error) {
 	}
 	n, err := strconv.Atoi(v)
 	if err != nil || n < 1 {
-		return 0, httpx.Validation(errs.Detail{Field: "If-Match", Code: "INVALID_VERSION"})
+		return 0, httpx.ErrPreconditionRequired
 	}
 	return n, nil
 }
@@ -95,7 +96,7 @@ func writeOne(w http.ResponseWriter, r *http.Request, status int, u Update) {
 	httpx.WriteData(w, r, status, u)
 }
 
-// HandleCreate is POST /campaigns/{id}/updates ({title, body, publish, media_ids?}).
+// HandleCreate is POST /campaigns/{campaign_id}/updates ({title, body, publish, media_ids?}).
 func (s *Service) HandleCreate(w http.ResponseWriter, r *http.Request) {
 	uid, err := userID(r)
 	if err != nil {
@@ -107,7 +108,7 @@ func (s *Service) HandleCreate(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	u, err := s.Create(r.Context(), uid, r.PathValue("id"), in)
+	u, err := s.Create(r.Context(), uid, r.PathValue("campaign_id"), in)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -115,7 +116,7 @@ func (s *Service) HandleCreate(w http.ResponseWriter, r *http.Request) {
 	writeOne(w, r, http.StatusCreated, u)
 }
 
-// HandleListOwner is GET /campaigns/{id}/updates (owner or organisation member; every status except DELETED).
+// HandleListOwner is GET /campaigns/{campaign_id}/updates (owner or organisation member; every status except DELETED).
 func (s *Service) HandleListOwner(w http.ResponseWriter, r *http.Request) {
 	uid, err := userID(r)
 	if err != nil {
@@ -127,15 +128,15 @@ func (s *Service) HandleListOwner(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	list, next, err := s.ListOwner(r.Context(), uid, r.PathValue("id"), cursor, limit)
+	list, next, err := s.ListOwner(r.Context(), uid, r.PathValue("campaign_id"), cursor, limit)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	httpx.WriteData(w, r, http.StatusOK, map[string]any{"updates": list, "next_cursor": next})
+	httpx.WriteData(w, r, http.StatusOK, campaigns.Page(list, next))
 }
 
-// HandleEdit is PATCH /campaigns/{id}/updates/{update_id} (If-Match required; drafts and pending only).
+// HandleEdit is PATCH /campaigns/{campaign_id}/updates/{update_id} (If-Match required; drafts and pending only).
 func (s *Service) HandleEdit(w http.ResponseWriter, r *http.Request) {
 	uid, err := userID(r)
 	if err != nil {
@@ -148,7 +149,7 @@ func (s *Service) HandleEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if v == 0 {
-		s.fail(w, r, httpx.Validation(errs.Detail{Field: "If-Match", Code: "REQUIRED"}))
+		s.fail(w, r, httpx.ErrPreconditionRequired)
 		return
 	}
 	var p Patch
@@ -156,7 +157,7 @@ func (s *Service) HandleEdit(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	u, err := s.Edit(r.Context(), uid, r.PathValue("id"), r.PathValue("update_id"), v, p)
+	u, err := s.Edit(r.Context(), uid, r.PathValue("campaign_id"), r.PathValue("update_id"), v, p)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -164,7 +165,7 @@ func (s *Service) HandleEdit(w http.ResponseWriter, r *http.Request) {
 	writeOne(w, r, http.StatusOK, u)
 }
 
-// HandleDelete is DELETE /campaigns/{id}/updates/{update_id} (soft delete; If-Match optional).
+// HandleDelete is DELETE /campaigns/{campaign_id}/updates/{update_id} (soft delete; If-Match required).
 func (s *Service) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	uid, err := userID(r)
 	if err != nil {
@@ -172,11 +173,14 @@ func (s *Service) HandleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v, err := ifMatch(r)
+	if err == nil && v == 0 {
+		err = httpx.ErrPreconditionRequired // If-Match is required on every conditional write (ADR-038 §7)
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.Delete(r.Context(), uid, r.PathValue("id"), r.PathValue("update_id"), v); err != nil {
+	if err := s.Delete(r.Context(), uid, r.PathValue("campaign_id"), r.PathValue("update_id"), v); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -200,7 +204,7 @@ func (s *Service) HandleModerationQueue(w http.ResponseWriter, r *http.Request) 
 		s.fail(w, r, err)
 		return
 	}
-	httpx.WriteData(w, r, http.StatusOK, map[string]any{"updates": list, "next_cursor": next})
+	httpx.WriteData(w, r, http.StatusOK, campaigns.Page(list, next))
 }
 
 // HandleApprove is POST /admin/campaigns/updates/{update_id}/approve ({reason_code, note}).
@@ -245,5 +249,6 @@ func (s *Service) HandleListPublic(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	httpx.WriteData(w, r, http.StatusOK, map[string]any{"updates": list, "next_cursor": next})
+	// revalidate on every use: a hidden update or suspended campaign disappears at once (ADR-038 §1)
+	s.Core.WritePublic(w, r, campaigns.Page(list, next), campaigns.CacheRevalidate)
 }

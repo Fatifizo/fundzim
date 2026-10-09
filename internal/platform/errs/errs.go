@@ -28,6 +28,8 @@ const (
 	RateLimited
 	Unavailable
 	Timeout
+	PreconditionRequired // 428: a conditional request needs If-Match (ADR-038 §7)
+	PreconditionFailed   // 412: If-Match does not match the current version
 )
 
 // Status maps a Kind to its HTTP status.
@@ -57,6 +59,10 @@ func (k Kind) Status() int {
 		return http.StatusServiceUnavailable
 	case Timeout:
 		return http.StatusServiceUnavailable
+	case PreconditionRequired:
+		return http.StatusPreconditionRequired
+	case PreconditionFailed:
+		return http.StatusPreconditionFailed
 	default:
 		return http.StatusInternalServerError
 	}

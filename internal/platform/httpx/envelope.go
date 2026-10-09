@@ -4,9 +4,11 @@ package httpx
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
 	"github.com/Fatifizo/fundzim/internal/platform/logging"
@@ -37,7 +39,9 @@ type errorBody struct {
 // WriteJSON writes v as a raw JSON body (no envelope). Used only for infrastructure probes.
 func WriteJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "no-store") // default; handlers of public data choose their own policy
+	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }
@@ -62,11 +66,18 @@ func WriteError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err
 	} else {
 		l.Debug("request rejected", attrs...)
 	}
+	var ra interface{ RetryAfter() time.Duration }
+	if errors.As(err, &ra) && ra.RetryAfter() > 0 && w.Header().Get("Retry-After") == "" {
+		secs := int((ra.RetryAfter() + time.Second - 1) / time.Second) // the limiter's real wait, rounded up
+		w.Header().Set("Retry-After", strconv.Itoa(secs))
+	}
 	if e.Kind == errs.RateLimited || e.Kind == errs.Unavailable || e.Kind == errs.Timeout {
 		if w.Header().Get("Retry-After") == "" {
 			w.Header().Set("Retry-After", strconv.Itoa(5))
 		}
 	}
+	w.Header().Set("Cache-Control", "no-store") // errors are never cacheable (a public 404 must not stick)
+	w.Header().Del("ETag")
 	WriteJSON(w, status, errorBody{
 		Error: errorObject{Code: e.Code, Message: e.Message, Retryable: e.Retryable, Details: e.Details},
 		Meta:  Meta{RequestID: RequestID(r.Context())},

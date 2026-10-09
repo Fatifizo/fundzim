@@ -251,6 +251,9 @@ services:
       fundzim-api: { condition: service_healthy }
     environment:
       API_BASE_URL: http://fundzim-api:8080
+      # canonical/Open Graph/share URLs (never derived from request headers); indexing stays off unless allowed
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:3000}
+      SITE_INDEXING: ${SITE_INDEXING:-disallow}
     networks:
       default:
         ipv4_address: 172.28.0.10   # the API trusts X-Forwarded-For from this address only

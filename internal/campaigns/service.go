@@ -18,8 +18,10 @@ import (
 	"github.com/Fatifizo/fundzim/internal/kyc"
 	"github.com/Fatifizo/fundzim/internal/organisations"
 	"github.com/Fatifizo/fundzim/internal/platform/clock"
+	"github.com/Fatifizo/fundzim/internal/platform/crypto"
 	"github.com/Fatifizo/fundzim/internal/platform/db"
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
+	"github.com/Fatifizo/fundzim/internal/platform/ratelimit"
 )
 
 // Statuses (ADR-036 §1). Brief names: PENDING_REVIEW = SUBMITTED, PUBLISHED = ACTIVE.
@@ -116,6 +118,9 @@ type Deps struct {
 	// StaffCan reports whether an active staff account holds a permission (assignee eligibility); nil refuses
 	// assigning anyone but the caller.
 	StaffCan func(ctx context.Context, staffID, permission string) (bool, error)
+	Limiter  ratelimit.Limiter // public reports and analytics events (Stage 7)
+	AEAD     *crypto.AEAD      // report contact emails (app field key)
+	Keyed    *crypto.Keyed     // report reporter keys and contact blind index (app blind-index key)
 	Clock    clock.Clock
 	Logger   *slog.Logger
 }
