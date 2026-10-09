@@ -20,7 +20,7 @@ the committed code on 2026-10-09.
 | Web (lint, typecheck, Vitest, Playwright) | `npm --prefix apps/web run lint`, `typecheck`, `test`, `test:e2e` | re-run by the lead: lint clean, typecheck OK, **Vitest 281 passed (20 files)**, **Playwright 83 passed / 1 skipped** (pre-existing mobile-only skip; includes the production build). A manual smoke run of the user KYC flow against the real stack (web container → API → worker → ClamAV) passed; staff pages are covered against the mock API only |
 | Real-stack web smoke | through the web app against the compose API | register → email and phone verification → KYC draft → PDF/PNG upload scanned **CLEAN by ClamAV within ~5 s** → incomplete submit shows a field-level message → successful submit. Found one shape mismatch (requirements `{document_types[], satisfied}`), fixed in the UI. **Staff/admin pages were exercised against the mock API only** (KI-S5-08) |
 | OpenAPI | `go test ./internal/app/` (every route has a policy and is in the spec); `npx @redocly/cli@2.54.3 lint` | pass; lint valid with the 2 pre-existing `/healthz` `/readyz` warnings |
-| Secrets | `scripts/check-secrets.sh`; gitleaks | check-secrets: none; gitleaks (working tree): findings only in the git-ignored local `.env` (generated dev secrets); gitleaks on git history: see completion report |
+| Secrets | `scripts/check-secrets.sh`; gitleaks | check-secrets: none; gitleaks (working tree): findings only in the git-ignored local `.env` (generated dev secrets); gitleaks on full git history (after the Stage 5 commits): no leaks |
 | CI | GitHub Actions | **not running** (KI-S4-01); the workflow was extended (ClamAV service, Stage 5 tests) but has never executed |
 
 ## 2. New unit tests
