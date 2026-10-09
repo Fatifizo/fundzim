@@ -40024,6 +40024,7 @@ components:
       - beneficiary
       - cover_media_id
       - media_ids
+      - media
       - published_at
       - completed_at
       - donations
@@ -40077,7 +40078,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Uuid'
-          description: Fetch with `GET /public/campaigns/{slug}/media/{media_id}`.
+          description: Fetch with `GET /public/campaigns/{slug}/media/{media_id}`. Only media of the approved version that are still APPROVED
+            (media removed or rejected since approval drop out).
+        media:
+          type: array
+          description: The same media as `media_ids`, in order, with kind and alt text for accessible rendering.
+          items:
+            type: object
+            required:
+            - id
+            - kind
+            - alt_text
+            properties:
+              id:
+                $ref: '#/components/schemas/Uuid'
+              kind:
+                type: string
+                enum:
+                - COVER
+                - GALLERY
+              alt_text:
+                type: string
         published_at:
           oneOf:
           - $ref: '#/components/schemas/Timestamp'

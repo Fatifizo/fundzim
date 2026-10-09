@@ -647,4 +647,32 @@ func TestCampaignSecurityRechecks(t *testing.T) {
 	if _, body := publicGet(t, s, "/public/campaigns?q=camp-sec2"); strings.Contains(string(body), slug) {
 		t.Fatal("unlisted campaign listed in search")
 	}
+	// media removed after approval disappears from the public view (no dangling references)
+	var mediaID string
+	if err := pool(t, os.Getenv("DATABASE_MIGRATION_URL")).QueryRow(ctx(t), `SELECT id FROM app.campaign_media WHERE campaign_id = $1 AND status = 'APPROVED'`,
+		id2).Scan(&mediaID); err != nil {
+		t.Fatal(err)
+	}
+	_, body := publicGet(t, s, "/public/campaigns/"+slug)
+	if !strings.Contains(string(body), mediaID) {
+		t.Fatalf("approved cover missing from public view: %s", body)
+	}
+	mr := u2.do("GET", "/campaigns/"+id2+"/media", nil)
+	var ml struct {
+		Media []struct {
+			ID      string `json:"id"`
+			Version int    `json:"version"`
+		} `json:"media"`
+	}
+	_ = json.Unmarshal(mr.Data, &ml)
+	etag := ""
+	for _, m := range ml.Media {
+		if m.ID == mediaID {
+			etag = fmt.Sprintf("%q", fmt.Sprint(m.Version))
+		}
+	}
+	u2.expect(u2.do("DELETE", "/campaigns/"+id2+"/media/"+mediaID, nil, "If-Match", etag), 204, "")
+	if _, body = publicGet(t, s, "/public/campaigns/"+slug); strings.Contains(string(body), mediaID) {
+		t.Fatalf("removed media still referenced publicly: %s", body)
+	}
 }

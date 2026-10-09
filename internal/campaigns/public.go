@@ -27,9 +27,30 @@ type PublicCampaign struct {
 	Beneficiary map[string]any `json:"beneficiary"`
 	CoverMedia  *string        `json:"cover_media_id"`
 	MediaIDs    []string       `json:"media_ids"`
+	Media       []PublicMedia  `json:"media"`
 	PublishedAt *time.Time     `json:"published_at"`
 	CompletedAt *time.Time     `json:"completed_at"`
 	Donations   map[string]any `json:"donations"`
+}
+
+// PublicMedia is an image of the approved version that is still APPROVED (removed media drop out).
+type PublicMedia struct {
+	ID      string `json:"id"`
+	Kind    string `json:"kind"`
+	AltText string `json:"alt_text"`
+}
+
+// publicMedia keeps the approved version's order and drops media removed or rejected since approval.
+func (s *Service) publicMedia(ctx context.Context, ids []string) ([]PublicMedia, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT cm.id::text, cm.kind, cm.alt_text FROM unnest($1::uuid[]) WITH ORDINALITY AS u(m, o)
+		JOIN app.campaign_media cm ON cm.id = u.m AND cm.status = 'APPROVED' ORDER BY u.o`, ids)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (PublicMedia, error) {
+		var m PublicMedia
+		return m, r.Scan(&m.ID, &m.Kind, &m.AltText)
+	})
 }
 
 // PublicView returns a live campaign by slug (404 for anything not public; existence is not revealed).
@@ -50,9 +71,15 @@ func (s *Service) PublicView(ctx context.Context, slug string) (PublicCampaign, 
 		return PublicCampaign{}, err
 	}
 	p := PublicCampaign{Slug: c.Slug, Title: v.Title, Summary: v.Summary, Story: v.Story, Category: v.Category, Goal: v.Goal, Status: c.Status,
-		MediaIDs: v.MediaIDs, PublishedAt: c.PublishedAt, CompletedAt: c.CompletedAt, Donations: donationsNotAvailable()}
-	if len(v.MediaIDs) > 0 {
-		p.CoverMedia = &v.MediaIDs[0]
+		MediaIDs: []string{}, PublishedAt: c.PublishedAt, CompletedAt: c.CompletedAt, Donations: donationsNotAvailable()}
+	if p.Media, err = s.publicMedia(ctx, v.MediaIDs); err != nil {
+		return p, err
+	}
+	for i, m := range p.Media {
+		p.MediaIDs = append(p.MediaIDs, m.ID)
+		if m.Kind == "COVER" && p.CoverMedia == nil {
+			p.CoverMedia = &p.Media[i].ID
+		}
 	}
 	if p.Organiser, err = s.organiser(ctx, c); err != nil {
 		return p, err
@@ -132,7 +159,8 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]PublicCard, str
 		before, beforeID = &t, id
 	}
 	rows, err := s.Pool.Query(ctx, `SELECT c.id, c.slug, v.title, v.summary, v.category_code, v.goal_amount_minor, v.goal_currency, c.status,
-		v.media_ids[1]::text, c.published_at, c.created_at, `+orderCol+`
+		(SELECT u.m::text FROM unnest(v.media_ids) WITH ORDINALITY AS u(m, o) JOIN app.campaign_media cm ON cm.id = u.m
+		   AND cm.status = 'APPROVED' AND cm.kind = 'COVER' ORDER BY u.o LIMIT 1), c.published_at, c.created_at, `+orderCol+`
 		FROM app.campaigns c JOIN app.campaign_versions v ON v.id = c.approved_version_id
 		WHERE c.status IN ('ACTIVE','PAUSED','COMPLETED') AND c.visibility = 'PUBLIC'
 		  AND ($1 = '' OR v.category_code = $1)
