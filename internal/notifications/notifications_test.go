@@ -9,6 +9,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,8 +22,8 @@ type fakeSMTP struct {
 	mu       sync.Mutex
 	messages []recorded
 	// silent makes the server accept connections but never answer (timeout tests).
-	silent    bool
-	rejectRcp bool
+	silent    atomic.Bool // set by tests while the accept loop runs
+	rejectRcp atomic.Bool
 }
 
 type recorded struct{ from, to, data string }
@@ -53,7 +54,7 @@ func (f *fakeSMTP) serve() {
 
 func (f *fakeSMTP) session(c net.Conn) {
 	defer c.Close()
-	if f.silent {
+	if f.silent.Load() {
 		_, _ = io.Copy(io.Discard, c)
 		return
 	}
@@ -74,7 +75,7 @@ func (f *fakeSMTP) session(c net.Conn) {
 			rec.from = strings.TrimSpace(line[10:])
 			w("250 ok")
 		case strings.HasPrefix(cmd, "RCPT TO:"):
-			if f.rejectRcp {
+			if f.rejectRcp.Load() {
 				w("550 5.1.1 <" + strings.TrimSpace(line[8:]) + "> no such user")
 				continue
 			}
@@ -184,7 +185,7 @@ func inTxContext(t *testing.T) context.Context {
 
 func TestSMTPTimeoutAndUnreachable(t *testing.T) {
 	srv := newFakeSMTP(t)
-	srv.silent = true
+	srv.silent.Store(true)
 	s, _ := newSMTPSender(emailCfg(srv.port()))
 	s.totalTO = 300 * time.Millisecond
 	start := time.Now()
@@ -208,7 +209,7 @@ func TestSMTPTimeoutAndUnreachable(t *testing.T) {
 
 func TestSMTPErrorsDoNotEchoAddresses(t *testing.T) {
 	srv := newFakeSMTP(t)
-	srv.rejectRcp = true
+	srv.rejectRcp.Store(true)
 	s, _ := NewEmailSender(emailCfg(srv.port()))
 	err := s.Send(context.Background(), Email{To: "secret.person@example.test", Subject: "s", Text: "t"})
 	if err == nil || strings.Contains(err.Error(), "secret.person") || !strings.Contains(err.Error(), "550") {
