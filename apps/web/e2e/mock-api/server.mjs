@@ -11,6 +11,8 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import http from "node:http";
 
+import { createVerificationMock } from "./verification.mjs";
+
 /** Widely published documentation example (base32), not a credential. */
 const EXAMPLE_TOTP_BASE32 = "JBSWY3DP" + "EHPK3PXP";
 
@@ -41,15 +43,16 @@ function now() {
   return new Date().toISOString();
 }
 
-function addUser({ email, display_name, email_verified = true, mfa_enabled = false, password = FIXTURES.password }) {
+function addUser({ email, display_name, email_verified = true, mfa_enabled = false, password = FIXTURES.password, phone_verified = false, account_kind = "USER", roles = undefined }) {
   const user = {
     id: randomUUID(),
-    account_kind: "USER",
+    account_kind,
+    roles,
     email,
     email_verified,
     display_name,
-    phone_masked: null,
-    phone_verified: false,
+    phone_masked: phone_verified ? "+263 77 *** **67" : null,
+    phone_verified,
     mfa_enabled,
     created_at: "2026-09-01T08:00:00Z",
     password,
@@ -68,7 +71,9 @@ addUser({ email: "unverified@example.test", display_name: "Farai New", email_ver
 const ME_FIELDS = ["id", "account_kind", "email", "email_verified", "display_name", "phone_masked", "phone_verified", "mfa_enabled", "created_at"];
 
 function me(user) {
-  return Object.fromEntries(ME_FIELDS.map((key) => [key, user[key]]));
+  const out = Object.fromEntries(ME_FIELDS.map((key) => [key, user[key]]));
+  if (user.account_kind === "STAFF") out.roles = user.roles ?? [];
+  return out;
 }
 
 function userById(id) {
@@ -113,16 +118,26 @@ function createSession(res, user, mfa) {
   send(res, 200, { status: "authenticated", user: me(user) }, { "Set-Cookie": sessionCookies(token, csrf) });
 }
 
-async function readJson(req) {
+async function readRaw(req) {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
-  if (chunks.length === 0) return {};
+  return Buffer.concat(chunks);
+}
+
+function parseJson(raw, contentType) {
+  if (raw.length === 0 || /multipart\/form-data/i.test(contentType ?? "")) return {};
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    return JSON.parse(raw.toString("utf8"));
   } catch {
     return {};
   }
 }
+
+async function readJson(req) {
+  return parseJson(await readRaw(req), req.headers["content-type"]);
+}
+
+const verification = createVerificationMock({ send, err, userById, users, addUser, me, stepUpTtlMs: STEP_UP_TTL_MS });
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://mock");
@@ -146,8 +161,18 @@ const server = http.createServer(async (req, res) => {
   if (path === "/api/v1/__mock/last-request") return send(res, 200, lastRequest);
   if (path === "/api/v1/__mock/users" && method === "POST") {
     const body = await readJson(req);
-    const created = addUser({ email: body.email, display_name: body.display_name ?? "Test User", mfa_enabled: !!body.mfa_enabled, email_verified: body.email_verified !== false });
+    const created = addUser({ email: body.email, display_name: body.display_name ?? "Test User", mfa_enabled: !!body.mfa_enabled, email_verified: body.email_verified !== false, phone_verified: !!body.phone_verified });
+    if (body.kyc_level) verification.setLevel(created.id, body.kyc_level);
     return send(res, 201, me(created));
+  }
+  if (path === "/api/v1/__mock/staff" && method === "POST") {
+    const body = await readJson(req);
+    const created = addUser({ email: body.email, display_name: body.display_name ?? "Staff Reviewer", mfa_enabled: true, account_kind: "STAFF", roles: body.roles ?? ["KYC_REVIEWER"] });
+    return send(res, 201, me(created));
+  }
+  if (path.startsWith("/api/v1/__mock/") && method === "POST") {
+    const handled = await verification.control(path, await readJson(req), res);
+    if (handled) return;
   }
   if (path === "/api/v1/health") return send(res, 200, { status: "ok" });
   if (path === "/api/v1/version") return send(res, 200, { name: "fundzim-api", version: "mock", build: "mock", commit: "mock" });
@@ -160,7 +185,8 @@ const server = http.createServer(async (req, res) => {
     if (session && req.headers["x-csrf-token"] !== session.csrf) return err(res, 403, "CSRF_TOKEN_INVALID");
   }
 
-  const body = unsafe ? await readJson(req) : {};
+  const raw = unsafe ? await readRaw(req) : Buffer.alloc(0);
+  const body = parseJson(raw, req.headers["content-type"]);
   const requireAuth = () => {
     if (!user) {
       err(res, 401, "AUTHENTICATION_REQUIRED");
@@ -327,6 +353,7 @@ const server = http.createServer(async (req, res) => {
         }
         return err(res, 404, "RESOURCE_NOT_FOUND");
       }
+      if (await verification.handle({ req, res, method, path, url, user, session, sessionToken, body, raw })) return;
       return err(res, 404, "ROUTE_NOT_FOUND");
     }
   }

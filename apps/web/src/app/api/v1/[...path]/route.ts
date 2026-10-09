@@ -18,6 +18,10 @@
  *    The API trusts X-Forwarded-For only from the web container's address (TRUSTED_PROXY_CIDRS).
  *  - Internal `x-fz-peer-*` headers never leave this process.
  *  - Request body capped at MAX_BODY_BYTES (413 PAYLOAD_TOO_LARGE), upstream timeout UPSTREAM_TIMEOUT_MS.
+ *    Exception (Stage 5): `POST /api/v1/verification/documents` — identity-document uploads go through the
+ *    API (ADR-035 §5, never browser-to-bucket) — gets UPLOAD_MAX_BODY_BYTES (the API's 10 MiB default
+ *    `UPLOAD_MAX_BYTES` plus multipart overhead) and a longer timeout. Only that exact method and path; the
+ *    API applies its own per-purpose cap and content checks.
  *  - Never retries: a forwarded mutation with an unknown outcome is reported, not replayed.
  *  - Redirects are passed through (redirect: "manual"), not followed.
  */
@@ -27,8 +31,15 @@ import { generateRequestId, isValidRequestId } from "@/lib/api/client";
 import { ApiConfigError, resolveApiBaseUrl } from "@/lib/api/config";
 import { clientIpFromHeaders, isInternalHeader } from "@/lib/net/client-ip";
 
-const MAX_BODY_BYTES = 1024 * 1024; // 1 MiB; file uploads use presigned URLs (Stage 5/6)
+const MAX_BODY_BYTES = 1024 * 1024; // 1 MiB for JSON requests
 const UPSTREAM_TIMEOUT_MS = 30_000;
+const UPLOAD_PATH = "/api/v1/verification/documents";
+const UPLOAD_MAX_BODY_BYTES = 10 * 1024 * 1024 + 256 * 1024;
+const UPLOAD_TIMEOUT_MS = 180_000;
+
+function isUpload(method: string, pathname: string): boolean {
+  return method === "POST" && pathname === UPLOAD_PATH;
+}
 
 const HOP_BY_HOP = new Set([
   "connection",
@@ -78,10 +89,10 @@ function errorResponse(status: number, code: string, message: string, retryable:
 
 class BodyTooLargeError extends Error {}
 
-async function readBodyCapped(request: NextRequest): Promise<Uint8Array | undefined> {
+async function readBodyCapped(request: NextRequest, maxBytes: number): Promise<Uint8Array | undefined> {
   if (request.method === "GET" || request.method === "HEAD" || request.body === null) return undefined;
   const declared = request.headers.get("content-length");
-  if (declared !== null && /^\d+$/.test(declared) && parseInt(declared, 10) > MAX_BODY_BYTES) {
+  if (declared !== null && /^\d+$/.test(declared) && parseInt(declared, 10) > maxBytes) {
     throw new BodyTooLargeError();
   }
   const reader = request.body.getReader();
@@ -91,7 +102,7 @@ async function readBodyCapped(request: NextRequest): Promise<Uint8Array | undefi
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
-    if (total > MAX_BODY_BYTES) {
+    if (total > maxBytes) {
       await reader.cancel();
       throw new BodyTooLargeError();
     }
@@ -138,9 +149,10 @@ async function forward(request: NextRequest): Promise<Response> {
   const clientIp = clientIpFromHeaders(request.headers);
   if (clientIp) headers.set("X-Forwarded-For", clientIp);
 
+  const upload = isUpload(request.method, incoming.pathname);
   let body: Uint8Array | undefined;
   try {
-    body = await readBodyCapped(request);
+    body = await readBodyCapped(request, upload ? UPLOAD_MAX_BODY_BYTES : MAX_BODY_BYTES);
   } catch (error) {
     if (error instanceof BodyTooLargeError) {
       return errorResponse(413, "PAYLOAD_TOO_LARGE", "The request body is too large.", false, requestId);
@@ -148,7 +160,7 @@ async function forward(request: NextRequest): Promise<Response> {
     throw error;
   }
 
-  const timeout = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
+  const timeout = AbortSignal.timeout(upload ? UPLOAD_TIMEOUT_MS : UPSTREAM_TIMEOUT_MS);
   let upstream: Response;
   try {
     upstream = await fetch(target, {

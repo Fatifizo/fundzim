@@ -72,6 +72,20 @@ export default async function DashboardPage() {
             </div>
           </Card>
         </div>
+        <Card as="section" aria-labelledby="verification-title">
+          <h2 id="verification-title" className="font-display text-xl font-semibold text-ink-900">
+            Verification
+          </h2>
+          <p className="mt-2 text-ink-700">Verify your identity, your beneficiaries, payout accounts and the organisations you manage.</p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <ButtonLink href="/dashboard/verification" variant="outline">
+              Verification
+            </ButtonLink>
+            <ButtonLink href="/dashboard/organisations" variant="ghost">
+              Your organisations
+            </ButtonLink>
+          </div>
+        </Card>
         <Card as="section" aria-labelledby="fundraising-title">
           <h2 id="fundraising-title" className="font-display text-xl font-semibold text-ink-900">
             Fundraising

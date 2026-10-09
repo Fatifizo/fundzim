@@ -50,7 +50,9 @@ Proxy behaviour: fixed upstream origin (path + query only); strips hop-by-hop he
 `Forwarded`/`X-Forwarded-*`/`X-Real-IP`, then sets `X-Forwarded-For` to exactly one address — the client this
 process observed (see "Client address" below); forwards
 cookies, `Origin` and a validated `X-Request-ID` (generated if absent/malformed); 1 MiB body cap
-(`413 PAYLOAD_TOO_LARGE`); 30 s upstream timeout; never retries; passes redirects and multiple `Set-Cookie`
+(`413 PAYLOAD_TOO_LARGE`) — except exactly `POST /api/v1/verification/documents` (Stage 5 identity-document
+uploads go through the API, ADR-035), which gets 10 MiB + 256 KiB multipart overhead and a 180 s timeout;
+30 s upstream timeout otherwise; never retries; passes redirects and multiple `Set-Cookie`
 through; upstream failure → error envelope `SERVICE_UNAVAILABLE` (503, or 504 on timeout) with
 `retryable: true` only for GET/HEAD.
 
@@ -96,6 +98,42 @@ Contract: `docs/stage-4/interface-contracts.md` §4. Pages: `/register`, `/login
 - **MFA:** QR code rendered in the browser as inline SVG with `qrcode-generator@2.0.4` (MIT, zero deps); the
   TOTP secret/URI live only in component state during enrolment and are dropped on confirm/cancel. Recovery
   codes are shown once (copy / download as a local text file).
+
+## Verification (Stage 5)
+
+Contract: `docs/stage-5/interface-contracts.md` §7; vocabularies ADR-034; documents and access tickets ADR-035.
+
+| Area | Pages | Main components |
+|---|---|---|
+| User | `/dashboard/verification` (level, status, progress, gates, next step), `/identity` (KYC details → review → submit, information requests, decision), `/documents`, `/beneficiaries`, `/payout-destinations` | `src/components/verification/*` |
+| Organisations | `/dashboard/organisations` (list + create, KI-S4-08), `/dashboard/organisations/[id]/verification` (KYB: details, persons, documents, history; ORG_ADMIN edits, ORG_MEMBER read-only, others 404) | `organisations.tsx` |
+| Staff | `/admin/verification` (+ `/kyc`, `/kyb`, `/beneficiaries`, `/payout-destinations`), `/admin/verification/cases/[caseId]`, `/admin/compliance/cases` (+ `[caseId]`) | `src/components/admin/*` |
+
+- **Access.** User pages call `requireUser`. Staff pages call `requireStaff()` (anything but a staff session →
+  404, never a login redirect) and load data with `serverGetOr404`, so a staff member without the API
+  permission also gets a 404. `src/proxy.ts` marks `/admin/*` `private, no-store` but does not redirect it.
+  Every page sets `robots: noindex`.
+- **Documents.** Upload with progress via `XMLHttpRequest` (`src/lib/verification/upload.ts`; same CSRF and
+  request-id rules as `browserApi`, never retried). Scan status (UPLOADED/QUARANTINED/SCANNING/CLEAN/REJECTED/
+  FAILED_SCAN) is polled with backoff (1.5 s → 20 s, stop after 10 min) and announced in a polite live region.
+  Viewing: `POST …/access` (through step-up when required) → the returned URL is accepted only if it is this
+  document's same-origin `/content` path → full-page navigation (the API answers as an attachment).
+- **Sensitive values.** ID and account numbers are write-only inputs (`autocomplete="off"`); only the masked
+  values from the API are displayed. A reviewer's revealed ID number lives in component state for 60 s.
+  Nothing goes into URLs (queue filters only) or browser storage.
+- **Requirements** arrive as `{document_types: [alternatives], satisfied}` from the backend (contract:
+  `{document_type, sides, satisfied}`); `normaliseRequirements` (`src/lib/verification/labels.ts`) accepts both.
+  Staff payloads go through `src/lib/verification/normalise.ts` (KYC/KYB `review` block, opaque queue cursor).
+- **Ownership shares** are entered as percentages and sent as integer `ownership_bp`
+  (`src/lib/verification/basis-points.ts`: string parsing, no floating point, invalid input rejected).
+- **Errors** (`src/lib/verification/errors.ts`) map every documented Stage 5 code (and fall back to the Stage 4
+  mapping); `SUBMISSION_INCOMPLETE` details become an error summary linking to the field or document section.
+- **Payout accounts** always show that payouts are not available; the three checks (format, ownership,
+  compliance) are shown separately and `PROVIDER_CONFIRMATION_REQUIRED` is explained, never presented as
+  confirmed.
+- **Tests:** `src/lib/verification/*.test.ts`, `src/__tests__/verification-components.test.tsx`,
+  `e2e/verification.spec.ts` against the mock API (`e2e/mock-api/verification.mjs`, control endpoints under
+  `/api/v1/__mock/`).
 
 ## API client (`src/lib/api/`)
 

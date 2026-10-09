@@ -41,10 +41,20 @@ export async function seriousAxeViolations(page: Page) {
 
 let counter = 0;
 /** Creates a fresh verified user in the mock API so mutating tests do not interfere with each other. */
-export async function createUser(page: Page, opts: { mfa?: boolean; verified?: boolean } = {}) {
+export async function createUser(
+  page: Page,
+  opts: { mfa?: boolean; verified?: boolean; phoneVerified?: boolean; kycLevel?: string; displayName?: string } = {},
+) {
   const email = `e2e-${Date.now()}-${process.pid}-${counter++}@example.test`;
   const res = await page.request.post(`${AUTH_BASE_URL}/api/v1/__mock/users`, {
-    data: { email, display_name: "E2E Person", mfa_enabled: !!opts.mfa, email_verified: opts.verified !== false },
+    data: {
+      email,
+      display_name: opts.displayName ?? "E2E Person",
+      mfa_enabled: !!opts.mfa,
+      email_verified: opts.verified !== false,
+      phone_verified: !!opts.phoneVerified,
+      kyc_level: opts.kycLevel,
+    },
   });
   expect(res.status()).toBe(201);
   return email;
@@ -55,4 +65,27 @@ export async function signIn(page: Page, email: string, password = PASSWORD, pat
   await page.getByLabel("Email address").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
+}
+
+/** Creates a staff account (MFA always on) with the given roles in the mock API. */
+export async function createStaff(page: Page, roles: string[], displayName = "Reviewer") {
+  const email = `staff-${Date.now()}-${process.pid}-${counter++}@example.test`;
+  const res = await page.request.post(`${AUTH_BASE_URL}/api/v1/__mock/staff`, { data: { email, display_name: displayName, roles } });
+  expect(res.status()).toBe(201);
+  return email;
+}
+
+/** Staff sign-in: password, then the authenticator code. */
+export async function signInStaff(page: Page, email: string, next = "/admin/verification") {
+  await signIn(page, email, PASSWORD, `/login?next=${encodeURIComponent(next)}`);
+  await page.getByLabel("Authentication code").fill(TOTP);
+  await page.getByRole("button", { name: "Verify and sign in" }).click();
+  await expect(page).toHaveURL(new RegExp(`${next.replace(/[/]/g, "\\/")}$`));
+}
+
+/** A submitted KYC case (identity + clean ID documents) for an existing mock user; returns the case id. */
+export async function seedSubmittedKyc(page: Page, email: string, firstName: string, opts: { fourEyes?: boolean } = {}) {
+  const res = await page.request.post(`${AUTH_BASE_URL}/api/v1/__mock/kyc-submitted`, { data: { email, first_name: firstName, last_name: "Ncube", four_eyes: !!opts.fourEyes } });
+  expect(res.status()).toBe(201);
+  return ((await res.json()) as { data: { case_id: string } }).data.case_id;
 }

@@ -34,6 +34,16 @@ describe("proxy.ts", () => {
     expect(run("http://web.local/dashboard", "fz_csrf=only").status).toBe(307);
   });
 
+  it("never redirects /admin to login (not discoverable) but marks it private/no-store", () => {
+    for (const cookie of [undefined, "fz_session=abc"]) {
+      const res = run("http://web.local/admin/verification?type=KYC", cookie);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("location")).toBeNull();
+      expect(res.headers.get("cache-control")).toBe("private, no-store");
+    }
+    expect(run("http://web.local/administrator").headers.get("cache-control")).toBeNull();
+  });
+
   it("does not run on the API proxy or static assets", () => {
     const re = new RegExp(`^${config.matcher[0]}$`);
     expect(re.test("/api/v1/auth/session")).toBe(false);

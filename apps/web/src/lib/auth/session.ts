@@ -1,11 +1,12 @@
 import "server-only";
 
 import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect, unstable_rethrow } from "next/navigation";
 import { connection } from "next/server";
 import { cache } from "react";
 
 import { isApiError } from "@/lib/api/errors";
+import type { ApiResult } from "@/lib/api/client";
 import { getServerApi } from "@/lib/api/server";
 import { clientIpFromHeaders } from "@/lib/net/client-ip";
 
@@ -106,12 +107,55 @@ export async function redirectIfAuthenticated(destination: string): Promise<void
  * login page; other errors propagate.
  */
 export async function serverGet<T>(path: string, currentPath: string): Promise<T> {
+  return (await serverGetResult<T>(path, currentPath)).data;
+}
+
+/** As serverGet, but returns the whole result (meta carries `next_cursor` for paginated lists). */
+export async function serverGetResult<T>(path: string, currentPath: string): Promise<ApiResult<T>> {
   const api = getServerApi({ timeoutMs: 8_000, maxRetries: 1 });
   try {
-    return (await api.get<T>(path, { headers: await forwardedHeaders() })).data;
+    return await api.get<T>(path, { headers: await forwardedHeaders() });
   } catch (error) {
     if (isApiError(error) && error.status === 401) redirect(loginUrl(currentPath));
     throw error;
   }
 }
 
+/**
+ * As serverGetResult, but a 403 or 404 from the API renders this app's 404 page. Used where the API is the
+ * authority on whether the caller may see a resource at all (organisation membership, staff permissions):
+ * the page must not reveal that the resource or the admin area exists.
+ */
+export async function serverGetOr404<T>(path: string, currentPath: string): Promise<ApiResult<T>> {
+  try {
+    return await serverGetResult<T>(path, currentPath);
+  } catch (error) {
+    if (isApiError(error) && (error.status === 403 || error.status === 404)) notFound();
+    throw error;
+  }
+}
+
+/**
+ * For secondary data a page can live without (e.g. the organisation list next to beneficiaries): an API
+ * error gives `fallback`, but Next.js control flow (the login redirect, notFound) is never swallowed.
+ */
+export async function serverGetOptional<T>(path: string, currentPath: string, fallback: T): Promise<T> {
+  try {
+    return await serverGet<T>(path, currentPath);
+  } catch (error) {
+    unstable_rethrow(error);
+    return fallback;
+  }
+}
+
+/**
+ * Staff-only pages (admin area): anything other than a signed-in STAFF session gets a 404, never a login
+ * redirect, so the admin area is not discoverable (Stage 4 rbac.md §1: non-staff → 404). The specific
+ * permission is enforced by the API; pages call serverGetOr404 for their data so a staff member without the
+ * permission also sees a 404.
+ */
+export async function requireStaff(): Promise<Me> {
+  const session = await getSession();
+  if (!session.authenticated || !session.user || session.user.account_kind !== "STAFF") notFound();
+  return session.user;
+}

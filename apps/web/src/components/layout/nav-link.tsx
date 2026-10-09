@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, type ComponentProps } from "react";
 
-type NavLinkProps = ComponentProps<typeof Link> & { href: string };
+/** `exact`: only the path itself is current, not its sub-paths (for an "Overview" entry above its children). */
+type NavLinkProps = ComponentProps<typeof Link> & { href: string; exact?: boolean };
 
-function CurrentAwareLink({ href, ...props }: NavLinkProps) {
+function CurrentAwareLink({ href, exact = false, ...props }: NavLinkProps) {
   const pathname = usePathname();
-  const current = pathname === href || (href !== "/" && pathname?.startsWith(`${href}/`));
+  const current = pathname === href || (!exact && href !== "/" && pathname?.startsWith(`${href}/`));
   return <Link href={href} aria-current={current ? "page" : undefined} {...props} />;
 }
 
@@ -17,10 +18,10 @@ function CurrentAwareLink({ href, ...props }: NavLinkProps) {
  * only known at request time (cacheComponents), so a plain link renders in the static shell and the
  * current-aware link streams in.
  */
-export function NavLink(props: NavLinkProps) {
+export function NavLink({ exact, ...props }: NavLinkProps) {
   return (
     <Suspense fallback={<Link {...props} />}>
-      <CurrentAwareLink {...props} />
+      <CurrentAwareLink exact={exact} {...props} />
     </Suspense>
   );
 }

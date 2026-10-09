@@ -80,6 +80,24 @@ describe("/api/v1 runtime proxy", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("allows document uploads up to the upload cap on exactly POST /api/v1/verification/documents", async () => {
+    fetchMock.mockResolvedValueOnce(Response.json({ data: {}, meta: { request_id: "r" } }, { status: 201 }));
+    const twoMiB = "x".repeat(2 * 1024 * 1024);
+    const ok = await POST(req("http://web.local/api/v1/verification/documents", { method: "POST", body: twoMiB }));
+    expect(ok.status).toBe(201);
+    expect((fetchMock.mock.calls[0]![1]?.body as Uint8Array).byteLength).toBe(2 * 1024 * 1024);
+
+    const tooBig = "x".repeat(10 * 1024 * 1024 + 256 * 1024 + 1);
+    const res = await POST(req("http://web.local/api/v1/verification/documents", { method: "POST", body: tooBig }));
+    expect(res.status).toBe(413);
+    // Other paths (even look-alikes) keep the 1 MiB JSON cap.
+    for (const path of ["/api/v1/verification/documents/x", "/api/v1/verification/documentsx", "/api/v1/things"]) {
+      const other = await POST(req(`http://web.local${path}`, { method: "POST", body: twoMiB }));
+      expect(other.status, path).toBe(413);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("returns a 503 envelope when the API is unreachable; retryable only for GET", async () => {
     fetchMock.mockRejectedValueOnce(new TypeError("fetch failed"));
     const getRes = await GET(req("http://web.local/api/v1/health"));
