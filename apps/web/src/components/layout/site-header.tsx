@@ -22,7 +22,7 @@ export function SiteHeader() {
                 <NavLink
                   href={item.href}
                   className={
-                    item.href === "/start"
+                    item.href === "/dashboard/campaigns/new"
                       ? "ml-2 inline-flex min-h-11 items-center rounded-full bg-brand-700 px-5 font-semibold text-white hover:bg-brand-800"
                       : "inline-flex min-h-11 items-center rounded-full px-4 font-medium text-ink-700 hover:bg-brand-50 hover:text-brand-800 aria-[current=page]:text-brand-700 aria-[current=page]:underline underline-offset-4"
                   }

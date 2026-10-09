@@ -32,7 +32,7 @@ function sniff(buf) {
 }
 
 /** Minimal multipart/form-data parser (enough for the browser's FormData). */
-function parseMultipart(raw, contentType) {
+export function parseMultipart(raw, contentType) {
   const m = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType ?? "");
   if (!m) return null;
   const boundary = Buffer.from(`--${m[1] ?? m[2]}`);
@@ -944,5 +944,16 @@ export function createVerificationMock({ send, err, userById, users, me }) {
     return false;
   }
 
-  return { handle, control, setLevel, me };
+  /** Stage 6 hooks for the campaigns mock (e2e/mock-api/campaigns.mjs). */
+  function seedBeneficiary(user, { display_name, beneficiary_type = "SELF", status = "APPROVED" }) {
+    const b = {
+      id: randomUUID(), owner: { type: "USER", id: user.id }, beneficiary_type, display_name, full_name: null, date_of_birth: null,
+      relationship: { type: beneficiary_type === "SELF" ? "SELF" : "FAMILY_MEMBER", description: null }, authority_basis: beneficiary_type === "SELF" ? "NOT_REQUIRED" : "BENEFICIARY_CONSENT", status,
+      information_requests: [], decision: null, submitted_at: now(), created_at: now(), updated_at: now(), version: 1, review: newReview(),
+    };
+    beneficiaries.set(b.id, b);
+    return b;
+  }
+
+  return { handle, control, setLevel, me, getProfile: profile, getBeneficiary: (id) => beneficiaries.get(id), getOrg: (id) => orgs.get(id), seedBeneficiary };
 }

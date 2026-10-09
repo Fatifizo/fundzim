@@ -11,6 +11,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import http from "node:http";
 
+import { createCampaignsMock } from "./campaigns.mjs";
 import { createVerificationMock } from "./verification.mjs";
 
 /** Widely published documentation example (base32), not a credential. */
@@ -138,6 +139,7 @@ async function readJson(req) {
 }
 
 const verification = createVerificationMock({ send, err, userById, users, addUser, me, stepUpTtlMs: STEP_UP_TTL_MS });
+const campaigns = createCampaignsMock({ send, err, userById, users, verification, stepUpTtlMs: STEP_UP_TTL_MS });
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://mock");
@@ -171,8 +173,9 @@ const server = http.createServer(async (req, res) => {
     return send(res, 201, me(created));
   }
   if (path.startsWith("/api/v1/__mock/") && method === "POST") {
-    const handled = await verification.control(path, await readJson(req), res);
-    if (handled) return;
+    const controlBody = await readJson(req);
+    if (await verification.control(path, controlBody, res)) return;
+    if (await campaigns.control(path, controlBody, res)) return;
   }
   if (path === "/api/v1/health") return send(res, 200, { status: "ok" });
   if (path === "/api/v1/version") return send(res, 200, { name: "fundzim-api", version: "mock", build: "mock", commit: "mock" });
@@ -212,7 +215,10 @@ const server = http.createServer(async (req, res) => {
       if (typeof body.password !== "string" || body.password.length < 12) {
         return err(res, 422, "PASSWORD_POLICY_VIOLATION", { details: [{ field: "password", code: "TOO_SHORT" }] });
       }
-      if (!users.has(body.email)) addUser({ email: body.email, display_name: body.display_name, email_verified: false, password: body.password });
+      if (!users.has(body.email)) {
+        const created = addUser({ email: body.email, display_name: body.display_name, email_verified: false, password: body.password });
+        if (body.age_attestation === true) campaigns.recordAttestation(created.id, "ATTESTED", "REGISTRATION");
+      }
       return send(res, 202, { status: "verification_sent" });
     }
     case "POST /api/v1/auth/verify-email":
@@ -353,6 +359,7 @@ const server = http.createServer(async (req, res) => {
         }
         return err(res, 404, "RESOURCE_NOT_FOUND");
       }
+      if (await campaigns.handle({ req, res, method, path, url, user, session, body, raw })) return;
       if (await verification.handle({ req, res, method, path, url, user, session, sessionToken, body, raw })) return;
       return err(res, 404, "ROUTE_NOT_FOUND");
     }

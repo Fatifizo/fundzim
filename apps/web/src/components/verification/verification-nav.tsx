@@ -2,6 +2,7 @@ import { NavLink } from "@/components/layout/nav-link";
 
 const ITEMS = [
   { href: "/dashboard/verification", label: "Overview", exact: true },
+  { href: "/dashboard/verification/age", label: "Age declaration" },
   { href: "/dashboard/verification/identity", label: "Your identity" },
   { href: "/dashboard/verification/documents", label: "Documents" },
   { href: "/dashboard/verification/beneficiaries", label: "Beneficiaries" },

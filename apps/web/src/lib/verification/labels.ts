@@ -127,7 +127,7 @@ export function complianceStatusLabel(status: string): Label {
 
 const LEVELS: Record<string, string> = {
   UNVERIFIED: "Not verified",
-  BASIC_VERIFIED: "Basic (email and phone confirmed)",
+  BASIC_VERIFIED: "Basic verified (email, phone and age declaration)",
   IDENTITY_VERIFIED: "Identity verified",
   PAYOUT_VERIFIED: "Payout verified",
   ORG_UNVERIFIED: "Not verified",

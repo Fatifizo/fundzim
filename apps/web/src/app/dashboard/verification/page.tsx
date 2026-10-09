@@ -82,6 +82,12 @@ export default async function VerificationOverviewPage() {
         </h2>
         <ul className="mt-3 list-disc space-y-2 pl-6 text-ink-700">
           <li>
+            <Link href="/dashboard/verification/age" className="font-semibold text-brand-700 underline">
+              Age declaration
+            </Link>{" "}
+            — confirm you are an adult. Needed, with a confirmed email and phone, for basic verification.
+          </li>
+          <li>
             <Link href="/dashboard/verification/beneficiaries" className="font-semibold text-brand-700 underline">
               Beneficiaries
             </Link>{" "}

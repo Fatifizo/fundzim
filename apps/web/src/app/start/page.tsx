@@ -1,19 +1,9 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { StagePlaceholder } from "@/components/stage-placeholder";
-
-export const metadata: Metadata = {
-  title: "Start a fundraiser",
-  robots: { index: false, follow: false },
-};
-
-export default function Page() {
-  return (
-    <StagePlaceholder
-      title="Start a fundraiser"
-      stage="Stage 6"
-      description="Creating a campaign is not available yet. Campaign creation and review are being built."
-      planned={["Create a campaign for yourself, someone you know, or a verified organisation", "Identity verification before a campaign can receive funds", "Review of every campaign before it is published"]}
-    />
-  );
+/**
+ * The Stage 3 placeholder URL now starts the campaign wizard (kept so old links keep working). Signed-out
+ * visitors are sent to sign in by the proxy and the page itself, then back to the wizard.
+ */
+export default function StartPage() {
+  redirect("/dashboard/campaigns/new");
 }

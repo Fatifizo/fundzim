@@ -91,8 +91,16 @@ export default async function DashboardPage() {
             Fundraising
           </h2>
           <p className="mt-2 text-ink-700">
-            Campaigns, donations and payouts are not available yet in this development preview.
+            Create and manage campaigns. Donations and payouts are not available yet in this development preview.
           </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <ButtonLink href="/dashboard/campaigns" variant="outline">
+              Your campaigns
+            </ButtonLink>
+            <ButtonLink href="/dashboard/campaigns/new" variant="ghost">
+              Start a campaign
+            </ButtonLink>
+          </div>
         </Card>
       </AccountPage>
     </AccountContainer>

@@ -10,6 +10,10 @@ const ITEMS = [
   { href: "/admin/verification/beneficiaries", label: "Beneficiaries" },
   { href: "/admin/verification/payout-destinations", label: "Payout accounts" },
   { href: "/admin/compliance/cases", label: "Compliance cases" },
+  { href: "/admin/campaigns/review", label: "Campaign reviews" },
+  { href: "/admin/campaigns", label: "All campaigns", exact: true },
+  { href: "/admin/campaigns/updates", label: "Update moderation" },
+  { href: "/admin/account/personal-link", label: "Personal account link" },
 ] as const;
 
 /** Staff area chrome. Rendered only for staff sessions; each page still checks access itself. */

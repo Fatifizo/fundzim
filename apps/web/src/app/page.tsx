@@ -56,10 +56,10 @@ export default function HomePage() {
             Support people and causes across Zimbabwe through simple, secure fundraising.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <ButtonLink href="/start" variant="secondary" size="lg">
+            <ButtonLink href="/dashboard/campaigns/new" variant="secondary" size="lg">
               Start a Fundraiser
             </ButtonLink>
-            <ButtonLink href="/explore" size="lg" variant="inverse">
+            <ButtonLink href="/campaigns" size="lg" variant="inverse">
               Explore Campaigns
             </ButtonLink>
           </div>

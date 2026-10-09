@@ -21,7 +21,8 @@
  *    Exception (Stage 5): `POST /api/v1/verification/documents` — identity-document uploads go through the
  *    API (ADR-035 §5, never browser-to-bucket) — gets UPLOAD_MAX_BODY_BYTES (the API's 10 MiB default
  *    `UPLOAD_MAX_BYTES` plus multipart overhead) and a longer timeout. Only that exact method and path; the
- *    API applies its own per-purpose cap and content checks.
+ *    API applies its own per-purpose cap and content checks. Stage 6 adds exactly one more upload route,
+ *    `POST /api/v1/campaigns/{uuid}/media` (campaign photos); the allow-list is src/lib/api/upload-routes.ts.
  *  - Never retries: a forwarded mutation with an unknown outcome is reported, not replayed.
  *  - Redirects are passed through (redirect: "manual"), not followed.
  */
@@ -29,16 +30,16 @@ import type { NextRequest } from "next/server";
 
 import { generateRequestId, isValidRequestId } from "@/lib/api/client";
 import { ApiConfigError, resolveApiBaseUrl } from "@/lib/api/config";
+import { isUploadRequest } from "@/lib/api/upload-routes";
 import { clientIpFromHeaders, isInternalHeader } from "@/lib/net/client-ip";
 
 const MAX_BODY_BYTES = 1024 * 1024; // 1 MiB for JSON requests
 const UPSTREAM_TIMEOUT_MS = 30_000;
-const UPLOAD_PATH = "/api/v1/verification/documents";
 const UPLOAD_MAX_BODY_BYTES = 10 * 1024 * 1024 + 256 * 1024;
 const UPLOAD_TIMEOUT_MS = 180_000;
 
 function isUpload(method: string, pathname: string): boolean {
-  return method === "POST" && pathname === UPLOAD_PATH;
+  return isUploadRequest(method, pathname);
 }
 
 const HOP_BY_HOP = new Set([

@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DELETE, GET, POST } from "@/app/api/v1/[...path]/route";
+import { DELETE, GET, PATCH, POST } from "@/app/api/v1/[...path]/route";
 import { clearPeerHeaderName, setPeerHeaderName } from "@/lib/net/peer-header";
 
 function req(url: string, init?: RequestInit): NextRequest {
@@ -95,6 +95,21 @@ describe("/api/v1 runtime proxy", () => {
       const other = await POST(req(`http://web.local${path}`, { method: "POST", body: twoMiB }));
       expect(other.status, path).toBe(413);
     }
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows campaign photo uploads up to the upload cap on exactly POST /api/v1/campaigns/{uuid}/media", async () => {
+    fetchMock.mockResolvedValue(Response.json({ data: {}, meta: { request_id: "r" } }, { status: 201 }));
+    const id = "0192f0c4-7a1b-7c3d-8e4f-0123456789ab";
+    const twoMiB = "x".repeat(2 * 1024 * 1024);
+    const ok = await POST(req(`http://web.local/api/v1/campaigns/${id}/media`, { method: "POST", body: twoMiB }));
+    expect(ok.status).toBe(201);
+    for (const path of [`/api/v1/campaigns/${id}/media/x`, `/api/v1/campaigns/${id}/updates`, "/api/v1/campaigns/abc/media", `/api/v1/campaigns/${id}`]) {
+      const other = await POST(req(`http://web.local${path}`, { method: "POST", body: twoMiB }));
+      expect(other.status, path).toBe(413);
+    }
+    const patch = await PATCH(req(`http://web.local/api/v1/campaigns/${id}/media`, { method: "PATCH", body: twoMiB }));
+    expect(patch.status).toBe(413);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

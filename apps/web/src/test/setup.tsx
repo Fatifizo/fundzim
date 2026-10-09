@@ -14,6 +14,9 @@ vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
   },
+  redirect: (url: string) => {
+    throw new Error(`NEXT_REDIRECT:${url}`);
+  },
 }));
 
 // The header's session slot is an async Server Component that calls the API (server-only); jsdom cannot

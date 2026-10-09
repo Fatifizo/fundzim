@@ -17,7 +17,7 @@ campaigns, donations or payments, and the site is `noindex` throughout.
 npm ci              # install from lockfile (Node 24)
 npm run dev         # http://localhost:3000 (API expected at http://127.0.0.1:8080)
 npm run lint        # ESLint (includes a rule banning Number()/parseFloat on amount_minor)
-npm run typecheck   # tsc --noEmit
+npm run typecheck   # next typegen && tsc --noEmit (route types generated first; works on a fresh checkout)
 npm test            # Vitest + React Testing Library + axe-core (jsdom)
 npm run test:watch
 npm run build       # production build, output: standalone
@@ -33,6 +33,7 @@ First E2E run on a machine: `npx playwright install chromium` (no sudo needed fo
 |---|---|---|---|
 | `API_BASE_URL` | Server only, **at request time** (Route Handler proxy, Server Components) and at server start (validation) | **Production: yes.** Dev/test default `http://127.0.0.1:8080` | Origin only (`http://api:8080`), no path/credentials. In production (`NODE_ENV=production`) a missing/invalid value makes the server **exit on start** (`src/instrumentation.ts`) and the proxy answers `503 SERVICE_UNAVAILABLE`; there is no silent fallback. Not needed at build time. |
 | `WEB_TRUSTED_PROXY_CIDRS` | Server only, at start (validated) and per request | No (default empty) | Comma-separated CIDRs of reverse proxies **in front of** the web server. Empty: the TCP peer is the client and client-supplied `X-Forwarded-For` is ignored. Invalid → the server exits on start in production. |
+| `PUBLIC_SITE_URL` | Server only, at request time (campaign page metadata) | No | Canonical site origin (`https://fundzim.example`). When set, public campaign pages emit absolute `og:url`, canonical and `og:image`; when unset they are left out (never guessed from request headers). |
 | `PORT`, `HOSTNAME` | Standalone server | No | Defaults `3000` / `0.0.0.0` in the container. |
 | `NEXT_PUBLIC_*` | Inlined into the browser bundle **at build time** | — | Public by definition. None are used in Stage 3. Never put a secret in a `NEXT_PUBLIC_` variable. |
 
@@ -134,6 +135,38 @@ Contract: `docs/stage-5/interface-contracts.md` §7; vocabularies ADR-034; docum
 - **Tests:** `src/lib/verification/*.test.ts`, `src/__tests__/verification-components.test.tsx`,
   `e2e/verification.spec.ts` against the mock API (`e2e/mock-api/verification.mjs`, control endpoints under
   `/api/v1/__mock/`).
+
+## Campaigns (Stage 6)
+
+Contract: `docs/stage-6/interface-contracts.md` (§3, §5, §6, §9); ADR-036 (lifecycle, publication), ADR-037
+(age attestation, BASIC_VERIFIED, restrictions, staff links).
+
+| Area | Pages | Main code |
+|---|---|---|
+| Owner | `/dashboard/campaigns` (list, organisation filter), `/new` (8-step wizard), `/[id]` (overview, feedback, eligibility, lifecycle), `/[id]/edit`, `/media`, `/beneficiaries`, `/updates`, `/settings` (visibility, pause/resume/complete/cancel/archive) | `src/components/campaigns/*`, `src/lib/campaigns/*` |
+| Verification | `/dashboard/verification/age` (self-declaration, `?next=` validated), `/dashboard/account/staff-link?token=` (confirm), optional age checkbox on `/register` | `age-attestation.tsx`, `staff-link-confirm.tsx` |
+| Staff | `/admin/campaigns/review` (queue), `/admin/campaigns/review/[id]` (detail + actions; API `GET /admin/campaigns/{id}/review`), `/admin/campaigns` (search), `/admin/campaigns/updates` (moderation), `/admin/account/personal-link` | `src/components/admin/campaign-*.tsx`, `update-moderation.tsx`, `personal-link.tsx` |
+| Public | `/campaigns` (search, category, sort, cursor), `/campaigns/[slug]` (published version only; anything else is the app 404) | `src/app/campaigns/*`, `src/lib/campaigns/public.ts` |
+
+- **Money.** Goals are typed as decimal strings and converted to `amount_minor` digit strings with string/BigInt
+  arithmetic (`src/lib/campaigns/money.ts`); currencies and minor units come from `GET /campaign-currencies`.
+  No totals, raised amounts or progress bars exist anywhere; the public donate control is disabled.
+- **Text.** Campaign text is plain text rendered through React text nodes (`StoryText`: paragraphs on blank
+  lines, no links, control/bidi characters stripped). `dangerouslySetInnerHTML` is not used.
+- **Media** (internal/campaigns/media): kinds `COVER` | `GALLERY`, JPEG/PNG only, alt text 3–250, a required
+  `depicts_minor` field (images of children are refused, LR-070), one cover at a time (remove it to replace:
+  409 `COVER_ALREADY_EXISTS`). Staff list: `GET /admin/campaigns/{id}/media/all`; previews use the owner
+  `…/content` route, which staff with `campaign.view` may read.
+- **Shapes** follow the Go handlers (`src/lib/campaigns/normalise.ts` documents each); older readings are still
+  accepted where harmless. `/explore` and `/start` redirect to `/campaigns` and `/dashboard/campaigns/new`.
+- **Uploads** go only to the API through the proxy; the large-body allow-list (`src/lib/api/upload-routes.ts`)
+  is exactly `POST /api/v1/verification/documents` and `POST /api/v1/campaigns/{uuid}/media`.
+- **Images** use plain `<img>` from same-origin API paths (`next/image` emits inline styles the CSP blocks).
+- **Staff actions** open a dialog with a reason code and a 3–5000 character note; `STEP_UP_REQUIRED` goes
+  through `StepUpProvider`. Second approval is never offered when `pending_decided_by` is the current user.
+  The compliance restriction indicator is a yes/no flag only.
+- **Tests:** `src/lib/campaigns/*.test.ts(x)`, `src/__tests__/public-campaign-page.test.tsx`,
+  `src/lib/api/upload-routes.test.ts`, `e2e/campaigns.spec.ts` against `e2e/mock-api/campaigns.mjs`.
 
 ## API client (`src/lib/api/`)
 

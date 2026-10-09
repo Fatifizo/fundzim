@@ -11,9 +11,9 @@ describe("SiteHeader", () => {
     const nav = screen.getByRole("navigation", { name: "Main" });
     const links = within(nav).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
-      ["Explore", "/explore"],
+      ["Explore", "/campaigns"],
       ["How It Works", "/how-it-works"],
-      ["Start a Fundraiser", "/start"],
+      ["Start a Fundraiser", "/dashboard/campaigns/new"],
     ]);
     // Sign-in / account menu sits outside the main nav (session-aware slot, mocked in src/test/setup.tsx).
     expect(screen.getByRole("link", { name: "Sign In" })).toHaveAttribute("href", "/login");

@@ -47,17 +47,26 @@ test("unknown routes return the 404 page", async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "We couldn't find that page" })).toBeVisible();
 });
 
-test("campaign slugs are never rendered as campaigns", async ({ page }) => {
+test("without the API, a campaign slug is never rendered as a campaign", async ({ page }) => {
   const response = await page.goto("/campaigns/help-my-family-urgent");
-  expect(response?.status()).toBe(404);
-  await expect(page.getByRole("heading", { level: 1, name: "Campaign pages are coming soon" })).toBeVisible();
+  expect(response?.status()).not.toBe(200);
+  await expect(page.getByRole("heading", { level: 1, name: "Error" })).toBeAttached();
+  await expect(page.getByText("This page could not be loaded")).toBeVisible();
   await expect(page.getByText("help-my-family-urgent")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /donat/i })).toHaveCount(0);
 });
 
-test("placeholder pages are accessible and have no forms", async ({ page }) => {
+test("malformed campaign slugs are a 404 without calling the API", async ({ page }) => {
+  const response = await page.goto("/campaigns/Not_A_Slug");
+  expect(response?.status()).toBe(404);
+  await expect(page.getByRole("heading", { level: 1, name: "We couldn't find that page" })).toBeVisible();
+});
+
+test("former placeholder URLs redirect: /explore to the listing, /start to the wizard (via sign-in)", async ({ page }) => {
+  await page.goto("/explore");
+  await expect(page).toHaveURL(/\/campaigns$/);
   await page.goto("/start");
-  await expect(page.getByText(/Coming soon — under development \(Stage 6\)/)).toBeVisible();
-  await expect(page.locator("main form, main input")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/login\?next=%2Fdashboard%2Fcampaigns%2Fnew$/);
   expect(await seriousAxeViolations(page)).toEqual([]);
 });
 

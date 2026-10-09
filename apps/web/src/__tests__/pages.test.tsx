@@ -1,31 +1,15 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import CampaignNotFound from "@/app/campaigns/[slug]/not-found";
-import CampaignPage, { metadata as campaignMetadata } from "@/app/campaigns/[slug]/page";
-import StartPage, { metadata as startMetadata } from "@/app/start/page";
+import ExplorePage from "@/app/explore/page";
+import StartPage from "@/app/start/page";
 import PrivacyPage from "@/app/privacy/page";
 import TermsPage from "@/app/terms/page";
-import { axeViolations } from "@/test/axe";
 
-describe("placeholder routes", () => {
-  it("start-a-fundraiser is a coming-soon page with noindex and no form", async () => {
-    const { container } = render(
-      <main>
-        <StartPage />
-      </main>,
-    );
-    expect(screen.getByText(/Coming soon — under development/)).toBeInTheDocument();
-    expect(container.querySelector("form, input")).toBeNull();
-    expect(startMetadata.robots).toMatchObject({ index: false });
-    expect(await axeViolations(container)).toEqual([]);
-  });
-
-  it("campaign pages never render a slug as a campaign: they 404", () => {
-    expect(() => CampaignPage()).toThrow("NEXT_NOT_FOUND");
-    expect(campaignMetadata.robots).toMatchObject({ index: false });
-    render(<CampaignNotFound />);
-    expect(screen.getByRole("heading", { level: 1, name: "Campaign pages are coming soon" })).toBeInTheDocument();
+describe("former placeholder routes", () => {
+  it("/start and /explore redirect to the campaign wizard and listing", () => {
+    expect(() => StartPage()).toThrow("NEXT_REDIRECT:/dashboard/campaigns/new");
+    expect(() => ExplorePage()).toThrow("NEXT_REDIRECT:/campaigns");
   });
 });
 

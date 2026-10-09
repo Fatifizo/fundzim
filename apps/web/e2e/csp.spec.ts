@@ -5,7 +5,7 @@ import { AUTH_BASE_URL, cspViolations, signIn, trackCspViolations, watchForBreak
 // Strict nonce-based CSP (src/proxy.ts, src/lib/security/csp.ts) verified against the production build.
 test.use({ baseURL: AUTH_BASE_URL });
 
-const PUBLIC_PAGES = ["/", "/about", "/how-it-works", "/explore", "/start", "/terms", "/privacy", "/contact", "/register", "/login", "/login/mfa", "/forgot-password", "/reset-password", "/verify-email", "/staff/accept-invitation", "/does-not-exist"];
+const PUBLIC_PAGES = ["/", "/about", "/how-it-works", "/campaigns", "/terms", "/privacy", "/contact", "/register", "/login", "/login/mfa", "/forgot-password", "/reset-password", "/verify-email", "/staff/accept-invitation", "/does-not-exist"];
 const SIGNED_IN_PAGES = ["/dashboard", "/settings/profile", "/settings/security", "/settings/mfa", "/settings/sessions"];
 
 function nonceFrom(csp: string): string {

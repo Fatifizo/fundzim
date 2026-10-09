@@ -25,8 +25,8 @@ describe("homepage", () => {
     expect(screen.getByText("Support people and causes across Zimbabwe through simple, secure fundraising.")).toBeInTheDocument();
     expect(screen.getByText("Fund anyone in Zimbabwe, from anywhere.")).toBeInTheDocument();
     const main = screen.getByRole("main");
-    expect(within(main).getByRole("link", { name: "Start a Fundraiser" })).toHaveAttribute("href", "/start");
-    expect(within(main).getByRole("link", { name: "Explore Campaigns" })).toHaveAttribute("href", "/explore");
+    expect(within(main).getByRole("link", { name: "Start a Fundraiser" })).toHaveAttribute("href", "/dashboard/campaigns/new");
+    expect(within(main).getByRole("link", { name: "Explore Campaigns" })).toHaveAttribute("href", "/campaigns");
   });
 
   it("renders the three how-it-works steps in order", () => {

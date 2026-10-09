@@ -39,6 +39,7 @@ export function RegisterForm({ api = authApi }: { api?: AuthApi }) {
     const displayName = String(data.get("display_name") ?? "").trim();
     const password = String(data.get("password") ?? "");
     const terms = data.get("accept_terms") === "on";
+    const adult = data.get("age_attestation") === "on";
 
     const errors: Record<string, string> = {};
     if (!email) errors.email = "Enter your email address.";
@@ -56,7 +57,7 @@ export function RegisterForm({ api = authApi }: { api?: AuthApi }) {
     clear();
     setBusy(true);
     try {
-      await api.register({ email, password, display_name: displayName, accept_terms: true });
+      await api.register({ email, password, display_name: displayName, accept_terms: true, ...(adult ? { age_attestation: true as const } : {}) });
       setSent(true);
     } catch (error) {
       failWith(error, "We couldn't create your account. Please try again.", { new_password: PASSWORD_FIELD });
@@ -129,6 +130,17 @@ export function RegisterForm({ api = authApi }: { api?: AuthApi }) {
             {fieldErrors.accept_terms}
           </p>
         ) : null}
+      </div>
+      <div className="space-y-1">
+        <div className="flex items-start gap-3">
+          <input id="age_attestation" name="age_attestation" type="checkbox" aria-describedby="age_attestation-hint" className="mt-1 size-6 shrink-0 accent-brand-700" />
+          <label htmlFor="age_attestation" className="text-ink-900">
+            I declare that I am 18 or older (optional)
+          </label>
+        </div>
+        <p id="age_attestation-hint" className="pl-9 text-sm text-ink-600">
+          Needed before you can raise funds; you can also do it later. This is your own declaration, not proof of age.
+        </p>
       </div>
       <SubmitButton busy={busy} busyLabel="Creating account…" className="w-full sm:w-auto">
         Create account

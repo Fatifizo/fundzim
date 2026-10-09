@@ -82,13 +82,26 @@ describe("RegisterForm", () => {
     await user.type(screen.getByLabelText("Email address"), "a@example.test");
     await user.type(screen.getByLabelText("Display name"), "Ann");
     await user.type(screen.getByLabelText("Password", { selector: "input" }), "a long enough passphrase");
-    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("checkbox", { name: /I accept/ }));
     await user.click(screen.getByRole("button", { name: "Create account" }));
     expect(register).toHaveBeenCalledWith({ email: "a@example.test", password: "a long enough passphrase", display_name: "Ann", accept_terms: true });
     const status = await screen.findByRole("status");
     expect(status).toHaveTextContent("Check your email");
     expect(status).toHaveTextContent("If this address can be used");
     expect(status).toHaveFocus();
+  });
+
+  it("sends the optional age declaration only when ticked", async () => {
+    const user = userEvent.setup();
+    const register = vi.fn(async () => ({ status: "verification_sent" as const }));
+    render(<RegisterForm api={fakeApi({ register })} />);
+    await user.type(screen.getByLabelText("Email address"), "a@example.test");
+    await user.type(screen.getByLabelText("Display name"), "Ann");
+    await user.type(screen.getByLabelText("Password", { selector: "input" }), "a long enough passphrase");
+    await user.click(screen.getByRole("checkbox", { name: /I accept/ }));
+    await user.click(screen.getByRole("checkbox", { name: /18 or older/ }));
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    expect(register).toHaveBeenCalledWith({ email: "a@example.test", password: "a long enough passphrase", display_name: "Ann", accept_terms: true, age_attestation: true });
   });
 
   it("maps PASSWORD_POLICY_VIOLATION details to the password field", async () => {
@@ -100,7 +113,7 @@ describe("RegisterForm", () => {
     await user.type(screen.getByLabelText("Email address"), "a@example.test");
     await user.type(screen.getByLabelText("Display name"), "Ann");
     await user.type(screen.getByLabelText("Password", { selector: "input" }), "password12345");
-    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("checkbox", { name: /I accept/ }));
     await user.click(screen.getByRole("button", { name: "Create account" }));
     const field = screen.getByLabelText("Password", { selector: "input" });
     await waitFor(() => expect(field).toHaveAttribute("aria-invalid", "true"));

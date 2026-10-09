@@ -13,7 +13,7 @@ export function createAuthApi(api: ApiClient = browserApi) {
   const post = <T>(path: string, body?: unknown) => api.post<T>(path, { body, timeoutMs: AUTH_TIMEOUT_MS }).then((r) => r.data);
   return {
     session: () => api.get<SessionState>("/api/v1/auth/session", { retries: 0 }).then((r) => r.data),
-    register: (input: { email: string; password: string; display_name: string; accept_terms: true }) =>
+    register: (input: { email: string; password: string; display_name: string; accept_terms: true; age_attestation?: true }) =>
       post<{ status: "verification_sent" }>("/api/v1/auth/register", input),
     verifyEmail: (token: string) => post<{ status: "verified" }>("/api/v1/auth/verify-email", { token }),
     resendVerification: (email: string) => post<{ status: "verification_sent" }>("/api/v1/auth/resend-verification", { email }),
