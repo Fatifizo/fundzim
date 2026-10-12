@@ -258,6 +258,7 @@ test("HIGH tier: a COMPLIANCE officer who gave the first approval cannot give th
 });
 
 test("self-approval prevention: a staff member linked (real ceremony) to the owner's personal account is refused", async ({ browser }) => {
+  test.setTimeout(20 * 60_000); // may wait out the per-IP email-token budget (see below)
   const r = run();
   const linked: StaffCred = r.linkedStaff;
   // 1. The staff member requests the link in the staff UI (step-up with an authenticator code).
@@ -277,17 +278,25 @@ test("self-approval prevention: a staff member linked (real ceremony) to the own
   const octx = await ownerContext(browser);
   const opage = await octx.newPage();
   await opage.goto(`${link.pathname}${link.search}`);
-  // The button is server-rendered; on a slow runner a click can land before React attaches its handler. Click
-  // again only while neither the result nor an error has appeared (an error fails the test with its message).
+  // The button is server-rendered; on a slow runner a click can land before React attaches its handler, so click
+  // again while neither the result nor an error has appeared. The confirmation shares the per-IP `auth.token.ip`
+  // budget (20 / 15 min) with every email-token action, and in the compose stack every client has the same address
+  // (KI-S7-03): when the API says "Please wait N seconds", wait as a person would and confirm again. Any other
+  // error fails the test with its message.
   const linkedStatus = opage.getByRole("status").filter({ hasText: "Your personal account is now linked to your staff account" });
   const linkError = opage.locator("main").getByRole("alert").filter({ hasText: /\S/ });
-  await expect(async () => {
-    if ((await linkedStatus.count()) === 0 && (await linkError.count()) === 0) {
-      await opage.getByRole("button", { name: "Confirm the link" }).click({ timeout: 2_000 });
+  const confirmButton = opage.getByRole("button", { name: "Confirm the link" });
+  for (let attempt = 0; attempt < 20 && (await linkedStatus.count()) === 0; attempt++) {
+    if ((await linkError.count()) > 0) {
+      const message = (await linkError.allInnerTexts()).join(" ");
+      const wait = /Please wait (\d+) seconds?/.exec(message);
+      expect(wait, `link confirmation failed: ${message}`).not.toBeNull();
+      test.info().annotations.push({ type: "rate-limit", description: `staff-link confirm: waited ${wait![1]} s (auth.token.ip)` });
+      await opage.waitForTimeout((Number(wait![1]) + 1) * 1000);
     }
-    await expect(linkedStatus.or(linkError).first()).toBeVisible({ timeout: 3_000 });
-  }).toPass({ timeout: 30_000 });
-  expect(await linkError.count(), `link confirmation failed: ${await linkError.allInnerTexts()}`).toBe(0);
+    await confirmButton.click();
+    await expect(linkedStatus.or(linkError).first()).toBeVisible({ timeout: 5_000 }).catch(() => undefined);
+  }
   await expect(linkedStatus).toBeVisible();
   await octx.close();
   await spage.reload();
