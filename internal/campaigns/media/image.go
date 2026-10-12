@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/jpeg"
 	"image/png"
 
@@ -314,4 +315,194 @@ func orient(src image.Image, o int) image.Image {
 		}
 	}
 	return dst
+}
+
+// VariantWidths are the srcset widths produced for approved media (never at or above the derivative's own width).
+var VariantWidths = []int{320, 640, 1024}
+
+// variantQuality is the JPEG quality of width variants.
+const variantQuality = 80
+
+// VariantWidthsFor returns the widths to produce for an image srcWidth pixels wide (no upscaling: widths at or above
+// the source width are skipped).
+func VariantWidthsFor(srcWidth int) []int {
+	var out []int
+	for _, w := range VariantWidths {
+		if w < srcWidth {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// ScaledHeight is the height of an srcW×srcH image scaled to width w (aspect ratio kept, rounded, at least 1).
+func ScaledHeight(srcW, srcH, w int) int {
+	h := int((int64(srcH)*int64(w)*2 + int64(srcW)) / (2 * int64(srcW)))
+	if h < 1 {
+		h = 1
+	}
+	return h
+}
+
+// ScaleToWidth downscales img to width w with an area-averaging box filter (each destination pixel is the coverage-
+// weighted mean of the source pixels under it). It never upscales: w ≥ the source width returns an error. Transparent
+// pixels are composited on white, since the result is encoded as JPEG. Memory is one source row and one destination
+// row of accumulators beyond the output image.
+func ScaleToWidth(img image.Image, w int) (*image.RGBA, error) {
+	b := img.Bounds()
+	sw, sh := b.Dx(), b.Dy()
+	if w <= 0 || w >= sw || sh <= 0 {
+		return nil, fmt.Errorf("media: cannot scale %dx%d to width %d (downscale only)", sw, sh, w)
+	}
+	h := ScaledHeight(sw, sh, w)
+	dst := image.NewRGBA(image.Rect(0, 0, w, h))
+	xs := boxWeights(sw, w)
+	ys := boxWeights(sh, h)
+	row := make([]float64, 4*sw) // one source row, premultiplied RGBA (0..65535)
+	hrow := make([]float64, 4*w) // that row reduced horizontally
+	acc := make([]float64, 4*w)  // current destination row
+	cached := -1
+	for dy := 0; dy < h; dy++ {
+		for i := range acc {
+			acc[i] = 0
+		}
+		for _, yw := range ys[dy] {
+			if yw.src != cached {
+				readRow(img, b, yw.src, row)
+				for i := range hrow {
+					hrow[i] = 0
+				}
+				for dx := 0; dx < w; dx++ {
+					for _, xw := range xs[dx] {
+						o := 4 * xw.src
+						hrow[4*dx] += row[o] * xw.w
+						hrow[4*dx+1] += row[o+1] * xw.w
+						hrow[4*dx+2] += row[o+2] * xw.w
+						hrow[4*dx+3] += row[o+3] * xw.w
+					}
+				}
+				cached = yw.src
+			}
+			for i := range acc {
+				acc[i] += hrow[i] * yw.w
+			}
+		}
+		for dx := 0; dx < w; dx++ {
+			a := acc[4*dx+3]
+			o := dst.PixOffset(dx, dy)
+			for c := 0; c < 3; c++ {
+				v := acc[4*dx+c] + (65535 - a) // premultiplied colour over white
+				dst.Pix[o+c] = clamp8(v)
+			}
+			dst.Pix[o+3] = 255
+		}
+	}
+	return dst, nil
+}
+
+type boxWeight struct {
+	src int
+	w   float64
+}
+
+// boxWeights maps each of n destination cells to the source cells it covers, with weights summing to 1.
+func boxWeights(srcN, n int) [][]boxWeight {
+	out := make([][]boxWeight, n)
+	scale := float64(srcN) / float64(n)
+	for d := 0; d < n; d++ {
+		lo, hi := float64(d)*scale, float64(d+1)*scale
+		for s := int(lo); s < srcN && float64(s) < hi; s++ {
+			cov := min(float64(s+1), hi) - max(float64(s), lo)
+			if cov > 0 {
+				out[d] = append(out[d], boxWeight{src: s, w: cov / scale})
+			}
+		}
+	}
+	return out
+}
+
+func clamp8(v float64) uint8 {
+	v = v/257 + 0.5
+	switch {
+	case v <= 0:
+		return 0
+	case v >= 255:
+		return 255
+	}
+	return uint8(v)
+}
+
+// readRow fills row with the premultiplied RGBA (0..65535) of source row y (relative to b.Min), with fast paths for
+// the decoder outputs (YCbCr for JPEG, RGBA/NRGBA for PNG).
+func readRow(img image.Image, b image.Rectangle, y int, row []float64) {
+	sy := b.Min.Y + y
+	switch src := img.(type) {
+	case *image.YCbCr:
+		for x := 0; x < b.Dx(); x++ {
+			sx := b.Min.X + x
+			yi, ci := src.YOffset(sx, sy), src.COffset(sx, sy)
+			r, g, bl := color.YCbCrToRGB(src.Y[yi], src.Cb[ci], src.Cr[ci])
+			row[4*x], row[4*x+1], row[4*x+2], row[4*x+3] = float64(r)*257, float64(g)*257, float64(bl)*257, 65535
+		}
+	case *image.RGBA:
+		for x := 0; x < b.Dx(); x++ {
+			p := src.Pix[src.PixOffset(b.Min.X+x, sy):]
+			row[4*x], row[4*x+1], row[4*x+2], row[4*x+3] = float64(p[0])*257, float64(p[1])*257, float64(p[2])*257, float64(p[3])*257
+		}
+	default:
+		for x := 0; x < b.Dx(); x++ {
+			r, g, bl, a := img.At(b.Min.X+x, sy).RGBA()
+			row[4*x], row[4*x+1], row[4*x+2], row[4*x+3] = float64(r), float64(g), float64(bl), float64(a)
+		}
+	}
+}
+
+// Variant is one encoded width variant.
+type Variant struct {
+	Width, Height int
+	Data          []byte
+}
+
+// MakeVariants decodes a derivative (already metadata-free) and encodes the JPEG width variants smaller than it.
+// Each variant is encoded from pixels, so it carries no metadata either.
+func MakeVariants(derivative []byte, contentType string, lim Limits) ([]Variant, error) {
+	if lim == (Limits{}) {
+		lim = DefaultLimits
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(derivative))
+	if err != nil {
+		return nil, reject(ReasonDecodeFailed, "header: %v", err)
+	}
+	if cfg.Width > lim.MaxSide || cfg.Height > lim.MaxSide || int64(cfg.Width)*int64(cfg.Height) > lim.MaxPixels {
+		return nil, reject(ReasonTooLarge, "%dx%d exceeds the limits", cfg.Width, cfg.Height)
+	}
+	widths := VariantWidthsFor(cfg.Width)
+	if len(widths) == 0 {
+		return nil, nil
+	}
+	var img image.Image
+	switch contentType {
+	case storage.TypeJPEG:
+		img, err = jpeg.Decode(bytes.NewReader(derivative))
+	case storage.TypePNG:
+		img, err = png.Decode(bytes.NewReader(derivative))
+	default:
+		return nil, reject(ReasonUnsupported, "type %s", contentType)
+	}
+	if err != nil {
+		return nil, reject(ReasonDecodeFailed, "decode: %v", err)
+	}
+	out := make([]Variant, 0, len(widths))
+	for _, w := range widths {
+		scaled, err := ScaleToWidth(img, w)
+		if err != nil {
+			return nil, err
+		}
+		var buf bytes.Buffer
+		if err := jpeg.Encode(&buf, scaled, &jpeg.Options{Quality: variantQuality}); err != nil {
+			return nil, reject(ReasonDecodeFailed, "encode: %v", err)
+		}
+		out = append(out, Variant{Width: w, Height: scaled.Bounds().Dy(), Data: buf.Bytes()})
+	}
+	return out, nil
 }

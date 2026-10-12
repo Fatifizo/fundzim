@@ -258,7 +258,12 @@ type QueueItem struct {
 }
 
 // Queue lists open reviews oldest first with a (queued_at, review id) keyset cursor.
-func (s *Service) Queue(ctx context.Context, staffID, assigned, category, cursor string, limit int) ([]QueueItem, string, error) {
+func (s *Service) Queue(ctx context.Context, staffID, assigned, category, status, cursor string, limit int) ([]QueueItem, string, error) {
+	switch status {
+	case "", StatusSubmitted, StatusUnderReview, StatusActive, StatusPaused, StatusRejected:
+	default:
+		return nil, "", httpx.Validation(errs.Detail{Field: "status", Code: "INVALID_VALUE"})
+	}
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
@@ -287,7 +292,8 @@ func (s *Service) Queue(ctx context.Context, staffID, assigned, category, cursor
 		  AND ($1 = 'any' OR ($1 = 'me' AND r.assigned_to = $2::uuid) OR ($1 = 'unassigned' AND r.assigned_to IS NULL))
 		  AND ($3 = '' OR c.category_code = $3)
 		  AND ($4::timestamptz IS NULL OR (r.created_at, r.id) > ($4, $5::uuid))
-		ORDER BY r.created_at, r.id LIMIT $6`, assigned, staffID, category, after, afterID, limit)
+		  AND ($7 = '' OR c.status = $7)
+		ORDER BY r.created_at, r.id LIMIT $6`, assigned, staffID, category, after, afterID, limit, status)
 	if err != nil {
 		return nil, "", err
 	}

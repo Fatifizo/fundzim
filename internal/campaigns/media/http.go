@@ -5,10 +5,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/Fatifizo/fundzim/internal/campaigns"
 	"github.com/Fatifizo/fundzim/internal/platform/authz"
@@ -209,6 +212,11 @@ func (s *Service) HandleContent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	p := principal(r)
 	campaignID, mediaID := r.PathValue("campaign_id"), r.PathValue("media_id")
+	width, werr := requestedWidth(r)
+	if werr != nil {
+		s.fail(w, r, werr)
+		return
+	}
 	if s.d.Core == nil {
 		s.fail(w, r, ErrNotConfigured)
 		return
@@ -236,13 +244,18 @@ func (s *Service) HandleContent(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, ErrNotAvailable)
 		return
 	}
-	s.serve(w, r, *m.processedObjectID, "private, no-store", "same-origin")
+	s.serve(w, r, s.pickObject(ctx, m.ID, *m.processedObjectID, width), "private, no-store", "same-origin")
 }
 
 // HandlePublicContent: GET /public/campaigns/{slug}/media/{media_id} — image bytes of APPROVED media that is part of
 // the approved version of a publicly exposed campaign. Everything else is 404.
 func (s *Service) HandlePublicContent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	width, werr := requestedWidth(r)
+	if werr != nil {
+		s.fail(w, r, werr)
+		return
+	}
 	if s.d.Core == nil {
 		s.fail(w, r, ErrNotConfigured)
 		return
@@ -257,7 +270,44 @@ func (s *Service) HandlePublicContent(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.serve(w, r, obj, "public, no-cache", "cross-origin") // revalidate every time: hidden as soon as the campaign is not public (ADR-038 §1)
+	s.serve(w, r, s.pickObject(ctx, r.PathValue("media_id"), obj, width), "public, no-cache", "cross-origin") // revalidate every time: hidden as soon as the campaign is not public (ADR-038 §1)
+}
+
+// requestedWidth parses ?w= (absent = the full derivative; 320, 640 or 1024 = that width variant; anything else 422).
+func requestedWidth(r *http.Request) (int, error) {
+	vals, ok := r.URL.Query()["w"]
+	if !ok {
+		return 0, nil
+	}
+	if len(vals) == 1 {
+		for _, w := range VariantWidths {
+			if vals[0] == strconv.Itoa(w) {
+				return w, nil
+			}
+		}
+	}
+	return 0, httpx.Validation(errs.Detail{Field: "w", Code: "INVALID_VALUE"})
+}
+
+// pickObject returns the width variant's object when one is recorded and CLEAN, otherwise the full derivative (a
+// missing, still scanning or failed variant never makes the image unavailable). The caller has already checked
+// that the media may be served to this requester.
+func (s *Service) pickObject(ctx context.Context, mediaID, derivativeID string, width int) string {
+	if width == 0 {
+		return derivativeID
+	}
+	var obj string
+	if err := s.d.Pool.QueryRow(ctx, `SELECT object_id::text FROM app.campaign_media_variants WHERE media_id = $1 AND width = $2`,
+		mediaID, width).Scan(&obj); err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			s.d.Logger.Warn("campaign media variant lookup failed; serving the full image", slog.String("error", err.Error()))
+		}
+		return derivativeID
+	}
+	if o, err := s.d.Storage.Get(ctx, obj); err != nil || o.Status != storage.StatusClean {
+		return derivativeID
+	}
+	return obj
 }
 
 // serve streams a CLEAN derivative with strict headers. The ETag is the content SHA-256, so a conditional request

@@ -25984,6 +25984,17 @@ paths:
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
+      - name: w
+        in: query
+        required: false
+        schema:
+          type: integer
+          enum:
+          - 320
+          - 640
+          - 1024
+        description: 'Width variant (JPEG, metadata-free, Stage 7). Served when that variant exists and is scanned CLEAN; otherwise
+          the full derivative is served. Any other value → `422 VALIDATION_FAILED` (field `w`).'
       - name: If-None-Match
         in: header
         required: false
@@ -26244,6 +26255,17 @@ paths:
         required: true
         schema:
           $ref: '#/components/schemas/Uuid'
+      - name: w
+        in: query
+        required: false
+        schema:
+          type: integer
+          enum:
+          - 320
+          - 640
+          - 1024
+        description: 'Width variant (JPEG, metadata-free, Stage 7). Served when that variant exists and is scanned CLEAN; otherwise
+          the full derivative is served. Any other value → `422 VALIDATION_FAILED` (field `w`).'
       - name: If-None-Match
         in: header
         required: false
@@ -26569,8 +26591,9 @@ paths:
       operationId: listCampaignReviewQueue
       summary: Campaign review queue
       description: '**MOD-19** · Auth: staff + MFA · Authorization: `campaign.review` (staff session; non-staff → `404 ROUTE_NOT_FOUND`). Open reviews (QUEUED,
-        ASSIGNED, IN_REVIEW), oldest first. Keyset cursor: opaque, pass `data.next_cursor` back unchanged; malformed → `422` (cursor INVALID_FORMAT). The
-        `status` filter in the interface contract is not implemented. Implemented in Stage 6.
+        ASSIGNED, IN_REVIEW), oldest first. Keyset cursor: opaque, pass `data.next_cursor` back unchanged; malformed → `422` (cursor INVALID_FORMAT). `status`
+        filters on the campaign status (SUBMITTED, UNDER_REVIEW, or ACTIVE/PAUSED for re-reviews, REJECTED for reopened reviews; other values →
+        `422`). Implemented in Stage 6; status filter Stage 7.
 
 
         Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` (policies: `global.ip`) · Audit: —'
@@ -26592,6 +26615,17 @@ paths:
         required: false
         schema:
           type: string
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - SUBMITTED
+          - UNDER_REVIEW
+          - ACTIVE
+          - PAUSED
+          - REJECTED
       - name: limit
         in: query
         required: false
@@ -28457,8 +28491,8 @@ paths:
       operationId: listFeaturedCampaigns
       summary: Featured campaigns (staff picks, then recently published)
       description: '**DIS-13** · Auth: none · Authorization: Public. Staff picks first (by position), then recently published live PUBLIC campaigns to fill
-        the list; each item says which (`selection`). No popularity, ranking or paid promotion; a pick never overrides visibility. A staff pick made while
-        the campaign was live stays listed after it is COMPLETED (still PUBLIC); new picks of COMPLETED campaigns are refused. Implemented in Stage 6.
+        the list; each item says which (`selection`). No popularity, ranking or paid promotion; a pick never overrides visibility. Only ACTIVE and PAUSED
+        campaigns are listed (a pick whose campaign completes drops out; new picks of COMPLETED campaigns are refused). Implemented in Stage 6.
 
 
         Idempotency: n/a · Rate-limit class: `RL-PUBLIC-READ` (policies: `global.ip`) · Audit: —'
@@ -41269,6 +41303,7 @@ components:
             - id
             - kind
             - alt_text
+            - variants
             properties:
               id:
                 $ref: '#/components/schemas/Uuid'
@@ -41279,6 +41314,25 @@ components:
                 - GALLERY
               alt_text:
                 type: string
+              variants:
+                type: array
+                description: Resized JPEG width variants for srcset, ascending by width (never wider than the image; may be empty).
+                  Fetch with `?w=<width>`.
+                items:
+                  type: object
+                  required:
+                  - width
+                  - height
+                  properties:
+                    width:
+                      type: integer
+                      enum:
+                      - 320
+                      - 640
+                      - 1024
+                    height:
+                      type: integer
+                      minimum: 1
         title:
           type: string
         summary:

@@ -224,7 +224,7 @@ func (s *Service) Featured(ctx context.Context, limit int) ([]FeaturedCard, erro
 	rows, err := s.Pool.Query(ctx, cardSelect+`, f.position::text FROM app.campaign_featured f
 		JOIN app.campaigns c ON c.id = f.campaign_id AND f.removed_at IS NULL
 		JOIN app.campaign_versions v ON v.id = c.approved_version_id
-		WHERE c.status IN ('ACTIVE','PAUSED','COMPLETED') AND c.visibility = 'PUBLIC'
+		WHERE c.status IN ('ACTIVE','PAUSED') AND c.visibility = 'PUBLIC' -- same rule as picking: completed picks drop out
 		ORDER BY f.position, f.added_at LIMIT $1`, limit)
 	if err != nil {
 		return nil, err

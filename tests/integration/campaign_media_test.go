@@ -895,3 +895,223 @@ func TestCampaignMediaPrivateObjectNeverLinked(t *testing.T) {
 	}
 	cmWait(t, u, c.id, m.ID, 120*time.Second)
 }
+
+// cmEncodeJPEG encodes a plain w×h JPEG fixture.
+func cmEncodeJPEG(t *testing.T, w, h int) []byte {
+	t.Helper()
+	var b bytes.Buffer
+	if err := jpeg.Encode(&b, cmImage(w, h), &jpeg.Options{Quality: 92}); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
+func cmDims(t *testing.T, body []byte) (int, int, string) {
+	t.Helper()
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("decode served image: %v (%d bytes)", err, len(body))
+	}
+	return cfg.Width, cfg.Height, format
+}
+
+type cmVariantRow struct {
+	width, height int
+	object        string
+}
+
+func cmVariants(t *testing.T, mediaID string) []cmVariantRow {
+	t.Helper()
+	rows, err := pool(t, workerURL(t)).Query(ctx(t), `SELECT width, height, object_id::text FROM app.campaign_media_variants
+		 WHERE media_id = $1 ORDER BY width`, mediaID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (cmVariantRow, error) {
+		var v cmVariantRow
+		return v, r.Scan(&v.width, &v.height, &v.object)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// cmWaitVariantsClean waits until the media has exactly want variants, all scanned CLEAN.
+func cmWaitVariantsClean(t *testing.T, mediaID string, want int) []cmVariantRow {
+	t.Helper()
+	var vs []cmVariantRow
+	waitFor(t, 120*time.Second, "variants of "+mediaID, func() bool {
+		time.Sleep(300 * time.Millisecond)
+		vs = cmVariants(t, mediaID)
+		return len(vs) == want && cmCount(t, `SELECT count(*) FROM app.campaign_media_variants v JOIN app.stored_objects o ON o.id = v.object_id
+			 WHERE v.media_id = $1 AND o.scan_status = 'CLEAN'`, mediaID) == want
+	})
+	return vs
+}
+
+// Stage 7: approved media get JPEG width variants (320/640/1024, never upscaled) that are scanned like the
+// derivative and served by ?w=; an invalid width is 422; a missing or unusable variant falls back to the full image;
+// the public media list carries the variant sizes; media approved before variants existed are backfilled.
+func TestCampaignMediaWidthVariants(t *testing.T) {
+	s := newITServer(t, nil)
+	u := cmOwner(t, s, "media-variants")
+	c := cmMakeDraft(t, u.id)
+
+	cover := cmUploadOK(t, u, c.id, media.KindCover, "image/jpeg", cmEncodeJPEG(t, 1200, 600))
+	if got := cmWait(t, u, c.id, cover.ID, 120*time.Second); got.Status != media.StatusApproved {
+		t.Fatalf("cover %s", got.Status)
+	}
+	vs := cmWaitVariantsClean(t, cover.ID, 3)
+	for i, want := range [][2]int{{320, 160}, {640, 320}, {1024, 512}} {
+		if vs[i].width != want[0] || vs[i].height != want[1] {
+			t.Fatalf("variant rows %+v", vs)
+		}
+	}
+	if cmCount(t, `SELECT count(*) FROM app.stored_objects o JOIN app.campaign_media_variants v ON v.object_id = o.id
+		 WHERE v.media_id = $1 AND o.bucket_class = 'PUBLIC_MEDIA' AND o.purpose = 'CAMPAIGN_MEDIA' AND o.owner_module = 'campaigns'
+		   AND o.scan_engine IS NOT NULL AND o.sniffed_content_type = 'image/jpeg'`, cover.ID) != 3 {
+		t.Fatal("variant objects are not scanned PUBLIC_MEDIA campaign objects")
+	}
+
+	// owner preview by width
+	base := s.srv.URL + "/api/v1/campaigns/" + c.id + "/media/" + cover.ID + "/content"
+	etags := map[string]bool{}
+	for _, tc := range []struct {
+		q    string
+		w, h int
+	}{{"", 1200, 600}, {"?w=320", 320, 160}, {"?w=640", 640, 320}, {"?w=1024", 1024, 512}} {
+		r := cmGet(t, u.browser, base+tc.q)
+		if r.status != 200 || r.header.Get("Cache-Control") != "private, no-store" || r.header.Get("X-Content-Type-Options") != "nosniff" {
+			t.Fatalf("owner %s: %d %v", tc.q, r.status, r.header)
+		}
+		if w, h, f := cmDims(t, r.body); w != tc.w || h != tc.h || f != "jpeg" || bytes.Contains(r.body, []byte("Exif")) {
+			t.Fatalf("owner %s: %dx%d %s", tc.q, w, h, f)
+		}
+		etags[r.header.Get("ETag")] = true
+	}
+	if len(etags) != 4 {
+		t.Fatalf("ETags not distinct per variant: %v", etags)
+	}
+	for _, bad := range []string{"?w=500", "?w=abc", "?w=", "?w=320&w=640", "?w=2048"} {
+		r := cmGet(t, u.browser, base+bad)
+		if r.status != 422 || !bytes.Contains(r.body, []byte("VALIDATION_FAILED")) {
+			t.Fatalf("owner %s: %d %s", bad, r.status, r.body)
+		}
+	}
+
+	// public serving by width (same visibility rules and headers)
+	if r := cmPublicContent(t, s, c.slug, cover.ID+"?w=320"); r.status != 404 {
+		t.Fatalf("draft campaign variant served publicly: %d", r.status)
+	}
+	cmPublish(t, c, cover.ID)
+	pub := s.srv.URL + "/api/v1/public/campaigns/" + c.slug + "/media/" + cover.ID
+	r := cmGet(t, nil, pub+"?w=640")
+	if r.status != 200 || r.header.Get("Cache-Control") != "public, no-cache" || r.header.Get("ETag") == "" ||
+		r.header.Get("X-Content-Type-Options") != "nosniff" || !strings.Contains(r.header.Get("Content-Security-Policy"), "sandbox") ||
+		r.header.Get("Content-Type") != "image/jpeg" {
+		t.Fatalf("public ?w=640: %d %v", r.status, r.header)
+	}
+	if w, h, _ := cmDims(t, r.body); w != 640 || h != 320 {
+		t.Fatalf("public ?w=640 is %dx%d", w, h)
+	}
+	if nm := cmGet(t, nil, pub+"?w=640", "If-None-Match", r.header.Get("ETag")); nm.status != 304 {
+		t.Fatalf("public conditional ?w=640: %d", nm.status)
+	}
+	if bad := cmGet(t, nil, pub+"?w=99"); bad.status != 422 {
+		t.Fatalf("public invalid w: %d", bad.status)
+	}
+	if other := cmGet(t, nil, s.srv.URL+"/api/v1/public/campaigns/no-such-campaign-zz/media/"+cover.ID+"?w=320"); other.status != 404 {
+		t.Fatalf("variant under a wrong slug: %d", other.status)
+	}
+
+	// the public campaign view lists the variant sizes
+	status, body := publicGet(t, s, "/public/campaigns/"+c.slug)
+	if status != 200 {
+		t.Fatalf("public view: %d %s", status, body)
+	}
+	var view struct {
+		Data struct {
+			Media []struct {
+				ID       string `json:"id"`
+				Variants []struct {
+					Width  int `json:"width"`
+					Height int `json:"height"`
+				} `json:"variants"`
+			} `json:"media"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &view); err != nil || len(view.Data.Media) != 1 {
+		t.Fatalf("public view media: %v %s", err, body)
+	}
+	if got := fmt.Sprint(view.Data.Media[0].Variants); got != "[{320 160} {640 320} {1024 512}]" {
+		t.Fatalf("public variants %s", got)
+	}
+
+	// fallback: a variant whose object is no longer CLEAN serves the full derivative
+	if err := s.d.Verification.Storage.Delete(ctx(t), vs[2].object, ""); err != nil {
+		t.Fatal(err)
+	}
+	if w, _, _ := cmDims(t, cmGet(t, nil, pub+"?w=1024").body); w != 1200 {
+		t.Fatalf("fallback for an unusable 1024 variant served width %d", w)
+	}
+	// fallback: an image narrower than every width has no variants; any w serves the full image
+	small := cmUploadOK(t, u, c.id, media.KindGallery, "image/jpeg", cmEncodeJPEG(t, 300, 150))
+	if got := cmWait(t, u, c.id, small.ID, 120*time.Second); got.Status != media.StatusApproved {
+		t.Fatalf("small %s", got.Status)
+	}
+	time.Sleep(2 * time.Second) // let the worker finish its (empty) variant step
+	if n := len(cmVariants(t, small.ID)); n != 0 {
+		t.Fatalf("a 300 px image got %d variants (upscaling)", n)
+	}
+	sr := cmGet(t, u.browser, s.srv.URL+"/api/v1/campaigns/"+c.id+"/media/"+small.ID+"/content?w=320")
+	if w, h, _ := cmDims(t, sr.body); sr.status != 200 || w != 300 || h != 150 {
+		t.Fatalf("small ?w=320: %d %dx%d", sr.status, w, h)
+	}
+	// a 700 px image gets 320 and 640 only
+	mid := cmUploadOK(t, u, c.id, media.KindGallery, "image/png", cmPNGWithTextSized(t, 700, 350))
+	if got := cmWait(t, u, c.id, mid.ID, 120*time.Second); got.Status != media.StatusApproved {
+		t.Fatalf("mid %s", got.Status)
+	}
+	if mv := cmWaitVariantsClean(t, mid.ID, 2); mv[0].width != 320 || mv[1].width != 640 {
+		t.Fatalf("700 px variants %+v", mv)
+	}
+
+	// backfill: APPROVED media without variants (approved before this feature) get them from EnsureVariants, the step
+	// the worker's sweep runs for such media; the table is append-only
+	var old string
+	err := pool(t, workerURL(t)).QueryRow(ctx(t), `SELECT m.id::text FROM app.campaign_media m WHERE m.status = 'APPROVED' AND m.width > 320
+		 AND NOT EXISTS (SELECT 1 FROM app.campaign_media_variants v WHERE v.media_id = m.id) ORDER BY m.approved_at LIMIT 1`).Scan(&old)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		t.Log("no pre-variant APPROVED media in this database; backfill step not exercised here")
+	case err != nil:
+		t.Fatal(err)
+	default:
+		ms := media.New(media.Deps{Pool: pool(t, workerURL(t)), Storage: cmWorkerStorage(t, storage.DevScanner{}), MaxUploadBytes: 10 << 20})
+		if err := ms.EnsureVariants(ctx(t), old); err != nil {
+			t.Fatal(err)
+		}
+		var width int
+		_ = pool(t, workerURL(t)).QueryRow(ctx(t), `SELECT width FROM app.campaign_media WHERE id = $1`, old).Scan(&width)
+		if got, want := len(cmVariants(t, old)), len(media.VariantWidthsFor(width)); got != want {
+			t.Fatalf("backfilled %d variants for a %d px image, want %d", got, width, want)
+		}
+		if err := ms.EnsureVariants(ctx(t), old); err != nil || len(cmVariants(t, old)) != len(media.VariantWidthsFor(width)) {
+			t.Fatalf("second EnsureVariants not idempotent: %v", err)
+		}
+	}
+	if _, err := s.d.DB.Exec(ctx(t), `DELETE FROM app.campaign_media_variants WHERE media_id = $1`, cover.ID); err == nil {
+		t.Fatal("variant rows deleted")
+	}
+}
+
+// cmPNGWithTextSized is a plain w×h PNG.
+func cmPNGWithTextSized(t *testing.T, w, h int) []byte {
+	t.Helper()
+	var b bytes.Buffer
+	if err := png.Encode(&b, cmImage(w, h)); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}

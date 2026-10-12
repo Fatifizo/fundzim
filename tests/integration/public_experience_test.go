@@ -53,7 +53,7 @@ var publicAllowedKeys = map[string]bool{
 	"message": true, "trust": true, "organiser_identity_verified": true, "organisation_verified": true, "beneficiary_verified": true,
 	"campaign_reviewed": true, "selection": true, "code": true, "name": true, "description": true, "display_order": true, "sensitive": true,
 	"live_campaigns": true, "campaigns": true, "categories": true, "updated_at": true, "body": true, "organiser_name": true,
-	"requires_organisation": true, "risk_tier": false,
+	"requires_organisation": true, "risk_tier": false, "variants": true, "width": true, "height": true,
 }
 
 func assertPublicKeys(t *testing.T, where string, raw []byte) {
@@ -263,6 +263,31 @@ func TestPublicExperienceEndpoints(t *testing.T) {
 	})
 	if u.do("GET", "/campaigns/"+id, nil).field(t, "status") != "ACTIVE" {
 		t.Fatal("escalation changed the campaign status")
+	}
+
+	// ---- dismissal: a second reporter's report is dismissed; no escalation event, no status change, final
+	other.expect(other.do("POST", "/public/campaigns/"+slug+"/reports", map[string]any{"reason": "SUSPICIOUS_ACTIVITY", "details": "The organiser asked me to pay outside FundZim."}), 202, "")
+	dismissID := ""
+	_ = mig.QueryRow(ctx(t), `SELECT id FROM app.campaign_reports WHERE campaign_id = $1 AND status = 'OPEN'`, id).Scan(&dismissID)
+	if dismissID == "" {
+		t.Fatal("second report not stored")
+	}
+	rev.expect(rev.do("POST", "/admin/campaigns/reports/"+dismissID+"/dismiss", map[string]string{"reason_code": "NOT_ACTIONABLE",
+		"note": "checked: payment instructions are not in the campaign text"}), 200, "")
+	var dismissedStatus string
+	var triagedBy *string
+	_ = mig.QueryRow(ctx(t), `SELECT status, triaged_by::text FROM app.campaign_reports WHERE id = $1`, dismissID).Scan(&dismissedStatus, &triagedBy)
+	if dismissedStatus != "DISMISSED" || triagedBy == nil {
+		t.Fatalf("dismissed report: status %s, triaged_by set %v", dismissedStatus, triagedBy != nil)
+	}
+	var dismissEvents int
+	_ = mig.QueryRow(ctx(t), `SELECT count(*) FROM app.outbox_events WHERE event_type = 'campaigns.report_escalated' AND payload->>'report_id' = $1`, dismissID).Scan(&dismissEvents)
+	if dismissEvents != 0 {
+		t.Fatal("a dismissed report emitted an escalation event")
+	}
+	rev.expect(rev.do("POST", "/admin/campaigns/reports/"+dismissID+"/escalate", map[string]string{"reason_code": "NEEDS_INVESTIGATION", "note": "second look"}), 409, "REPORT_ALREADY_TRIAGED")
+	if u.do("GET", "/campaigns/"+id, nil).field(t, "status") != "ACTIVE" {
+		t.Fatal("dismissal changed the campaign status")
 	}
 
 	// ---- report rate limit per IP (5/hour)

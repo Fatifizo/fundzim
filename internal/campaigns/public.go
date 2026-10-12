@@ -42,21 +42,36 @@ type PublicCampaign struct {
 
 // PublicMedia is an image of the approved version that is still APPROVED (removed media drop out).
 type PublicMedia struct {
-	ID      string `json:"id"`
-	Kind    string `json:"kind"`
-	AltText string `json:"alt_text"`
+	ID       string               `json:"id"`
+	Kind     string               `json:"kind"`
+	AltText  string               `json:"alt_text"`
+	Variants []PublicMediaVariant `json:"variants"` // srcset widths (ascending); fetch with ?w=<width>
+}
+
+// PublicMediaVariant is a resized JPEG width variant of a public image (app.campaign_media_variants). Serving falls
+// back to the full image while a variant is not yet scanned, so a listed width is always fetchable.
+type PublicMediaVariant struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
 }
 
 // publicMedia keeps the approved version's order and drops media removed or rejected since approval.
 func (s *Service) publicMedia(ctx context.Context, ids []string) ([]PublicMedia, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT cm.id::text, cm.kind, cm.alt_text FROM unnest($1::uuid[]) WITH ORDINALITY AS u(m, o)
+	rows, err := s.Pool.Query(ctx, `SELECT cm.id::text, cm.kind, cm.alt_text,
+		  coalesce((SELECT json_agg(json_build_object('width', v.width, 'height', v.height) ORDER BY v.width)
+		            FROM app.campaign_media_variants v WHERE v.media_id = cm.id), '[]'::json)
+		FROM unnest($1::uuid[]) WITH ORDINALITY AS u(m, o)
 		JOIN app.campaign_media cm ON cm.id = u.m AND cm.status = 'APPROVED' ORDER BY u.o`, ids)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (PublicMedia, error) {
 		var m PublicMedia
-		return m, r.Scan(&m.ID, &m.Kind, &m.AltText)
+		err := r.Scan(&m.ID, &m.Kind, &m.AltText, &m.Variants)
+		if m.Variants == nil {
+			m.Variants = []PublicMediaVariant{}
+		}
+		return m, err
 	})
 }
 

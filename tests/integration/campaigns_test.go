@@ -240,9 +240,23 @@ func TestCampaignLifecycleEndToEnd(t *testing.T) {
 	sup.expect(sup.do("POST", "/admin/campaigns/"+id+"/approve", decision("CHECKLIST_COMPLETE")), 403, "PERMISSION_DENIED")
 	u.expect(u.do("GET", "/admin/campaigns/review", nil), 404, "")
 	rev, rev2 := s.staff(t, f.campRev1), s.staff(t, f.campRev2)
-	r = rev.do("GET", "/admin/campaigns/review?assigned=unassigned", nil)
-	rev.expect(r, 200, "")
-	if !strings.Contains(string(r.Data), id) {
+	// The queue is oldest first and the shared development database may hold more than one page of open
+	// reviews: follow next_cursor until the campaign appears or the queue ends.
+	inQueue, cursor := false, ""
+	for page := 0; page < 100 && !inQueue; page++ {
+		r = rev.do("GET", "/admin/campaigns/review?assigned=unassigned&cursor="+strings.ReplaceAll(cursor, "+", "%2B"), nil)
+		rev.expect(r, 200, "")
+		inQueue = strings.Contains(string(r.Data), id)
+		var pg struct {
+			NextCursor *string `json:"next_cursor"`
+		}
+		_ = json.Unmarshal(r.Data, &pg)
+		if pg.NextCursor == nil || *pg.NextCursor == "" {
+			break
+		}
+		cursor = *pg.NextCursor
+	}
+	if !inQueue {
 		t.Fatalf("queue lacks the campaign: %.300s", r.Data)
 	}
 	rev.expect(rev.do("POST", "/admin/campaigns/"+id+"/assign", map[string]string{"assignee_id": f.support.id}), 422, "ASSIGNEE_NOT_ELIGIBLE")

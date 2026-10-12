@@ -3,6 +3,7 @@ package media
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 	"image"
 	"image/color"
@@ -335,4 +336,130 @@ func TestTransitionsMatchMigration(t *testing.T) {
 	if strings.Join(sqlEdges, ",") != strings.Join(goEdges, ",") || len(goEdges) == 0 {
 		t.Fatalf("edge lists differ:\nsql %v\ngo  %v", sqlEdges, goEdges)
 	}
+}
+
+func TestVariantWidthsNeverUpscale(t *testing.T) {
+	cases := map[int][]int{1: nil, 300: nil, 320: nil, 321: {320}, 640: {320}, 641: {320, 640}, 1024: {320, 640}, 1025: {320, 640, 1024},
+		8000: {320, 640, 1024}}
+	for src, want := range cases {
+		if got := VariantWidthsFor(src); fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("VariantWidthsFor(%d) = %v, want %v", src, got, want)
+		}
+	}
+	for _, w := range []int{300, 301, 0, -1} {
+		if _, err := ScaleToWidth(image.NewRGBA(image.Rect(0, 0, 300, 100)), w); err == nil {
+			t.Errorf("ScaleToWidth(300px, %d) must refuse (no upscaling / invalid)", w)
+		}
+	}
+}
+
+func TestScaleToWidthKeepsAspectRatio(t *testing.T) {
+	for _, c := range []struct{ sw, sh, w, wantH int }{
+		{2000, 1000, 320, 160}, {2000, 1000, 640, 320}, {2000, 1000, 1024, 512},
+		{1001, 333, 320, 106}, {1500, 4000, 640, 1707}, {5000, 3, 320, 1}, {700, 700, 640, 640},
+	} {
+		img, err := ScaleToWidth(image.NewRGBA(image.Rect(0, 0, c.sw, c.sh)), c.w)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b := img.Bounds(); b.Dx() != c.w || b.Dy() != c.wantH || ScaledHeight(c.sw, c.sh, c.w) != c.wantH {
+			t.Errorf("%dx%d → w %d: got %dx%d, want height %d", c.sw, c.sh, c.w, b.Dx(), b.Dy(), c.wantH)
+		}
+	}
+	// a non-zero origin (sub-image) is handled
+	sub := image.NewRGBA(image.Rect(0, 0, 500, 300)).SubImage(image.Rect(50, 20, 450, 220)) // 400x200 at (50,20)
+	if img, err := ScaleToWidth(sub, 200); err != nil || img.Bounds().Dy() != 100 {
+		t.Fatalf("sub-image: %v %v", err, img.Bounds())
+	}
+}
+
+func TestScaleToWidthAveragesArea(t *testing.T) {
+	// left half black, right half white → 2 px wide: one black, one white
+	src := image.NewRGBA(image.Rect(0, 0, 8, 4))
+	for y := 0; y < 4; y++ {
+		for x := 0; x < 8; x++ {
+			v := uint8(0)
+			if x >= 4 {
+				v = 255
+			}
+			src.Set(x, y, color.RGBA{v, v, v, 255})
+		}
+	}
+	out, _ := ScaleToWidth(src, 2)
+	if r, _, _, _ := out.At(0, 0).RGBA(); r>>8 != 0 {
+		t.Errorf("left = %d", r>>8)
+	}
+	if r, _, _, _ := out.At(1, 0).RGBA(); r>>8 != 255 {
+		t.Errorf("right = %d", r>>8)
+	}
+	// a 1-px checkerboard averages to mid grey; a fractional ratio (3 → 2) weights the shared column half each
+	cb := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	for y := 0; y < 4; y++ {
+		for x := 0; x < 4; x++ {
+			v := uint8(0)
+			if (x+y)%2 == 0 {
+				v = 255
+			}
+			cb.Set(x, y, color.RGBA{v, v, v, 255})
+		}
+	}
+	out, _ = ScaleToWidth(cb, 2)
+	if r, _, _, _ := out.At(0, 0).RGBA(); r>>8 < 126 || r>>8 > 129 {
+		t.Errorf("checkerboard = %d", r>>8)
+	}
+	three := image.NewRGBA(image.Rect(0, 0, 3, 1))
+	three.Set(0, 0, color.RGBA{0, 0, 0, 255})
+	three.Set(1, 0, color.RGBA{90, 90, 90, 255})
+	three.Set(2, 0, color.RGBA{180, 180, 180, 255})
+	out, _ = ScaleToWidth(three, 2)
+	// left = (0 + 0.5*90) / 1.5 = 30; right = (0.5*90 + 180) / 1.5 = 150
+	if l, _, _, _ := out.At(0, 0).RGBA(); l>>8 != 30 {
+		t.Errorf("fractional left = %d", l>>8)
+	}
+	if r, _, _, _ := out.At(1, 0).RGBA(); r>>8 != 150 {
+		t.Errorf("fractional right = %d", r>>8)
+	}
+	// transparent pixels become white (JPEG has no alpha)
+	tr := image.NewNRGBA(image.Rect(0, 0, 4, 4))
+	out, _ = ScaleToWidth(tr, 2)
+	if r, g, b, _ := out.At(0, 0).RGBA(); r>>8 != 255 || g>>8 != 255 || b>>8 != 255 {
+		t.Errorf("transparent → %d,%d,%d", r>>8, g>>8, b>>8)
+	}
+}
+
+func TestMakeVariantsFromDerivative(t *testing.T) {
+	// a JPEG derivative (YCbCr fast path) and a PNG derivative (generic path)
+	for _, c := range []struct {
+		name, ctype string
+		data        []byte
+		widths      []int
+	}{
+		{"jpeg 1500x750", storage.TypeJPEG, encodeJPEG(t, testImage(1500, 750)), []int{320, 640, 1024}},
+		{"png 700x350", storage.TypePNG, encodePNG(t, testImage(700, 350)), []int{320, 640}},
+		{"png 300x300", storage.TypePNG, encodePNG(t, testImage(300, 300)), nil},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			vs, err := MakeVariants(c.data, c.ctype, DefaultLimits)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(vs) != len(c.widths) {
+				t.Fatalf("variants %d, want %v", len(vs), c.widths)
+			}
+			for i, v := range vs {
+				cfg, format, err := image.DecodeConfig(bytes.NewReader(v.Data))
+				if err != nil || format != "jpeg" || cfg.Width != c.widths[i] || cfg.Height != v.Height || v.Width != c.widths[i] {
+					t.Fatalf("variant %d: %v %s %dx%d", c.widths[i], err, format, cfg.Width, cfg.Height)
+				}
+				if storage.Sniff(v.Data) != storage.TypeJPEG || bytes.Contains(v.Data, []byte("Exif")) || jpegOrientation(v.Data) != 1 {
+					t.Fatal("variant is not a plain JPEG")
+				}
+				if len(v.Data) >= len(c.data) && c.ctype == storage.TypeJPEG {
+					t.Errorf("variant %d (%d bytes) not smaller than the derivative (%d)", v.Width, len(v.Data), len(c.data))
+				}
+			}
+		})
+	}
+	_, err := MakeVariants([]byte("garbage"), storage.TypeJPEG, DefaultLimits)
+	wantCode(t, err, ReasonDecodeFailed)
 }

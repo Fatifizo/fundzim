@@ -255,7 +255,7 @@ func (s *Service) handleAdminList(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleQueue(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
-	items, next, err := s.Queue(r.Context(), principal(r).UserID, q.Get("assigned"), q.Get("category"), q.Get("cursor"), limit)
+	items, next, err := s.Queue(r.Context(), principal(r).UserID, q.Get("assigned"), q.Get("category"), q.Get("status"), q.Get("cursor"), limit)
 	if err != nil {
 		s.fail(w, r, err)
 		return

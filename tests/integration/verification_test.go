@@ -411,12 +411,29 @@ func TestVerificationKYCEndToEnd(t *testing.T) {
 	// staff: support has no queue; reviewers see it; only the assignee sees documents
 	sup.expect(sup.do("GET", "/admin/verification/cases", nil), 403, "PERMISSION_DENIED")
 	sup.expect(sup.do("POST", "/verification/documents/"+front+"/access", nil), 403, "PERMISSION_DENIED")
-	r = rev1.do("GET", "/admin/verification/cases?type=KYC", nil)
-	rev1.expect(r, 200, "")
-	if !strings.Contains(string(r.Data), caseID) {
-		t.Fatalf("queue lacks the submitted case: %.400s", r.Data)
+	// The shared development database may hold more than one page of open cases: walk every page.
+	var queue strings.Builder
+	for page, cursor := 0, ""; page < 100; page++ {
+		path := "/admin/verification/cases?type=KYC"
+		if cursor != "" {
+			path += "&cursor=" + strings.ReplaceAll(cursor, "+", "%2B")
+		}
+		r = rev1.do("GET", path, nil)
+		rev1.expect(r, 200, "")
+		queue.Write(r.Data)
+		var pg struct {
+			NextCursor *string `json:"next_cursor"`
+		}
+		_ = json.Unmarshal(r.Data, &pg)
+		if pg.NextCursor == nil || *pg.NextCursor == "" {
+			break
+		}
+		cursor = *pg.NextCursor
 	}
-	if strings.Contains(string(r.Data), strings.ReplaceAll(idNum, "-", "")) {
+	if !strings.Contains(queue.String(), caseID) {
+		t.Fatalf("queue lacks the submitted case: %.400s", queue.String())
+	}
+	if strings.Contains(queue.String(), strings.ReplaceAll(idNum, "-", "")) {
 		t.Fatal("queue leaks the ID number")
 	}
 	rev1.expect(adminAct(rev1, caseID, "assign", map[string]string{"assignee_id": f.support.id}), 422, "ASSIGNEE_NOT_ELIGIBLE")

@@ -37,8 +37,10 @@ func (s *Service) Advance(ctx context.Context, mediaID string) error {
 	}
 	switch m.Status {
 	case StatusUploaded, StatusQuarantined, StatusScanning:
+	case StatusApproved:
+		return s.EnsureVariants(ctx, m.ID) // srcset variants (also the backfill path for media approved before them)
 	default:
-		return nil // final (APPROVED, REJECTED, REMOVED)
+		return nil // final (REJECTED, REMOVED)
 	}
 	if m.processedObjectID == nil {
 		orig, err := s.d.Storage.Get(ctx, m.storedObjectID)
@@ -68,7 +70,10 @@ func (s *Service) Advance(ctx context.Context, mediaID string) error {
 	}
 	switch der.Status {
 	case storage.StatusClean:
-		return s.finish(ctx, m.ID, m.processedObjectID, StatusApproved, "")
+		if err := s.finish(ctx, m.ID, m.processedObjectID, StatusApproved, ""); err != nil {
+			return err
+		}
+		return s.EnsureVariants(ctx, m.ID) // never undoes the approval; a failure is retried by redelivery / the sweep
 	case storage.StatusRejected:
 		reason := ReasonDerivativeRejected
 		if der.RejectReason == storage.RejectMalware {
@@ -281,7 +286,137 @@ func (s *Service) Sweep(ctx context.Context, limit int) (int, error) {
 			}
 		}
 	}
+	n, err := s.backfillVariants(ctx, 5)
+	if err != nil && firstErr == nil {
+		firstErr = err
+	}
+	return len(list) + n, firstErr
+}
+
+// backfillVariants creates missing width variants for APPROVED media (media approved before variants existed, or
+// whose variant step failed). Random order, so one item that keeps failing cannot starve the others.
+func (s *Service) backfillVariants(ctx context.Context, limit int) (int, error) {
+	rows, err := s.d.Pool.Query(ctx, `SELECT m.id::text FROM app.campaign_media m
+		 WHERE m.status = 'APPROVED' AND m.width IS NOT NULL
+		   AND (SELECT count(*) FROM app.campaign_media_variants v WHERE v.media_id = m.id)
+		       < (SELECT count(*) FROM unnest($1::int[]) w WHERE w < m.width)
+		 ORDER BY random() LIMIT $2`, VariantWidths, limit)
+	if err != nil {
+		return 0, err
+	}
+	list, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return 0, err
+	}
+	var firstErr error
+	for _, id := range list {
+		if err := s.EnsureVariants(ctx, id); err != nil {
+			s.d.Logger.Warn("campaign media variants: backfill failed; will retry", slog.String("media_id", id), slog.String("error", err.Error()))
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
 	return len(list), firstErr
+}
+
+// EnsureVariants creates the missing JPEG width variants (320, 640, 1024 px; never at or above the derivative's
+// width) of APPROVED media. Each variant is stored as its own PUBLIC_MEDIA object through the storage pipeline
+// (quarantine + scan) and recorded in app.campaign_media_variants. It runs under the media row lock, so concurrent
+// callers create each width once. A variant failure never changes the media: content failures are logged and
+// dropped (the full derivative keeps serving); infrastructure failures are returned for a later retry.
+func (s *Service) EnsureVariants(ctx context.Context, mediaID string) error {
+	var stored []string
+	var retryErr error // an infrastructure failure for some width: commit what was stored, retry the rest later
+	err := s.tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		retryErr = nil
+		m, err := s.load(ctx, tx, "", mediaID, true)
+		if err != nil {
+			return ignoreNotFound(err)
+		}
+		if m.Status != StatusApproved || m.processedObjectID == nil || m.Width == nil || m.ContentType == nil {
+			return nil
+		}
+		rows, err := tx.Query(ctx, `SELECT width FROM app.campaign_media_variants WHERE media_id = $1`, m.ID)
+		if err != nil {
+			return err
+		}
+		have, err := pgx.CollectRows(rows, pgx.RowTo[int])
+		if err != nil {
+			return err
+		}
+		missing := map[int]bool{}
+		for _, w := range VariantWidthsFor(*m.Width) {
+			missing[w] = true
+		}
+		for _, w := range have {
+			delete(missing, w)
+		}
+		if len(missing) == 0 {
+			return nil
+		}
+		rc, obj, err := s.d.Storage.Open(ctx, *m.processedObjectID)
+		if err != nil {
+			return fmt.Errorf("campaign media variants: open derivative: %w", err)
+		}
+		content, rerr := io.ReadAll(io.LimitReader(rc, obj.SizeBytes+1))
+		_ = rc.Close()
+		if rerr != nil {
+			return fmt.Errorf("campaign media variants: read derivative: %w", rerr)
+		}
+		variants, verr := s.variants(ctx, content, obj.SniffedType)
+		if verr != nil {
+			if code := RejectCode(verr); code != "" {
+				s.d.Logger.Warn("campaign media variants not produced", slog.String("media_id", m.ID), slog.String("reason", code))
+				return nil
+			}
+			return verr
+		}
+		for _, v := range variants {
+			if !missing[v.Width] {
+				continue
+			}
+			o, uerr := s.d.Storage.Upload(ctx, storage.UploadInput{BucketClass: storage.BucketPublicMedia, Purpose: PurposeCampaignMedia,
+				OwnerModule: OwnerModule, UploaderUserID: m.createdBy, DeclaredContentType: storage.TypeJPEG, Body: bytes.NewReader(v.Data),
+				MaxBytes: s.d.MaxUploadBytes})
+			if uerr != nil {
+				s.d.Logger.Warn("campaign media variant not stored", slog.String("media_id", m.ID), slog.Int("width", v.Width),
+					slog.String("error", uerr.Error()))
+				if retryErr == nil && !storage.IsUploadRejection(uerr) {
+					retryErr = uerr
+				}
+				continue
+			}
+			stored = append(stored, o.ID)
+			if _, err := tx.Exec(ctx, `INSERT INTO app.campaign_media_variants (id, media_id, width, height, object_id, created_at)
+				VALUES ($1, $2, $3, $4, $5, $6)`, ids.New(), m.ID, v.Width, v.Height, o.ID, s.now()); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err == nil {
+		return retryErr
+	}
+	if err != nil {
+		for _, id := range stored {
+			if derr := s.d.Storage.Delete(context.WithoutCancel(ctx), id, ""); derr != nil {
+				s.d.Logger.Warn("campaign media: unlinked variant not deleted", slog.String("object_id", id), slog.String("error", derr.Error()))
+			}
+		}
+	}
+	return err
+}
+
+// variants runs MakeVariants with at most one decode at a time per process.
+func (s *Service) variants(ctx context.Context, content []byte, contentType string) ([]Variant, error) {
+	select {
+	case s.decode <- struct{}{}:
+		defer func() { <-s.decode }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return MakeVariants(content, contentType, s.d.Limits)
 }
 
 // KindSweep is the periodic sweep job kind (stable once shipped).
