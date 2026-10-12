@@ -11,19 +11,19 @@ providers.
 FundZim is **not** an investment, lending, equity or rewards platform, and it is not a wallet or a payment
 provider.
 
-> **Status: Stage 6 — Campaign Engine & Fundraising Lifecycle (complete; awaiting acceptance).** On top of
-> Stages 4–5 (identity, staff roles, organisations, KYC/KYB, beneficiary and payout-destination verification,
-> secure documents, compliance cases and risk signals), the repository now has campaigns: an age declaration and
-> BASIC verification, drafts with exact money goals (USD; ZWG unavailable until its minor units are verified), a
-> guided creation wizard, beneficiary association with change control, campaign images (ClamAV scan + re-encoding
-> that strips metadata), a review engine with conflict-of-interest checks (including linked staff accounts) and four
-> eyes for high-risk categories, controlled publication, public campaign pages and search, owner updates with
-> moderation, pause/suspend/complete/archive, and enforcement of compliance restrictions. There are **no donations,
+> **Status: Stage 7 — Public Fundraising Experience (complete; awaiting acceptance).** On top of the Stage 6
+> campaign engine (verification, drafts with exact USD goals, review with conflict-of-interest checks and four eyes,
+> controlled publication, updates, restriction enforcement), the repository now has the public experience: a home
+> page with transparent featured campaigns (staff picks, then recently published), search and category pages,
+> campaign pages with honest trust indicators, canonical URLs and short links, plain-link sharing (WhatsApp,
+> Facebook, X, email, copy, Web Share), opt-in SEO (`PUBLIC_SITE_URL` + `SITE_INDEXING=allow`), a minimal PWA,
+> public reporting with a staff triage queue (a report never changes a campaign by itself), first-party aggregate
+> analytics with no cookies or third-party scripts, and a real-stack browser test suite. There are **no donations,
 > payments, payouts or totals**: every campaign page says "Donations are not yet available." Raising funds for
-> someone else as an individual stays disabled pending legal advice (LR-046 – LR-048). GitHub Actions now runs on
-> stage branches. Production start-up is refused until KMS key management exists (Stage 18). Nothing here is a claim
-> of regulatory approval or compliance — open legal questions are tracked in [`docs/COMPLIANCE.md`](docs/COMPLIANCE.md).
-> What exists in detail: [`docs/stage-6/implementation.md`](docs/stage-6/implementation.md).
+> someone else as an individual stays disabled pending legal advice (LR-046 – LR-048). Production start-up is
+> refused until KMS key management exists (Stage 18). Nothing here is a claim of regulatory approval or compliance —
+> open legal questions are tracked in [`docs/COMPLIANCE.md`](docs/COMPLIANCE.md). What exists in detail:
+> [`docs/stage-7/implementation.md`](docs/stage-7/implementation.md).
 
 ## Stack
 
@@ -143,6 +143,7 @@ Guide: [`docs/development/migrations.md`](docs/development/migrations.md).
 | Web unit tests (Vitest) | `make test-web` | `npm --prefix apps/web test` |
 | Both | `make test` | both commands above |
 | Web E2E (Playwright; first run: `npx --prefix apps/web playwright install chromium`) | `make test-e2e` | `npm --prefix apps/web run test:e2e` |
+| Real-stack web E2E (needs the running stack; see `apps/web/e2e-real/README.md`) | — | `cd apps/web && flock /tmp/claude-1000/fundzim-stack.lock npm run test:e2e:real` (hold the lock: it shares the database with the integration tests) |
 | Integration (needs the running stack) | `make test-integration` | `set -a; . ./.env; set +a; FUNDZIM_IT_API_URL=http://127.0.0.1:8080 FUNDZIM_IT_WEB_URL=http://127.0.0.1:3000 go test -tags integration -count=1 -v ./tests/integration/...` |
 
 Integration tests need the running stack **including the worker** (identity tests read emails from Mailpit).
@@ -202,12 +203,13 @@ Reset deletes the Postgres and Garage volumes (database, roles, objects). `.env`
 | [DATA-CLASSIFICATION](docs/DATA-CLASSIFICATION.md) · [PRIVACY](docs/PRIVACY.md) | Data classes, handling, privacy architecture |
 | [OBSERVABILITY](docs/OBSERVABILITY.md) · [FRONTEND](docs/FRONTEND.md) · [TESTING](docs/TESTING.md) · [DEVELOPMENT](docs/DEVELOPMENT.md) | Operating, building and testing standards |
 | [ADRs](docs/adr/README.md) | Architecture Decision Records |
+| [Stage 7 implementation](docs/stage-7/implementation.md) · [public experience](docs/stage-7/public-experience.md) · [discovery](docs/stage-7/campaign-discovery.md) · [sharing](docs/stage-7/social-sharing.md) · [SEO](docs/stage-7/seo.md) · [accessibility](docs/stage-7/accessibility.md) · [security](docs/stage-7/security-review.md) · [performance](docs/stage-7/performance.md) · [testing](docs/stage-7/testing.md) · [known issues](docs/stage-7/known-issues.md) | Public pages, discovery, sharing, SEO, reports, featured, analytics, API consistency |
 | [Stage 6 implementation](docs/stage-6/implementation.md) · [lifecycle](docs/stage-6/campaign-lifecycle.md) · [eligibility](docs/stage-6/campaign-eligibility.md) · [moderation](docs/stage-6/campaign-moderation.md) · [media](docs/stage-6/campaign-media.md) · [security](docs/stage-6/campaign-security.md) · [testing](docs/stage-6/testing.md) · [known issues](docs/stage-6/known-issues.md) | Campaign engine, age attestation, restriction enforcement, staff links |
 | [Stage 5 implementation](docs/stage-5/implementation.md) · [security review](docs/stage-5/security-review.md) · [testing](docs/stage-5/testing.md) · [known issues](docs/stage-5/known-issues.md) | KYC, KYB, beneficiaries, payout destinations, documents, review engine, compliance cases, risk foundation |
 | [Stage 4 implementation](docs/stage-4/implementation.md) · [security review](docs/stage-4/security-review.md) · [testing](docs/stage-4/testing.md) | Authentication, sessions, RBAC, MFA, organisations, worker, distributed limits |
 | [Stage 3 implementation](docs/stage-3/implementation.md) · [security review](docs/stage-3/security-review.md) | What Stage 3 built, deviations, endpoint status, security baseline findings |
 | [Configuration](docs/development/configuration.md) · [Migrations](docs/development/migrations.md) · [Seed data](docs/development/seed-data.md) | Environment variables and refusals, migration guide, development data rules |
-| [Stage handovers](docs/stage-handover/STAGE-6-TO-STAGE-7.md) | Stage 6 → 7 (public fundraising experience); earlier handovers in the same folder |
+| [Stage handovers](docs/stage-handover/STAGE-7-TO-STAGE-8.md) | Stage 7 → 8 (payment abstraction layer); earlier handovers in the same folder |
 
 ## Licence
 

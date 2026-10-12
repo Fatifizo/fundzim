@@ -15,17 +15,23 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
-**Stage 6 — Campaign Engine, Fundraising Lifecycle, Moderation, Eligibility & Publishing (complete; awaiting
-acceptance).** Stage 0 is complete; Stages 1–5 are complete but their acceptance has not been recorded
-(`docs/stage-6/prerequisite-assessment.md`). What Stage 6 built: `docs/stage-6/implementation.md` (lifecycle,
-eligibility, moderation, media, security review, testing and known issues alongside it); Stage 7 starts from
-`docs/stage-handover/STAGE-6-TO-STAGE-7.md`. GitHub Actions now runs on `main` and `stage-**` branches (the old
-`stage-*` filter never matched `stage-N/name`) — still never report CI as green without seeing the run. Campaigns hold
-**no financial state**: no donations, totals, balances, payments or payouts; the goal is `amount_minor` + currency and
-the public page shows a disabled "Donations are not yet available." button. Gate on `kyc.Service.Level`, enforce
-compliance restrictions through `compliance.Service.Restrictions`, and check self-review with
-`kyc.Service.ActorIdentities` / `app.actor_identities()` (linked staff accounts). A documentation-stage PASS is never
-permission to operate a live crowdfunding business or to move real money.
+**Stage 7 — Public Fundraising Experience, Campaign Discovery, Social Sharing, SEO, Accessibility & Mobile-First UX
+(complete; awaiting acceptance).** Stage 0 is complete; Stages 1–6 are complete but their acceptance has not been
+recorded (`docs/stage-7/prerequisite-assessment.md`). What Stage 7 built: `docs/stage-7/implementation.md` (public
+experience, discovery, sharing, SEO, accessibility, security review, performance, testing and known issues alongside
+it; decisions in ADR-038); Stage 8 starts from `docs/stage-handover/STAGE-7-TO-STAGE-8.md`. Public campaign data is
+`public, no-cache` + ETag and fetched `no-store` by the web app (no shared cache to invalidate); errors are always
+`no-store`; a handler's `Cache-Control` must not be overwritten. Rate-limit errors carry their real wait through
+`RetryAfter()`. Campaign-family APIs use `{campaign_id}`, 428/412 for `If-Match` and `{items, next_cursor}` lists
+(ADR-038 §7). A public report never changes a campaign's status; analytics are first-party aggregate counters only
+(no cookies, identifiers, query text or third-party scripts); trust indicators are shown only when true now. The
+real-stack Playwright suite (`apps/web/e2e-real`) and the Go integration tests share the development database: run
+either under `flock /tmp/claude-1000/fundzim-stack.lock`. Never report CI as green without seeing the run. Campaigns
+hold **no financial state**: no donations, totals, balances, payments or payouts; the goal is `amount_minor` +
+currency and the public page shows a disabled "Donations are not yet available." button. Gate on
+`kyc.Service.Level`, enforce compliance restrictions through `compliance.Service.Restrictions`, and check
+self-review with `kyc.Service.ActorIdentities` / `app.actor_identities()` (linked staff accounts). A
+documentation-stage PASS is never permission to operate a live crowdfunding business or to move real money.
 Do not start a stage until the user explicitly asks for it. Do not implement work belonging to a later stage
 "while you're there". Each stage ends with a completion report (template in `docs/DEVELOPMENT.md`) and then
 STOPS.

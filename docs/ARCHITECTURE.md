@@ -4,18 +4,22 @@
 > towards. Almost nothing here is implemented yet. Where a choice is deferred, the stage that decides it is
 > named. Significant changes require an ADR (see [`docs/adr/`](adr/)).
 
-> **Stage 5 implementation status.** In code: Go binaries `api`, `worker` (River on PostgreSQL, outbox relay
+> **Implementation status (Stage 7).** In code: Go binaries `api`, `worker` (River on PostgreSQL, outbox relay
 > and delivery, purge, scan, rescan and verification-sweep jobs) and `fundzimctl`; `internal/app` (composition
 > root), `internal/platform` (config, logging, errors, HTTP middleware incl. trusted client IP and per-route
 > body-limit exemptions, distributed rate limiting, idempotency, health, db, cache, storage incl. SSE-C,
 > metrics, money, ids, crypto, outbox, jobs, authz, clock, verifcase) and the domain modules `users`, `auth`,
 > `organisations`, `audit`, `notifications`, `storage`, `kyc`, `beneficiaries`, `payouts` (destinations
-> only), `risk`, `compliance` and the orchestration package `verification`. The `kyc` and `compliance`
+> only), `risk`, `compliance`, `campaigns` (Stage 6–7: lifecycle, review, publication, public read and search, reports,
+> featured picks, event counters; subpackages `campaigns/media` and `campaigns/updates`) and the orchestration package
+> `verification`. The `kyc` and `compliance`
 > modules run on their own restricted database roles and pools and reach audit/outbox only through
 > SECURITY DEFINER gateways (ADR-035). ClamAV runs as a compose service. The Next.js app has authentication,
-> verification, organisation and staff review pages. Module boundaries are enforced by `internal/archtest`.
-> **Not yet built:** campaigns and every financial module (payments, ledger, payouts, fees), identity /
+> verification, organisation, campaign (owner and staff) and public pages (home, discovery, categories, campaign pages,
+> sharing, SEO, PWA). Module boundaries are enforced by `internal/archtest`.
+> **Not yet built:** every financial module (payments, psp, ledger, payout execution, fees, reconciliation), identity /
 > screening / account-lookup provider integrations, tracing export. Details:
+> [stage-7/implementation.md](stage-7/implementation.md), [stage-6/implementation.md](stage-6/implementation.md),
 > [stage-5/implementation.md](stage-5/implementation.md) (Stage 4: [stage-4/implementation.md](stage-4/implementation.md);
 > Stage 3: [stage-3/implementation.md](stage-3/implementation.md)).
 
@@ -459,6 +463,19 @@ setting.
 > restriction enforcement (suspends affected campaigns), campaign notifications, media scan/processing and a 30 s
 > media sweep, BASIC re-evaluation and registration attestations. Campaigns hold no financial state. Details:
 > [stage-6/implementation.md](stage-6/implementation.md).
+
+> **Stage 7 as built (public experience; [ADR-038](adr/ADR-038-public-experience-caching-reporting-and-api-consistency.md)).**
+> No new module: the public read side, reports, staff picks and event counters live in `campaigns` (new tables
+> `app.campaign_reports`, `app.campaign_featured`, `app.public_event_counters`; status machine `campaign_report`).
+> Escalating a report emits `campaigns.report_escalated`, which `compliance` consumes to open a case (source
+> `REPORT`); a report never changes a campaign's status. Caching: campaign state is `public, no-cache` + strong ETag
+> and the web app fetches it `no-store` (no shared cache to invalidate); categories and sitemap data
+> `public, max-age=300`; errors always `no-store`. `httpx.WriteJSON` keeps a handler's `Cache-Control`, and
+> `httpx.WriteError` takes `Retry-After` from an error's `RetryAfter()`. Search uses a stored `search_tsv` with a GIN
+> index, keyset cursors, a capped count and a 2 s statement timeout. Campaign-family APIs: `{campaign_id}`, 428/412 for
+> `If-Match`, `{items, next_cursor}`. The web app reads `PUBLIC_SITE_URL` (canonical/OG/share URLs, never request
+> headers) and `SITE_INDEXING`; its service worker caches only hashed build assets and an offline page. Details:
+> [stage-7/implementation.md](stage-7/implementation.md).
 
 ## 14. Decisions deferred
 

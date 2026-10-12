@@ -215,6 +215,33 @@ money is formatted from `amount_minor` with integer/string arithmetic; the publi
 are not yet available." button and no totals. Details: `apps/web/README.md`; contracts:
 [stage-6/interface-contracts.md](stage-6/interface-contracts.md).
 
+## 10b. Stage 7 public experience (as built)
+
+Routes: `/`, `/campaigns`, `/campaigns/[slug]`, `/c/[code]` (short link → permanent redirect), `/categories`,
+`/categories/[slug]`, `/how-it-works`, `/safety`, `/about`, `/contact`, `/privacy` and `/terms` (draft placeholders,
+`noindex`), `/sitemap.xml`, `/robots.txt`, `/manifest.webmanifest`; staff `/admin/campaigns/reports` and
+`/admin/campaigns/featured`. Rules:
+
+- Campaign data is fetched server-side with `cache: 'no-store'` (ADR-038 §1); user text is rendered as escaped text
+  nodes; the only `dangerouslySetInnerHTML` is the nonce-carrying JSON-LD script built by `serializeJsonLd`.
+- Absolute URLs (canonical, Open Graph, share, sitemap) come only from `PUBLIC_SITE_URL` (an origin) — never request
+  headers; without it they are omitted. Indexing needs `SITE_INDEXING=allow` as well; otherwise `robots.txt`
+  disallows everything and pages are `noindex`.
+- Sharing is plain links (WhatsApp `wa.me`, Facebook sharer, X intent, `mailto:`), copy link and Web Share; no SDKs or
+  third-party scripts.
+- Trust indicators only when the API says true, with the disclaimer; no totals, progress or donor data; the donate
+  control stays disabled.
+- Analytics: `trackEvent` posts first-party events with `credentials: "omit"`, never query text, nothing under
+  DNT/GPC.
+- The service worker (`public/sw.js`) caches only `/_next/static/` and the offline page; it never caches pages, API
+  responses or media.
+- Tests: Vitest with axe (no `color-contrast` in jsdom); mock-API Playwright (`e2e/`); real-stack Playwright
+  (`e2e-real/`, see its README; run under the host lock).
+
+Details: [stage-7/public-experience.md](stage-7/public-experience.md), [stage-7/seo.md](stage-7/seo.md),
+[stage-7/social-sharing.md](stage-7/social-sharing.md), [stage-7/accessibility.md](stage-7/accessibility.md), and
+`apps/web/README.md` "Public experience (Stage 7)".
+
 ## 11. Testing (see [TESTING.md](TESTING.md))
 
 - Vitest + React Testing Library for components; axe checks in component tests.

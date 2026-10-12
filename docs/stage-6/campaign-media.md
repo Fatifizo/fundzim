@@ -66,3 +66,21 @@ for contract stability), `POST /admin/campaigns/{id}/media/{media_id}/remove` (`
 The worker now holds the public-media credential (compose: `STORAGE_PUBLIC_*` on `fundzim-worker`; config requires the
 trio all-or-nothing) and its memory limit is 512 MiB for decoding. Retention of removed media is LEGAL_REVIEW_REQUIRED
 (LR-012); images of minors are refused until LR-070 is answered.
+
+## 5. Width variants (Stage 7, srcset)
+
+After a media item is APPROVED, the worker produces JPEG width variants of **320, 640 and 1024 px** from the decoded
+pixels of the derivative (`media.EnsureVariants`; area-averaging box filter, stdlib only, quality 80, transparent pixels
+on white). A width at or above the derivative's own width is skipped (never upscaled). Each variant is stored as its own
+PUBLIC_MEDIA object (purpose `CAMPAIGN_MEDIA`, owner `campaigns`) through `storage.Upload`, so it is quarantined and
+scanned like the derivative, and recorded in `app.campaign_media_variants` (one append-only row per width;
+`migrations/20261010090200_campaign_media_variants.sql`; bucket-pinned foreign key, trigger: object purpose/owner,
+media APPROVED, width below the media width). Variant creation runs under the media row lock (each width once). A
+failure never touches the media: content failures are logged and dropped, infrastructure failures are retried by
+redelivery and by the sweep, which also **backfills** APPROVED media without variants (5 per run, random order).
+
+Serving: `?w=320|640|1024` on `GET /public/campaigns/{slug}/media/{media_id}` and on the owner/staff
+`…/media/{media_id}/content` serves the variant when its row exists and its object is CLEAN, otherwise the full
+derivative (same visibility rules and headers; the ETag is the served object's SHA-256). Any other `w` → `422
+VALIDATION_FAILED` (field `w`). The public campaign view lists `media[].variants: [{width, height}]` (ascending; a
+listed width may briefly serve the full image while its object is still being scanned).

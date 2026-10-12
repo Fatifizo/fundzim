@@ -528,6 +528,24 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 > endpoints expose approved snapshots only and no private data. Full analysis:
 > [stage-6/campaign-security.md](stage-6/campaign-security.md).
 
+## 21b. Public experience security (Stage 7, summary)
+
+> **Stage 7 as built ([ADR-038](adr/ADR-038-public-experience-caching-reporting-and-api-consistency.md)):** public
+> responses are explicit allow-listed DTOs, checked by a recursive key test over every public endpoint; campaign
+> state is `public, no-cache` + ETag and fetched `no-store` by the web app, so a suspended campaign disappears on the
+> next request; errors are always `no-store` without an `ETag` (fixes a Stage 6 defect where `httpx.WriteJSON` forced
+> `no-store` on everything, silently defeating public cache policies); `Retry-After` now carries the limiter's real
+> wait. Reports: honeypot, per-IP (5/h) and per-campaign (50/h) limits, per-reporter daily dedupe in the database, an
+> identical 202 for accepted, duplicate and honeypot submissions, reporter identity kept only as an HMAC, optional
+> contact email as blind index + AEAD ciphertext never listed or shown to owners, and **no automatic status change**
+> (staff triage; escalation opens a compliance case). Analytics: first-party aggregate counters only — no cookies,
+> IP, user id or query text; DNT/GPC respected. Canonical, Open Graph, share and sitemap URLs come only from
+> `PUBLIC_SITE_URL`; redirects target internal campaign paths only; JSON-LD is escaped and never carries money,
+> ratings or donate actions; no third-party scripts; the service worker caches only hashed build assets and an offline
+> page. Search is bounded (100-character query, 2 s statement timeout, capped count). Residual risks (`global.ip` and
+> public images, report retention LR-012, unverified link previews) and the full table:
+> [stage-7/security-review.md](stage-7/security-review.md).
+
 ## 22. Incident response outline
 
 Full runbooks in Stage 18. Outline:

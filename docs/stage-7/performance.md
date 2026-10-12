@@ -575,3 +575,156 @@ limit.
 
 The scratch database `fundzim_perf` was dropped after these runs; `tests/perf/` keeps everything needed to rebuild it
 (§6).
+
+## 8. Core Web Vitals (lab)
+
+Stream F, 2026-10-09. **These are lab measurements from a scripted browser, not field data.** They show how the
+pages behave under a fixed, repeatable profile. Real visitors on real phones and networks will differ, and field
+p75 (FRONTEND.md §5) can only come from real-user monitoring, which does not exist yet.
+
+### 8.1 Method
+
+- **Tool:** `apps/web/scripts/cwv.mjs` (Playwright Chromium 153 via `playwright-core`; no new dependencies). It runs
+  against the **real compose stack** at http://localhost:3000: `fundzim/web:local` built from this branch, the Go
+  API, PostgreSQL and the worker. It is not the mock API.
+- **Metrics:**
+  - **LCP:** `PerformanceObserver` `largest-contentful-paint`, read before any input.
+  - **CLS:** `layout-shift`, largest session window (1 s gap / 5 s cap), excluding shifts after input.
+  - **INP proxy:** Event Timing, the longest duration among entries with an `interactionId`. The interactions are a
+    tap on the page heading, two taps on the mobile menu button (a real React handler), and a Tab key press. Hover
+    events such as `pointerover` are excluded, as they are in INP. Playwright's resting pointer fires them during
+    load, and counting them produced false 370–450 ms readings in a first attempt.
+  - **TTFB:** Navigation Timing `responseStart`. Chromium's CDP network emulation delays the response body, not
+    `responseStart`, so this is the server's time to first byte in both profiles. The emulated 150 ms RTT is not
+    included.
+  - **Bytes:** Resource and Navigation Timing `transferSize` (compressed, on the wire). "JS" means script resources,
+    with the decoded size in brackets.
+- **Profiles:**
+  - **Mobile:** 360×800, DPR 2, touch; `Emulation.setCPUThrottlingRate` 4×; `Network.emulateNetworkConditions`
+    1.6 Mbps down, 750 kbps up, 150 ms latency (a "Slow 4G"-like profile).
+  - **Desktop:** 1350×940, unthrottled.
+- **Runs:**
+  - **Cold:** a new browser context (empty HTTP cache, service workers blocked), then `goto`.
+  - **Warm:** a reload in the same context, so the HTTP cache holds the static assets. Public data is
+    `no-cache` + ETag and revalidates on every request.
+  - 5 runs per page, profile and mode. Results are reported as p50 / p95 (nearest-rank).
+- **Pages:** `/`, `/campaigns`, `/categories/education` (the largest category), and the detail page of the most
+  recently published live Education campaign.
+- **Environment:**
+  - Host: Intel Xeon Platinum 8160 @ 2.10 GHz, 16 vCPUs, 30 GiB RAM, Linux 6.17. Load average 0.5–2.8 during
+    the runs.
+  - Dataset at the final run (`app` schema, via psql): 404 campaigns, of which 247 are live PUBLIC; 336 media items,
+    322 of them approved; 81 updates; 11 active categories. Width variants: 5, on 2 media items. This is the shared
+    development database, provisioned through the API by stream E and the Go integration tests. Most covers are tiny
+    synthetic PNGs (79 bytes).
+
+Re-run: `cd apps/web && node scripts/cwv.mjs --runs 5 [--json out.json]`. Add `--heavy-images --profile mobile`
+for the scenario in §8.3.
+
+Targets: LCP ≤ 2,500 ms, CLS ≤ 0.1, INP ≤ 200 ms. ⚠ marks a p95 over target.
+
+### 8.2 Results (development dataset, after responsive images)
+
+Measured after web change C in §8.3 (`srcset` + `sizes` on every campaign image, using the API's `?w=` width
+variants), on the rebuilt `fundzim-web`.
+
+| Profile | Page | Load | LCP ms p50 / p95 | CLS p50 / p95 | INP-proxy ms p50 / p95 | TTFB ms p50 / p95 | Transfer KB | JS KB (decoded) | Requests | LCP element |
+|---|---|---|---|---|---|---|---|---|---|---|
+| mobile | / | cold | 656 / 692 | 0.000 / 0.000 | 48 / 48 | 35 / 40 | 171 | 144 (473) | 18 | p |
+| mobile | / | warm | 400 / 452 | 0.000 / 0.000 | 32 / 32 | 32 / 42 | 19 | 0 (473) | 18 | p |
+| mobile | /campaigns | cold | 596 / 612 | 0.000 / 0.000 | 48 / 56 | 24 / 29 | 237 | 145 (475) | 18 | p |
+| mobile | /campaigns | warm | 328 / 444 | 0.000 / 0.000 | 32 / 32 | 27 / 34 | 21 | 0 (475) | 18 | p |
+| mobile | /categories/education | cold | 1476 / 1484 | 0.000 / 0.000 | 48 / 56 | 26 / 28 | 239 | 145 (475) | 21 | img[img] |
+| mobile | /categories/education | warm | 784 / 1076 | 0.000 / 0.000 | 32 / 40 | 31 / 32 | 22 | 0 (475) | 21 | img[img] |
+| mobile | campaign detail | cold | 1488 / 1492 | 0.000 / 0.000 | 48 / 48 | 32 / 37 | 239 | 150 (488) | 20 | img[img] |
+| mobile | campaign detail | warm | 480 / 496 | 0.000 / 0.000 | 32 / 40 | 35 / 44 | 18 | 0 (488) | 20 | img[img] |
+| desktop | / | cold | 220 / 260 | 0.000 / 0.000 | 32 / 32 | 30 / 31 | 194 | 144 (473) | 23 | h1#hero-title |
+| desktop | / | warm | 200 / 232 | 0.000 / 0.000 | 24 / 32 | 44 / 47 | 22 | 0 (473) | 23 | h1#hero-title |
+| desktop | /campaigns | cold | 236 / 532 | 0.000 / 0.000 | 32 / 40 | 24 / 28 | 207 | 145 (475) | 35 | img[img] |
+| desktop | /campaigns | warm | 196 / 448 | 0.000 / 0.000 | 24 / 32 | 24 / 33 | 31 | 0 (475) | 35 | img[img] |
+| desktop | /categories/education | cold | 516 / 532 | 0.000 / 0.000 | 32 / 32 | 22 / 29 | 211 | 145 (475) | 40 | img[img] |
+| desktop | /categories/education | warm | 196 / 200 | 0.000 / 0.000 | 24 / 24 | 22 / 30 | 34 | 0 (475) | 40 | img[img] |
+| desktop | campaign detail | cold | 248 / 260 | 0.000 / 0.000 | 24 / 24 | 38 / 42 | 245 | 150 (488) | 26 | img[img] |
+| desktop | campaign detail | warm | 204 / 212 | 0.000 / 0.000 | 24 / 32 | 39 / 48 | 24 | 0 (488) | 26 | img[img] |
+
+- **Every page meets every target** in both profiles, cold and warm.
+- The worst p95 values are: LCP 1,492 ms (mobile campaign detail, cold), CLS 0.000 everywhere, and INP proxy 56 ms.
+- **The detail page measured here changed between runs.** The newest live Education campaign is now an
+  integration-test campaign whose cover is a real JPEG with width variants: 37 KB at 1024 px, against the 79-byte
+  fixture PNG of the earlier run. Its mobile detail LCP (≈1.49 s) therefore reflects a real image download and is
+  not comparable with the earlier ~0.6 s. The same image now leads the category grid, which explains that row as
+  well.
+- **CLS is 0.** Every image has explicit `width`/`height` and an `aspect-video` box. The streamed result grids
+  replace a same-size skeleton. There are no web fonts.
+- **JavaScript:** 144–150 KB compressed (473–488 KB decoded) on the first visit. That is within FRONTEND.md §5's
+  170 KB initial JS budget. It is 0 KB on warm loads.
+- **Server TTFB:** ≤ 48 ms p95 for every page. The pages are rendered per request, and campaign data is fetched with
+  `no-store`.
+
+<details><summary>Earlier run, before responsive images (same method; the detail page was then a fixture campaign)</summary>
+
+| Profile | Page | Load | LCP ms p50 / p95 | CLS p50 / p95 | INP-proxy ms p50 / p95 | TTFB ms p50 / p95 | Transfer KB | JS KB (decoded) | Requests | LCP element |
+|---|---|---|---|---|---|---|---|---|---|---|
+| mobile | / | cold | 644 / 660 | 0.000 / 0.000 | 48 / 64 | 33 / 40 | 170 | 144 (473) | 18 | p |
+| mobile | / | warm | 424 / 432 | 0.000 / 0.000 | 40 / 40 | 36 / 37 | 19 | 0 (473) | 18 | p |
+| mobile | /campaigns | cold | 584 / 624 | 0.000 / 0.000 | 48 / 56 | 29 / 33 | 174 | 145 (475) | 19 | p |
+| mobile | /campaigns | warm | 388 / 508 | 0.000 / 0.000 | 32 / 32 | 26 / 27 | 20 | 0 (475) | 19 | p |
+| mobile | /categories/education | cold | 976 / 1012 | 0.000 / 0.000 | 48 / 48 | 27 / 33 | 176 | 145 (475) | 22 | img[img] |
+| mobile | /categories/education | warm | 788 / 1076 | 0.000 / 0.000 | 32 / 32 | 25 / 31 | 22 | 0 (475) | 22 | img[img] |
+| mobile | campaign detail | cold | 596 / 612 | 0.000 / 0.000 | 48 / 48 | 35 / 38 | 176 | 150 (488) | 20 | img[img] |
+| mobile | campaign detail | warm | 468 / 508 | 0.000 / 0.000 | 32 / 40 | 34 / 36 | 19 | 0 (488) | 20 | img[img] |
+| desktop | / | cold | 232 / 236 | 0.000 / 0.000 | 24 / 32 | 36 / 47 | 176 | 144 (473) | 24 | h1#hero-title |
+| desktop | / | warm | 188 / 204 | 0.000 / 0.000 | 24 / 24 | 31 / 41 | 22 | 0 (473) | 24 | h1#hero-title |
+| desktop | /campaigns | cold | 504 / 528 | 0.000 / 0.000 | 32 / 40 | 21 / 24 | 189 | 145 (475) | 36 | img[img] |
+| desktop | /campaigns | warm | 156 / 192 | 0.000 / 0.000 | 32 / 32 | 23 / 27 | 30 | 0 (475) | 36 | img[img] |
+| desktop | /categories/education | cold | 520 / 548 | 0.000 / 0.000 | 24 / 32 | 22 / 24 | 193 | 145 (475) | 41 | img[img] |
+| desktop | /categories/education | warm | 192 / 196 | 0.000 / 0.000 | 24 / 24 | 22 / 25 | 34 | 0 (475) | 41 | img[img] |
+| desktop | campaign detail | cold | 216 / 280 | 0.000 / 0.000 | 24 / 24 | 29 / 45 | 182 | 150 (488) | 26 | img[img] |
+| desktop | campaign detail | warm | 176 / 188 | 0.000 / 0.000 | 24 / 24 | 34 / 44 | 24 | 0 (488) | 26 | img[img] |
+
+</details>
+
+### 8.3 Realistic cover weight (mobile, cold)
+
+The development covers are tiny, so `--heavy-images` serves every public campaign image from a local HTTP server
+as a noisy PNG with realistic weight. The full image is 1200×675 at 187 KB. Each `?w=` width is rendered at that
+width, so bytes scale with pixels: 1024 → 136 KB, 640 → 51 KB, 320 → 12 KB, which is in the range of photo JPEGs.
+
+The image requests are re-pointed with `route.continue`, so they still go through the throttled network. A
+`route.fulfill` would bypass Chromium's network emulation; an early attempt did that and gave invalid numbers. Warm
+runs are not reported: Playwright disables the HTTP cache while request routing is on.
+
+| Page | A. all covers lazy, full image | B. first result eager + `fetchpriority=high`, full image | C. B + `srcset`/`sizes` with width variants | LCP element | Transfer KB A → C |
+|---|---|---|---|---|---|
+| `/` | 792 / 828 | 784 / 804 | 768 / 848 | p | 535 → 437 |
+| `/campaigns` | 732 / 756 | 776 / 792 | 772 / 792 | p | 720 → 439 |
+| `/categories/education` | **4,024 / 4,052 ⚠** | **3,532 / 3,544 ⚠** | **2,312 / 2,320** | img (first card cover) | 722 → 441 |
+| campaign detail | 2,140 / 2,148 | 2,132 / 2,144 | 1,912 / 1,920 | img (cover) | 358 → 308 |
+
+All values are LCP p50 / p95 in ms, from 5 runs each.
+
+- **Cause of the original miss.**
+  - On a 360 px phone, the category page's first card cover is only just inside the viewport, but it becomes the
+    LCP element once it paints.
+  - With lazy loading it started late, and Chrome's lazy-load distance threshold also starts the next two covers.
+  - Several full-size covers plus 145 KB of JS then share 1.6 Mbps.
+- **Web change B.** In search and category result grids, the first card's cover is `loading="eager"` with
+  `fetchpriority="high"`; React also preloads it. Every other cover stays lazy (`CampaignGrid priorityFirst`).
+  This saved about 0.5 s.
+- **Web change C** (after the API added 320/640/1024 px JPEG variants):
+  - `PublicImage` emits `srcset` with the `?w=` variants and a layout-specific `sizes`. The source is
+    `src/lib/campaigns/paths.ts` `publicImageSources` / `IMAGE_SIZES`.
+  - `sizes` by layout: cards ≈ 100vw − 32px on phones, half from 640 px, a third from 1024 px. The detail cover
+    fills the main column. Gallery photos take half the column.
+  - On the detail page, only the widths the API lists in `media[].variants` are offered. Cards list all three
+    widths, which is safe because the API falls back to the full image for a missing width. The full derivative is
+    never a candidate, since it can be up to 8000 px wide.
+  - Open Graph and JSON-LD use the 1024 px variant when one exists.
+  - Result: the mobile category page is now within target (2.31 s p95), with about 40% fewer image bytes.
+- **What is left.** On a DPR 2 phone a full-width card or cover needs about 656 px, just over the 640 variant, so
+  Chrome correctly chooses 1024 (136 KB here). A 720–768 px variant in the media pipeline would roughly halve that
+  download and take the category and detail LCP to about 1.5 s under this profile. **Backend suggestion, not done
+  here.**
+- **Related backend note.** The API's `global.ip` limit (40 requests per 2 s) counts image requests. Rapid
+  scripted navigation across grid pages produced 429s on covers during the smoke test. The cards fall back to a
+  neutral block.

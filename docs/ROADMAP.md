@@ -276,6 +276,22 @@ Notes on ordering:
 
 ## Stage 7 — Public Fundraising Experience
 
+> **Status: implemented (awaiting acceptance).** Built per
+> [ADR-038](adr/ADR-038-public-experience-caching-reporting-and-api-consistency.md): the Stage 6 remediation (API
+> consistency for the campaign family, a recursive public allow-list test, the public caching defect fix, a real-stack
+> Playwright suite for the staff pages), then the home page, discovery and category pages, campaign pages with trust
+> indicators, canonical URLs and short links, plain-link sharing with Open Graph previews, opt-in SEO (robots,
+> sitemap, JSON-LD), PWA manifest and offline page, report-a-campaign with staff triage, transparent featured
+> campaigns, first-party aggregate analytics, and search performance work at 50 000 campaigns. Summary:
+> [stage-7/implementation.md](stage-7/implementation.md); evidence: [stage-7/testing.md](stage-7/testing.md) and
+> [stage-7/performance.md](stage-7/performance.md); review: [stage-7/security-review.md](stage-7/security-review.md);
+> open items: [stage-7/known-issues.md](stage-7/known-issues.md); handover:
+> [stage-handover/STAGE-7-TO-STAGE-8.md](stage-handover/STAGE-7-TO-STAGE-8.md). **Not met / deviations:** no
+> donation-flow UI against payment mocks, no receipts UI and no QR codes (KI-S7-10; carried to Stage 8 or later); the
+> performance budget on a throttled mobile profile was not measured (KI-S7-05); WCAG 2.2 AA is covered by automated
+> axe checks only — no manual screen-reader checks, and the unverified criteria are listed in
+> [stage-7/accessibility.md](stage-7/accessibility.md) (KI-S7-04).
+
 - **Objective:** Fast, accessible, mobile-first public campaign pages and the donation flow UI, built against
   **API mocks** of the payments endpoints (the sandbox provider arrives in Stage 8, where the donation flow is
   exercised end to end).
