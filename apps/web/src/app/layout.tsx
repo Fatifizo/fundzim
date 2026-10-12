@@ -2,26 +2,40 @@ import type { Metadata, Viewport } from "next";
 import { connection } from "next/server";
 
 import { DevPreviewBanner } from "@/components/layout/dev-preview-banner";
+import { RegisterServiceWorker } from "@/components/pwa/register-service-worker";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 
+import { publicRobots } from "@/lib/seo/metadata";
+
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: {
-    template: "%s · FundZim",
-    default: "FundZim — Fund anyone in Zimbabwe, from anywhere",
-  },
-  description:
-    "FundZim is a Zimbabwe-first donation crowdfunding platform under development. It is not yet open for fundraising.",
-  applicationName: "FundZim",
-  // Site-wide noindex while this is a development preview: nothing here is a real campaign or a live
-  // service, and search engines must not present it as one. Remove deliberately at launch (Stage 20).
-  robots: { index: false, follow: false, nocache: true },
-};
+/**
+ * Site-wide defaults. Indexing is opt-in per deployment (PUBLIC_SITE_URL + SITE_INDEXING=allow, see
+ * src/lib/site/url.ts): until then every page is noindex, as in the development preview. Private pages
+ * (dashboard, settings, admin, sign-in and account flows) set noindex themselves regardless.
+ */
+export function generateMetadata(): Metadata {
+  return {
+    title: {
+      template: "%s · FundZim",
+      default: "FundZim — Fund anyone in Zimbabwe, from anywhere",
+    },
+    description: "FundZim is a Zimbabwe-first donation crowdfunding platform under development. Donations are not available yet.",
+    applicationName: "FundZim",
+    robots: publicRobots(),
+    icons: {
+      apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    },
+    appleWebApp: { title: "FundZim", statusBarStyle: "default" },
+    formatDetection: { telephone: false },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#1b5e40",
+  width: "device-width",
+  initialScale: 1,
 };
 
 /**
@@ -47,6 +61,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           {children}
         </main>
         <SiteFooter />
+        <RegisterServiceWorker />
       </body>
     </html>
   );

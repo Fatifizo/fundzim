@@ -60,9 +60,11 @@ const common = { NODE_ENV: "production", HOSTNAME: "127.0.0.1" };
 start("mock-api", ["e2e/mock-api/server.mjs"], { MOCK_API_PORT: String(MOCK_PORT), MOCK_APP_ORIGIN: `http://127.0.0.1:${AUTH_PORT}` });
 await waitFor(`http://127.0.0.1:${MOCK_PORT}/__mock/health`, "mock-api");
 
-start("auth app", [".next/standalone/server.js"], { ...common, PORT: String(AUTH_PORT), API_BASE_URL: `http://127.0.0.1:${MOCK_PORT}` });
+// The mock-backed app also has a canonical site URL (itself) with indexing allowed, so share links, canonical
+// and Open Graph URLs, robots.txt and sitemap.xml are exercised; the API-less site app has neither.
+start("auth app", [".next/standalone/server.js"], { ...common, PORT: String(AUTH_PORT), API_BASE_URL: `http://127.0.0.1:${MOCK_PORT}`, PUBLIC_SITE_URL: `http://127.0.0.1:${AUTH_PORT}`, SITE_INDEXING: "allow" });
 await waitFor(`http://127.0.0.1:${AUTH_PORT}/healthz`, "auth app");
 
-start("site app", [".next/standalone/server.js"], { ...common, PORT: String(SITE_PORT), API_BASE_URL: "http://127.0.0.1:1" });
+start("site app", [".next/standalone/server.js"], { ...common, PORT: String(SITE_PORT), API_BASE_URL: "http://127.0.0.1:1", PUBLIC_SITE_URL: "", SITE_INDEXING: "" });
 await waitFor(`http://127.0.0.1:${SITE_PORT}/healthz`, "site app");
 console.log("[e2e] all servers ready");

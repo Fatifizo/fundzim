@@ -4,7 +4,7 @@ export interface NavItem {
 }
 
 export const PRIMARY_NAV: readonly NavItem[] = [
-  { href: "/campaigns", label: "Explore" },
+  { href: "/campaigns", label: "Explore Campaigns" },
   { href: "/how-it-works", label: "How It Works" },
   { href: "/dashboard/campaigns/new", label: "Start a Fundraiser" },
 ];
@@ -15,4 +15,5 @@ export const FOOTER_NAV: readonly NavItem[] = [
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
   { href: "/contact", label: "Contact" },
+  { href: "/safety", label: "Safety" },
 ];

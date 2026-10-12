@@ -17,8 +17,10 @@ test("homepage renders key sections, honest notices and security headers", async
 
   await expect(page.getByRole("heading", { level: 1, name: "Together, We Can Make a Difference." })).toBeVisible();
   await expect(page.getByText(/Development preview — FundZim is not open for fundraising/)).toBeVisible();
-  await expect(page.getByText("Payments are not live yet")).toBeVisible();
-  await expect(page.getByText("Design preview — not a real campaign")).toBeVisible();
+  await expect(page.getByText("Support people and causes across Zimbabwe through simple, transparent fundraising.")).toBeVisible();
+  // API down: honest error states, never fabricated campaigns.
+  await expect(page.getByText("Featured campaigns could not be loaded")).toBeVisible();
+  await expect(page.getByText(/Categories could not be loaded/)).toBeVisible();
   // API is intentionally unreachable in this run: the footer degrades gracefully and the header offers sign-in.
   await expect(page.getByText(/Platform API: not reachable right now/)).toBeVisible();
   await expect(page.getByRole("banner").getByRole("link", { name: "Sign In" })).toHaveAttribute("href", "/login");
@@ -35,7 +37,7 @@ test("navigates to How it works from the header", async ({ page, isMobile }) => 
   const nav = page.getByRole("navigation", { name: isMobile ? "Main menu" : "Main" });
   await nav.getByRole("link", { name: "How It Works" }).click();
   await expect(page).toHaveURL(/\/how-it-works$/);
-  await expect(page.getByRole("heading", { level: 1, name: "How FundZim will work" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "How FundZim works" })).toBeVisible();
   await expect(page).toHaveTitle("How it works · FundZim");
   expect(await seriousAxeViolations(page)).toEqual([]);
   expect(problems).toEqual([]);

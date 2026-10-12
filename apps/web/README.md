@@ -33,7 +33,8 @@ First E2E run on a machine: `npx playwright install chromium` (no sudo needed fo
 |---|---|---|---|
 | `API_BASE_URL` | Server only, **at request time** (Route Handler proxy, Server Components) and at server start (validation) | **Production: yes.** Dev/test default `http://127.0.0.1:8080` | Origin only (`http://api:8080`), no path/credentials. In production (`NODE_ENV=production`) a missing/invalid value makes the server **exit on start** (`src/instrumentation.ts`) and the proxy answers `503 SERVICE_UNAVAILABLE`; there is no silent fallback. Not needed at build time. |
 | `WEB_TRUSTED_PROXY_CIDRS` | Server only, at start (validated) and per request | No (default empty) | Comma-separated CIDRs of reverse proxies **in front of** the web server. Empty: the TCP peer is the client and client-supplied `X-Forwarded-For` is ignored. Invalid → the server exits on start in production. |
-| `PUBLIC_SITE_URL` | Server only, at request time (campaign page metadata) | No | Canonical site origin (`https://fundzim.example`). When set, public campaign pages emit absolute `og:url`, canonical and `og:image`; when unset they are left out (never guessed from request headers). |
+| `PUBLIC_SITE_URL` | Server only, at request time | No (production: recommended) | Canonical site origin only (`https://fundzim.example`; no path/query). Source of every absolute URL: canonical links, Open Graph/Twitter URLs and images, JSON-LD, share links, `robots.txt` sitemap line and `sitemap.xml`. When unset or invalid these are left out — never guessed from request headers — and share buttons are not offered (a note says why in non-production builds). |
+| `SITE_INDEXING` | Server only, at request time | No | `allow` lets search engines index the public pages (only together with a valid `PUBLIC_SITE_URL`). Anything else keeps the development-preview behaviour: every page `noindex` and `robots.txt` `Disallow: /`. Private pages are always `noindex`. |
 | `PORT`, `HOSTNAME` | Standalone server | No | Defaults `3000` / `0.0.0.0` in the container. |
 | `NEXT_PUBLIC_*` | Inlined into the browser bundle **at build time** | — | Public by definition. None are used in Stage 3. Never put a secret in a `NEXT_PUBLIC_` variable. |
 
@@ -167,6 +168,75 @@ Contract: `docs/stage-6/interface-contracts.md` (§3, §5, §6, §9); ADR-036 (l
   The compliance restriction indicator is a yes/no flag only.
 - **Tests:** `src/lib/campaigns/*.test.ts(x)`, `src/__tests__/public-campaign-page.test.tsx`,
   `src/lib/api/upload-routes.test.ts`, `e2e/campaigns.spec.ts` against `e2e/mock-api/campaigns.mjs`.
+
+## Public experience (Stage 7)
+
+Contract: `docs/stage-7/interface-contracts.md` (§2 consistency, §3 public endpoints, §5 routes); ADR-038.
+
+| Route | What it shows | Data |
+|---|---|---|
+| `/` | Hero, featured campaigns (staff picks then recently published; selection explained, not an endorsement), categories with live counts, four steps (step 4: "Receive support when payments become available"), trust and safety, call to action; Organization JSON-LD | `GET /public/campaigns/featured`, `GET /public/categories` |
+| `/campaigns` | Search (`q` ≤ 100, control characters stripped), category (code or slug), sort, keyset pagination ("Next page" / "Back to the first page"), result count from `total` ("1000+" when capped); results stream behind a skeleton; empty and error states | `GET /public/campaigns` |
+| `/categories`, `/categories/[slug]` | Category cards with live counts; one category's description, count, sensitivity note and listing | `GET /public/categories[/{slug}]` |
+| `/campaigns/[slug]` | Approved version: cover, story (escaped paragraphs, no links), photos, updates with their photos, trust indicators (only when true, with "Verified identity does not guarantee the campaign's claims"), disabled "Donations are not yet available.", share, report; WebPage JSON-LD. A non-canonical slug → 308 to `canonical_slug` | `GET /public/campaigns/{slug}`, `…/updates` |
+| `/c/[code]` | 308 to the canonical campaign URL; unknown → 404 | `GET /public/campaign-codes/{code}` |
+| `/safety`, `/how-it-works`, `/about`, `/contact`, `/privacy`, `/terms` | Static; privacy and terms stay marked DRAFT (LEGAL_REVIEW_REQUIRED) and `noindex` | — |
+| `/robots.txt`, `/sitemap.xml`, `/manifest.webmanifest` | See below | `GET /public/sitemap` |
+
+- **Freshness.** Campaign data is fetched per request with `cache: 'no-store'` (ADR-038 §1); there is no server cache to
+  invalidate when a campaign is suspended.
+- **Cards** (`src/components/campaigns/campaign-card.tsx`): approved cover (lazy, fixed 640×360, `aspect-video`),
+  title, summary, category, organiser, goal with currency, status, and only the true trust indicators. No totals,
+  donor counts or progress bars anywhere.
+- **Sharing** (`src/lib/share/links.ts`, `share-controls.tsx`): WhatsApp `wa.me/?text=` ("Support this FundZim
+  campaign:\n<title>\n<summary ≤140>\nRead the story: <canonical URL>"), Facebook sharer, X intent, `mailto:` (all
+  percent-encoded), Copy link (polite live region; selectable fallback when the clipboard is refused) and the Web
+  Share API when present. Only public, approved fields; URLs only from `PUBLIC_SITE_URL`.
+- **Reports** (`report-dialog.tsx`, `src/lib/campaigns/report.ts`): native `<dialog>`, the six contract reasons,
+  details (required 10–2000 for OTHER), optional email, hidden honeypot `website`; `POST /public/campaigns/{slug}/reports`
+  (never retried). The confirmation says the team will review it; nothing promises removal.
+- **SEO** (`src/lib/seo/*`): per-page title/description/canonical/Open Graph/Twitter via `pageMetadata`; the generic
+  image is `public/og/fundzim-og.png`. JSON-LD only as Organization (home) and WebPage (campaign) — never
+  DonateAction, amounts, ratings, reviews or certifications; serialised with `<`, `>`, `&`, U+2028/9 escaped and
+  rendered with the request nonce (`src/components/seo/json-ld.tsx`, the only `dangerouslySetInnerHTML`).
+  `robots.txt` disallows `/dashboard`, `/admin`, `/login`, `/register`, `/settings`, `/staff`, `/verify-email`,
+  `/reset-password`, `/forgot-password` and `/api` when indexing is allowed (`Disallow: /` otherwise).
+- **Analytics** (`src/lib/analytics/events.ts`): fire-and-forget `POST /api/v1/public/events` with
+  `credentials: "omit"` for campaign page views, share clicks (channel), searches (never the query text) and category
+  views. Nothing is sent with Do Not Track or Global Privacy Control. No cookies, identifiers or third parties.
+- **PWA.** `src/app/manifest.ts`; icons in `public/icons/` drawn by `scripts/generate-icons.mjs` (node:zlib only;
+  re-run after changing the mark). `public/sw.js` (registered in production builds only) caches **only** hashed
+  `/_next/static/*` assets (cache-first, capped) and the static `/offline.html` + `/offline.css`; it never intercepts
+  online navigations and never caches API responses, pages, media, documents, auth, dashboard or admin. When the
+  browser reports it is offline, navigations get the offline page (its own strict CSP, no scripts). The worker's own
+  CSP allows only same-origin fetches.
+- **Core Web Vitals (lab).** `node scripts/cwv.mjs --runs 5` measures LCP, CLS, an INP proxy, TTFB and bytes with
+  Playwright Chromium against a running stack. The profiles are mobile (360×800, 4× CPU, ~1.6 Mbps / 150 ms) and
+  desktop, cold and warm. Results and method: `docs/stage-7/performance.md` §8. In result grids, the first card's
+  cover loads eagerly with `fetchpriority="high"` (`CampaignGrid priorityFirst`); every other cover is lazy.
+- **Responsive images.** Public images use the API's JPEG width variants (`?w=320|640|1024`) via `srcset` and
+  layout-specific `sizes` (`publicImageSources` / `IMAGE_SIZES` in `src/lib/campaigns/paths.ts`). The detail page
+  offers only the widths listed in `media[].variants`. Cards offer all three, because the API falls back to the full
+  image for a missing width. The full derivative (up to 8000 px) is never a `srcset` candidate. Open Graph uses the
+  1024 px variant when present.
+- **Mobile.** Mobile-first; the main navigation collapses into a disclosure menu below 1024 px (icon-only button
+  below 400 px so the header fits at 320 px). E2E checks no horizontal overflow at 320 and 375 px.
+- **API consistency (contract §2).** Owner/staff/media/update lists are `{items, next_cursor}` (owner list paginates
+  with "Next page"); media and update edits send `If-Match`; 428 `PRECONDITION_REQUIRED` and 412
+  `PRECONDITION_FAILED` have their own copy (the Stage 6 409 codes are still understood).
+- **Staff pages** (contract §4; `requireStaff` + `serverGetOr404`, so users and staff without the permission get
+  404): `/admin/campaigns/reports` (`campaign.review`; Open / Escalated / Dismissed tabs, keyset "Next page"; reason,
+  details as escaped text, whether a contact email was given — never the email — whether the reporter was signed in,
+  the campaign's current status and a link to its review page; Dismiss / Escalate dialogs with reason code and a
+  3–5,000 character note; the page states that a report never suspends a campaign by itself) and
+  `/admin/campaigns/featured` (`campaign.feature`; picks by position, `shown: false` marked "Hidden from the public",
+  add by campaign id — pre-filled from the review page's "Feature on the home page" link — with position 1–100 and a
+  3–500 character note, remove with a reason; step-up whenever the API asks). Components:
+  `src/components/admin/{report-queue,featured-manager}.tsx`; E2E: `e2e/staff-public.spec.ts`.
+- **Tests:** `src/lib/{share,site,seo,analytics}/*.test.ts`, `src/lib/campaigns/{report,public-normalise,errors-stage7}.test.ts`,
+  `src/__tests__/{home-page,public-campaign-page,campaign-card,share-controls,report-dialog,service-worker}.test.*`,
+  `e2e/public.spec.ts` against the extended mock (`e2e/mock-api/campaigns.mjs`; control endpoints `__mock/feature`,
+  `__mock/reports`, `__mock/events`, `__mock/update`).
 
 ## API client (`src/lib/api/`)
 

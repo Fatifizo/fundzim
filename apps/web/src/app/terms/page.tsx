@@ -18,7 +18,8 @@ export default function Page() {
         </Alert>
       }
     >
-      <p>This development preview offers no service: you cannot create campaigns, donate or receive funds. Terms governing the use of FundZim will be published before the platform opens.</p>
+      <p>FundZim is a development preview. Campaigns can be prepared, reviewed, published and shared, but donations and payments are not available: no one can donate or receive funds through FundZim. Terms governing the use of FundZim will be published before the platform opens.</p>
+      <p>Until then, please do not send money to anyone because of a FundZim campaign page, and report any campaign that worries you using the button on its page.</p>
     </ContentPage>
   );
 }

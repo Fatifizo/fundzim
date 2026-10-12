@@ -13,6 +13,8 @@ const ITEMS = [
   { href: "/admin/campaigns/review", label: "Campaign reviews" },
   { href: "/admin/campaigns", label: "All campaigns", exact: true },
   { href: "/admin/campaigns/updates", label: "Update moderation" },
+  { href: "/admin/campaigns/reports", label: "Campaign reports" },
+  { href: "/admin/campaigns/featured", label: "Featured campaigns" },
   { href: "/admin/account/personal-link", label: "Personal account link" },
 ] as const;
 

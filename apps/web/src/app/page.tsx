@@ -1,84 +1,145 @@
-import { CampaignCard } from "@/components/campaign-card";
-import { Alert } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import type { Metadata } from "next";
+import Link from "next/link";
+
+import { CampaignGrid } from "@/components/campaigns/campaign-card";
+import { liveCountText } from "@/components/campaigns/category-card";
+import { JsonLdScript } from "@/components/seo/json-ld";
 import { ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Container } from "@/components/ui/container";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionHeading } from "@/components/ui/section-heading";
+import { fetchFeatured, fetchPublicCategories } from "@/lib/campaigns/public";
+import { organizationJsonLd } from "@/lib/seo/json-ld";
+import { pageMetadata } from "@/lib/seo/metadata";
+import { siteOrigin } from "@/lib/site/url";
+
+const HERO_TITLE = "Together, We Can Make a Difference.";
+const HERO_SUBTITLE = "Support people and causes across Zimbabwe through simple, transparent fundraising.";
+
+export function generateMetadata(): Metadata {
+  return {
+    ...pageMetadata({ title: "FundZim — Fund anyone in Zimbabwe, from anywhere", description: HERO_SUBTITLE, path: "/" }),
+    title: { absolute: "FundZim — Fund anyone in Zimbabwe, from anywhere" },
+  };
+}
 
 const STEPS = [
-  {
-    title: "Create a campaign",
-    body: "Tell us who you are raising money for and why. Every campaign will be reviewed before it goes public.",
-  },
-  {
-    title: "Share your story",
-    body: "Share your campaign link with family, friends and community — on WhatsApp, social media or by word of mouth.",
-  },
-  {
-    title: "Receive support",
-    body: "Supporters in Zimbabwe and abroad will give using payment methods that suit them, and funds will go to the verified beneficiary.",
-  },
-] as const;
-
-const PAYMENT_METHODS = [
-  { title: "Mobile money", body: "For example EcoCash, OneMoney, InnBucks and O'Mari." },
-  { title: "Local bank rails", body: "ZimSwitch-connected bank payments." },
-  { title: "International cards", body: "So family and friends in the diaspora can give from anywhere." },
+  { title: "Create your campaign", body: "Explain who the money is for and why, set a goal in one currency, and add a cover photo." },
+  { title: "Get reviewed", body: "Organisers verify who they are, and a FundZim reviewer checks every campaign before it can be published." },
+  { title: "Share your story", body: "Share your campaign link on WhatsApp, social media or by email. Pages load quickly on mobile phones." },
+  { title: "Receive support when payments become available", body: "Donations are not available yet. When payments open, they will go through licensed payment providers, never through FundZim staff or personal accounts." },
 ] as const;
 
 const TRUST = [
-  {
-    title: "Identity verification",
-    body: "Campaign owners and organisations will verify who they are before they can receive funds.",
-  },
-  {
-    title: "Transparent transactions",
-    body: "Every donation and payout will be recorded and traceable end to end, kept separately per currency (USD and ZiG).",
-  },
-  {
-    title: "Beneficiary protection",
-    body: "Campaigns will be reviewed, can be reported by anyone, and payouts will be checked before funds are released.",
-  },
+  { title: "Reviewed before publishing", body: "Every campaign is checked by a FundZim reviewer against our rules before anyone can see it. Changes to a published campaign are reviewed again." },
+  { title: "Verification shown honestly", body: "When an organiser, organisation or beneficiary has completed a FundZim check, the campaign page says so — and only then." },
+  { title: "Report anything that worries you", body: "Every campaign page has a Report button. Reports go to the review team, who decide what to do." },
+  { title: "What checks cannot promise", body: "A verified identity does not guarantee that every claim in a story is true. Read carefully, and never send money outside FundZim." },
 ] as const;
 
-export default function HomePage() {
+/** Home: hero, featured campaigns, categories, how it works, trust and safety, call to action. */
+export default async function HomePage() {
+  const [featured, categories] = await Promise.all([fetchFeatured(6), fetchPublicCategories()]);
+  const origin = siteOrigin();
+  const hasStaffPicks = featured.ok && featured.data.some((c) => c.selection === "STAFF_PICK");
+
   return (
     <>
+      {origin ? <JsonLdScript data={organizationJsonLd(origin)} /> : null}
       <section aria-labelledby="hero-title" className="on-dark bg-brand-900 text-white">
-        <Container className="py-16 sm:py-24">
+        <Container className="py-14 sm:py-24">
           <p className="font-semibold text-gold-400">Fund anyone in Zimbabwe, from anywhere.</p>
-          <h1 id="hero-title" className="mt-3 max-w-3xl font-display text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl">
-            Together, We Can Make a Difference.
+          <h1 id="hero-title" className="mt-3 max-w-3xl font-display text-4xl font-bold tracking-tight break-words sm:text-5xl lg:text-6xl">
+            {HERO_TITLE}
           </h1>
-          <p className="mt-5 max-w-2xl text-lg text-brand-100 sm:text-xl">
-            Support people and causes across Zimbabwe through simple, secure fundraising.
-          </p>
+          <p className="mt-5 max-w-2xl text-lg text-brand-100 sm:text-xl">{HERO_SUBTITLE}</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <ButtonLink href="/dashboard/campaigns/new" variant="secondary" size="lg">
-              Start a Fundraiser
-            </ButtonLink>
-            <ButtonLink href="/campaigns" size="lg" variant="inverse">
+            <ButtonLink href="/campaigns" variant="secondary" size="lg">
               Explore Campaigns
             </ButtonLink>
+            <ButtonLink href="/dashboard/campaigns/new" size="lg" variant="inverse">
+              Start a Fundraiser
+            </ButtonLink>
           </div>
-          <p className="mt-6 max-w-2xl text-sm text-brand-100">
-            FundZim is in development. Fundraising and donations are not open yet; these pages show what is being built.
-          </p>
+          <p className="mt-6 max-w-2xl text-sm text-brand-100">Donations are not available yet: you can read and share campaigns, but no payment can be made on FundZim today.</p>
         </Container>
       </section>
 
-      <section aria-labelledby="how-title" className="py-16 sm:py-20">
+      <section aria-labelledby="featured-title" className="py-14 sm:py-20">
         <Container>
-          <SectionHeading id="how-title" eyebrow="How it works" title="Three simple steps" />
-          <ol className="mt-10 grid gap-6 md:grid-cols-3">
+          <SectionHeading
+            id="featured-title"
+            eyebrow="Featured campaigns"
+            title="Causes you can support"
+            description={
+              hasStaffPicks
+                ? "Some campaigns are chosen by the FundZim team to show the range of causes here; the rest are the most recently published. Being featured is not an endorsement or a ranking."
+                : "The most recently published campaigns. Being shown here is not an endorsement or a ranking."
+            }
+          />
+          <div className="mt-8">
+            {!featured.ok ? (
+              <EmptyState
+                title="Featured campaigns could not be loaded"
+                description="Please try again in a moment, or browse every campaign."
+                action={
+                  <ButtonLink href="/campaigns" variant="outline">
+                    Browse campaigns
+                  </ButtonLink>
+                }
+              />
+            ) : featured.data.length === 0 ? (
+              <EmptyState
+                title="No campaigns are published yet"
+                description="Campaigns appear here once a reviewer has approved them and their organisers publish them."
+                action={<ButtonLink href="/dashboard/campaigns/new">Start a Fundraiser</ButtonLink>}
+              />
+            ) : (
+              <>
+                <CampaignGrid campaigns={featured.data} label="Featured campaigns" />
+                <div className="mt-8">
+                  <ButtonLink href="/campaigns" variant="outline">
+                    See all campaigns
+                  </ButtonLink>
+                </div>
+              </>
+            )}
+          </div>
+        </Container>
+      </section>
+
+      <section aria-labelledby="categories-title" className="bg-surface-muted py-14 sm:py-20">
+        <Container>
+          <SectionHeading id="categories-title" eyebrow="Categories" title="Find a cause" />
+          {!categories.ok ? (
+            <p className="mt-6 text-ink-700">
+              Categories could not be loaded right now. <Link href="/campaigns" className="font-semibold text-brand-700 underline">Browse all campaigns</Link> instead.
+            </p>
+          ) : categories.data.length === 0 ? (
+            <p className="mt-6 text-ink-700">Categories will appear here once they are set up.</p>
+          ) : (
+            <ul aria-label="Categories" className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {categories.data.map((c) => (
+                <li key={c.code}>
+                  <Link href={`/categories/${c.slug}`} className="flex min-h-14 items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3 font-semibold text-ink-900 hover:border-brand-700 hover:bg-brand-50">
+                    <span className="break-words">{c.name}</span>
+                    {c.live_campaigns !== null ? <span className="shrink-0 text-sm font-normal text-ink-600">{liveCountText(c.live_campaigns)}</span> : null}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Container>
+      </section>
+
+      <section aria-labelledby="how-title" className="py-14 sm:py-20">
+        <Container>
+          <SectionHeading id="how-title" eyebrow="How it works" title="Four steps" />
+          <ol className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {STEPS.map((step, index) => (
               <Card as="li" key={step.title}>
-                <span
-                  aria-hidden="true"
-                  className="inline-flex size-10 items-center justify-center rounded-full bg-gold-400 font-display text-lg font-bold text-ink-900"
-                >
+                <span aria-hidden="true" className="inline-flex size-10 items-center justify-center rounded-full bg-gold-400 font-display text-lg font-bold text-ink-900">
                   {index + 1}
                 </span>
                 <h3 className="mt-4 text-xl font-semibold text-ink-900">
@@ -90,73 +151,47 @@ export default function HomePage() {
           </ol>
           <div className="mt-8">
             <ButtonLink href="/how-it-works" variant="ghost">
-              Learn more about how FundZim will work
+              More about how FundZim works
             </ButtonLink>
           </div>
         </Container>
       </section>
 
-      <section aria-labelledby="payments-title" className="bg-surface-muted py-16 sm:py-20">
+      <section aria-labelledby="trust-title" className="bg-brand-50 py-14 sm:py-20">
         <Container>
-          <SectionHeading
-            id="payments-title"
-            eyebrow="Payment methods"
-            title="Designed for the way Zimbabwe pays"
-            description="FundZim is being designed for Zimbabwean payment methods, processed through licensed payment service providers."
-          />
-          <ul className="mt-10 grid gap-6 md:grid-cols-3">
-            {PAYMENT_METHODS.map((method) => (
-              <Card as="li" key={method.title}>
-                <h3 className="text-xl font-semibold text-ink-900">{method.title}</h3>
-                <p className="mt-2 text-ink-600">{method.body}</p>
-              </Card>
-            ))}
-          </ul>
-          <Alert tone="notice" title="Payments are not live yet" className="mt-8">
-            No payment provider has been selected and no payment can be made on FundZim today. Which methods are offered
-            will depend on agreements with licensed providers and on legal review. Names above describe payment types
-            commonly used in Zimbabwe; they do not indicate any partnership.
-          </Alert>
-        </Container>
-      </section>
-
-      <section aria-labelledby="featured-title" className="py-16 sm:py-20">
-        <Container>
-          <SectionHeading id="featured-title" eyebrow="Featured campaigns" title="Causes you can support" />
-          <EmptyState
-            className="mt-10"
-            title="Campaigns will appear here once fundraising opens"
-            description="There are no live campaigns yet. Every campaign will be reviewed before it is published."
-          />
-          <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <CampaignCard
-              preview
-              title="Example: Borehole for a community school"
-              summary="This card shows how a campaign will be presented. It is a design example, not a real appeal."
-              category="Community"
-              location="Example location, Zimbabwe"
-            />
-          </div>
-        </Container>
-      </section>
-
-      <section aria-labelledby="trust-title" className="bg-brand-50 py-16 sm:py-20">
-        <Container>
-          <SectionHeading
-            id="trust-title"
-            eyebrow="Trust"
-            title="Built for trust from day one"
-            description="These protections are planned and being built now. None of them is active yet."
-          />
-          <ul className="mt-10 grid gap-6 md:grid-cols-3">
+          <SectionHeading id="trust-title" eyebrow="Trust and safety" title="How FundZim looks after donors and beneficiaries" />
+          <ul className="mt-8 grid gap-6 md:grid-cols-2">
             {TRUST.map((item) => (
               <Card as="li" key={item.title}>
-                <Badge tone="brand">Planned — being built</Badge>
-                <h3 className="mt-4 text-xl font-semibold text-ink-900">{item.title}</h3>
+                <h3 className="text-xl font-semibold text-ink-900">{item.title}</h3>
                 <p className="mt-2 text-ink-600">{item.body}</p>
               </Card>
             ))}
           </ul>
+          <div className="mt-8">
+            <ButtonLink href="/safety" variant="outline">
+              Read our safety guidance
+            </ButtonLink>
+          </div>
+        </Container>
+      </section>
+
+      <section aria-labelledby="cta-title" className="on-dark bg-brand-900 py-14 text-white sm:py-20">
+        <Container className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="max-w-2xl">
+            <h2 id="cta-title" className="font-display text-3xl font-bold tracking-tight">
+              Raising money for someone you care about?
+            </h2>
+            <p className="mt-3 text-lg text-brand-100">Prepare your campaign now. It will be reviewed before it is published, and donations will open when payments become available.</p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <ButtonLink href="/dashboard/campaigns/new" variant="secondary" size="lg">
+              Start a Fundraiser
+            </ButtonLink>
+            <ButtonLink href="/how-it-works" variant="inverse" size="lg">
+              How It Works
+            </ButtonLink>
+          </div>
         </Container>
       </section>
     </>

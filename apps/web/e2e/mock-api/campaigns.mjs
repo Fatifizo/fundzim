@@ -15,13 +15,20 @@ const GOAL_MAX_MINOR = 100_000_000n; // 1,000,000.00 (mock policy value)
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 const CATEGORIES = [
-  { code: "MEDICAL", name: "Medical", description: "Treatment, surgery and care costs.", requires_organisation: false, risk_tier: "STANDARD", active: true },
-  { code: "EDUCATION", name: "Education", description: "School fees, uniforms and learning costs.", requires_organisation: false, risk_tier: "STANDARD", active: true },
-  { code: "FUNERAL", name: "Funeral", description: "Funeral and memorial costs.", requires_organisation: false, risk_tier: "STANDARD", active: true },
-  { code: "COMMUNITY", name: "Community", description: "Projects that benefit a community.", requires_organisation: false, risk_tier: "ELEVATED", active: true },
-  { code: "CHILD_WELFARE", name: "Children's welfare", description: "Support for a child's wellbeing.", requires_organisation: false, risk_tier: "HIGH", active: true },
-  { code: "CHARITY", name: "Registered charity", description: "Programmes run by a verified organisation.", requires_organisation: true, risk_tier: "ELEVATED", active: true },
+  { code: "MEDICAL", slug: "medical", display_order: 10, sensitive: true, name: "Medical", description: "Treatment, surgery and care costs.", requires_organisation: false, risk_tier: "STANDARD", active: true },
+  { code: "EDUCATION", slug: "education", display_order: 20, sensitive: false, name: "Education", description: "School fees, uniforms and learning costs.", requires_organisation: false, risk_tier: "STANDARD", active: true },
+  { code: "FUNERAL", slug: "funeral", display_order: 30, sensitive: true, name: "Funeral", description: "Funeral and memorial costs.", requires_organisation: false, risk_tier: "STANDARD", active: true },
+  { code: "COMMUNITY", slug: "community", display_order: 40, sensitive: false, name: "Community", description: "Projects that benefit a community.", requires_organisation: false, risk_tier: "ELEVATED", active: true },
+  { code: "CHILD_WELFARE", slug: "child-welfare", display_order: 50, sensitive: true, name: "Children's welfare", description: "Support for a child's wellbeing.", requires_organisation: false, risk_tier: "HIGH", active: true },
+  { code: "CHARITY", slug: "charity", display_order: 60, sensitive: false, name: "Registered charity", description: "Programmes run by a verified organisation.", requires_organisation: true, risk_tier: "ELEVATED", active: true },
 ];
+const REPORT_REASONS = new Set(["MISLEADING_INFORMATION", "IMPERSONATION", "SUSPICIOUS_ACTIVITY", "INAPPROPRIATE_CONTENT", "PRIVACY_CONCERN", "OTHER"]);
+const EVENT_TYPES = new Set(["CAMPAIGN_PAGE_VIEW", "CAMPAIGN_SHARE_CLICK", "CAMPAIGN_SEARCH", "CATEGORY_VIEW"]);
+const SHARE_CHANNELS = new Set(["WHATSAPP", "FACEBOOK", "X", "EMAIL", "COPY_LINK", "WEB_SHARE"]);
+const TOTAL_CAP = 1000;
+/** Width variants served with ?w= (stands in for the media pipeline's 320/640/1024 JPEGs). */
+const VARIANT_WIDTHS = ["320", "640", "1024"];
+const MOCK_VARIANTS = [{ width: 320, height: 180 }, { width: 640, height: 360 }, { width: 1024, height: 576 }];
 const CURRENCIES = [
   { code: "USD", minor_units: 2, display_symbol: "US$", available: true },
   { code: "ZWG", minor_units: 2, display_symbol: "ZiG", available: false }, // LR-043: minor units not verified
@@ -30,8 +37,8 @@ const CURRENCIES = [
 /** Stage 6 permissions per role (contract §8 + the Stage 4 seed). KYC_REVIEWER has none of these. */
 const ROLE_PERMISSIONS = {
   REVIEWER: ["campaign.view", "campaign.review", "campaign.decide", "campaign.suspend", "campaign.unsuspend", "campaign.publish"],
-  COMPLIANCE: ["campaign.view", "campaign.review", "campaign.decide", "campaign.decide.high", "campaign.suspend", "campaign.unsuspend", "campaign.publish"],
-  ADMIN: ["campaign.view", "content.moderate", "campaign.category.manage"],
+  COMPLIANCE: ["campaign.view", "campaign.review", "campaign.decide", "campaign.decide.high", "campaign.suspend", "campaign.unsuspend", "campaign.publish", "campaign.feature"],
+  ADMIN: ["campaign.view", "content.moderate", "campaign.category.manage", "campaign.feature"],
   SUPPORT: ["campaign.view"],
 };
 const ACTION_PERMISSION = {
@@ -80,12 +87,18 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
   const idempotency = new Map(); // `${userId}:${key}` -> campaignId
   const restricted = new Set(); // userIds with a compliance restriction (generic)
   const staffLinks = new Map(); // staffId -> {email, token, status, requested_at, linked_at, personalUserId}
+  const featuredPicks = []; // {id, position, note, added_at} (staff picks, ADR-038 §2)
+  const reports = []; // {campaignId, slug, reason, details, has_contact, received_at, dropped}
+  const reportDedupe = new Set(); // `${ip}|${campaignId}|${day}`
+  const eventCounts = new Map(); // `${type}|${slug|category}|${channel}` -> n
+  let lastEventBody = null;
 
   const perms = (user) => (user?.account_kind === "STAFF" ? new Set((user.roles ?? []).flatMap((r) => ROLE_PERMISSIONS[r] ?? [])) : new Set());
   const ref = (user) => ({ id: user.id, display_name: user.display_name });
   const level = (userId) => verification.getProfile(userId).level;
   const attestation = (userId) => (attestations.get(userId) ?? []).at(-1) ?? null;
   const category = (code) => CATEGORIES.find((c) => c.code === code && c.active);
+  const categoryByCodeOrSlug = (v) => CATEGORIES.find((c) => c.active && (c.code === v || c.slug === v));
 
   function recordAttestation(userId, outcome, source) {
     const list = attestations.get(userId) ?? [];
@@ -111,7 +124,7 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
     return {
       id: m.id, campaign_id: m.campaignId, kind: m.kind, position: m.position, alt_text: m.alt_text, status, ...(status === "REJECTED" ? { rejected_reason: "MALWARE_DETECTED" } : {}),
       ...(status === "APPROVED" ? { content_type: "image/png", width: 1, height: 1, content_url: `/api/v1/campaigns/${m.campaignId}/media/${m.id}/content` } : {}),
-      ...(m.removed ? { removed_at: m.removed_at ?? now(), removed_reason: m.removed_reason ?? "REMOVED_BY_OWNER" } : {}), version: 1, created_at: m.created_at, updated_at: m.created_at,
+      ...(m.removed ? { removed_at: m.removed_at ?? now(), removed_reason: m.removed_reason ?? "REMOVED_BY_OWNER" } : {}), version: m.version ?? 1, created_at: m.created_at, updated_at: m.created_at,
     };
   };
   const mediaOf = (c) => [...media.values()].filter((m) => m.campaignId === c.id);
@@ -275,17 +288,49 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
     const cat = category(a.category) ?? { code: a.category, name: a.category };
     const disclosed = a.beneficiary?.disclosure === "DISPLAY_NAME" && b && b.beneficiary_type !== "MINOR";
     const ids = [...approvedMedia.filter((m) => m.kind === "COVER"), ...approvedMedia.filter((m) => m.kind !== "COVER")].map((m) => m.id);
+    const ordered = [...approvedMedia.filter((m) => m.kind === "COVER"), ...approvedMedia.filter((m) => m.kind !== "COVER")];
     return {
-      slug: c.slug, title: a.title, summary: a.summary, story: a.story, category: cat.code,
+      slug: c.slug, canonical_slug: c.slug, public_code: c.public_code.toLowerCase(), title: a.title, summary: a.summary, story: a.story, category: cat.code, category_name: cat.name,
       goal: { amount_minor: a.goal_amount_minor, currency: a.goal_currency }, status: c.status,
-      organiser: c.orgId ? { type: "ORGANISATION", display_name: verification.getOrg(c.orgId)?.display_name } : { type: "INDIVIDUAL", display_name: owner?.display_name ?? "Organiser" },
+      organiser: organiserView(c, owner),
       beneficiary: disclosed ? { disclosed: true, display_name: b.display_name } : { disclosed: false },
-      cover_media_id: ids[0] ?? null, media_ids: ids,
+      cover_media_id: approvedMedia.some((m) => m.kind === "COVER") ? ids[0] : null, media_ids: ids, media: ordered.map((m) => ({ id: m.id, kind: m.kind, alt_text: m.alt_text, variants: MOCK_VARIANTS })),
+      trust: trustOf(c),
       published_at: c.published_at, completed_at: c.completed_at, donations: { available: false, message: "Donations are not yet available." },
     };
   }
+  function organiserView(c, owner = ownerUser(c)) {
+    return c.orgId ? { type: "ORGANISATION", display_name: verification.getOrg(c.orgId)?.display_name } : { type: "INDIVIDUAL", display_name: owner?.display_name ?? "Organiser" };
+  }
+  /** ADR-038 §5, computed live: shown only when true now. */
+  function trustOf(c) {
+    const owner = ownerUser(c);
+    const idv = !!owner && VERIFIED_LEVELS.has(level(owner.id));
+    const org = c.orgId ? verification.getOrg(c.orgId) : null;
+    const b = c.approved?.beneficiary ? verification.getBeneficiary(c.approved.beneficiary.beneficiary_id) : null;
+    const benOk = !!b && (b.status === "APPROVED" || (b.beneficiary_type === "SELF" && idv));
+    return { organiser_identity_verified: idv && !c.orgId, organisation_verified: org?.level === "ORG_VERIFIED", beneficiary_verified: benOk, campaign_reviewed: !!c.approved };
+  }
+  function card(c) {
+    const v = publicView(c);
+    return { slug: v.slug, title: v.title, summary: v.summary, category: v.category, goal: v.goal, status: v.status, cover_media_id: v.cover_media_id, published_at: v.published_at, created_at: c.created_at, organiser: v.organiser, trust: v.trust };
+  }
+  /** A slug, or a non-canonical slug whose trailing public code matches (contract §3). */
+  function findPublic(slug) {
+    const exact = [...campaigns.values()].find((x) => x.slug === slug);
+    if (exact) return isPublic(exact) ? exact : null;
+    const code = slug.split("-").at(-1)?.toUpperCase();
+    const byCode = code ? [...campaigns.values()].find((x) => x.public_code === code) : null;
+    return byCode && isPublic(byCode) ? byCode : null;
+  }
+  const listed = () => [...campaigns.values()].filter((c) => isPublic(c) && c.visibility === "PUBLIC");
+  function sendData(res, status, data, headers = {}) {
+    const requestId = randomUUID();
+    res.writeHead(status, { "Content-Type": "application/json", "X-Request-ID": requestId, "Cache-Control": "public, no-cache", ETag: `"${randomBytes(6).toString("hex")}"`, ...headers });
+    res.end(JSON.stringify({ data, meta: { request_id: requestId } }));
+  }
 
-  function paginate(res, list, url, mapper, defaultLimit = 25, itemsShape = false) {
+  function paginate(res, list, url, mapper, defaultLimit = 25, itemsShape = false, extra = {}) {
     const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") ?? String(defaultLimit), 10) || defaultLimit, 1), 100);
     const cursor = url.searchParams.get("cursor");
     let offset = 0;
@@ -298,12 +343,12 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
     const requestId = randomUUID();
     res.writeHead(200, { "Content-Type": "application/json", "X-Request-ID": requestId, "Cache-Control": "no-store" });
     const nextCursor = offset + limit < list.length ? `o:${offset + limit}` : null;
-    const data = itemsShape ? { items: page, next_cursor: nextCursor } : page;
+    const data = itemsShape ? { items: page, next_cursor: nextCursor, ...extra } : page;
     res.end(JSON.stringify({ data, meta: { request_id: requestId, limit, ...(nextCursor && !itemsShape ? { next_cursor: nextCursor } : {}) } }));
   }
 
   function sendImage(res, contentType = "image/png") {
-    res.writeHead(200, { "Content-Type": contentType, "Cache-Control": "public, max-age=60", "X-Content-Type-Options": "nosniff" });
+    res.writeHead(200, { "Content-Type": contentType, "Cache-Control": "public, no-cache", ETag: '"pixel"', "X-Content-Type-Options": "nosniff" });
     res.end(PIXEL);
   }
 
@@ -320,7 +365,8 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
     };
 
     // ---------------------------------------------------------------- reference data (public)
-    if (p === "/campaign-categories" && method === "GET") return send(res, 200, CATEGORIES.filter((c) => c.active).map((c) => ({ code: c.code, name: c.name, description: c.description, requires_organisation: c.requires_organisation }))), true;
+    // Stage 7: same shape as /public/categories (plus requires_organisation), {items, next_cursor: null}.
+    if (p === "/campaign-categories" && method === "GET") return send(res, 200, { items: CATEGORIES.filter((c) => c.active).sort((a, b) => a.display_order - b.display_order).map((c) => ({ code: c.code, slug: c.slug, name: c.name, description: c.description, display_order: c.display_order, sensitive: c.sensitive, requires_organisation: c.requires_organisation, live_campaigns: listed().filter((x) => x.approved.category === c.code).length })), next_cursor: null }), true;
     if (p === "/campaign-currencies" && method === "GET") return send(res, 200, CURRENCIES.filter((c) => c.available).map((c) => ({ code: c.code, minor_units: c.minor_units, display_symbol: c.display_symbol }))), true;
 
     // ---------------------------------------------------------------- age attestation
@@ -367,31 +413,98 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
       return send(res, 200, { status: "linked", staff_user_id: entry[0] }), true;
     }
 
-    // ---------------------------------------------------------------- public
+    // ---------------------------------------------------------------- public (Stage 7 contract §3)
+    if (seg[0] === "public" && seg[1] === "categories" && method === "GET") {
+      const view = (c) => ({ code: c.code, slug: c.slug, name: c.name, description: c.description, display_order: c.display_order, sensitive: c.sensitive, live_campaigns: listed().filter((x) => x.approved.category === c.code).length });
+      const active = CATEGORIES.filter((c) => c.active).sort((a, b) => a.display_order - b.display_order);
+      const headers = { "Cache-Control": "public, max-age=300" };
+      if (seg.length === 2) return sendData(res, 200, { items: active.map(view), next_cursor: null }, headers), true;
+      const c = seg.length === 3 ? active.find((x) => x.slug === seg[2]) : null;
+      if (!c) return err(res, 404, "CATEGORY_NOT_FOUND"), true;
+      return sendData(res, 200, view(c), headers), true;
+    }
+    if (seg[0] === "public" && seg[1] === "campaign-codes" && seg.length === 3 && method === "GET") {
+      const c = [...campaigns.values()].find((x) => x.public_code === seg[2].toUpperCase());
+      if (!c || !isPublic(c)) return err(res, 404, "CAMPAIGN_NOT_FOUND"), true;
+      return sendData(res, 200, { canonical_slug: c.slug }), true;
+    }
+    if (seg[0] === "public" && seg[1] === "sitemap" && seg.length === 2 && method === "GET") {
+      const live = [...campaigns.values()].filter((c) => isPublic(c) && c.visibility === "PUBLIC");
+      return sendData(res, 200, { campaigns: live.map((c) => ({ slug: c.slug, updated_at: c.updated_at })), categories: CATEGORIES.filter((c) => c.active).map((c) => ({ slug: c.slug, updated_at: "2026-10-01T00:00:00Z" })) }, { "Cache-Control": "public, max-age=300" }), true;
+    }
+    if (seg[0] === "public" && seg[1] === "events" && seg.length === 2) {
+      if (method !== "POST") return err(res, 405, "METHOD_NOT_ALLOWED"), true;
+      lastEventBody = body;
+      if (!EVENT_TYPES.has(body.type)) return err(res, 422, "VALIDATION_FAILED", { details: [{ field: "type", code: "INVALID_VALUE" }] }), true;
+      if (body.channel !== undefined && !SHARE_CHANNELS.has(body.channel)) return err(res, 422, "VALIDATION_FAILED", { details: [{ field: "channel", code: "INVALID_VALUE" }] }), true;
+      if (body.q !== undefined || body.query !== undefined) return err(res, 422, "VALIDATION_FAILED", { details: [{ field: "q", code: "NOT_ALLOWED" }] }), true;
+      const subject = body.slug ?? body.category ?? "";
+      const key = `${body.type}|${subject}|${body.channel ?? ""}`;
+      eventCounts.set(key, (eventCounts.get(key) ?? 0) + 1);
+      res.writeHead(204, { "Cache-Control": "no-store" });
+      res.end();
+      return true;
+    }
     if (seg[0] === "public" && seg[1] === "campaigns") {
-      if (method !== "GET") return err(res, 405, "METHOD_NOT_ALLOWED"), true;
-      if (seg.length === 2) {
-        const q = (url.searchParams.get("q") ?? "").toLowerCase();
-        const cat = url.searchParams.get("category");
-        const sort = url.searchParams.get("sort") === "created" ? "created_at" : "published_at";
-        const list = [...campaigns.values()]
-          .filter((c) => isPublic(c) && c.visibility === "PUBLIC")
-          .filter((c) => !cat || c.approved.category === cat)
-          .filter((c) => !q || `${c.approved.title} ${c.approved.summary}`.toLowerCase().includes(q))
-          .sort((a, b) => (a[sort] < b[sort] ? 1 : -1));
-        paginate(res, list, url, (c) => {
-          const v = publicView(c);
-          return { slug: v.slug, title: v.title, summary: v.summary, category: v.category, goal: v.goal, status: v.status, cover_media_id: v.cover_media_id, published_at: v.published_at, created_at: c.created_at };
-        }, 12, true);
+      if (seg.length === 4 && seg[3] === "reports") {
+        if (method !== "POST") return err(res, 405, "METHOD_NOT_ALLOWED"), true;
+        const c = findPublic(seg[2]);
+        if (!c) return err(res, 404, "CAMPAIGN_NOT_FOUND"), true;
+        const details = [];
+        if (!REPORT_REASONS.has(body.reason)) details.push({ field: "reason", code: "INVALID_VALUE" });
+        const text = typeof body.details === "string" ? body.details.trim() : "";
+        if (body.details !== undefined && typeof body.details !== "string") details.push({ field: "details", code: "INVALID_FORMAT" });
+        else if (body.reason === "OTHER" && [...text].length < 10) details.push({ field: "details", code: "REQUIRED" });
+        else if ([...text].length > 2000) details.push({ field: "details", code: "INVALID_LENGTH" });
+        else if (text && contentProblem(text)) details.push({ field: "details", code: contentProblem(text) });
+        if (body.contact_email !== undefined && (typeof body.contact_email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.contact_email) || body.contact_email.length > 254)) details.push({ field: "contact_email", code: "INVALID_EMAIL" });
+        if (details.length) return err(res, 422, "VALIDATION_FAILED", { details }), true;
+        const ip = String(req.headers["x-forwarded-for"] ?? "unknown");
+        const dedupe = `${ip}|${c.id}|${now().slice(0, 10)}|${user?.id ?? ""}`;
+        const dropped = (typeof body.website === "string" && body.website !== "") || reportDedupe.has(dedupe);
+        if (!dropped) reportDedupe.add(dedupe);
+        reports.push({ id: randomUUID(), campaignId: c.id, slug: c.slug, status: "OPEN", reason: body.reason, details: text || null, has_contact: !!body.contact_email, reporter_signed_in: !!user, honeypot: typeof body.website === "string" && body.website !== "", dropped, received_at: now(), triaged_at: null, triage_reason_code: null, triage_note: null });
+        res.writeHead(202, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+        res.end(JSON.stringify({ data: { received: true }, meta: { request_id: randomUUID() } }));
         return true;
       }
-      const c = [...campaigns.values()].find((x) => x.slug === seg[2]);
-      if (!c || !isPublic(c)) return err(res, 404, "CAMPAIGN_NOT_FOUND"), true;
-      if (seg.length === 3) return send(res, 200, publicView(c)), true;
-      if (seg[3] === "updates" && seg.length === 4) return send(res, 200, { updates: [...updates.values()].filter((u) => u.campaignId === c.id && u.status === "PUBLISHED").map((u) => ({ id: u.id, title: u.title, body: u.body, media_ids: [], published_at: u.published_at, organiser_name: ownerUser(c)?.display_name })), next_cursor: null }), true;
+      if (method !== "GET") return err(res, 405, "METHOD_NOT_ALLOWED"), true;
+      if (seg.length === 3 && seg[2] === "featured") {
+        const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") ?? "6", 10) || 6, 1), 12);
+        const picks = [...featuredPicks].sort((a, b) => a.position - b.position).map((f) => campaigns.get(f.id)).filter((c) => c && isPublic(c) && c.visibility === "PUBLIC" && c.status !== "COMPLETED");
+        const recent = listed().filter((c) => !picks.includes(c)).sort((a, b) => (a.published_at < b.published_at ? 1 : -1));
+        const items = [...picks.map((c) => ({ ...card(c), selection: "STAFF_PICK" })), ...recent.map((c) => ({ ...card(c), selection: "RECENTLY_PUBLISHED" }))].slice(0, limit);
+        return sendData(res, 200, { items, next_cursor: null }), true;
+      }
+      if (seg.length === 2) {
+        const rawQ = url.searchParams.get("q") ?? "";
+        if ([...rawQ].length > 100 || /[\u0000-\u001F\u007F]/.test(rawQ)) return err(res, 422, "VALIDATION_FAILED", { details: [{ field: "q", code: "INVALID_VALUE" }] }), true;
+        const q = rawQ.toLowerCase();
+        const catParam = url.searchParams.get("category");
+        const cat = catParam ? categoryByCodeOrSlug(catParam) : null;
+        if (catParam && !cat) return sendData(res, 200, { items: [], next_cursor: null, total: { value: 0, capped: false } }), true;
+        const sort = url.searchParams.get("sort") === "created" ? "created_at" : "published_at";
+        const list = listed()
+          .filter((c) => !cat || c.approved.category === cat.code)
+          .filter((c) => !q || `${c.approved.title} ${c.approved.summary}`.toLowerCase().includes(q))
+          .sort((a, b) => (a[sort] < b[sort] ? 1 : -1));
+        const total = { value: Math.min(list.length, TOTAL_CAP), capped: list.length > TOTAL_CAP };
+        paginate(res, list, url, card, 12, true, { total });
+        return true;
+      }
+      const c = findPublic(seg[2]);
+      if (!c) return err(res, 404, "CAMPAIGN_NOT_FOUND"), true;
+      if (seg.length === 3) return sendData(res, 200, publicView(c)), true;
+      if (seg[3] === "updates" && seg.length === 4) {
+        const items = [...updates.values()].filter((u) => u.campaignId === c.id && u.status === "PUBLISHED").sort((a, b) => (a.published_at < b.published_at ? 1 : -1));
+        return sendData(res, 200, { items: items.map((u) => ({ id: u.id, title: u.title, body: u.body, media_ids: u.media_ids ?? [], published_at: u.published_at, organiser_name: ownerUser(c)?.display_name })), next_cursor: null }), true;
+      }
       if (seg[3] === "media" && seg[4] && seg.length === 5) {
+        const w = url.searchParams.getAll("w");
+        if (w.length > 1 || (w.length === 1 && !VARIANT_WIDTHS.includes(w[0]))) return err(res, 422, "VALIDATION_FAILED", { details: [{ field: "w", code: "INVALID_VALUE" }] }), true;
         const m = media.get(seg[4]);
-        if (!m || m.campaignId !== c.id || !c.approved.media_ids.includes(m.id) || mediaStatus(m) !== "APPROVED") return err(res, 404, "MEDIA_NOT_FOUND"), true;
+        const inUpdate = [...updates.values()].some((u) => u.campaignId === c.id && u.status === "PUBLISHED" && (u.media_ids ?? []).includes(seg[4]));
+        if (!m || m.campaignId !== c.id || !(c.approved.media_ids.includes(m.id) || inUpdate) || mediaStatus(m) !== "APPROVED") return err(res, 404, "MEDIA_NOT_FOUND"), true;
         return sendImage(res), true;
       }
       return err(res, 404, "ROUTE_NOT_FOUND"), true;
@@ -416,8 +529,10 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
     if (p === "/campaigns/mine" && method === "GET") {
       if (!personal()) return true;
       const org = url.searchParams.get("organisation_id");
-      const list = [...campaigns.values()].filter((c) => isMember(user, c) && (!org || c.orgId === org) && c.status !== "ARCHIVED").sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
-      return send(res, 200, list.map(summary)), true;
+      // Contract §2: {items, next_cursor}, newest first, limit ≤ 100.
+      const list = [...campaigns.values()].filter((c) => isMember(user, c) && (!org || c.orgId === org) && c.status !== "ARCHIVED").sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : a.id < b.id ? 1 : -1));
+      paginate(res, list, url, summary, 50, true);
+      return true;
     }
     if (seg[0] === "campaigns" && seg[1]) {
       if (!personal()) return true;
@@ -434,9 +549,9 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
         return send(res, 200, evaluate(action, user, c)), true;
       }
       if (seg.length === 2 && method === "PATCH") {
-        const ifMatch = req.headers["if-match"];
-        if (!ifMatch) return err(res, 422, "IF_MATCH_REQUIRED"), true;
-        if (ifMatch.replace(/"/g, "") !== String(c.version)) return err(res, 409, "CAMPAIGN_STATE_CHANGED"), true;
+        const v = ifMatchVersion(req);
+        if (v === null) return err(res, 428, "PRECONDITION_REQUIRED"), true;
+        if (v !== c.version) return err(res, 412, "PRECONDITION_FAILED"), true;
         const onlyVisibility = Object.keys(body).length === 1 && body.visibility !== undefined;
         if (!onlyVisibility && !EDITABLE.has(c.status)) return err(res, 409, "INVALID_STATUS"), true;
         if (onlyVisibility && ["CANCELLED", "ARCHIVED", "REJECTED", "SUSPENDED"].includes(c.status)) return err(res, 409, "INVALID_STATUS"), true;
@@ -514,7 +629,7 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
 
       // media
       if (seg[2] === "media") {
-        if (seg.length === 3 && method === "GET") return send(res, 200, { media: mediaOf(c).map(mediaView) }), true;
+        if (seg.length === 3 && method === "GET") return send(res, 200, { items: mediaOf(c).map(mediaView), next_cursor: null }), true;
         if (seg.length === 3 && method === "POST") {
           if (!EDITABLE.has(c.status)) return err(res, 409, "INVALID_STATUS"), true;
           const form = parseMultipart(raw, req.headers["content-type"]);
@@ -539,9 +654,13 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
         if (!m || m.campaignId !== c.id) return err(res, 404, "MEDIA_NOT_FOUND"), true;
         if (seg.length === 5 && seg[4] === "content" && method === "GET") return mediaStatus(m) === "APPROVED" ? (sendImage(res), true) : (err(res, 404, "MEDIA_NOT_AVAILABLE"), true);
         if (seg.length === 4 && method === "PATCH") {
+          const v = ifMatchVersion(req);
+          if (v === null) return err(res, 428, "PRECONDITION_REQUIRED"), true;
+          if (v !== (m.version ?? 1)) return err(res, 412, "PRECONDITION_FAILED"), true;
           if (typeof body.alt_text === "string") m.alt_text = body.alt_text.trim();
           if (Number.isInteger(body.position)) m.position = body.position;
-          return send(res, 200, mediaView(m)), true;
+          m.version = (m.version ?? 1) + 1;
+          return send(res, 200, mediaView(m), { ETag: `"${m.version}"` }), true;
         }
         if (seg.length === 4 && method === "DELETE") {
           m.removed = true;
@@ -551,7 +670,7 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
 
       // updates
       if (seg[2] === "updates") {
-        if (seg.length === 3 && method === "GET") return send(res, 200, { updates: [...updates.values()].filter((u) => u.campaignId === c.id && u.status !== "DELETED").map(updateView), next_cursor: null }), true;
+        if (seg.length === 3 && method === "GET") return send(res, 200, { items: [...updates.values()].filter((u) => u.campaignId === c.id && u.status !== "DELETED").map(updateView), next_cursor: null }), true;
         if (seg.length === 3 && method === "POST") {
           if (!PUBLIC_STATUSES.has(c.status)) return err(res, 409, "INVALID_STATUS"), true;
           const details = [];
@@ -569,12 +688,19 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
         const u = seg[3] ? updates.get(seg[3]) : null;
         if (!u || u.campaignId !== c.id || u.status === "DELETED") return err(res, 404, "UPDATE_NOT_FOUND"), true;
         if (seg.length === 4 && method === "DELETE") {
+          const v = ifMatchVersion(req);
+          if (v === null) return err(res, 428, "PRECONDITION_REQUIRED"), true;
+          if (v !== (u.version ?? 1)) return err(res, 412, "PRECONDITION_FAILED"), true;
           u.status = "DELETED";
           return send(res, 204, null), true;
         }
         if (seg.length === 4 && method === "PATCH") {
+          const v = ifMatchVersion(req);
+          if (v === null) return err(res, 428, "PRECONDITION_REQUIRED"), true;
+          if (v !== (u.version ?? 1)) return err(res, 412, "PRECONDITION_FAILED"), true;
           if (typeof body.title === "string") u.title = body.title.trim();
           if (typeof body.body === "string") u.body = body.body.trim();
+          u.version = (u.version ?? 1) + 1;
           return send(res, 200, updateView(u)), true;
         }
       }
@@ -589,12 +715,69 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
         if (!ps.has(perm)) return err(res, 403, "PERMISSION_DENIED"), false;
         return true;
       };
+      // reports triage (campaign.review), contract §4. Contact emails are never listed.
+      if (seg[2] === "reports") {
+        if (!need("campaign.review")) return true;
+        if (seg.length === 3 && method === "GET") {
+          const status = url.searchParams.get("status") || "OPEN";
+          if (!["OPEN", "ESCALATED", "DISMISSED"].includes(status)) return err(res, 422, "VALIDATION_FAILED", { details: [{ field: "status", code: "INVALID_VALUE" }] }), true;
+          const list = reports.filter((r) => !r.dropped && r.status === status);
+          paginate(res, list, url, (r) => {
+            const c = campaigns.get(r.campaignId);
+            return { id: r.id, campaign_id: r.campaignId, campaign_title: c?.title ?? "", campaign_slug: c?.slug ?? "", status: r.status, reason: r.reason, details: r.details, has_contact: r.has_contact, reporter_signed_in: r.reporter_signed_in, created_at: r.received_at, triaged_at: r.triaged_at, triage_reason_code: r.triage_reason_code, triage_note: r.triage_note, campaign_status: c?.status ?? "" };
+          }, 50, true);
+          return true;
+        }
+        const r = reports.find((x) => x.id === seg[3] && !x.dropped);
+        if (method === "POST" && seg.length === 5 && (seg[4] === "dismiss" || seg[4] === "escalate")) {
+          if (!r) return err(res, 404, "REPORT_NOT_FOUND"), true;
+          const note = String(body.note ?? "").trim();
+          if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(String(body.reason_code ?? ""))) return err(res, 422, "VALIDATION_FAILED", { details: [{ field: "reason_code", code: "INVALID_FORMAT" }] }), true;
+          if (note.length < 3 || note.length > 5000) return err(res, 422, "VALIDATION_FAILED", { details: [{ field: "note", code: "INVALID_LENGTH" }] }), true;
+          if (r.status !== "OPEN") return err(res, 409, "REPORT_ALREADY_TRIAGED"), true;
+          r.status = seg[4] === "dismiss" ? "DISMISSED" : "ESCALATED";
+          r.triaged_at = now();
+          r.triage_reason_code = body.reason_code;
+          r.triage_note = note;
+          return send(res, 200, { report_id: r.id, status: r.status }), true;
+        }
+        return err(res, 404, "ROUTE_NOT_FOUND"), true;
+      }
+      // staff picks (campaign.feature; step-up for changes)
+      const pickView = () => featuredPicks.sort((a, b) => a.position - b.position).map((f) => {
+        const c = campaigns.get(f.id);
+        return { campaign_id: f.id, title: c?.title ?? "", slug: c?.slug ?? "", status: c?.status ?? "", visibility: c?.visibility ?? "", position: f.position, note: f.note, added_by: "staff", added_at: f.added_at, shown: !!c && ["ACTIVE", "PAUSED"].includes(c.status) && c.visibility === "PUBLIC" && !!c.approved };
+      });
+      if (seg[2] === "featured" && seg.length === 3 && method === "GET") {
+        if (!need("campaign.feature")) return true;
+        return send(res, 200, { items: pickView(), next_cursor: null }), true;
+      }
+      if (seg.length === 4 && seg[3] === "feature" && (method === "POST" || method === "DELETE")) {
+        if (!need("campaign.feature")) return true;
+        if (!stepUpFresh()) return err(res, 403, "STEP_UP_REQUIRED"), true;
+        const c = campaigns.get(seg[2]);
+        if (!c) return err(res, 404, "CAMPAIGN_NOT_FOUND"), true;
+        if (method === "DELETE") {
+          const reason = String(body.reason ?? "").trim();
+          if (reason.length < 3 || reason.length > 500) return err(res, 422, "VALIDATION_FAILED", { details: [{ field: "reason", code: "INVALID_LENGTH" }] }), true;
+          const i = featuredPicks.findIndex((f) => f.id === c.id);
+          if (i < 0) return err(res, 404, "NOT_FEATURED"), true;
+          featuredPicks.splice(i, 1);
+          return send(res, 200, { items: pickView(), next_cursor: null }), true;
+        }
+        if (!["ACTIVE", "PAUSED"].includes(c.status) || c.visibility !== "PUBLIC") return err(res, 409, "NOT_FEATURABLE"), true;
+        const note = String(body.note ?? "").trim();
+        if (note.length < 3 || note.length > 500 || !Number.isInteger(body.position) || body.position < 1 || body.position > 100) return err(res, 422, "VALIDATION_FAILED", { details: [{ field: "note", code: "INVALID_VALUE" }, { field: "position", code: "INVALID_VALUE" }] }), true;
+        if (featuredPicks.some((f) => f.id === c.id)) return err(res, 409, "ALREADY_FEATURED"), true;
+        featuredPicks.push({ id: c.id, position: body.position, note, added_at: now() });
+        return send(res, 200, { items: pickView(), next_cursor: null }), true;
+      }
       // updates moderation
       if (seg[2] === "updates") {
         if (!need("content.moderate")) return true;
         if (seg[3] === "moderation" && method === "GET") {
           const list = [...updates.values()].filter((u) => u.status === "PUBLISHED" && !u.moderated);
-          return send(res, 200, { updates: list.map((u) => ({ ...updateView(u), campaign_id: u.campaignId, author_id: ownerUser(campaigns.get(u.campaignId))?.id, moderation_reasons: [], campaign_status: campaigns.get(u.campaignId)?.status })), next_cursor: null }), true;
+          return send(res, 200, { items: list.map((u) => ({ ...updateView(u), campaign_id: u.campaignId, author_id: ownerUser(campaigns.get(u.campaignId))?.id, moderation_reasons: [], campaign_status: campaigns.get(u.campaignId)?.status })), next_cursor: null }), true;
         }
         const u = updates.get(seg[3]);
         if (!u) return err(res, 404, "UPDATE_NOT_FOUND"), true;
@@ -612,8 +795,8 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
         const q = (url.searchParams.get("q") ?? "").toLowerCase();
         const status = url.searchParams.get("status");
         const list = [...campaigns.values()].filter((c) => (!status || c.status === status) && (!q || c.title.toLowerCase().includes(q))).sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
-        const limit = Math.min(Math.max(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 1), 100);
-        return send(res, 200, list.slice(0, limit).map(summary)), true;
+        paginate(res, list, url, summary, 50, true);
+        return true;
       }
       if (seg[2] === "review" && seg.length === 3 && method === "GET") {
         if (!need("campaign.review")) return true;
@@ -637,7 +820,7 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
       if (!c) return err(res, 404, "CAMPAIGN_NOT_FOUND"), true;
       if (seg[3] === "media" && seg[4] === "all" && seg.length === 5 && method === "GET") {
         if (!need("campaign.view")) return true;
-        return send(res, 200, { media: mediaOf(c).map(mediaView) }), true;
+        return send(res, 200, { items: mediaOf(c).map(mediaView), next_cursor: null }), true;
       }
       if (method !== "POST") return err(res, 404, "ROUTE_NOT_FOUND"), true;
       if (seg[3] === "media" && seg[4] && seg[5] === "remove" && seg.length === 6) {
@@ -748,7 +931,13 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
   }
 
   function updateView(u) {
-    return { id: u.id, title: u.title, body: u.body, status: u.status, created_at: u.created_at, published_at: u.published_at };
+    return { id: u.id, title: u.title, body: u.body, media_ids: u.media_ids ?? [], status: u.status, created_at: u.created_at, published_at: u.published_at, version: u.version ?? 1 };
+  }
+
+  /** If-Match: a quoted or bare positive integer (ADR-038 §7); null when missing or unparsable (→ 428). */
+  function ifMatchVersion(req) {
+    const raw = String(req.headers["if-match"] ?? "").trim().replace(/^W\//, "").replace(/"/g, "");
+    return /^[1-9][0-9]*$/.test(raw) ? Number(raw) : null;
   }
 
   // =====================================================================================================
@@ -787,13 +976,43 @@ export function createCampaignsMock({ send, err, userById, users, verification, 
       }
       if (body.visibility) c.visibility = body.visibility;
       if (body.restricted) restricted.add(user.id);
-      return send(res, 201, { id: c.id, slug: c.slug }), true;
+      return send(res, 201, { id: c.id, slug: c.slug, public_code: c.public_code.toLowerCase() }), true;
     }
     const info = /^\/api\/v1\/__mock\/campaign\/([^/]+)$/.exec(path);
     if (info) {
       const c = campaigns.get(info[1]);
       if (!c) return err(res, 404, "RESOURCE_NOT_FOUND"), true;
       return send(res, 200, { id: c.id, slug: c.slug, status: c.status, goal: { amount_minor: c.goal_amount_minor, currency: c.goal_currency }, story: c.story }), true;
+    }
+    if (path === "/api/v1/__mock/feature") {
+      // Staff picks (stands in for POST /admin/campaigns/{id}/feature): {ids: [...]} replaces the list.
+      // {add: id} puts a pick at position 1; {remove: id} removes it (tests run in parallel: never replace the list).
+      if (body.add) featuredPicks.push({ id: body.add, position: 1, note: "Seeded pick", added_at: now() });
+      if (body.remove) featuredPicks.splice(0, featuredPicks.length, ...featuredPicks.filter((f) => f.id !== body.remove));
+      return send(res, 200, { ids: featuredPicks.map((f) => f.id) }), true;
+    }
+    const statusCtl = /^\/api\/v1\/__mock\/campaign\/([^/]+)\/status$/.exec(path);
+    if (statusCtl) {
+      const c = campaigns.get(statusCtl[1]);
+      if (!c) return err(res, 404, "RESOURCE_NOT_FOUND"), true;
+      c.status = body.status;
+      return send(res, 200, { id: c.id, status: c.status }), true;
+    }
+    if (path === "/api/v1/__mock/reports") {
+      return send(res, 200, { items: reports.filter((r) => !body.slug || r.slug === body.slug) }), true;
+    }
+    if (path === "/api/v1/__mock/events") {
+      return send(res, 200, { counts: Object.fromEntries(eventCounts), last: lastEventBody }), true;
+    }
+    if (path === "/api/v1/__mock/update") {
+      // A published update with an approved photo on a public campaign.
+      const c = campaigns.get(body.campaign_id);
+      if (!c) return err(res, 404, "RESOURCE_NOT_FOUND"), true;
+      const m = { id: randomUUID(), campaignId: c.id, kind: "GALLERY", position: 1, alt_text: "Update photo", created_at: now(), createdMs: Date.now() - 60_000, malicious: false, removed: false };
+      media.set(m.id, m);
+      const u = { id: randomUUID(), campaignId: c.id, title: body.title ?? "Progress update", body: body.body ?? "Thank you for reading. Here is our progress.", media_ids: [m.id], status: "PUBLISHED", moderated: true, created_at: now(), published_at: now() };
+      updates.set(u.id, u);
+      return send(res, 201, { id: u.id, media_id: m.id }), true;
     }
     if (path === "/api/v1/__mock/staff-link-token") {
       const staff = users.get(body.staff_email);

@@ -36,19 +36,20 @@ export function MobileNav({ items }: { items: readonly NavItem[] }) {
   }, [open]);
 
   return (
-    <div ref={containerRef} className="md:hidden">
+    <div ref={containerRef} className="lg:hidden">
       <button
         ref={buttonRef}
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border-2 border-brand-700 px-4 font-semibold text-brand-700"
+        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-full border-2 border-brand-700 px-3 font-semibold text-brand-700 min-[400px]:px-4"
       >
         <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
           {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
         </svg>
-        Menu
+        {/* Icon-only below 400px so the header fits at 320px; the accessible name stays "Menu". */}
+        <span className="sr-only min-[400px]:not-sr-only">Menu</span>
       </button>
       <nav
         id={panelId}

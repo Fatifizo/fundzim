@@ -1,78 +1,135 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import HomePage from "@/app/page";
-import { DevPreviewBanner } from "@/components/layout/dev-preview-banner";
-import { SiteHeader } from "@/components/layout/site-header";
-import { axeViolations } from "@/test/axe";
+import type { PublicCampaignSummary, PublicCategory } from "@/lib/campaigns/types";
 
-function renderHome() {
+const fetchFeatured = vi.fn();
+const fetchPublicCategories = vi.fn();
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/campaigns/public", () => ({
+  fetchFeatured: () => fetchFeatured(),
+  fetchPublicCategories: () => fetchPublicCategories(),
+}));
+
+const { default: HomePage } = await import("@/app/page");
+const { DevPreviewBanner } = await import("@/components/layout/dev-preview-banner");
+const { SiteHeader } = await import("@/components/layout/site-header");
+const { SiteFooter } = await import("@/components/layout/site-footer");
+const { axeViolations } = await import("@/test/axe");
+
+const CARD: PublicCampaignSummary = {
+  slug: "help-chipo-abc123",
+  title: "Help Chipo finish school",
+  summary: "School fees.",
+  category: { code: "EDUCATION", name: "Education", slug: "education" },
+  goal: { amount_minor: "150000", currency: "USD" },
+  status: "ACTIVE",
+  organiser: { type: "INDIVIDUAL", display_name: "Tendai" },
+  trust: { organiser_identity_verified: false, organisation_verified: false, beneficiary_verified: false, campaign_reviewed: true },
+  cover: null,
+  published_at: null,
+  selection: "STAFF_PICK",
+};
+const CATEGORY: PublicCategory = { code: "MEDICAL", slug: "medical", name: "Medical", description: null, display_order: 1, sensitive: true, live_campaigns: 3 };
+
+async function renderHome() {
+  const home = await HomePage();
   return render(
     <>
       <DevPreviewBanner />
       <SiteHeader />
-      <main>
-        <HomePage />
-      </main>
+      <main>{home}</main>
     </>,
   );
 }
 
 describe("homepage", () => {
-  it("renders the hero copy and CTAs", () => {
-    renderHome();
-    expect(screen.getByRole("heading", { level: 1, name: "Together, We Can Make a Difference." })).toBeInTheDocument();
-    expect(screen.getByText("Support people and causes across Zimbabwe through simple, secure fundraising.")).toBeInTheDocument();
-    expect(screen.getByText("Fund anyone in Zimbabwe, from anywhere.")).toBeInTheDocument();
-    const main = screen.getByRole("main");
-    expect(within(main).getByRole("link", { name: "Start a Fundraiser" })).toHaveAttribute("href", "/dashboard/campaigns/new");
-    expect(within(main).getByRole("link", { name: "Explore Campaigns" })).toHaveAttribute("href", "/campaigns");
+  beforeEach(() => {
+    fetchFeatured.mockResolvedValue({ ok: true, data: [CARD] });
+    fetchPublicCategories.mockResolvedValue({ ok: true, data: [CATEGORY] });
   });
 
-  it("renders the three how-it-works steps in order", () => {
-    renderHome();
-    const steps = screen.getAllByRole("heading", { level: 3, name: /^Step \d: / });
-    expect(steps.map((s) => s.textContent)).toEqual([
-      "Step 1: Create a campaign",
-      "Step 2: Share your story",
-      "Step 3: Receive support",
+  it("renders the exact hero copy and CTAs", async () => {
+    await renderHome();
+    expect(screen.getByRole("heading", { level: 1, name: "Together, We Can Make a Difference." })).toBeInTheDocument();
+    expect(screen.getByText("Support people and causes across Zimbabwe through simple, transparent fundraising.")).toBeInTheDocument();
+    const hero = screen.getByRole("heading", { level: 1 }).closest("section")!;
+    expect(within(hero).getAllByRole("link").map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
+      ["Explore Campaigns", "/campaigns"],
+      ["Start a Fundraiser", "/dashboard/campaigns/new"],
     ]);
   });
 
-  it("states honestly that payments are not live and no provider is selected", () => {
-    renderHome();
-    expect(screen.getByText("Payments are not live yet")).toBeInTheDocument();
-    expect(screen.getByText(/No payment provider has been selected/)).toBeInTheDocument();
-    expect(screen.getByText(/EcoCash, OneMoney, InnBucks and O'Mari/)).toBeInTheDocument();
+  it("shows featured campaigns from the API and explains selection without implying endorsement", async () => {
+    await renderHome();
+    expect(screen.getByRole("list", { name: "Featured campaigns" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: CARD.title })).toHaveAttribute("href", "/campaigns/help-chipo-abc123");
+    expect(screen.getByText(/not an endorsement or a ranking/)).toBeInTheDocument();
   });
 
-  it("shows an empty state and only a clearly labelled design preview, with no money totals", () => {
-    renderHome();
-    expect(screen.getByText("Campaigns will appear here once fundraising opens")).toBeInTheDocument();
-    expect(screen.getByText("Design preview — not a real campaign")).toBeInTheDocument();
-    const main = screen.getByRole("main");
-    expect(main.textContent).not.toMatch(/US\$|ZiG \d|raised/i);
+  it("shows a meaningful empty state and no fabricated campaigns when none are published", async () => {
+    fetchFeatured.mockResolvedValue({ ok: true, data: [] });
+    const { container } = await renderHome();
+    expect(screen.getByText("No campaigns are published yet")).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Featured campaigns" })).toBeNull();
+    expect(container.textContent).not.toMatch(/example|design preview|US\$/i);
   });
 
-  it("marks trust features as planned, not active", () => {
-    renderHome();
-    expect(screen.getAllByText("Planned — being built")).toHaveLength(3);
-    expect(screen.getByText(/None of them is active yet/)).toBeInTheDocument();
+  it("degrades when the API is unavailable", async () => {
+    fetchFeatured.mockResolvedValue({ ok: false });
+    fetchPublicCategories.mockResolvedValue({ ok: false });
+    await renderHome();
+    expect(screen.getByText("Featured campaigns could not be loaded")).toBeInTheDocument();
+    expect(screen.getByText(/Categories could not be loaded/)).toBeInTheDocument();
   });
 
-  it("shows the development preview notice", () => {
-    renderHome();
-    expect(screen.getByText(/Development preview — FundZim is not open for fundraising/)).toBeInTheDocument();
+  it("lists categories with live counts", async () => {
+    await renderHome();
+    const list = screen.getByRole("list", { name: "Categories" });
+    expect(within(list).getByRole("link", { name: /Medical/ })).toHaveAttribute("href", "/categories/medical");
+    expect(within(list).getByText("3 live campaigns")).toBeInTheDocument();
   });
 
-  it("never claims compliance, licensing or certification", () => {
-    const { container } = renderHome();
-    expect(container.textContent).not.toMatch(/\b(compliant|certified|approved by|PCI)\b/i);
+  it("renders four how-it-works steps; step 4 never implies payments work today", async () => {
+    await renderHome();
+    const steps = screen.getAllByRole("heading", { level: 3, name: /^Step \d: / });
+    expect(steps.map((s) => s.textContent)).toEqual([
+      "Step 1: Create your campaign",
+      "Step 2: Get reviewed",
+      "Step 3: Share your story",
+      "Step 4: Receive support when payments become available",
+    ]);
+    expect(screen.getAllByText(/Donations are not available yet/).length).toBeGreaterThan(0);
+  });
+
+  it("explains trust and safety honestly, including what checks cannot promise", async () => {
+    await renderHome();
+    expect(screen.getByText("What checks cannot promise")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Read our safety guidance" })).toHaveAttribute("href", "/safety");
+  });
+
+  it("never claims compliance, licensing or certification", async () => {
+    const { container } = await renderHome();
+    expect(container.textContent).not.toMatch(/\b(compliant|certified|approved by|PCI|guaranteed)\b/i);
     expect(container.textContent).not.toMatch(/\bwe are licensed\b|\bFundZim is licensed\b/i);
   });
 
+  it("header navigation and footer links match the brief", async () => {
+    render(
+      <>
+        <SiteHeader />
+        <SiteFooter />
+      </>,
+    );
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Explore Campaigns", "How It Works", "Start a Fundraiser"]);
+    expect(screen.getAllByRole("link", { name: "Sign In" })[0]).toHaveAttribute("href", "/login");
+    const footer = screen.getByRole("navigation", { name: "Footer" });
+    expect(within(footer).getAllByRole("link").map((l) => l.textContent)).toEqual(["About", "How It Works", "Privacy", "Terms", "Contact", "Safety"]);
+  });
+
   it("has no detectable axe violations", async () => {
-    const { container } = renderHome();
+    const { container } = await renderHome();
     expect(await axeViolations(container)).toEqual([]);
   });
 });

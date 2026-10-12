@@ -24,7 +24,22 @@ export default async function CampaignReviewPage({ params }: PageProps<"/admin/c
   const media = readMedia(staffMedia);
   const detail = media.length > 0 ? { ...base, media } : base;
   return (
-    <AccountPage title="Campaign review" intro={<Link href="/admin/campaigns/review" className="text-base font-semibold text-brand-700 underline">Back to the queue</Link>}>
+    <AccountPage
+      title="Campaign review"
+      intro={
+        <span className="flex flex-wrap gap-x-6 gap-y-2 text-base">
+          <Link href="/admin/campaigns/review" className="font-semibold text-brand-700 underline">
+            Back to the queue
+          </Link>
+          {/* Only offered for live campaigns; the featured page itself needs campaign.feature (404 otherwise). */}
+          {["ACTIVE", "PAUSED"].includes(String(detail.campaign.status)) ? (
+            <Link href={`/admin/campaigns/featured?campaign_id=${id}`} className="font-semibold text-brand-700 underline">
+              Feature on the home page
+            </Link>
+          ) : null}
+        </span>
+      }
+    >
       <CampaignReviewView detail={detail} meId={me.id} />
     </AccountPage>
   );

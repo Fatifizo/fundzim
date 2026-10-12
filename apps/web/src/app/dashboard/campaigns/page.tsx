@@ -10,8 +10,8 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { requireUser, serverGet, serverGetOptional } from "@/lib/auth/session";
 import { formatGoal } from "@/lib/campaigns/money";
-import { readCampaigns } from "@/lib/campaigns/normalise";
-import { first, isUuid } from "@/lib/campaigns/paths";
+import { readCampaigns, readNextCursor } from "@/lib/campaigns/normalise";
+import { first, isCursor, isUuid } from "@/lib/campaigns/paths";
 import type { MyOrganisation } from "@/lib/verification/types";
 
 export const metadata: Metadata = { title: "Your campaigns", robots: { index: false, follow: false, nocache: true } };
@@ -20,13 +20,28 @@ const PATH = "/dashboard/campaigns";
 
 export default async function CampaignsPage({ searchParams }: PageProps<"/dashboard/campaigns">) {
   await requireUser(PATH);
-  const orgRaw = first((await searchParams).organisation_id);
+  const sp = await searchParams;
+  const orgRaw = first(sp.organisation_id);
   const organisationId = isUuid(orgRaw) ? orgRaw : undefined;
+  const cursorRaw = first(sp.cursor);
+  const cursor = isCursor(cursorRaw) ? cursorRaw : undefined;
+  const query = new URLSearchParams();
+  if (organisationId) query.set("organisation_id", organisationId);
+  if (cursor) query.set("cursor", cursor);
+  // Contract §2 (ADR-038 §7): {items, next_cursor}, newest first.
   const [raw, organisations] = await Promise.all([
-    serverGet<unknown>(`/api/v1/campaigns/mine${organisationId ? `?organisation_id=${organisationId}` : ""}`, PATH),
+    serverGet<unknown>(`/api/v1/campaigns/mine${query.size ? `?${query.toString()}` : ""}`, PATH),
     serverGetOptional<MyOrganisation[]>("/api/v1/me/organisations", PATH, []),
   ]);
   const campaigns = readCampaigns(raw);
+  const nextRaw = readNextCursor(raw);
+  const next = nextRaw && isCursor(nextRaw) ? nextRaw : null;
+  const pageHref = (c: string | null) => {
+    const q = new URLSearchParams();
+    if (organisationId) q.set("organisation_id", organisationId);
+    if (c) q.set("cursor", c);
+    return q.size ? `${PATH}?${q.toString()}` : PATH;
+  };
   const orgName = (id: string | null) => (id ? organisations.find((o) => o.id === id)?.display_name ?? "An organisation" : "You");
   return (
     <AccountPage title="Your campaigns" intro="Campaigns you run yourself or for organisations you belong to.">
@@ -78,6 +93,20 @@ export default async function CampaignsPage({ searchParams }: PageProps<"/dashbo
           ))}
         </ul>
       )}
+      {next || cursor ? (
+        <nav aria-label="Pagination" className="flex flex-wrap gap-3">
+          {cursor ? (
+            <ButtonLink href={pageHref(null)} variant="ghost">
+              Back to the first page
+            </ButtonLink>
+          ) : null}
+          {next ? (
+            <ButtonLink href={pageHref(next)} variant="outline">
+              Next page
+            </ButtonLink>
+          ) : null}
+        </nav>
+      ) : null}
     </AccountPage>
   );
 }

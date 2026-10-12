@@ -247,7 +247,8 @@ test("reviewer approves with step-up and publishes; the public page shows no tot
   await expect(anon.getByText("US$1,500.00")).toBeVisible();
   await expect(anon.getByText("Details kept private")).toBeVisible();
   await expect(anon.getByText("Tendai Organiser")).toBeVisible();
-  await expect(anon.getByRole("img", { name: `Cover photo for ${title}` })).toBeVisible();
+  // The owner's alt text from the public view's `media` list (fallback "Cover photo for …" only when empty).
+  await expect(anon.getByRole("img", { name: "Chipo outside her school" })).toBeVisible();
   await expect(anon.locator("main")).not.toContainText(/raised|donors|funded/i);
   await expect(anon.locator("progress, [role=progressbar]")).toHaveCount(0);
   await expect(anon.getByRole("button", { name: "Copy link" })).toBeVisible();

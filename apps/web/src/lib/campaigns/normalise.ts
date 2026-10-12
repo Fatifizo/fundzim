@@ -14,14 +14,24 @@ import type {
   CampaignReview,
   CampaignUpdate,
   Category,
+  CategoryRef,
   CurrencyInfo,
+  ListTotal,
   EligibilityResult,
   ModerationItem,
   PersonRef,
   PublicCampaign,
   PublicCampaignSummary,
+  PublicCategory,
+  PublicImageRef,
+  PublicOrganiser,
+  PublicTrust,
+  PublicUpdate,
   ReviewHistoryEntry,
+  SitemapData,
   StaffAction,
+  StaffFeaturedPick,
+  StaffReport,
   StaffCampaignDetail,
   StaffCampaignSummary,
   StaffLinkStatus,
@@ -159,6 +169,7 @@ export function readMedia(v: unknown): CampaignMedia[] {
       status: str(m.status, "UPLOADED"),
       rejection_reason: strOrNull(m.rejection_reason ?? m.rejected_reason),
       created_at: strOrNull(m.created_at),
+      version: int(m.version, 0),
     }))
     .sort((a, b) => (a.kind === b.kind ? a.position - b.position : a.kind === "COVER" ? -1 : 1));
 }
@@ -167,32 +178,58 @@ export function readUpdates(v: unknown): CampaignUpdate[] {
   return list(v)
     .filter(isRec)
     .filter((u) => typeof u.id === "string")
-    .map((u) => ({ id: u.id as string, title: str(u.title), body: str(u.body), status: str(u.status, "PUBLISHED"), created_at: strOrNull(u.created_at), published_at: strOrNull(u.published_at) }));
+    .map((u) => ({ id: u.id as string, title: str(u.title), body: str(u.body), status: str(u.status, "PUBLISHED"), created_at: strOrNull(u.created_at), published_at: strOrNull(u.published_at), version: int(u.version, 0) }));
 }
 
-function readCategoryRef(v: unknown, fallbackCode?: unknown): { code: string; name: string } {
-  if (isRec(v)) return { code: str(v.code), name: str(v.name, str(v.code)) };
+function humaniseCode(code: string): string {
+  return code ? code.charAt(0) + code.slice(1).toLowerCase().replace(/_/g, " ") : "";
+}
+
+function readCategoryRef(v: unknown, fallbackCode?: unknown, fallbackName?: unknown): CategoryRef {
+  if (isRec(v)) return { code: str(v.code), name: str(v.name, str(fallbackName, humaniseCode(str(v.code)))), slug: strOrNull(v.slug) };
   const code = str(v, str(fallbackCode));
-  return { code, name: code ? code.charAt(0) + code.slice(1).toLowerCase().replace(/_/g, " ") : "" };
+  return { code, name: str(fallbackName, humaniseCode(code)), slug: null };
 }
 
-/** Cover and gallery ids: `cover_media_id` + `media_ids` (Go public view), or older `cover`/`media` objects. */
-function readCover(c: Rec): { id: string; alt_text: string } | null {
-  if (typeof c.cover_media_id === "string" && c.cover_media_id) return { id: c.cover_media_id, alt_text: str(c.cover_alt_text) };
-  if (isRec(c.cover) && typeof c.cover.id === "string") return { id: c.cover.id, alt_text: str(c.cover.alt_text) };
-  const media = list(c.media).filter(isRec);
-  const cover = media.find((m) => (m.kind === "COVER" || m.kind === "COVER_IMAGE") && typeof m.id === "string");
-  return cover ? { id: cover.id as string, alt_text: str(cover.alt_text) } : null;
+/** `variants: [{width, height}]` → ascending positive integer widths; null when the field is absent. */
+export function readVariantWidths(v: unknown): number[] | null {
+  if (!Array.isArray(v)) return null;
+  const widths = v.filter(isRec).map((x) => x.width).filter((w): w is number => typeof w === "number" && Number.isInteger(w) && w > 0);
+  return [...new Set(widths)].sort((a, b) => a - b);
 }
 
-function readGallery(c: Rec, coverId: string | null): Array<{ id: string; alt_text: string }> {
-  if (Array.isArray(c.media_ids)) {
-    return c.media_ids.filter((id): id is string => typeof id === "string" && id !== coverId).map((id) => ({ id, alt_text: "" }));
-  }
+/** Public media list `media: [{id, kind, alt_text, variants}]` (Go public view), keeping order. */
+function publicMediaList(c: Rec): Array<PublicImageRef & { kind: string }> {
   return list(c.media)
     .filter(isRec)
-    .filter((m) => (m.kind === "GALLERY" || m.kind === "GALLERY_IMAGE") && typeof m.id === "string")
-    .map((m) => ({ id: m.id as string, alt_text: str(m.alt_text) }));
+    .filter((m) => typeof m.id === "string")
+    .map((m) => ({ id: m.id as string, kind: str(m.kind), alt_text: str(m.alt_text), widths: readVariantWidths(m.variants) }));
+}
+
+/** Cover: `cover_media_id` (+ alt text and variants from `media`), or older `cover`/`media` objects. */
+function readCover(c: Rec): PublicImageRef | null {
+  const media = publicMediaList(c);
+  if (typeof c.cover_media_id === "string" && c.cover_media_id) {
+    const id = c.cover_media_id;
+    const m = media.find((x) => x.id === id);
+    return { id, alt_text: str(c.cover_alt_text, m?.alt_text ?? ""), widths: m ? m.widths : null };
+  }
+  if (isRec(c.cover) && typeof c.cover.id === "string") return { id: c.cover.id, alt_text: str(c.cover.alt_text), widths: readVariantWidths(c.cover.variants) };
+  const cover = media.find((m) => m.kind === "COVER" || m.kind === "COVER_IMAGE");
+  return cover ? { id: cover.id, alt_text: cover.alt_text, widths: cover.widths } : null;
+}
+
+function readGallery(c: Rec, coverId: string | null): PublicImageRef[] {
+  const media = publicMediaList(c);
+  if (Array.isArray(c.media_ids)) {
+    return c.media_ids
+      .filter((id): id is string => typeof id === "string" && id !== coverId)
+      .map((id) => {
+        const m = media.find((x) => x.id === id);
+        return { id, alt_text: m?.alt_text ?? "", widths: m ? m.widths : null };
+      });
+  }
+  return media.filter((m) => m.kind === "GALLERY" || m.kind === "GALLERY_IMAGE").map((m) => ({ id: m.id, alt_text: m.alt_text, widths: m.widths }));
 }
 
 /** Public beneficiary: `{disclosed, display_name?}` (Go) or `{disclosure, display_name}` (older reading). */
@@ -202,21 +239,40 @@ function readPublicBeneficiary(ben: Rec): PublicCampaign["beneficiary"] {
   return { disclosure: disclosed && name ? "DISPLAY_NAME" : "NONE", display_name: name };
 }
 
+/** Trust indicators: only an explicit `true` counts (ADR-038 §5: shown only when true now). */
+export function readTrust(v: unknown): PublicTrust {
+  const t = isRec(v) ? v : {};
+  return {
+    organiser_identity_verified: t.organiser_identity_verified === true,
+    organisation_verified: t.organisation_verified === true,
+    beneficiary_verified: t.beneficiary_verified === true,
+    campaign_reviewed: t.campaign_reviewed === true,
+  };
+}
+
+function readOrganiser(v: unknown): PublicOrganiser | null {
+  if (!isRec(v) || typeof v.display_name !== "string" || v.display_name.trim() === "") return null;
+  return { type: str(v.type, "INDIVIDUAL"), display_name: v.display_name };
+}
+
 export function readPublicCampaign(v: unknown): PublicCampaign {
   const c = isRec(v) ? v : {};
-  const organiser = isRec(c.organiser) ? c.organiser : {};
+  const organiser = readOrganiser(c.organiser);
   const cover = readCover(c);
+  const slug = str(c.slug);
   return {
-    slug: str(c.slug),
+    slug,
+    canonical_slug: str(c.canonical_slug, slug),
+    public_code: strOrNull(c.public_code),
     title: str(c.title),
     summary: str(c.summary),
     story: str(c.story),
-    category: readCategoryRef(c.category, c.category_code),
+    category: readCategoryRef(c.category, c.category_code, c.category_name),
     goal: readMoney(c.goal),
     status: str(c.status),
-    organiser: { display_name: str(organiser.display_name, "The organiser") },
+    organiser: organiser ?? { type: "INDIVIDUAL", display_name: "The organiser" },
     organisation:
-      organiser.type === "ORGANISATION" && typeof organiser.display_name === "string"
+      organiser?.type === "ORGANISATION"
         ? { display_name: organiser.display_name }
         : isRec(c.organisation) && typeof c.organisation.display_name === "string"
           ? { display_name: c.organisation.display_name }
@@ -224,6 +280,7 @@ export function readPublicCampaign(v: unknown): PublicCampaign {
     beneficiary: readPublicBeneficiary(isRec(c.beneficiary) ? c.beneficiary : {}),
     cover,
     gallery: readGallery(c, cover?.id ?? null),
+    trust: readTrust(c.trust),
     published_at: strOrNull(c.published_at),
     completed_at: strOrNull(c.completed_at),
   };
@@ -232,23 +289,98 @@ export function readPublicCampaign(v: unknown): PublicCampaign {
 export function readPublicSummaries(v: unknown): PublicCampaignSummary[] {
   return list(v)
     .filter(isRec)
-    .filter((c) => typeof c.slug === "string")
+    .filter((c) => typeof c.slug === "string" && c.slug !== "")
     .map((c) => ({
       slug: c.slug as string,
       title: str(c.title),
       summary: str(c.summary),
-      category: readCategoryRef(c.category, c.category_code),
+      category: readCategoryRef(c.category, c.category_code, c.category_name),
       goal: readMoney(c.goal),
       status: str(c.status),
+      organiser: readOrganiser(c.organiser),
+      trust: readTrust(c.trust),
       cover: readCover(c),
       published_at: strOrNull(c.published_at),
+      selection: c.selection === "STAFF_PICK" || c.selection === "RECENTLY_PUBLISHED" ? c.selection : null,
     }));
 }
 
-/** Category display names from the categories list (codes from campaign responses are shown with their name). */
-export function withCategoryName<T extends { category: { code: string; name: string } }>(item: T, categories: Category[]): T {
-  const match = categories.find((c) => c.code === item.category.code);
-  return match ? { ...item, category: { code: match.code, name: match.name } } : item;
+/** `total: {value, capped}` from the list payload (or meta); a bare number is accepted as exact. */
+export function readTotal(data: unknown, meta?: unknown): ListTotal | null {
+  for (const source of [data, meta]) {
+    if (!isRec(source)) continue;
+    const t = source.total;
+    if (typeof t === "number" && Number.isInteger(t) && t >= 0) return { value: t, capped: false };
+    if (isRec(t) && typeof t.value === "number" && Number.isInteger(t.value) && t.value >= 0) return { value: t.value, capped: t.capped === true };
+  }
+  return null;
+}
+
+const CATEGORY_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function readPublicCategoryRec(c: Rec): PublicCategory | null {
+  if (typeof c.code !== "string" || c.code === "" || c.active === false) return null;
+  const slug = typeof c.slug === "string" && CATEGORY_SLUG.test(c.slug) ? c.slug : null;
+  if (!slug) return null;
+  const live = c.live_campaigns;
+  return {
+    code: c.code,
+    slug,
+    name: str(c.name, humaniseCode(c.code)),
+    description: strOrNull(c.description),
+    display_order: int(c.display_order, 0),
+    sensitive: c.sensitive === true,
+    live_campaigns: typeof live === "number" && Number.isInteger(live) && live >= 0 ? live : null,
+  };
+}
+
+/** `GET /public/categories` → `{items: [...]}`, ordered by `display_order` then name. */
+export function readPublicCategories(v: unknown): PublicCategory[] {
+  return list(v)
+    .filter(isRec)
+    .map(readPublicCategoryRec)
+    .filter((c): c is PublicCategory => c !== null)
+    .sort((a, b) => a.display_order - b.display_order || a.name.localeCompare(b.name));
+}
+
+export function readPublicCategory(v: unknown): PublicCategory | null {
+  return isRec(v) ? readPublicCategoryRec(v) : null;
+}
+
+/** Category display name and slug from the categories list (codes from campaign responses). */
+export function withCategoryName<T extends { category: CategoryRef }>(item: T, categories: ReadonlyArray<{ code: string; name: string; slug?: string | null }>): T {
+  const match = categories.find((c) => c.code === item.category.code || (c.slug && c.slug === item.category.code));
+  return match ? { ...item, category: { code: match.code, name: match.name, slug: match.slug ?? item.category.slug } } : item;
+}
+
+/** Published updates for the public page (`{items, next_cursor}`), with their approved media ids. */
+export function readPublicUpdates(v: unknown): PublicUpdate[] {
+  return list(v)
+    .filter(isRec)
+    .filter((u) => typeof u.id === "string")
+    .map((u) => ({
+      id: u.id as string,
+      title: str(u.title),
+      body: str(u.body),
+      media_ids: Array.isArray(u.media_ids) ? u.media_ids.filter((id): id is string => typeof id === "string") : [],
+      published_at: strOrNull(u.published_at ?? u.created_at),
+    }));
+}
+
+/** `GET /public/sitemap` → `{campaigns: [{slug, updated_at}], categories: [{slug, updated_at}]}`. */
+export function readSitemap(v: unknown): SitemapData {
+  const d = isRec(v) ? v : {};
+  const entries = (x: unknown) =>
+    (Array.isArray(x) ? x : [])
+      .filter(isRec)
+      .filter((e) => typeof e.slug === "string" && CATEGORY_SLUG.test(e.slug) && e.slug.length <= 160)
+      .map((e) => ({ slug: e.slug as string, updated_at: strOrNull(e.updated_at) }));
+  return { campaigns: entries(d.campaigns), categories: entries(d.categories) };
+}
+
+/** `GET /public/campaign-codes/{code}` → `{canonical_slug}`. */
+export function readCanonicalSlug(v: unknown): string | null {
+  return isRec(v) && typeof v.canonical_slug === "string" && CATEGORY_SLUG.test(v.canonical_slug) ? v.canonical_slug : null;
 }
 
 export function readStaffSummaries(v: unknown): StaffCampaignSummary[] {
@@ -393,4 +525,44 @@ export function readStaffLink(v: unknown): StaffLinkStatus {
     };
   }
   return { status: str(d.status, "NONE"), email_masked: strOrNull(d.email_masked), requested_at: strOrNull(d.requested_at), linked_at: strOrNull(d.linked_at), expires_at: strOrNull(d.expires_at) };
+}
+
+export function readStaffReports(v: unknown): StaffReport[] {
+  return list(v)
+    .filter(isRec)
+    .filter((r) => typeof r.id === "string" && typeof r.campaign_id === "string")
+    .map((r) => ({
+      id: r.id as string,
+      campaign_id: r.campaign_id as string,
+      campaign_title: str(r.campaign_title),
+      campaign_slug: strOrNull(r.campaign_slug),
+      campaign_status: str(r.campaign_status),
+      status: str(r.status, "OPEN"),
+      reason: str(r.reason),
+      details: strOrNull(r.details),
+      has_contact: r.has_contact === true,
+      reporter_signed_in: r.reporter_signed_in === true,
+      created_at: strOrNull(r.created_at),
+      triaged_at: strOrNull(r.triaged_at),
+      triage_reason_code: strOrNull(r.triage_reason_code),
+      triage_note: strOrNull(r.triage_note),
+    }));
+}
+
+export function readFeaturedPicks(v: unknown): StaffFeaturedPick[] {
+  return list(v)
+    .filter(isRec)
+    .filter((f) => typeof f.campaign_id === "string")
+    .map((f) => ({
+      campaign_id: f.campaign_id as string,
+      title: str(f.title),
+      slug: strOrNull(f.slug),
+      status: str(f.status),
+      visibility: str(f.visibility),
+      position: int(f.position, 0),
+      note: str(f.note),
+      added_at: strOrNull(f.added_at),
+      shown: f.shown === true,
+    }))
+    .sort((a, b) => a.position - b.position);
 }

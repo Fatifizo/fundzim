@@ -13,7 +13,7 @@ export function SiteFooter() {
           <Logo inverted />
           <p className="mt-3 max-w-md text-brand-100">Fund anyone in Zimbabwe, from anywhere.</p>
           <p className="mt-3 max-w-md text-sm text-brand-100">
-            FundZim is under development and is not yet accepting campaigns, donations or payments.
+            FundZim is under development. Campaigns can be published and shared, but donations and payments are not available yet.
           </p>
         </div>
         <nav aria-label="Footer">
@@ -33,7 +33,7 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-white/15">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-          <p className="text-sm text-brand-100">Development preview · not open for fundraising</p>
+          <p className="text-sm text-brand-100">Development preview · donations are not available</p>
           <Suspense fallback={<p className="text-sm text-brand-100">Platform API: checking…</p>}>
             <ApiStatus />
           </Suspense>

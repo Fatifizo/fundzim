@@ -116,6 +116,8 @@ export interface CampaignMedia {
   status: MediaStatus | string;
   rejection_reason: string | null;
   created_at: string | null;
+  /** Optimistic-concurrency version for PATCH (If-Match); 0 when the API did not send one. */
+  version: number;
 }
 
 export interface CampaignUpdate {
@@ -125,6 +127,8 @@ export interface CampaignUpdate {
   status: string;
   created_at: string | null;
   published_at: string | null;
+  /** Optimistic-concurrency version for PATCH (If-Match); 0 when the API did not send one. */
+  version: number;
 }
 
 export interface CreateCampaignInput {
@@ -144,34 +148,107 @@ export interface CampaignPatch {
   visibility?: Visibility;
 }
 
-// ---- Public ----
+// ---- Public (Stage 6 + Stage 7 contract §3) ----
+
+/**
+ * Trust indicators computed live by the API (ADR-038 §5). Each is shown only when true; a missing or
+ * non-boolean field is false.
+ */
+export interface PublicTrust {
+  organiser_identity_verified: boolean;
+  organisation_verified: boolean;
+  beneficiary_verified: boolean;
+  campaign_reviewed: boolean;
+}
+
+export interface PublicOrganiser {
+  type: "INDIVIDUAL" | "ORGANISATION" | string;
+  display_name: string;
+}
+
+/** `GET /public/categories` item. `live_campaigns` is an exact count of live PUBLIC campaigns (null if absent). */
+export interface PublicCategory {
+  code: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  display_order: number;
+  sensitive: boolean;
+  live_campaigns: number | null;
+}
+
+/**
+ * A public image. `widths`: the JPEG width variants the API listed (`media[].variants`, ascending; only widths
+ * below the original), or null when unknown (list endpoints send only `cover_media_id`).
+ */
+export interface PublicImageRef {
+  id: string;
+  alt_text: string;
+  widths: number[] | null;
+}
+
+export interface CategoryRef {
+  code: string;
+  name: string;
+  /** Category page slug when known (from the categories list). */
+  slug: string | null;
+}
 
 export interface PublicCampaign {
   slug: string;
+  /** The slug the campaign is published under; the web app redirects permanently when the request differs. */
+  canonical_slug: string;
+  public_code: string | null;
   title: string;
   summary: string;
   story: string;
-  category: { code: string; name: string };
+  category: CategoryRef;
   goal: Money | null;
   status: string;
-  organiser: { display_name: string };
+  organiser: PublicOrganiser;
   organisation: { display_name: string } | null;
   beneficiary: { disclosure: Disclosure | string; display_name: string | null };
-  cover: { id: string; alt_text: string } | null;
-  gallery: Array<{ id: string; alt_text: string }>;
+  cover: PublicImageRef | null;
+  gallery: PublicImageRef[];
+  trust: PublicTrust;
   published_at: string | null;
   completed_at: string | null;
 }
+
+export type FeaturedSelection = "STAFF_PICK" | "RECENTLY_PUBLISHED";
 
 export interface PublicCampaignSummary {
   slug: string;
   title: string;
   summary: string;
-  category: { code: string; name: string };
+  category: CategoryRef;
   goal: Money | null;
   status: string;
-  cover: { id: string; alt_text: string } | null;
+  organiser: PublicOrganiser | null;
+  trust: PublicTrust;
+  cover: PublicImageRef | null;
   published_at: string | null;
+  /** Featured lists only: why the campaign is shown (no popularity or ranking exists). */
+  selection: FeaturedSelection | null;
+}
+
+/** `total` of a public search: exact, but capped (`capped: true` means "at least `value`"). */
+export interface ListTotal {
+  value: number;
+  capped: boolean;
+}
+
+export interface PublicUpdate {
+  id: string;
+  title: string;
+  body: string;
+  media_ids: string[];
+  published_at: string | null;
+}
+
+export interface SitemapData {
+  campaigns: Array<{ slug: string; updated_at: string | null }>;
+  categories: Array<{ slug: string; updated_at: string | null }>;
 }
 
 // ---- Staff ----
@@ -279,4 +356,40 @@ export interface StaffLinkStatus {
   requested_at: string | null;
   linked_at: string | null;
   expires_at: string | null;
+}
+
+// ---- Staff: reports and featured (Stage 7 contract §4) ----
+
+export const REPORT_STATUSES = ["OPEN", "ESCALATED", "DISMISSED"] as const;
+export type ReportStatus = (typeof REPORT_STATUSES)[number];
+
+/** `GET /admin/campaigns/reports` row. The reporter's contact email is never sent, only `has_contact`. */
+export interface StaffReport {
+  id: string;
+  campaign_id: string;
+  campaign_title: string;
+  campaign_slug: string | null;
+  campaign_status: string;
+  status: string;
+  reason: string;
+  details: string | null;
+  has_contact: boolean;
+  reporter_signed_in: boolean;
+  created_at: string | null;
+  triaged_at: string | null;
+  triage_reason_code: string | null;
+  triage_note: string | null;
+}
+
+/** `GET /admin/campaigns/featured` row. `shown: false` = the campaign is no longer live and listed, so the public never sees it. */
+export interface StaffFeaturedPick {
+  campaign_id: string;
+  title: string;
+  slug: string | null;
+  status: string;
+  visibility: string;
+  position: number;
+  note: string;
+  added_at: string | null;
+  shown: boolean;
 }

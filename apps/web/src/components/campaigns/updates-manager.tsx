@@ -81,7 +81,7 @@ export function UpdatesManager({ campaignId, initial, canPost, api = campaignApi
 
   async function remove(u: CampaignUpdate) {
     try {
-      await api.deleteUpdate(campaignId, u.id);
+      await api.deleteUpdate(campaignId, u.id, u.version);
       setNotice("Update deleted.");
       requestAnimationFrame(() => noticeRef.current?.focus());
       await reload();

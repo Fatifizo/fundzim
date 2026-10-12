@@ -2,6 +2,7 @@ import { browserApi, type ApiClient } from "@/lib/api/client";
 
 import {
   readAgeAttestation,
+  readFeaturedPicks,
   readCampaign,
   readEligibility,
   readMedia,
@@ -14,7 +15,8 @@ import type { CampaignPatch, CreateCampaignInput, Disclosure, EligibilityAction,
 /**
  * Browser-side calls for the Stage 6 campaign API (contract §6) through the same-origin /api/v1 proxy. The
  * client adds X-CSRF-Token on unsafe methods and never retries them automatically. Edits send If-Match with
- * the campaign version (contract: ETag = version).
+ * the item's version (contract: ETag = version). Stage 7 (ADR-038 §7): a missing If-Match is 428
+ * PRECONDITION_REQUIRED and a stale one 412 PRECONDITION_FAILED; lists are `{items, next_cursor}`.
  */
 const WRITE_TIMEOUT_MS = 20_000;
 const enc = encodeURIComponent;
@@ -46,17 +48,21 @@ export function createCampaignApi(api: ApiClient = browserApi) {
 
     // Media (upload is ./upload.ts: multipart with progress)
     listMedia: (id: string) => api.get<unknown>(`${c(id)}/media`, { retries: 0 }).then((r) => readMedia(r.data)),
-    updateMedia: (id: string, mediaId: string, body: { alt_text?: string; position?: number }) =>
-      api.patch<unknown>(`${c(id)}/media/${enc(mediaId)}`, { body, timeoutMs: WRITE_TIMEOUT_MS }).then((r) => r.data),
+    /** PATCH needs If-Match with the media version (428 PRECONDITION_REQUIRED without it, 412 when stale). */
+    updateMedia: (id: string, mediaId: string, body: { alt_text?: string; position?: number }, version: number) =>
+      api.patch<unknown>(`${c(id)}/media/${enc(mediaId)}`, { body, timeoutMs: WRITE_TIMEOUT_MS, headers: ifMatch(version) }).then((r) => r.data),
     deleteMedia: (id: string, mediaId: string) => api.delete<unknown>(`${c(id)}/media/${enc(mediaId)}`, { timeoutMs: WRITE_TIMEOUT_MS }).then(() => undefined),
 
     // Updates
     listUpdates: (id: string) => get<unknown>(`${c(id)}/updates`).then(readUpdates),
     /** `publish: true` publishes at once (or queues for moderation where policy pre-moderates); false saves a draft. */
     createUpdate: (id: string, body: { title: string; body: string; publish: boolean }) => post<unknown>(`${c(id)}/updates`, body),
-    editUpdate: (id: string, updateId: string, body: { title: string; body: string }) =>
-      api.patch<unknown>(`${c(id)}/updates/${enc(updateId)}`, { body, timeoutMs: WRITE_TIMEOUT_MS }).then((r) => r.data),
-    deleteUpdate: (id: string, updateId: string) => api.delete<unknown>(`${c(id)}/updates/${enc(updateId)}`, { timeoutMs: WRITE_TIMEOUT_MS }).then(() => undefined),
+    /** PATCH needs If-Match with the update version (428 without it, 412 when stale). */
+    editUpdate: (id: string, updateId: string, body: { title: string; body: string }, version: number) =>
+      api.patch<unknown>(`${c(id)}/updates/${enc(updateId)}`, { body, timeoutMs: WRITE_TIMEOUT_MS, headers: ifMatch(version) }).then((r) => r.data),
+    /** DELETE needs If-Match with the update version (428 without it, 412 when stale). */
+    deleteUpdate: (id: string, updateId: string, version: number) =>
+      api.delete<unknown>(`${c(id)}/updates/${enc(updateId)}`, { timeoutMs: WRITE_TIMEOUT_MS, headers: ifMatch(version) }).then(() => undefined),
 
     // Age attestation (ADR-037 §1)
     ageAttestation: () => get<unknown>("/api/v1/me/age-attestation").then(readAgeAttestation),
@@ -78,6 +84,16 @@ export function createCampaignApi(api: ApiClient = browserApi) {
       post<unknown>(`/api/v1/admin/campaigns/${enc(id)}/media/${enc(mediaId)}/remove`, body),
     moderateUpdate: (updateId: string, action: "approve" | "hide", body: { reason_code: string; note: string }) =>
       post<unknown>(`/api/v1/admin/campaigns/updates/${enc(updateId)}/${action}`, body),
+
+    // Stage 7 staff (contract §4): report triage (campaign.review) and staff picks (campaign.feature).
+    /** A report never changes the campaign's status; escalation opens a compliance case. */
+    triageReport: (reportId: string, action: "dismiss" | "escalate", body: { reason_code: string; note: string }) =>
+      post<unknown>(`/api/v1/admin/campaigns/reports/${enc(reportId)}/${action}`, body),
+    /** Returns the updated pick list. */
+    feature: (campaignId: string, body: { position: number; note: string }) =>
+      post<unknown>(`/api/v1/admin/campaigns/${enc(campaignId)}/feature`, body).then(readFeaturedPicks),
+    unfeature: (campaignId: string, reason: string) =>
+      api.delete<unknown>(`/api/v1/admin/campaigns/${enc(campaignId)}/feature`, { body: { reason }, timeoutMs: WRITE_TIMEOUT_MS }).then((r) => readFeaturedPicks(r.data)),
   };
 }
 

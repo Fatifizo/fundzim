@@ -11,7 +11,7 @@ describe("SiteHeader", () => {
     const nav = screen.getByRole("navigation", { name: "Main" });
     const links = within(nav).getAllByRole("link");
     expect(links.map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
-      ["Explore", "/campaigns"],
+      ["Explore Campaigns", "/campaigns"],
       ["How It Works", "/how-it-works"],
       ["Start a Fundraiser", "/dashboard/campaigns/new"],
     ]);

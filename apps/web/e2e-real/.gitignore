@@ -1,0 +1,3 @@
+# Working state of the real-stack suite: staff fixture (TOTP secrets, session cookies of synthetic test
+# accounts), this run's data and browser storage states. Never commit.
+.state/

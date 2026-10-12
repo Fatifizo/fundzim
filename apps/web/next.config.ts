@@ -42,6 +42,17 @@ const nextConfig: NextConfig = {
       { source: "/:path*", headers: securityHeaders },
       { source: "/api/:path*", headers: [{ key: "Content-Security-Policy", value: NON_DOCUMENT_CSP }] },
       { source: "/healthz", headers: [{ key: "Content-Security-Policy", value: NON_DOCUMENT_CSP }] },
+      // Service worker: always revalidated so a fix ships promptly. Its CSP governs the worker itself: it may
+      // only fetch same-origin (precaching the offline page and hashed build assets).
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache" },
+          { key: "Content-Security-Policy", value: "default-src 'none'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" },
+        ],
+      },
+      // Static offline page (no scripts): its own stylesheet only.
+      { source: "/offline.html", headers: [{ key: "Content-Security-Policy", value: "default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" }] },
     ];
   },
   // NOTE: no rewrites() for /api/v1. next.config is evaluated at build time and serialised into the

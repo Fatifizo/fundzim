@@ -59,12 +59,15 @@ export function describeCampaignError(error: unknown, fallback = "Something went
     case "GOAL_OUT_OF_RANGE":
       out.fieldErrors.amount ??= "Choose a goal within the allowed range.";
       return set("The goal is outside the allowed range.");
+    case "PRECONDITION_REQUIRED":
     case "IF_MATCH_REQUIRED":
+      // 428 (ADR-038 §7): the page did not know which version it was changing. Reloading fetches it.
+      return set("We couldn't tell which version of this you were changing. Reload the page and try again; your unsaved text is still in the form.");
+    case "PRECONDITION_FAILED":
     case "CAMPAIGN_STATE_CHANGED":
     case "MEDIA_STATE_CHANGED":
-    case "PRECONDITION_REQUIRED":
-    case "PRECONDITION_FAILED":
     case "VERSION_CONFLICT":
+      // 412 (ADR-038 §7; the 409 codes are the Stage 6 equivalents, still accepted).
       return set("This campaign was changed somewhere else (perhaps in another tab). Reload the page; your unsaved text is still in the form.");
     case "SELF_DECISION_FORBIDDEN":
       return set("You can't decide on a campaign that involves you, your organisation or your linked personal account. Ask another reviewer.");
@@ -115,6 +118,16 @@ export function describeCampaignError(error: unknown, fallback = "Something went
       return set("This file isn't a usable JPEG or PNG photo. Choose a different photo.");
     case "TOKEN_INVALID":
       return set("This link is invalid, has expired, or was sent to a different account.");
+    case "REPORT_ALREADY_TRIAGED":
+      return set("Another reviewer has already dealt with this report. Reload to see its current state.");
+    case "REPORT_NOT_FOUND":
+      return set("We couldn't find this report. Reload the page.");
+    case "NOT_FEATURABLE":
+      return set("Only live, listed campaigns can be featured.");
+    case "ALREADY_FEATURED":
+      return set("This campaign is already featured.");
+    case "NOT_FEATURED":
+      return set("This campaign is not featured any more. Reload the page.");
     case "STAFF_LINK_EXISTS":
       return set("Your staff account is already linked to a personal account. Links cannot be removed here.");
     case "VALIDATION_FAILED": {
