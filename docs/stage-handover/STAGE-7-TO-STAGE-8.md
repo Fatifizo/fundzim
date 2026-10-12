@@ -25,7 +25,7 @@ Stage 9, after provider selection and an ADR). Nothing in Stage 8 may be describ
 | Public campaign page | `apps/web/src/app/campaigns/[slug]/page.tsx` shows a disabled "Donations are not yet available." control; no totals, progress or donor lists. Campaign data is fetched `no-store`; the API answers `public, no-cache` + ETag |
 | Restrictions | `compliance.Service.Restrictions` (fail closed) — Stage 8 must check the `DONATE` capability the same way |
 | Currency | USD only for goals; ZWG refused until minor units are verified (LR-043, PCR-018) |
-| CI | Go, web, mock E2E, integration, real-stack E2E jobs. Result of the Stage 7 run: see the Stage 7 completion report |
+| CI | Go, web, mock E2E, integration, real-stack E2E jobs. All 8 jobs green on run 38219854301 (`b09e740`), including the real-stack suite (47 passed) |
 
 ## 2. Rules Stage 8 must keep (CLAUDE.md, binding)
 

@@ -1,7 +1,7 @@
 # Stage 7 — Testing
 
 What was added, what it covers, and what was run. The final local runs (2026-10-12, on the final tree) are in §0;
-remote CI is recorded in §6. No test was skipped, disabled or weakened to get a green run.
+remote CI is recorded in §6 (all 8 jobs green on run 38219854301). No test was skipped, disabled or weakened to get a green run.
 
 ## 0. Final local runs (2026-10-12)
 
@@ -95,8 +95,15 @@ specs (featured, a11y) were added. Final: **47 / 47 passed in two consecutive ru
 staff-desktop, desktop-chromium, mobile-chromium; about 2.3 minutes each on a warm stack).
 
 CI: new job "Real-stack E2E (compose + Playwright)" in `.github/workflows/ci.yml` (throwaway secrets, infrastructure,
-migrations, ClamAV signatures, API/worker/web containers, the suite, logs on failure). Result: see the completion
-report. Local runs are not CI evidence.
+migrations, ClamAV signatures, API/worker/web containers, the suite, logs on failure). Local runs are not CI evidence.
+
+**Remote CI (GitHub Actions run 38219854301, commit `b09e740`, 2026-10-12): all 8 jobs passed** — Go (format, vet,
+unit, vulnerabilities), Web (lint, types, unit, build, audit), Web end-to-end (mock API), Integration (compose),
+**Real-stack E2E: 47 passed** (5.9 min), OpenAPI and SQL drafts, container images, secret scanning. Two earlier runs
+on this branch failed and were fixed, not retried: 38217307403 (`TestWorkerCrashedJobIsRescued` used a 30 s context
+after a wait of up to 110 s — a latent Stage 4 test defect; the staff-link confirmation failed in the real-stack job)
+and 38218638325 (the annotation then showed the real cause, the per-IP `auth.token.ip` limit in a single-address
+stack; the step now waits the stated time as a person would).
 
 ## 7. Not tested
 

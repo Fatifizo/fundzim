@@ -8,7 +8,7 @@
 | KI-S6-09 path parameter names differ | **RESOLVED** (`{campaign_id}` throughout the campaign family) |
 | KI-S6-10 review queue ignores `?status=` | RESOLVED in Stage 7 (campaign-status filter) |
 | KI-S6-18 search uses `simple`, no Shona/Ndebele handling | OPEN — KI-S7-08 |
-| KI-S6-19 staff pages tested only against the mock API | **RESOLVED with conditions** — real-stack suite in `apps/web/e2e-real` (47 / 47 passed in two local runs; CI: [testing.md](testing.md) §6) |
+| KI-S6-19 staff pages tested only against the mock API | **RESOLVED with conditions** — real-stack suite in `apps/web/e2e-real` (47 / 47 passed in two local runs and in CI run 38219854301) |
 | KI-S6-23 Stage 1–5 acceptance not recorded | OPEN — KI-S7-01 |
 | KI-S6-01 – 07, 11 – 17, 20 – 22 | Unchanged (OPEN or ACCEPTED as recorded in [stage-6/known-issues.md](../stage-6/known-issues.md)) |
 
@@ -39,3 +39,4 @@
 | KI-S7-21 | Campaign image width variants are 320, 640 and 1024 px; between about 720 and 768 px viewport width at DPR 2 the browser picks the 1024 px variant where a ~768 px one would do | Some extra bytes on mid-size screens | OPEN — consider a 768 px variant |
 | KI-S7-22 | The real-stack suite answers the staff step-up dialog when the API asks for it but does not force a step-up (a fresh staff session is inside the step-up window) | The step-up dialog path is covered by unit and mock tests, not proven in every real-stack run | OPEN |
 | KI-S7-23 | Report **dismissal** is not exercised in the real-stack suite (escalation is, through to the compliance case); dismissal against the real API and database is covered by `TestPublicExperienceEndpoints` (dismiss → `DISMISSED`, no escalation event, no status change, 409 on a second triage) and the staff UI dismiss path by the mock suite (`e2e/staff-public.spec.ts`) | The staff UI dismiss path is not proven end to end against the real stack | OPEN |
+| KI-S7-24 | In a single-address stack (compose locally and in CI) the real-stack suite can exhaust per-IP budgets such as `auth.token.ip` (20 / 15 min) and then waits out the stated time | Slower, timing-dependent CI runs | ACCEPTED (test environment; the limits are unchanged) |
