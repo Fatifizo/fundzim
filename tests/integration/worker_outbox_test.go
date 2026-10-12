@@ -149,6 +149,14 @@ func (h *harness) inboxCount(ctx context.Context, consumer, eventID string) int 
 	return n
 }
 
+// after is a fresh context for checks that follow a long waitJob: the test's ctx(t) lasts 30 s, and a retry
+// backoff or River's stuck-job rescuer (every 30 s) can use most of it before the job finishes.
+func after(t *testing.T) context.Context {
+	c, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+	return c
+}
+
 // jobFor returns the delivery job of (consumer, event) in the test queue.
 func (h *harness) jobsFor(ctx context.Context, consumer, eventID string) []int64 {
 	rows, err := h.wrk.Query(ctx, `SELECT id FROM queue.river_job WHERE kind = 'outbox.deliver' AND queue = $1
@@ -373,7 +381,7 @@ func TestOutboxHandlerRetriedUntilSuccess(t *testing.T) {
 		t.Fatalf("Delivery.Attempt sequence %v", attempts)
 	}
 	mu.Unlock()
-	if h.inboxCount(ctx, consumer, eventID) != 1 {
+	if h.inboxCount(after(t), consumer, eventID) != 1 {
 		t.Fatal("inbox row missing after success")
 	}
 	if testutil.ToFloat64(h.jobMetrics.Failed(outbox.KindDeliver)) != 2 || testutil.ToFloat64(h.jobMetrics.Completed(outbox.KindDeliver)) != 1 {
@@ -408,7 +416,7 @@ func TestOutboxHandlerAlwaysFailingIsDiscarded(t *testing.T) {
 	waitFor(t, 5*time.Second, "discard metric", func() bool {
 		return testutil.ToFloat64(h.jobMetrics.Discarded(outbox.KindDeliver)) == 1
 	})
-	if h.inboxCount(ctx, consumer, eventID) != 0 {
+	if h.inboxCount(after(t), consumer, eventID) != 0 {
 		t.Fatal("a failed delivery must not record an inbox row")
 	}
 }
@@ -483,7 +491,7 @@ func TestWorkerCrashedJobIsRescued(t *testing.T) {
 	if len(j.Errors) == 0 || !strings.Contains(j.Errors[0].Error, "Stuck job rescued") {
 		t.Fatalf("job was not rescued by River: %+v", j.Errors)
 	}
-	if h.inboxCount(ctx, consumer, eventID) != 1 {
+	if h.inboxCount(after(t), consumer, eventID) != 1 {
 		t.Fatal("inbox row missing")
 	}
 }
@@ -659,7 +667,7 @@ func TestNotificationSMTPUnreachableIsRetriedNotLost(t *testing.T) {
 	if _, text := findMail(t, to); !strings.Contains(text, "event "+eventID) {
 		t.Fatalf("mail body %q", text)
 	}
-	if h.inboxCount(ctx, consumer, eventID) != 1 {
+	if h.inboxCount(after(t), consumer, eventID) != 1 {
 		t.Fatal("inbox row missing")
 	}
 }

@@ -277,8 +277,18 @@ test("self-approval prevention: a staff member linked (real ceremony) to the own
   const octx = await ownerContext(browser);
   const opage = await octx.newPage();
   await opage.goto(`${link.pathname}${link.search}`);
-  await opage.getByRole("button", { name: "Confirm the link" }).click();
-  await expect(opage.getByRole("status").filter({ hasText: "Your personal account is now linked to your staff account" })).toBeVisible();
+  // The button is server-rendered; on a slow runner a click can land before React attaches its handler. Click
+  // again only while neither the result nor an error has appeared (an error fails the test with its message).
+  const linkedStatus = opage.getByRole("status").filter({ hasText: "Your personal account is now linked to your staff account" });
+  const linkError = opage.locator("main").getByRole("alert").filter({ hasText: /\S/ });
+  await expect(async () => {
+    if ((await linkedStatus.count()) === 0 && (await linkError.count()) === 0) {
+      await opage.getByRole("button", { name: "Confirm the link" }).click({ timeout: 2_000 });
+    }
+    await expect(linkedStatus.or(linkError).first()).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 30_000 });
+  expect(await linkError.count(), `link confirmation failed: ${await linkError.allInnerTexts()}`).toBe(0);
+  await expect(linkedStatus).toBeVisible();
   await octx.close();
   await spage.reload();
   await expect(spage.getByText(/Your staff account is linked to/)).toBeVisible();
