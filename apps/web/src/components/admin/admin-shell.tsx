@@ -15,6 +15,14 @@ const ITEMS = [
   { href: "/admin/campaigns/updates", label: "Update moderation" },
   { href: "/admin/campaigns/reports", label: "Campaign reports" },
   { href: "/admin/campaigns/featured", label: "Featured campaigns" },
+  { href: "/admin/payments", label: "Payments overview", exact: true },
+  { href: "/admin/payments/attempts", label: "Payment attempts" },
+  { href: "/admin/payments/unknown", label: "Unknown payments" },
+  { href: "/admin/payments/intents", label: "Donation intents" },
+  { href: "/admin/payments/webhooks", label: "Payment webhooks" },
+  { href: "/admin/payments/reconciliation", label: "Reconciliation" },
+  { href: "/admin/payments/refunds", label: "Refund requests" },
+  { href: "/admin/payments/providers", label: "Payment providers" },
   { href: "/admin/account/personal-link", label: "Personal account link" },
 ] as const;
 
