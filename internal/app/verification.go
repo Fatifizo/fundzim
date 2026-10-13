@@ -20,6 +20,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/campaigns"
 	"github.com/Fatifizo/fundzim/internal/compliance"
 	"github.com/Fatifizo/fundzim/internal/kyc"
+	"github.com/Fatifizo/fundzim/internal/ledger"
 	"github.com/Fatifizo/fundzim/internal/organisations"
 	"github.com/Fatifizo/fundzim/internal/payouts"
 	"github.com/Fatifizo/fundzim/internal/platform/clock"
@@ -83,6 +84,10 @@ type VerificationModules struct {
 	PSP      *psp.Service
 	Sandbox  *sandbox.Adapter // nil unless PAYMENTS_SANDBOX_ENABLED (never in production)
 	Payments *payments.Service
+
+	// Stage 10 ledger (internal/app/ledger.go, ADR-042): its own pool as fundzim_ledger
+	LedgerPool *pgxpool.Pool
+	Ledger     *ledger.Service
 }
 
 // Close closes the restricted pools.
@@ -95,6 +100,9 @@ func (m *VerificationModules) Close() {
 	}
 	if m.CompliancePool != nil {
 		m.CompliancePool.Close()
+	}
+	if m.LedgerPool != nil {
+		m.LedgerPool.Close()
 	}
 }
 
@@ -212,6 +220,9 @@ func NewVerificationModules(ctx context.Context, d VerificationDeps) (*Verificat
 	// Stage 6 stream U
 	m.CampaignUpdates = newCampaignUpdates(m, d)
 	if err := newPayments(ctx, m, d); err != nil { // Stage 8 (ADR-039), Stage 9 execution gates (ADR-041)
+		return fail(err)
+	}
+	if err := newLedger(ctx, m, d); err != nil { // Stage 10 (ADR-042)
 		return fail(err)
 	}
 	return m, nil

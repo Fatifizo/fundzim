@@ -40,6 +40,7 @@ func localEnv() map[string]string {
 		"DOCUMENT_TICKET_KEY":                   testKeys["DOCUMENT_TICKET_KEY"],
 		"DATABASE_KYC_URL":                      "postgres://fundzim_kyc:" + localTestPW + "@localhost:5432/fundzim?sslmode=disable",
 		"DATABASE_COMPLIANCE_URL":               "postgres://fundzim_compliance:" + localTestPW + "@localhost:5432/fundzim?sslmode=disable",
+		"DATABASE_LEDGER_URL":                   "postgres://fundzim_ledger:" + localTestPW + "@localhost:5432/fundzim?sslmode=disable",
 		"APP_ENV":                               "development",
 		"DATABASE_URL":                          "postgres://fundzim_app:" + localTestPW + "@localhost:5432/fundzim?sslmode=disable",
 	}
@@ -143,6 +144,7 @@ func TestProductionOtherwiseValidRefusedOnlyForMissingKMS(t *testing.T) {
 		"DOCUMENT_TICKET_KEY":       testKeys["DOCUMENT_TICKET_KEY"],
 		"DATABASE_KYC_URL":          "postgres://k:" + localTestPW + "@db:5432/fundzim?sslmode=verify-full",
 		"DATABASE_COMPLIANCE_URL":   "postgres://c:" + localTestPW + "@db:5432/fundzim?sslmode=verify-full",
+		"DATABASE_LEDGER_URL":       "postgres://l:" + localTestPW + "@db:5432/fundzim?sslmode=verify-full",
 		"MALWARE_SCANNER":           "clamd",
 		"CLAMAV_ADDR":               "clamav.internal:3310",
 		"SMTP_HOST":                 "smtp.example.com",

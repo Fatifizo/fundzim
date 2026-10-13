@@ -61,6 +61,13 @@ type Config struct {
 	Security     Security
 	Payments     Payments
 	Secrets      Secrets
+	Ledger       Ledger
+}
+
+// Ledger configures the Stage 10 ledger (ADR-042). Production posting is a code constant (ledger.ProductionPostingEnabled).
+type Ledger struct {
+	// SyntheticFixturesEnabled (LEDGER_SYNTHETIC_FIXTURES_ENABLED) allows TEST_ONLY synthetic journals; refused in production.
+	SyntheticFixturesEnabled bool
 }
 
 // Payments configures the payment layer (ADR-039 §6, Stage 9). Real payment execution is not configurable: it is
@@ -193,6 +200,7 @@ type Database struct {
 	MigrationURL   Secret // used only by `fundzimctl migrate`
 	KYCURL         Secret // role fundzim_kyc: kyc schema only (ADR-035)
 	ComplianceURL  Secret // role fundzim_compliance: compliance schema only (ADR-035)
+	LedgerURL      Secret // role fundzim_ledger: the only writer of the ledger schema (Stage 10, ADR-042)
 	MaxConns       int32
 	ConnectTimeout time.Duration
 }
@@ -389,12 +397,18 @@ func Load(get LookupFunc) (Config, error) {
 		MigrationURL:   Secret(l.str("DATABASE_MIGRATION_URL", "")),
 		KYCURL:         Secret(l.required("DATABASE_KYC_URL")),
 		ComplianceURL:  Secret(l.required("DATABASE_COMPLIANCE_URL")),
+		LedgerURL:      Secret(l.required("DATABASE_LEDGER_URL")),
 		MaxConns:       int32(l.integer("DATABASE_MAX_CONNS", 20, 1, 500)),
 		ConnectTimeout: l.duration("DATABASE_CONNECT_TIMEOUT", 5*time.Second, 500*time.Millisecond, time.Minute),
 	}
 	checkDatabaseURL(l, "DATABASE_URL", c.Database.URL.Reveal(), env)
 	checkDatabaseURL(l, "DATABASE_KYC_URL", c.Database.KYCURL.Reveal(), env)
 	checkDatabaseURL(l, "DATABASE_COMPLIANCE_URL", c.Database.ComplianceURL.Reveal(), env)
+	checkDatabaseURL(l, "DATABASE_LEDGER_URL", c.Database.LedgerURL.Reveal(), env)
+	if c.Database.LedgerURL != "" && (c.Database.LedgerURL == c.Database.URL || c.Database.LedgerURL == c.Database.KYCURL ||
+		c.Database.LedgerURL == c.Database.ComplianceURL) {
+		l.fail("DATABASE_LEDGER_URL must use its own role (fundzim_ledger), distinct from the other database URLs")
+	}
 	if c.Database.KYCURL != "" && (c.Database.KYCURL == c.Database.URL || c.Database.KYCURL == c.Database.ComplianceURL) {
 		l.fail("DATABASE_KYC_URL must use its own role (fundzim_kyc), distinct from DATABASE_URL and DATABASE_COMPLIANCE_URL")
 	}
@@ -497,6 +511,10 @@ func Load(get LookupFunc) (Config, error) {
 	loadVerification(l, &c, env)
 	loadPayments(l, &c, env)
 	loadSecrets(l, &c, env)
+	c.Ledger = Ledger{SyntheticFixturesEnabled: l.boolean("LEDGER_SYNTHETIC_FIXTURES_ENABLED", false)}
+	if c.Ledger.SyntheticFixturesEnabled && env == EnvProduction {
+		l.fail("LEDGER_SYNTHETIC_FIXTURES_ENABLED is refused in production (synthetic fixtures are TEST_ONLY)")
+	}
 
 	if len(l.problems) > 0 {
 		sort.Strings(l.problems)

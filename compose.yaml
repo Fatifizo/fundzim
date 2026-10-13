@@ -35,6 +35,8 @@ x-common-env: &common-env
   BLIND_INDEX_KEY: ${BLIND_INDEX_KEY:?run scripts/dev-env-init.sh}
   # Stage 5: restricted pools (ADR-035) and per-purpose keys
   DATABASE_KYC_URL: postgres://fundzim_kyc:${POSTGRES_KYC_PASSWORD:?}@fundzim-postgres:5432/fundzim?sslmode=disable
+  # Stage 10 (ADR-042): the ledger posting role — the only writer of the ledger schema
+  DATABASE_LEDGER_URL: postgres://fundzim_ledger:${POSTGRES_LEDGER_PASSWORD:?run scripts/dev-env-init.sh}@fundzim-postgres:5432/fundzim?sslmode=disable
   DATABASE_COMPLIANCE_URL: postgres://fundzim_compliance:${POSTGRES_COMPLIANCE_PASSWORD:?}@fundzim-postgres:5432/fundzim?sslmode=disable
   KYC_FIELD_ENCRYPTION_LOCAL_KEY: ${KYC_FIELD_ENCRYPTION_LOCAL_KEY:?run scripts/dev-env-init.sh}
   KYC_BLIND_INDEX_KEY: ${KYC_BLIND_INDEX_KEY:?run scripts/dev-env-init.sh}
@@ -52,6 +54,8 @@ x-common-env: &common-env
   SECRETS_PROVIDER: ${SECRETS_PROVIDER:-kv2}
   SECRETS_KV2_ADDR: http://fundzim-secrets:8200
   SECRETS_KV2_TOKEN: ${SECRETS_KV2_TOKEN:?run scripts/dev-env-init.sh}
+  # Stage 10 (ADR-042): TEST_ONLY synthetic ledger fixtures (refused in production)
+  LEDGER_SYNTHETIC_FIXTURES_ENABLED: ${LEDGER_SYNTHETIC_FIXTURES_ENABLED:-false}
 
 services:
   fundzim-postgres:
@@ -68,6 +72,7 @@ services:
       POSTGRES_KYC_PASSWORD: ${POSTGRES_KYC_PASSWORD:?}
       POSTGRES_COMPLIANCE_PASSWORD: ${POSTGRES_COMPLIANCE_PASSWORD:?}
       POSTGRES_READONLY_PASSWORD: ${POSTGRES_READONLY_PASSWORD:?}
+      POSTGRES_LEDGER_PASSWORD: ${POSTGRES_LEDGER_PASSWORD:?run scripts/dev-env-init.sh}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./deploy/docker/postgres/init:/docker-entrypoint-initdb.d:ro

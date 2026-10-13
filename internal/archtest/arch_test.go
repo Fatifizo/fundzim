@@ -44,6 +44,8 @@ var allowedImports = map[string][]string{
 	// imports campaigns, risk and psp; compliance is reached through an interface implemented in internal/app)
 	"psp":      {"platform", "audit"},
 	"payments": {"platform", "audit", "campaigns", "risk", "psp"},
+	// Stage 10 (ADR-042): the ledger imports platform and audit only (payment facts arrive through an interface)
+	"ledger": {"platform", "audit"},
 }
 
 // ownedTables is design-baseline §5 (plus the Stage 4 additions recorded in docs/stage-4/implementation.md:
@@ -84,6 +86,11 @@ var ownedTables = map[string][]string{
 	"payments": {"app.donation_intents", "app.payment_intents", "app.payment_attempts", "app.payment_transactions",
 		"app.payment_provider_references", "app.payment_sessions", "app.payment_events", "app.refund_requests",
 		"app.payment_reconciliation_references", "app.payment_status_rank", "app.payment_provider_evidence"},
+	"ledger": {"ledger.ledger_accounts", "ledger.ledger_transactions", "ledger.ledger_entries", "ledger.ledger_balances",
+		"ledger.ledger_posting_rules", "ledger.ledger_posting_rule_lines", "ledger.ledger_posting_batches", "ledger.ledger_adjustments",
+		"ledger.ledger_periods", "ledger.ledger_invariant_runs", "ledger.ledger_environment", "ledger.ledger_source_references",
+		"ledger.ledger_reconciliation_references", "ledger.v_trial_balance", "ledger.v_balances_current", "ledger.v_balance_drift",
+		"ledger.v_pool_integrity", "ledger.database_environment", "ledger.fold_deferred_balances"},
 }
 
 // moduleOf maps a repository-relative directory to its module ("" = not a constrained module).

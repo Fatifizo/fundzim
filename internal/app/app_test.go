@@ -37,6 +37,7 @@ func testDeps(t *testing.T) *Deps {
 			"DOCUMENT_TICKET_KEY":                   strings.Repeat("d4", 32),
 			"DATABASE_KYC_URL":                      "postgres://fundzim_kyc:" + apiTestPW + "@127.0.0.1:1/fundzim?sslmode=disable",
 			"DATABASE_COMPLIANCE_URL":               "postgres://fundzim_compliance:" + apiTestPW + "@127.0.0.1:1/fundzim?sslmode=disable",
+			"DATABASE_LEDGER_URL":                   "postgres://fundzim_ledger:" + apiTestPW + "@127.0.0.1:1/fundzim?sslmode=disable",
 			"DATABASE_URL":                          "postgres://fundzim_app:" + apiTestPW + "@127.0.0.1:1/fundzim?sslmode=disable",
 			"DATABASE_CONNECT_TIMEOUT":              "500ms",
 			"HTTP_PORT":                             "18080",

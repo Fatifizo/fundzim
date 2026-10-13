@@ -112,6 +112,7 @@ func (d *WorkerDeps) buildRiver() error {
 		periodic = append(periodic, verificationPeriodic()...)
 		periodic = append(periodic, campaignMediaJobs(workers, d.Verification)...) // Stage 6 stream M
 		periodic = append(periodic, paymentJobs(workers, d.Verification)...)       // Stage 8 (ADR-039)
+		periodic = append(periodic, ledgerJobs(workers, d.Verification)...)        // Stage 10 (ADR-042)
 	}
 	client, err := jobs.NewWorkerClient(jobs.WorkerConfig{
 		Pool: d.DB, Logger: d.Logger, Metrics: d.JobMetrics, Workers: workers,

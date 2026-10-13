@@ -95,6 +95,8 @@ tags:
   description: Public payment-method availability by execution environment (no provider names; test mode while payments are not real).
 - name: Payment operations (Stage 9)
   description: Provider detail, derived health, evidence log and provider controls (no control can enable production or change a payment).
+- name: Ledger (Stage 10)
+  description: Restricted double-entry ledger (TEST ledger in Stage 10; production posting disabled). No public or free-form posting endpoint.
 - name: Webhooks
   description: 'Provider callbacks: signature-authenticated, CSRF/session-exempt, inbox + 2xx fast.'
 - name: Health
@@ -19598,379 +19600,6 @@ paths:
       - MFA_REQUIRED
       - PERMISSION_DENIED
       - SETTLEMENT_BATCH_NOT_FOUND
-  /admin/ledger/accounts/{account_id}/balance:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Reconciliation (staff)
-      operationId: getLedgerBalance
-      summary: Ledger account balance projection
-      description: '**REC-13** · Auth: staff + MFA · Authorization: `ledger.view`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - name: account_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LedgerBalanceEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-13
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: ledger.view
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - LEDGER_ACCOUNT_NOT_FOUND
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-  /admin/ledger/transactions/{transaction_id}:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Reconciliation (staff)
-      operationId: getLedgerTransaction
-      summary: Get ledger transaction
-      description: '**REC-14** · Auth: staff + MFA · Authorization: `ledger.view`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - name: transaction_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LedgerTransactionEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-14
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: ledger.view
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - LEDGER_TRANSACTION_NOT_FOUND
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-  /admin/ledger/invariant-runs:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Reconciliation (staff)
-      operationId: listInvariantRuns
-      summary: Invariant run results
-      description: '**REC-15** · Auth: staff + MFA · Authorization: `ledger.view`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      - name: result
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 64
-        description: Allow-listed filter.
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InvariantRunPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-15
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: ledger.view
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-  /admin/ledger/adjustments:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Reconciliation (staff)
-      operationId: createLedgerAdjustment
-      summary: Propose a ledger adjustment (maker)
-      description: '**REC-16** · Auth: staff + MFA + step-up · Authorization: `ledger.adjustment.create`.
-
-
-        Idempotency: required · Rate-limit class: `RL-STAFF-WRITE` · Audit: ledger.adjustment.requested (J)'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LedgerAdjustmentCreate'
-      responses:
-        '201':
-          description: 'Success. Idempotent replays return the stored response with `Idempotent-Replayed: true`.'
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LedgerAdjustmentEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-16
-      x-fundzim-auth: staff+MFA+step-up
-      x-fundzim-permission: ledger.adjustment.create
-      x-fundzim-step-up: true
-      x-fundzim-maker-checker: maker
-      x-fundzim-idempotency: required
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: ledger.adjustment.requested (J)
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - CURRENCY_MISMATCH
-      - IDEMPOTENCY_KEY_INVALID
-      - IDEMPOTENCY_KEY_REQUIRED
-      - IDEMPOTENCY_KEY_REUSED
-      - IDEMPOTENCY_REQUEST_IN_PROGRESS
-      - INVALID_MONEY
-      - JUSTIFICATION_REQUIRED
-      - LEDGER_ADJUSTMENT_UNBALANCED
-      - LEDGER_PERIOD_CLOSED
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-      - STEP_UP_REQUIRED
-      - VALIDATION_FAILED
-    get:
-      tags:
-      - Reconciliation (staff)
-      operationId: listLedgerAdjustments
-      summary: List adjustments
-      description: '**REC-18** · Auth: staff + MFA · Authorization: `ledger.view`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      - name: status
-        in: query
-        required: false
-        schema:
-          type: string
-          description: Comma-separated allow-listed status values (OR).
-        description: Allow-listed filter.
-      - name: currency
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Currency'
-        description: Allow-listed filter.
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LedgerAdjustmentPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-18
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: ledger.view
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
-      - INVALID_FILTER
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-  /admin/ledger/adjustments/{adjustment_id}/approve:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Reconciliation (staff)
-      operationId: approveLedgerAdjustment
-      summary: Approve and post adjustment (different FINANCE)
-      description: '**REC-17** · Auth: staff + MFA + step-up · Authorization: `ledger.adjustment.approve`; ≠ maker.
-
-
-        Idempotency: required · Rate-limit class: `RL-STAFF-WRITE` · Audit: ledger.adjustment.approved (J); ledger.transaction.posted'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - name: adjustment_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/StaffActionRequest'
-      responses:
-        '200':
-          description: 'Success. Idempotent replays return the stored response with `Idempotent-Replayed: true`.'
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LedgerAdjustmentEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-17
-      x-fundzim-auth: staff+MFA+step-up
-      x-fundzim-permission: ledger.adjustment.approve
-      x-fundzim-step-up: true
-      x-fundzim-maker-checker: checker
-      x-fundzim-idempotency: required
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: ledger.adjustment.approved (J); ledger.transaction.posted
-      x-fundzim-error-codes:
-      - APPROVAL_EXPIRED
-      - APPROVER_CONFLICT
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - IDEMPOTENCY_KEY_INVALID
-      - IDEMPOTENCY_KEY_REQUIRED
-      - IDEMPOTENCY_KEY_REUSED
-      - IDEMPOTENCY_REQUEST_IN_PROGRESS
-      - INVARIANT_CHECK_FAILED
-      - LEDGER_ADJUSTMENT_NOT_FOUND
-      - LEDGER_PERIOD_CLOSED
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-      - STEP_UP_REQUIRED
-      - VALIDATION_FAILED
   /admin/audit/events:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -30434,6 +30063,1622 @@ paths:
       x-fundzim-permission: payment.view
       x-fundzim-step-up: false
       x-fundzim-idempotency: n/a
+  /admin/ledger/overview:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerOverview
+      summary: Ledger overview
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.view` (non-staff → `404`). Environment, counts,
+        per-currency trial balance totals, latest integrity results, open periods. Never a withdrawable balance.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerOverviewS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/ledger/accounts:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerListAccounts
+      summary: Accounts with exact current balances
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.view` (non-staff → `404`). Filters: class, owner_type,
+        status, currency.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+        description: Page size (default 50).
+      - name: class
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Account class.
+      - name: owner_type
+        in: query
+        required: false
+        schema:
+          type: string
+        description: PLATFORM | CAMPAIGN | PROVIDER.
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ACTIVE | FROZEN | CLOSED.
+      - name: currency
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO code.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerListS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/ledger/accounts/{account_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerGetAccount
+      summary: One account with its activity
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.view` (non-staff → `404`). Balance in normal-balance
+        terms; activity = journals touching the account (keyset pages).
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Keyset cursor.
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+        description: Page size (default 50).
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccountDetailS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - LEDGER_NOT_FOUND
+  /admin/ledger/accounts/{account_id}/freeze:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerFreezeAccount
+      summary: Freeze an account (ACTIVE → FROZEN)
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.account.manage` + fresh step-up (non-staff → `404`).
+        A frozen account accepts only approved adjustments; a closed account nothing. Serialised with postings by the account row lock.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ledger.account.frozen · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerReasonS10'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccountDetailS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.account.manage
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - LEDGER_NOT_FOUND
+      - LEDGER_ACCOUNT_STATE
+      - LEDGER_ACCOUNT_BALANCE_NOT_ZERO
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/ledger/accounts/{account_id}/unfreeze:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerUnfreezeAccount
+      summary: Unfreeze an account (FROZEN → ACTIVE)
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.account.manage` + fresh step-up (non-staff → `404`).
+        A frozen account accepts only approved adjustments; a closed account nothing. Serialised with postings by the account row lock.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ledger.account.unfrozen · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerReasonS10'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccountDetailS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.account.manage
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - LEDGER_NOT_FOUND
+      - LEDGER_ACCOUNT_STATE
+      - LEDGER_ACCOUNT_BALANCE_NOT_ZERO
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/ledger/accounts/{account_id}/close:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerCloseAccount
+      summary: Close an account (zero balance only)
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.account.manage` + fresh step-up (non-staff → `404`).
+        A frozen account accepts only approved adjustments; a closed account nothing. Serialised with postings by the account row lock.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ledger.account.closed · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerReasonS10'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAccountDetailS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.account.manage
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - LEDGER_NOT_FOUND
+      - LEDGER_ACCOUNT_STATE
+      - LEDGER_ACCOUNT_BALANCE_NOT_ZERO
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/ledger/journals:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerListJournals
+      summary: Journal register
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.view` (non-staff → `404`). Newest first; filters
+        posting_rule, source_type, source_id, source_system, currency, account_id.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+        description: Page size (default 50).
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Keyset cursor.
+      - name: posting_rule
+        in: query
+        required: false
+        schema:
+          type: string
+        description: posting_rule
+      - name: source_type
+        in: query
+        required: false
+        schema:
+          type: string
+        description: source_type
+      - name: source_id
+        in: query
+        required: false
+        schema:
+          type: string
+        description: source_id
+      - name: source_system
+        in: query
+        required: false
+        schema:
+          type: string
+        description: source_system
+      - name: currency
+        in: query
+        required: false
+        schema:
+          type: string
+        description: currency
+      - name: account_id
+        in: query
+        required: false
+        schema:
+          type: string
+        description: account_id
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerListS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/ledger/journals/{transaction_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerGetJournal
+      summary: Journal detail
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.view` (non-staff → `404`). Lines, source trace,
+        reversal history, metadata.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: transaction_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerJournalDetailS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - LEDGER_NOT_FOUND
+  /admin/ledger/trial-balance:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerTrialBalance
+      summary: Trial balance per currency
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.view` (non-staff → `404`). Per account debit/credit
+        nets, totals and difference per currency (never summed across currencies); optional period.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: currency
+        in: query
+        required: false
+        schema:
+          type: string
+        description: ISO code.
+      - name: period_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+        description: Period.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerTrialBalanceS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - VALIDATION_FAILED
+  /admin/ledger/periods:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerListPeriods
+      summary: Accounting periods
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.view` (non-staff → `404`). OPEN → CLOSING → CLOSED.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerListS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/ledger/periods/{period_id}/request-close:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerRequestPeriodClose
+      summary: Request a period close (maker; period must have ended)
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.period.close` + fresh step-up (non-staff → `404`).
+        Maker-checker; the close records a trial-balance snapshot as evidence.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ledger.period.close_requested · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: period_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerReasonS10'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerListS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.period.close
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - LEDGER_NOT_FOUND
+      - LEDGER_PERIOD_STATE
+      - LEDGER_PERIOD_NOT_ENDED
+      - LEDGER_SELF_APPROVAL_FORBIDDEN
+      - LEDGER_TRIAL_BALANCE_NOT_ZERO
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/ledger/periods/{period_id}/approve-close:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerApprovePeriodClose
+      summary: Approve a period close (checker ≠ maker; trial balance must balance)
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.period.close` + fresh step-up (non-staff → `404`).
+        Maker-checker; the close records a trial-balance snapshot as evidence.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ledger.period.closed · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: period_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerReasonS10'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerListS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.period.close
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - LEDGER_NOT_FOUND
+      - LEDGER_PERIOD_STATE
+      - LEDGER_PERIOD_NOT_ENDED
+      - LEDGER_SELF_APPROVAL_FORBIDDEN
+      - LEDGER_TRIAL_BALANCE_NOT_ZERO
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/ledger/periods/{period_id}/abort-close:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerAbortPeriodClose
+      summary: Abort a pending close
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.period.close` + fresh step-up (non-staff → `404`).
+        Maker-checker; the close records a trial-balance snapshot as evidence.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ledger.period.close_aborted · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: period_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerReasonS10'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerListS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.period.close
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - LEDGER_NOT_FOUND
+      - LEDGER_PERIOD_STATE
+      - LEDGER_PERIOD_NOT_ENDED
+      - LEDGER_SELF_APPROVAL_FORBIDDEN
+      - LEDGER_TRIAL_BALANCE_NOT_ZERO
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/ledger/adjustments:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerListAdjustments
+      summary: Adjustment requests
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.view` (non-staff → `404`). Maker-checker requests
+        for reversals, corrections and manual journals.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+        description: Page size (default 50).
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Status.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerListS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerRequestAdjustment
+      summary: Request an adjustment (maker)
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.adjustment.create` + fresh step-up (non-staff →
+        `404`). REVERSAL (exact mirror of a journal), CORRECTION (reversal + replacement) or MANUAL (one journal under an approval rule). Expires in 24 h.
+
+
+
+
+        Idempotency: required · Rate-limit: RL-STAFF-WRITE · Audit: ledger.adjustment.requested · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerAdjustmentRequestS10'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAdjustmentS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.adjustment.create
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required
+      x-fundzim-error-codes:
+      - LEDGER_INVALID_POSTING
+      - LEDGER_ALREADY_REVERSED
+      - LEDGER_REVERSAL_OF_REVERSAL
+      - LEDGER_NOT_FOUND
+      - LEDGER_PRODUCTION_POSTING_DISABLED
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/ledger/adjustments/{adjustment_id}/approve:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerApproveAdjustment
+      summary: Approve and post (checker ≠ maker)
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.adjustment.approve` + fresh step-up (non-staff →
+        `404`). Approval posts the journal(s) in the same transaction; the journal lines must equal the approved lines (L14).
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ledger.adjustment.approved / ledger.journal.reversed / ledger.journal.posted · Cache-Control:
+        no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: adjustment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerReasonS10'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAdjustmentS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.adjustment.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - LEDGER_NOT_FOUND
+      - LEDGER_ADJUSTMENT_STATE
+      - LEDGER_ADJUSTMENT_EXPIRED
+      - LEDGER_SELF_APPROVAL_FORBIDDEN
+      - LEDGER_ALREADY_REVERSED
+      - LEDGER_INSUFFICIENT_FUNDS
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/ledger/adjustments/{adjustment_id}/reject:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerRejectAdjustment
+      summary: Reject (checker ≠ maker)
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.adjustment.approve` + fresh step-up (non-staff →
+        `404`). Approval posts the journal(s) in the same transaction; the journal lines must equal the approved lines (L14).
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ledger.adjustment.rejected · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: adjustment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerReasonS10'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAdjustmentS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.adjustment.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - LEDGER_NOT_FOUND
+      - LEDGER_ADJUSTMENT_STATE
+      - LEDGER_ADJUSTMENT_EXPIRED
+      - LEDGER_SELF_APPROVAL_FORBIDDEN
+      - LEDGER_ALREADY_REVERSED
+      - LEDGER_INSUFFICIENT_FUNDS
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/ledger/adjustments/{adjustment_id}/withdraw:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerWithdrawAdjustment
+      summary: Withdraw (maker only)
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.adjustment.create` + fresh step-up (non-staff →
+        `404`). Approval posts the journal(s) in the same transaction; the journal lines must equal the approved lines (L14).
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ledger.adjustment.withdrawn · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: adjustment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerReasonS10'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerAdjustmentS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.adjustment.create
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - LEDGER_NOT_FOUND
+      - LEDGER_ADJUSTMENT_STATE
+      - LEDGER_ADJUSTMENT_EXPIRED
+      - LEDGER_SELF_APPROVAL_FORBIDDEN
+      - LEDGER_ALREADY_REVERSED
+      - LEDGER_INSUFFICIENT_FUNDS
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/ledger/reconciliation:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerListReconciliation
+      summary: Reconciliation exceptions
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.view` (non-staff → `404`). Missing, duplicate, orphan
+        postings; amount/currency mismatches; unknown outcomes; unmatched references; suspense balances. Settlement reconciliation is NOT performed (no provider
+        settlement evidence).
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+        description: Page size (default 50).
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Status.
+      - name: exception_type
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Type.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerListS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/ledger/reconciliation/run:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerRunReconciliation
+      summary: Run reconciliation now
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.reconciliation.operate` + fresh step-up (non-staff
+        → `404`). Records new exceptions (one unresolved per type and source).
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ledger.reconciliation.run · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerObjectS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.reconciliation.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - STEP_UP_REQUIRED
+  /admin/ledger/reconciliation/{reference_id}/investigate:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerInvestigateException
+      summary: Take ownership (OPEN → INVESTIGATING)
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.reconciliation.operate` + fresh step-up (non-staff
+        → `404`). Never changes the ledger itself.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ledger.reconciliation.investigating · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: reference_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerReasonS10'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerListS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.reconciliation.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - LEDGER_NOT_FOUND
+      - LEDGER_RECONCILIATION_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/ledger/reconciliation/{reference_id}/resolve:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerResolveException
+      summary: Resolve with a note (and the correcting adjustment, if any)
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.reconciliation.operate` + fresh step-up (non-staff
+        → `404`). Never changes the ledger itself.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ledger.reconciliation.resolved · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: reference_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerReasonS10'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerListS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.reconciliation.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - LEDGER_NOT_FOUND
+      - LEDGER_RECONCILIATION_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/ledger/exceptions:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerExceptions
+      summary: Integrity results and open exceptions
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.view` (non-staff → `404`). Latest integrity check
+        per invariant, open reconciliation exceptions, blocked source events.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerObjectS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/ledger/integrity/run:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerRunIntegrity
+      summary: Run the integrity checker now
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.reconciliation.operate` + fresh step-up (non-staff
+        → `404`). L1, L2, L4, L6, L7, L9, L10, L13, L15 in one snapshot; reports, never repairs.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ledger.integrity.checked · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerObjectS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.reconciliation.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - STEP_UP_REQUIRED
+  /admin/ledger/source-references:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerListSourceReferences
+      summary: Source events evaluated by the ledger
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.view` (non-staff → `404`). Each source event considered
+        for posting and the decision (POSTED, NOT_ELIGIBLE, BLOCKED).
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: decision
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Decision.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerListS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/ledger/synthetic-fixtures:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Ledger (Stage 10)
+      operationId: ledgerPostSyntheticFixture
+      summary: Post a TEST_ONLY synthetic fixture
+      description: '**Stage 10 · IMPLEMENTED (TEST ledger)** · Auth: staff + MFA · Authorization: `ledger.synthetic.post` (non-staff → `404`). TEST ledger
+        only and only where LEDGER_SYNTHETIC_FIXTURES_ENABLED (refused in production). Journals carry metadata {"fixture":"TEST_ONLY"}, SIMULATED evidence
+        and synthetic ids.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ledger.journal.posted · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LedgerFixtureRequestS10'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: ledger data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LedgerObjectS10Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 10
+      x-fundzim-auth: staff
+      x-fundzim-permission: ledger.synthetic.post
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - LEDGER_SYNTHETIC_DISABLED
+      - VALIDATION_FAILED
   /admin/payments/providers:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -37069,188 +38314,6 @@ components:
       - attempts
       - last_error_category
       - status
-    LedgerAdjustmentCreate:
-      type: object
-      description: Manual adjustment/reversal proposal (maker). Balanced per currency; single currency per journal.
-      properties:
-        reason_code:
-          type: string
-        justification:
-          type: string
-          minLength: 10
-          maxLength: 2000
-        currency:
-          $ref: '#/components/schemas/Currency'
-        lines:
-          type: array
-          items:
-            $ref: '#/components/schemas/LedgerLineInput'
-        reverses_transaction_id:
-          $ref: '#/components/schemas/Uuid'
-        linked_discrepancy_id:
-          $ref: '#/components/schemas/Uuid'
-        case_id:
-          $ref: '#/components/schemas/Uuid'
-      required:
-      - reason_code
-      - justification
-      - currency
-      - lines
-      additionalProperties: false
-    LedgerLineInput:
-      type: object
-      description: Proposed line.
-      properties:
-        account_id:
-          $ref: '#/components/schemas/Uuid'
-        direction:
-          type: string
-          enum:
-          - DEBIT
-          - CREDIT
-        amount:
-          $ref: '#/components/schemas/PositiveMoney'
-      required:
-      - account_id
-      - direction
-      - amount
-      additionalProperties: false
-    LedgerAdjustment:
-      type: object
-      description: Adjustment request.
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        status:
-          type: string
-          enum:
-          - PENDING_APPROVAL
-          - APPROVED_POSTED
-          - REJECTED
-          - EXPIRED
-        currency:
-          $ref: '#/components/schemas/Currency'
-        lines:
-          type: array
-          items:
-            $ref: '#/components/schemas/LedgerLine'
-        requested_by:
-          $ref: '#/components/schemas/ActorRef'
-        approved_by:
-          oneOf:
-          - $ref: '#/components/schemas/ActorRef'
-          - type: 'null'
-        ledger_transaction_id:
-          oneOf:
-          - $ref: '#/components/schemas/Uuid'
-          - type: 'null'
-        expires_at:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - id
-      - status
-      - currency
-      - lines
-      - requested_by
-      - approved_by
-      - ledger_transaction_id
-      - expires_at
-    LedgerLine:
-      type: object
-      description: Ledger entry line.
-      properties:
-        account_id:
-          $ref: '#/components/schemas/Uuid'
-        account_code:
-          type: string
-        direction:
-          type: string
-          enum:
-          - DEBIT
-          - CREDIT
-        amount:
-          $ref: '#/components/schemas/Money'
-      required:
-      - account_id
-      - account_code
-      - direction
-      - amount
-    LedgerTransaction:
-      type: object
-      description: Posted journal (append-only).
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        idempotency_key:
-          type: string
-        posting_rule:
-          type: string
-        currency:
-          $ref: '#/components/schemas/Currency'
-        lines:
-          type: array
-          items:
-            $ref: '#/components/schemas/LedgerLine'
-        occurred_at:
-          $ref: '#/components/schemas/Timestamp'
-        posted_at:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - id
-      - idempotency_key
-      - posting_rule
-      - currency
-      - lines
-      - occurred_at
-      - posted_at
-    LedgerBalance:
-      type: object
-      description: Account balance projection.
-      properties:
-        account_id:
-          $ref: '#/components/schemas/Uuid'
-        account_code:
-          type: string
-        currency:
-          $ref: '#/components/schemas/Currency'
-        balance:
-          $ref: '#/components/schemas/SignedMoney'
-        as_of:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - account_id
-      - account_code
-      - currency
-      - balance
-      - as_of
-    InvariantRun:
-      type: object
-      description: Invariant run result.
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        started_at:
-          $ref: '#/components/schemas/Timestamp'
-        finished_at:
-          oneOf:
-          - $ref: '#/components/schemas/Timestamp'
-          - type: 'null'
-        result:
-          type: string
-          enum:
-          - RUNNING
-          - PASS
-          - FAIL
-        failed_checks:
-          type: array
-          items:
-            type: string
-      required:
-      - id
-      - started_at
-      - finished_at
-      - result
-      - failed_checks
     CampaignStatement:
       type: object
       description: Owner statement of money movements for a period, per currency (ledger-derived).
@@ -39271,65 +40334,6 @@ components:
           $ref: '#/components/schemas/SettlementBatch'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
-    LedgerBalanceEnvelope:
-      type: object
-      description: Standard envelope for `LedgerBalance`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/LedgerBalance'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    LedgerTransactionEnvelope:
-      type: object
-      description: Standard envelope for `LedgerTransaction`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/LedgerTransaction'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    InvariantRunPage:
-      type: object
-      description: Standard envelope (cursor page) for `InvariantRun`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/InvariantRun'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
-    LedgerAdjustmentEnvelope:
-      type: object
-      description: Standard envelope for `LedgerAdjustment`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/LedgerAdjustment'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    LedgerAdjustmentPage:
-      type: object
-      description: Standard envelope (cursor page) for `LedgerAdjustment`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/LedgerAdjustment'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
     AuditEventPage:
       type: object
       description: Standard envelope (cursor page) for `AuditEvent`.
@@ -46269,6 +47273,307 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/PaymentMethodAvailabilityViewS9'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    LedgerReasonS10:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 2000
+        adjustment_id:
+          type: string
+          format: uuid
+      required:
+      - reason
+      additionalProperties: false
+    LedgerFixtureRequestS10:
+      type: object
+      properties:
+        scenario:
+          type: string
+          enum:
+          - donations
+          - partial_refund
+          - settlement
+          - refund_5
+        run_id:
+          type: string
+          format: uuid
+      required:
+      - scenario
+      additionalProperties: false
+    LedgerAdjustmentRequestS10:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+          - REVERSAL
+          - CORRECTION
+          - MANUAL
+        posting_rule:
+          type: string
+        currency:
+          type: string
+        target_transaction_id:
+          type: string
+          format: uuid
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              account_code:
+                type: string
+              direction:
+                type: string
+                enum:
+                - DEBIT
+                - CREDIT
+              amount_minor:
+                type: string
+                pattern: ^[1-9][0-9]{0,17}$
+            required:
+            - account_code
+            - direction
+            - amount_minor
+            additionalProperties: false
+        reason_code:
+          type: string
+          enum:
+          - POSTING_ERROR
+          - RECON_DISCREPANCY
+          - DUPLICATE_POSTING
+          - PROVIDER_CORRECTION
+          - WRITE_OFF
+          - TEST_FIXTURE_CORRECTION
+          - OTHER
+        reason:
+          type: string
+          minLength: 10
+        linked_subject_type:
+          type: string
+        linked_subject_id:
+          type: string
+          format: uuid
+      required:
+      - kind
+      - reason_code
+      - reason
+      additionalProperties: false
+    LedgerAdjustmentS10:
+      type: object
+      description: Adjustment (maker-checker).
+      additionalProperties: true
+    LedgerObjectS10:
+      type: object
+      description: Ledger report object (see docs/stage-10/posting-engine.md and reconciliation.md).
+      additionalProperties: true
+    LedgerListS10:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+        next_cursor:
+          type:
+          - string
+          - 'null'
+      required:
+      - items
+      - next_cursor
+      additionalProperties: true
+    LedgerOverviewS10:
+      type: object
+      properties:
+        environment:
+          type: string
+          enum:
+          - TEST
+          - PRODUCTION
+        production_posting_enabled:
+          type: boolean
+          const: false
+        notice:
+          type: string
+      required:
+      - environment
+      - production_posting_enabled
+      - notice
+      additionalProperties: true
+    LedgerAccountDetailS10:
+      type: object
+      properties:
+        account:
+          type: object
+          properties:
+            balance_minor:
+              type: string
+              pattern: ^-?[0-9]{1,19}$
+              description: Integer minor units as a string.
+            environment:
+              type: string
+            status:
+              type: string
+          additionalProperties: true
+        activity:
+          $ref: '#/components/schemas/LedgerListS10'
+      required:
+      - account
+      - activity
+      additionalProperties: false
+    LedgerJournalDetailS10:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        environment:
+          type: string
+        balanced:
+          type: boolean
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              debit_minor:
+                type: string
+                pattern: ^-?[0-9]{1,19}$
+                description: Integer minor units as a string.
+              credit_minor:
+                type: string
+                pattern: ^-?[0-9]{1,19}$
+                description: Integer minor units as a string.
+            additionalProperties: true
+      required:
+      - id
+      - environment
+      - balanced
+      - lines
+      additionalProperties: true
+    LedgerTrialBalanceS10:
+      type: object
+      properties:
+        environment:
+          type: string
+        currencies:
+          type: array
+          items:
+            type: object
+            properties:
+              currency:
+                type: string
+              total_debit_minor:
+                type: string
+                pattern: ^-?[0-9]{1,19}$
+                description: Integer minor units as a string.
+              total_credit_minor:
+                type: string
+                pattern: ^-?[0-9]{1,19}$
+                description: Integer minor units as a string.
+              difference_minor:
+                type: string
+                pattern: ^-?[0-9]{1,19}$
+                description: Integer minor units as a string.
+              balanced:
+                type: boolean
+            required:
+            - currency
+            - total_debit_minor
+            - total_credit_minor
+            - difference_minor
+            - balanced
+            additionalProperties: true
+      required:
+      - environment
+      - currencies
+      additionalProperties: true
+    LedgerAdjustmentS10Envelope:
+      type: object
+      description: Standard envelope for `LedgerAdjustmentS10`.
+      properties:
+        data:
+          $ref: '#/components/schemas/LedgerAdjustmentS10'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    LedgerObjectS10Envelope:
+      type: object
+      description: Standard envelope for `LedgerObjectS10`.
+      properties:
+        data:
+          $ref: '#/components/schemas/LedgerObjectS10'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    LedgerListS10Envelope:
+      type: object
+      description: Standard envelope for `LedgerListS10`.
+      properties:
+        data:
+          $ref: '#/components/schemas/LedgerListS10'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    LedgerOverviewS10Envelope:
+      type: object
+      description: Standard envelope for `LedgerOverviewS10`.
+      properties:
+        data:
+          $ref: '#/components/schemas/LedgerOverviewS10'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    LedgerAccountDetailS10Envelope:
+      type: object
+      description: Standard envelope for `LedgerAccountDetailS10`.
+      properties:
+        data:
+          $ref: '#/components/schemas/LedgerAccountDetailS10'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    LedgerJournalDetailS10Envelope:
+      type: object
+      description: Standard envelope for `LedgerJournalDetailS10`.
+      properties:
+        data:
+          $ref: '#/components/schemas/LedgerJournalDetailS10'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    LedgerTrialBalanceS10Envelope:
+      type: object
+      description: Standard envelope for `LedgerTrialBalanceS10`.
+      properties:
+        data:
+          $ref: '#/components/schemas/LedgerTrialBalanceS10'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
       required:
