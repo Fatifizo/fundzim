@@ -455,10 +455,10 @@ lacking permission). Staff permission in backticks after the path.
 | ID | Endpoint | ANON | USER | OWNER | ORGA | ORGM | REV | KYC_R | SUP | COMP | FIN | ADM | SEC_A | SUP_A | BUS_A | SYS |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | PAY-01 | `POST /payments/{payment_id}/cancel` | — | own | own | own | own | — | — | — | — | — | — | — | — | — | — |
-| PAY-02 | `GET /admin/payments` `payment.view` | — | — | — | — | — | — | — | ✓ | ✓ | ✓ | — | — | — | — | — |
-| PAY-03 | `GET /admin/payments/{payment_id}` `payment.view` | — | — | — | — | — | — | — | ✓ | ✓ | ✓ | — | — | — | — | — |
-| PAY-04 | `GET /admin/payments/{payment_id}/events` `payment.view` | — | — | — | — | — | — | — | ✓ | ✓ | ✓ | — | — | — | — | — |
-| PAY-05 | `POST /admin/payments/{payment_id}/status-checks` `payment.status.query` | — | — | — | — | — | — | — | — | — | ✓·J | — | — | — | — | — |
+| PAY-02 (superseded in Stage 8 by `/admin/payments/attempts…`, ADR-039) | `GET /admin/payments` `payment.view` | — | — | — | — | — | — | — | ✓ | ✓ | ✓ | — | — | — | — | — |
+| PAY-03 (superseded in Stage 8 by `/admin/payments/attempts…`, ADR-039) | `GET /admin/payments/{payment_id}` `payment.view` | — | — | — | — | — | — | — | ✓ | ✓ | ✓ | — | — | — | — | — |
+| PAY-04 (superseded in Stage 8 by `/admin/payments/attempts…`, ADR-039) | `GET /admin/payments/{payment_id}/events` `payment.view` | — | — | — | — | — | — | — | ✓ | ✓ | ✓ | — | — | — | — | — |
+| PAY-05 (superseded in Stage 8 by `/admin/payments/attempts…`, ADR-039) | `POST /admin/payments/{payment_id}/status-checks` `payment.status.query` | — | — | — | — | — | — | — | — | — | ✓·J | — | — | — | — | — |
 
 ### Payment status
 

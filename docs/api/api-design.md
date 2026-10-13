@@ -608,10 +608,10 @@ Donor cancel; staff payment inspection and status queries.
 | ID | Method & path | Auth | Authorization (permission / ownership) | Request → response | Specific errors | List: filters · sort | Idem. | RL class | Audit event |
 |---|---|---|---|---|---|---|---|---|---|
 | PAY-01 | `POST /api/v1/payments/{payment_id}/cancel` | session | Creating user only (guest token is read-only, I-2). Never from UNKNOWN. | — → 200 PaymentStatusView | `PAYMENT_NOT_CANCELLABLE`, `PAYMENT_NOT_FOUND`, `PAYMENT_OUTCOME_UNKNOWN`, `PROVIDER_UNAVAILABLE` | — | required | RL-DONATE | payment.state.changed |
-| PAY-02 | `GET /api/v1/admin/payments` | staff + MFA | `payment.view`. | — → 200 Page<StaffPaymentIntent> | — | cursor; status, provider, currency, campaign_id, needs_reconciliation, from, to · -created_at, unknown_since | n/a | RL-STAFF-READ | — |
-| PAY-03 | `GET /api/v1/admin/payments/{payment_id}` | staff + MFA | `payment.view`. | — → 200 StaffPaymentIntent | `PAYMENT_NOT_FOUND` | — | n/a | RL-STAFF-READ | — |
-| PAY-04 | `GET /api/v1/admin/payments/{payment_id}/events` | staff + MFA | `payment.view`. | — → 200 Page<PaymentEvent> | `PAYMENT_NOT_FOUND` | cursor | n/a | RL-STAFF-READ | — |
-| PAY-05 | `POST /api/v1/admin/payments/{payment_id}/status-checks` | staff + MFA | `payment.status.query`. Never changes state directly. | StaffActionRequest → 202 Accepted | `PAYMENT_NOT_FOUND` | — | optional | RL-STAFF-WRITE | payment.status_query.requested (new, J) |
+| PAY-02 (superseded in Stage 8 by `/admin/payments/attempts…`, ADR-039) | `GET /api/v1/admin/payments` | staff + MFA | `payment.view`. | — → 200 Page<StaffPaymentIntent> | — | cursor; status, provider, currency, campaign_id, needs_reconciliation, from, to · -created_at, unknown_since | n/a | RL-STAFF-READ | — |
+| PAY-03 (superseded in Stage 8 by `/admin/payments/attempts…`, ADR-039) | `GET /api/v1/admin/payments/{payment_id}` | staff + MFA | `payment.view`. | — → 200 StaffPaymentIntent | `PAYMENT_NOT_FOUND` | — | n/a | RL-STAFF-READ | — |
+| PAY-04 (superseded in Stage 8 by `/admin/payments/attempts…`, ADR-039) | `GET /api/v1/admin/payments/{payment_id}/events` | staff + MFA | `payment.view`. | — → 200 Page<PaymentEvent> | `PAYMENT_NOT_FOUND` | cursor | n/a | RL-STAFF-READ | — |
+| PAY-05 (superseded in Stage 8 by `/admin/payments/attempts…`, ADR-039) | `POST /api/v1/admin/payments/{payment_id}/status-checks` | staff + MFA | `payment.status.query`. Never changes state directly. | StaffActionRequest → 202 Accepted | `PAYMENT_NOT_FOUND` | — | optional | RL-STAFF-WRITE | payment.status_query.requested (new, J) |
 
 ### Payment status
 

@@ -87,6 +87,10 @@ tags:
   description: Settlement imports, runs, discrepancies and resolutions; ledger inspection and adjustments (FINANCE).
 - name: Audit access (staff)
   description: Scoped, audited read access to audit and security-audit chains; evidence metadata.
+- name: Donor payments (Stage 8)
+  description: Donation intents and payment attempts (SIMULATOR_ONLY in Stage 8; real execution disabled, ADR-039).
+- name: Payment operations (Stage 8)
+  description: Staff payment operations (payment.view / payment.operate / refund.request / refund.approve).
 - name: Webhooks
   description: 'Provider callbacks: signature-authenticated, CSRF/session-exempt, inbox + 2xx fast.'
 - name: Health
@@ -5898,6 +5902,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: CMP-14
+      x-fundzim-status: PLANNED
       x-fundzim-auth: session
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-READ
@@ -5990,6 +5995,7 @@ paths:
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: DON-02
+      x-fundzim-status: PLANNED
       x-fundzim-auth: none|session
       x-fundzim-idempotency: required
       x-fundzim-rate-limit-class: RL-DONATE
@@ -6767,6 +6773,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: DIS-03
+      x-fundzim-status: PLANNED
       x-fundzim-auth: none
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-PUBLIC-READ
@@ -8382,6 +8389,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: DON-01
+      x-fundzim-status: PLANNED
       x-fundzim-auth: none
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-PUBLIC-READ
@@ -8452,6 +8460,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: DON-03
+      x-fundzim-status: PLANNED
       x-fundzim-auth: session
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-READ
@@ -8503,6 +8512,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: DON-04
+      x-fundzim-status: PLANNED
       x-fundzim-auth: session|token
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-READ
@@ -8551,6 +8561,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: DON-05
+      x-fundzim-status: PLANNED
       x-fundzim-auth: session|token
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-READ
@@ -8613,6 +8624,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: DON-06
+      x-fundzim-status: PLANNED
       x-fundzim-auth: session
       x-fundzim-idempotency: optional
       x-fundzim-rate-limit-class: RL-USER-WRITE
@@ -8712,6 +8724,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: DON-08
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA
       x-fundzim-permission: payment.view
       x-fundzim-idempotency: n/a
@@ -8766,6 +8779,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: DON-09
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA
       x-fundzim-permission: payment.view
       x-fundzim-idempotency: n/a
@@ -8828,6 +8842,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: DON-10
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA+step-up
       x-fundzim-permission: donor.identity.unmask
       x-fundzim-step-up: true
@@ -8894,6 +8909,7 @@ paths:
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
       x-fundzim-endpoint-id: PAY-01
+      x-fundzim-status: PLANNED
       x-fundzim-auth: session
       x-fundzim-idempotency: required
       x-fundzim-rate-limit-class: RL-DONATE
@@ -8908,289 +8924,6 @@ paths:
       - PAYMENT_NOT_FOUND
       - PAYMENT_OUTCOME_UNKNOWN
       - PROVIDER_UNAVAILABLE
-  /admin/payments:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Payment intents
-      operationId: adminListPayments
-      summary: Search payments (staff)
-      description: '**PAY-02** · Auth: staff + MFA · Authorization: `payment.view`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      - name: status
-        in: query
-        required: false
-        schema:
-          type: string
-          description: Comma-separated allow-listed status values (OR).
-        description: Allow-listed filter.
-      - name: provider
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 64
-        description: Allow-listed filter.
-      - name: currency
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Currency'
-        description: Allow-listed filter.
-      - name: campaign_id
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Uuid'
-        description: Allow-listed filter.
-      - name: needs_reconciliation
-        in: query
-        required: false
-        schema:
-          type: boolean
-        description: Allow-listed filter.
-      - name: from
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Timestamp'
-        description: Allow-listed filter.
-      - name: to
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Timestamp'
-        description: Allow-listed filter.
-      - name: sort
-        in: query
-        required: false
-        description: Allow-listed sort key; `-` prefix = descending.
-        schema:
-          type: string
-          enum:
-          - -created_at
-          - unknown_since
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StaffPaymentIntentPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: PAY-02
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: payment.view
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
-      - INVALID_FILTER
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-  /admin/payments/{payment_id}:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Payment intents
-      operationId: adminGetPayment
-      summary: Get payment (staff)
-      description: '**PAY-03** · Auth: staff + MFA · Authorization: `payment.view`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - name: payment_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StaffPaymentIntentEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: PAY-03
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: payment.view
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - MFA_REQUIRED
-      - PAYMENT_NOT_FOUND
-      - PERMISSION_DENIED
-  /admin/payments/{payment_id}/events:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Payment intents
-      operationId: adminListPaymentEvents
-      summary: Payment event history
-      description: '**PAY-04** · Auth: staff + MFA · Authorization: `payment.view`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - name: payment_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaymentEventPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: PAY-04
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: payment.view
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
-      - MFA_REQUIRED
-      - PAYMENT_NOT_FOUND
-      - PERMISSION_DENIED
-  /admin/payments/{payment_id}/status-checks:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Payment intents
-      operationId: requestPaymentStatusCheck
-      summary: Enqueue an authoritative provider status query
-      description: '**PAY-05** · Auth: staff + MFA · Authorization: `payment.status.query`. Never changes state directly.
-
-
-        Idempotency: optional · Rate-limit class: `RL-STAFF-WRITE` · Audit: payment.status_query.requested (new, J)'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - name: payment_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKeyOptional'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/StaffActionRequest'
-      responses:
-        '202':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AcceptedEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: PAY-05
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: payment.status.query
-      x-fundzim-idempotency: optional
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: payment.status_query.requested (new, J)
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - IDEMPOTENCY_KEY_INVALID
-      - IDEMPOTENCY_KEY_REUSED
-      - IDEMPOTENCY_REQUEST_IN_PROGRESS
-      - MFA_REQUIRED
-      - PAYMENT_NOT_FOUND
-      - PERMISSION_DENIED
-      - VALIDATION_FAILED
   /payments/{payment_id}:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -9239,6 +8972,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: PST-01
+      x-fundzim-status: PLANNED
       x-fundzim-auth: session|token
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-STATUS-POLL
@@ -9304,6 +9038,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-01
+      x-fundzim-status: PLANNED
       x-fundzim-auth: session|token
       x-fundzim-idempotency: required
       x-fundzim-rate-limit-class: RL-SENSITIVE-USER
@@ -9366,6 +9101,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-02
+      x-fundzim-status: PLANNED
       x-fundzim-auth: session
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-READ
@@ -9417,6 +9153,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-03
+      x-fundzim-status: PLANNED
       x-fundzim-auth: session|token
       x-fundzim-idempotency: n/a
       x-fundzim-rate-limit-class: RL-USER-READ
@@ -9473,6 +9210,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-04
+      x-fundzim-status: PLANNED
       x-fundzim-auth: session
       x-fundzim-idempotency: required
       x-fundzim-rate-limit-class: RL-USER-WRITE
@@ -9538,6 +9276,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-05
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA
       x-fundzim-permission: refund.request
       x-fundzim-maker-checker: maker
@@ -9630,6 +9369,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-06
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA
       x-fundzim-permission: refund.view
       x-fundzim-idempotency: n/a
@@ -9684,6 +9424,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-07
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA
       x-fundzim-permission: refund.view
       x-fundzim-idempotency: n/a
@@ -9751,6 +9492,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-08
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA
       x-fundzim-permission: refund.request
       x-fundzim-idempotency: optional
@@ -9821,6 +9563,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-09
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA+step-up
       x-fundzim-permission: refund.approve
       x-fundzim-step-up: true
@@ -9903,6 +9646,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-10
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA+step-up
       x-fundzim-permission: refund.approve
       x-fundzim-step-up: true
@@ -9982,6 +9726,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-11
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA
       x-fundzim-permission: refund.approve
       x-fundzim-idempotency: optional
@@ -10056,6 +9801,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-12
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA
       x-fundzim-permission: refund.approve
       x-fundzim-idempotency: optional
@@ -10122,6 +9868,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-22
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA+step-up
       x-fundzim-permission: refund.bulk.request
       x-fundzim-step-up: true
@@ -10200,6 +9947,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-23
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA+step-up
       x-fundzim-permission: refund.approve
       x-fundzim-step-up: true
@@ -10280,6 +10028,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: REF-24
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA+step-up
       x-fundzim-permission: refund.bulk.approve
       x-fundzim-step-up: true
@@ -18644,6 +18393,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: ADM-21
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA
       x-fundzim-permission: webhook.deadletter.manage
       x-fundzim-idempotency: n/a
@@ -18710,6 +18460,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: ADM-22
+      x-fundzim-status: PLANNED
       x-fundzim-auth: staff+MFA
       x-fundzim-permission: webhook.deadletter.manage
       x-fundzim-idempotency: optional
@@ -20615,6 +20366,7 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
       x-fundzim-endpoint-id: WHK-01
+      x-fundzim-status: PLANNED
       x-fundzim-auth: provider-signature
       x-fundzim-idempotency: n/a (dedupe by provider_event_id)
       x-fundzim-rate-limit-class: RL-WEBHOOK
@@ -29499,6 +29251,1872 @@ paths:
       x-fundzim-audit: —
       x-fundzim-error-codes:
       - SERVICE_UNAVAILABLE
+  /donation-intents:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Donor payments (Stage 8)
+      operationId: createDonationIntent
+      summary: Create a donation intent
+      description: '**Stage 8 · SIMULATOR_ONLY** · Auth: personal account session (staff accounts refused) · Authorization: own resources only. Validates
+        eligibility (campaign ACTIVE + PUBLIC/UNLISTED + approved version; no compliance restriction of any level on the campaign, owner, organisation, beneficiary
+        or donor), currency (usable and = goal currency; ZWG refused), limits (technical; approved REGULATORY/INTERNAL_RISK limits from risk.limits) and availability
+        BEFORE anything is stored. Stores no money and changes no total. **Stage 8: SIMULATOR_ONLY** — the only provider is the sandbox simulator; real payment
+        execution is DISABLED (`psp.LiveExecutionEnabled` is a constant false; kill switch `payments.live_execution.enabled` off; ADR-039 §6).
+
+
+
+        Idempotency: required (Idempotency-Key; DB backstop UNIQUE (donor, key)) · Rate-limit: payments.intent.user, payments.intent.campaign · Audit: payments.donation_intent.created
+        · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - &id003
+        $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DonationIntentCreateS8'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: &id001
+              description: '`no-store`: payment data is never cached.'
+              schema:
+                type: string
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DonationIntentS8Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: SIMULATOR_ONLY
+      x-fundzim-stage: 8
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: required (Idempotency-Key; DB backstop UNIQUE (donor, key))
+      x-fundzim-error-codes:
+      - AMOUNT_OUT_OF_RANGE
+      - CAMPAIGN_NOT_ACCEPTING_DONATIONS
+      - CURRENCY_NOT_ACCEPTED
+      - CURRENCY_NOT_AVAILABLE
+      - DONATION_NOT_AVAILABLE
+      - IDEMPOTENCY_KEY_INVALID
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - IDEMPOTENCY_REQUEST_IN_PROGRESS
+      - PAYMENTS_UNAVAILABLE
+      - PAYMENT_METHOD_UNAVAILABLE
+      - RATE_LIMITED
+      - VALIDATION_FAILED
+    get:
+      tags:
+      - Donor payments (Stage 8)
+      operationId: listMyDonationIntents
+      summary: My donation intents
+      description: '**Stage 8 · SIMULATOR_ONLY** · Auth: personal account session (staff accounts refused) · Authorization: own resources only. Newest first;
+        keyset pages.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - &id004
+        $ref: '#/components/parameters/Limit'
+      - &id005
+        $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DonationIntentS8Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: SIMULATOR_ONLY
+      x-fundzim-stage: 8
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - VALIDATION_FAILED
+  /donation-intents/{donation_intent_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Donor payments (Stage 8)
+      operationId: getDonationIntent
+      summary: One of my donation intents (with attempts)
+      description: '**Stage 8 · SIMULATOR_ONLY** · Auth: personal account session (staff accounts refused) · Authorization: own resources only. Own intents
+        only; anyone else → 404.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: donation_intent_id
+        in: path
+        required: true
+        schema: &id002
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DonationIntentS8Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: SIMULATOR_ONLY
+      x-fundzim-stage: 8
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - DONATION_INTENT_NOT_FOUND
+  /donation-intents/{donation_intent_id}/attempts:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Donor payments (Stage 8)
+      operationId: createPaymentAttempt
+      summary: Start a payment attempt
+      description: '**Stage 8 · SIMULATOR_ONLY** · Auth: personal account session (staff accounts refused) · Authorization: own resources only. Routes to
+        a routable capability (never UNVERIFIED or MERCHANT_SETTLEMENT; never past an open circuit or outside provider limits), commits the payment CREATED
+        and the provider call IN_FLIGHT, calls the provider with a deadline, then records the classified outcome. The response is the payment''s REAL status
+        (`PENDING`, `REQUIRES_ACTION`, `UNKNOWN`, `FAILED` …) — never a 5xx for a provider outcome; a timeout is `UNKNOWN`, never `FAILED`. Refused while
+        another attempt is in progress (409 PAYMENT_IN_PROGRESS), unknown (409 PAYMENT_OUTCOME_UNKNOWN) or succeeded (409 DONATION_ALREADY_PAID). **Stage
+        8: SIMULATOR_ONLY** — the only provider is the sandbox simulator; real payment execution is DISABLED (`psp.LiveExecutionEnabled` is a constant false;
+        kill switch `payments.live_execution.enabled` off; ADR-039 §6).
+
+
+
+        Idempotency: required (Idempotency-Key; DB backstop UNIQUE (donation_intent, key)) · Rate-limit: payments.attempt.user · Audit: payments.attempt.created
+        · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: donation_intent_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentAttemptCreateS8'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentAttemptS8Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: SIMULATOR_ONLY
+      x-fundzim-stage: 8
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: required (Idempotency-Key; DB backstop UNIQUE (donation_intent, key))
+      x-fundzim-error-codes:
+      - AMOUNT_OUT_OF_RANGE
+      - CAMPAIGN_NOT_ACCEPTING_DONATIONS
+      - DONATION_ALREADY_PAID
+      - DONATION_INTENT_NOT_FOUND
+      - DONATION_INTENT_NOT_OPEN
+      - DONATION_NOT_AVAILABLE
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - IDEMPOTENCY_REQUEST_IN_PROGRESS
+      - PAYMENT_EXECUTION_DISABLED
+      - PAYMENT_IN_PROGRESS
+      - PAYMENT_METHOD_UNAVAILABLE
+      - PAYMENT_OUTCOME_UNKNOWN
+      - PAYMENT_PROVIDER_UNAVAILABLE
+      - RATE_LIMITED
+      - VALIDATION_FAILED
+    get:
+      tags:
+      - Donor payments (Stage 8)
+      operationId: listPaymentAttempts
+      summary: Attempts of one of my donation intents
+      description: '**Stage 8 · SIMULATOR_ONLY** · Auth: personal account session (staff accounts refused) · Authorization: own resources only. Own intents
+        only.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: donation_intent_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentAttemptS8Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: SIMULATOR_ONLY
+      x-fundzim-stage: 8
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - DONATION_INTENT_NOT_FOUND
+  /donation-intents/{donation_intent_id}/status:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Donor payments (Stage 8)
+      operationId: getDonationStatus
+      summary: Poll-friendly status of a donation intent
+      description: '**Stage 8 · SIMULATOR_ONLY** · Auth: personal account session (staff accounts refused) · Authorization: own resources only. Latest attempt
+        and a donor-safe message.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: donation_intent_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DonationStatusViewS8Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: SIMULATOR_ONLY
+      x-fundzim-stage: 8
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - DONATION_INTENT_NOT_FOUND
+  /donation-intents/{donation_intent_id}/cancel:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Donor payments (Stage 8)
+      operationId: cancelDonationIntent
+      summary: Cancel an OPEN donation intent
+      description: '**Stage 8 · SIMULATOR_ONLY** · Auth: personal account session (staff accounts refused) · Authorization: own resources only. Only while
+        no attempt is in progress, unknown or succeeded.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: payments.donation_intent.cancelled · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: donation_intent_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DonationIntentS8Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: SIMULATOR_ONLY
+      x-fundzim-stage: 8
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - DONATION_ALREADY_PAID
+      - DONATION_INTENT_NOT_FOUND
+      - DONATION_INTENT_NOT_OPEN
+      - PAYMENT_IN_PROGRESS
+      - PAYMENT_OUTCOME_UNKNOWN
+  /payment-sessions/{session_id}/return:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Donor payments (Stage 8)
+      operationId: returnFromPaymentSession
+      summary: Donor returned from a provider page
+      description: '**Stage 8 · SIMULATOR_ONLY** · Auth: personal account session (staff accounts refused) · Authorization: own resources only. **Never confirms
+        a payment** (CLAUDE.md financial rule 6): consumes the single-use, donor-bound token, marks the session RETURNED and schedules an authenticated status
+        query; the payment changes only on provider evidence. A reused, foreign or wrong token → 404 PAYMENT_SESSION_INVALID. **Stage 8: SIMULATOR_ONLY**
+        — the only provider is the sandbox simulator; real payment execution is DISABLED (`psp.LiveExecutionEnabled` is a constant false; kill switch `payments.live_execution.enabled`
+        off; ADR-039 §6).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: session_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionReturnS8'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionReturnResultS8Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: SIMULATOR_ONLY
+      x-fundzim-stage: 8
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYMENT_SESSION_INVALID
+      - VALIDATION_FAILED
+  /payment-methods:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Donor payments (Stage 8)
+      operationId: listPaymentMethods
+      summary: Payment methods available now
+      description: '**Stage 8 · SIMULATOR_ONLY** · Auth: none · Authorization: —. Methods that would route now for the currency (or the campaign''s goal currency).
+        Empty when nothing is routable; simulated methods are marked.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-PUBLIC · Audit: — · Cache-Control: no-store'
+      security: []
+      parameters:
+      - name: currency
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Currency'
+      - name: campaign_id
+        in: query
+        required: false
+        schema: *id002
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentMethodListS8Envelope'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: SIMULATOR_ONLY
+      x-fundzim-stage: 8
+      x-fundzim-auth: public
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - VALIDATION_FAILED
+  /payment-providers/capabilities:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Donor payments (Stage 8)
+      operationId: listPaymentProviderCapabilities
+      summary: Current capabilities of enabled providers
+      description: '**Stage 8 · SIMULATOR_ONLY** · Auth: none · Authorization: —. No accounts, no secrets. In Stage 8 only the sandbox simulator (when enabled)
+        is listed; its rows are simulator facts, not claims about any real rail.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-PUBLIC · Audit: — · Cache-Control: no-store'
+      security: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicPaymentCapabilityListS8Envelope'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: SIMULATOR_ONLY
+      x-fundzim-stage: 8
+      x-fundzim-auth: public
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /webhooks/payments/{provider}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Webhooks
+      operationId: receivePaymentProviderWebhook
+      summary: Receive a payment provider webhook
+      description: '**Stage 8 · IMPLEMENTED** · Auth: provider signature · Authorization: —. Size ≤ 64 KiB, `application/json`; verification by the provider
+        adapter with the provider''s DOCUMENTED procedure over the exact bytes (key slot current/previous for rotation, replay window from the account). The
+        sandbox SIMULATOR signs with header `FundZim-Sandbox-Signature: t=<unix>,kid=<current|previous>,v1=<hex HMAC-SHA256(secret, t + "." + body)>` — a
+        simulator-only scheme, never assumed for real providers (PCR-017). A rejected delivery stores NO payload (only a rejection row: reason, body hash,
+        size). Accepted events are stored once (UNIQUE (provider, provider_event_id)) together with an outbox dispatch event in one transaction, then `200
+        {received, duplicate}`: **acknowledgement means durably stored, not applied**. Duplicates are acknowledged and not reprocessed. Dispatch retries with
+        backoff; after 8 failures the event is DEAD_LETTERED (staff re-queue only). Providers should retry on non-2xx.
+
+
+
+        Idempotency: dedupe by (provider, provider_event_id) · Rate-limit: payments.webhook.ip, global.ip · Audit: rejections in app.provider_webhook_rejections
+        · Cache-Control: no-store'
+      security:
+      - providerSignature: []
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9_]{1,31}$
+        description: Provider code.
+      requestBody:
+        required: true
+        description: Raw provider payload; verified over the exact bytes before parsing; never logged or stored.
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookAckS8Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: provider
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: dedupe by (provider, provider_event_id)
+      x-fundzim-error-codes:
+      - PAYLOAD_TOO_LARGE
+      - RATE_LIMITED
+      - UNSUPPORTED_MEDIA_TYPE
+      - WEBHOOK_MALFORMED
+      - WEBHOOK_PROVIDER_UNKNOWN
+      - WEBHOOK_SIGNATURE_INVALID
+      - WEBHOOK_TIMESTAMP_INVALID
+  /admin/payments/overview:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminPaymentsOverview
+      summary: Payment operations overview
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.view` (non-staff → `404`). Counts only (never sums of money).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentsOverviewS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/payments/intents:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminListDonationIntents
+      summary: Donation intents
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.view` (non-staff → `404`). Newest first.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/DonationIntentStatusS8'
+      - name: campaign_id
+        in: query
+        required: false
+        schema: *id002
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDonationIntentS8Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - VALIDATION_FAILED
+  /admin/payments/intents/{donation_intent_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminGetDonationIntent
+      summary: Donation intent detail
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.view` (non-staff → `404`). With attempts and the event history.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: donation_intent_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminDonationIntentS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - DONATION_INTENT_NOT_FOUND
+  /admin/payments/attempts:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminListPaymentAttempts
+      summary: Payment attempts
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.view` (non-staff → `404`). Newest first.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/PaymentStatusS8'
+      - name: method
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/PaymentMethodS8'
+      - name: needs_reconciliation
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - 'true'
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPaymentAttemptS8Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - VALIDATION_FAILED
+  /admin/payments/attempts/{payment_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminGetPaymentAttempt
+      summary: Payment attempt detail
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.view` (non-staff → `404`). Provider calls, provider transaction
+        (raw status verbatim + mapping), references, session (never the token), webhooks, events, reconciliation references and refund requests.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payment_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPaymentAttemptDetailS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYMENT_NOT_FOUND
+  /admin/payments/unknown:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminUnknownPayments
+      summary: Unknown-outcome queue
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.view` (non-staff → `404`). Payments in UNKNOWN, oldest first.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminPaymentAttemptS8Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/payments/attempts/{payment_id}/status-query:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminRequestPaymentStatusQuery
+      summary: Request an authenticated status query
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.operate` + fresh step-up (non-staff → `404`). Runs an immediate
+        status query by our reference and applies the answer through the state machine (source POLL). It never sets a status itself; there is no manual success/failure
+        override.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payments.status_query.requested · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payment_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonInputS8'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusQueryResultS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYMENT_NOT_FOUND
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payments/webhooks:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminListWebhookInbox
+      summary: Webhook inbox
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.view` (non-staff → `404`). Newest first.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - RECEIVED
+          - DISPATCHED
+          - PARKED
+          - FAILED_RETRYING
+          - PROCESSED
+          - UNRECOGNISED
+          - DEAD_LETTERED
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookInboxItemS8Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - VALIDATION_FAILED
+  /admin/payments/webhooks/{inbox_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminGetWebhookInboxEvent
+      summary: Webhook inbox event
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.view` (non-staff → `404`). Redacted payload, hash of the verified
+        bytes, verification and processing facts.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: inbox_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookInboxDetailS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - INBOX_EVENT_NOT_FOUND
+  /admin/payments/webhooks/{inbox_id}/requeue:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminRequeueWebhookInboxEvent
+      summary: Re-queue a dead-lettered or unrecognised event
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.operate` + fresh step-up (non-staff → `404`). Only DEAD_LETTERED
+        or UNRECOGNISED; audited.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payments.webhook.requeued · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: inbox_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonInputS8'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookInboxDetailS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - INBOX_EVENT_NOT_FOUND
+      - INBOX_EVENT_NOT_REQUEUEABLE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payments/webhook-rejections:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminListWebhookRejections
+      summary: Rejected webhook deliveries
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.view` (non-staff → `404`). No payloads are stored.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookRejectionS8Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/payments/providers:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminListPaymentProviders
+      summary: Providers, accounts, capabilities and execution gates
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.view` (non-staff → `404`). Secret reference NAMES and whether
+        they resolve — never values.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentProvidersViewS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/payments/reconciliation:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminListPaymentReconciliation
+      summary: Reconciliation references
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.view` (non-staff → `404`). Newest first.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - AWAITING_SETTLEMENT_DATA
+          - RESOLVED_BY_PROVIDER_STATUS
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentReconciliationReferenceS8Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - VALIDATION_FAILED
+  /admin/payments/reconciliation/{reference_id}/await-settlement:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminAwaitSettlementData
+      summary: Mark a reference as awaiting settlement data
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.operate` + fresh step-up (non-staff → `404`). OPEN → AWAITING_SETTLEMENT_DATA.
+        Never changes the payment status; nothing is ever marked reconciled in Stage 8.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payments.reconciliation.awaiting_settlement · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: reference_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteInputS8'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconAwaitResultS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - RECONCILIATION_REFERENCE_NOT_FOUND
+      - RECONCILIATION_REFERENCE_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payments/attempts/{payment_id}/refund-requests:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminCreatePaymentRefundRequest
+      summary: Request a refund (maker)
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `refund.request` (non-staff → `404`). Payment must be SUCCEEDED or PARTIALLY_REFUNDED;
+        the database refuses any amount above the refundable remainder (concurrent requests serialise on the payment row). Goes to PENDING_APPROVAL. **Refund
+        execution is DISABLED in Stage 8** (no provider refund is ever sent).
+
+
+
+        Idempotency: required (DB backstop UNIQUE (requested_by, key)) · Rate-limit: RL-STAFF-WRITE · Audit: payments.refund.requested · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payment_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      - *id003
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequestCreateS8'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRefundRequestS8Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: refund.request
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: required (DB backstop UNIQUE (requested_by, key))
+      x-fundzim-error-codes:
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - PAYMENT_NOT_FOUND
+      - REFUND_EXCEEDS_REFUNDABLE
+      - REFUND_NOT_ALLOWED
+      - VALIDATION_FAILED
+  /admin/payments/refund-requests:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminListPaymentRefundRequests
+      summary: Refund requests
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `payment.view` (non-staff → `404`). Newest first.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - REQUESTED
+          - PENDING_APPROVAL
+          - ON_HOLD
+          - APPROVED
+          - REJECTED
+          - WITHDRAWN
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRefundRequestS8Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - VALIDATION_FAILED
+  /admin/payments/refund-requests/{refund_request_id}/approve:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminRefundRequestApprove
+      summary: Approve a refund request
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `refund.approve` + fresh step-up (non-staff → `404`). Checker must differ
+        from the maker (Go and database). Records the decision only: execution is DISABLED (no APPROVED → EXECUTING edge).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payments.refund.approve · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: refund_request_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonInputS8'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRefundRequestS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: refund.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - REFUND_REQUEST_NOT_FOUND
+      - REFUND_REQUEST_STATE
+      - REFUND_SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payments/refund-requests/{refund_request_id}/reject:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminRefundRequestReject
+      summary: Reject a refund request
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `refund.approve` + fresh step-up (non-staff → `404`). Checker must differ
+        from the maker (Go and database).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payments.refund.reject · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: refund_request_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonInputS8'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRefundRequestS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: refund.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - REFUND_REQUEST_NOT_FOUND
+      - REFUND_REQUEST_STATE
+      - REFUND_SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payments/refund-requests/{refund_request_id}/hold:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminRefundRequestHold
+      summary: Hold a refund request
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `refund.approve` + fresh step-up (non-staff → `404`). Checker must differ
+        from the maker (Go and database).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payments.refund.hold · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: refund_request_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonInputS8'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRefundRequestS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: refund.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - REFUND_REQUEST_NOT_FOUND
+      - REFUND_REQUEST_STATE
+      - REFUND_SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payments/refund-requests/{refund_request_id}/resume:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminRefundRequestResume
+      summary: Resume a refund request
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `refund.approve` + fresh step-up (non-staff → `404`). Checker must differ
+        from the maker (Go and database).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payments.refund.resume · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: refund_request_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonInputS8'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRefundRequestS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: refund.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - REFUND_REQUEST_NOT_FOUND
+      - REFUND_REQUEST_STATE
+      - REFUND_SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payments/refund-requests/{refund_request_id}/withdraw:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminRefundRequestWithdraw
+      summary: Withdraw a refund request
+      description: '**Stage 8 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `refund.request` (non-staff → `404`). Withdraw your own refund request.
+        Requester only.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payments.refund.withdraw · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: refund_request_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonInputS8'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentRefundRequestS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: refund.request
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - REFUND_REQUEST_NOT_FOUND
+      - REFUND_REQUEST_STATE
+      - REFUND_SELF_APPROVAL_FORBIDDEN
+      - VALIDATION_FAILED
+  /admin/payments/sandbox/attempts/{payment_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminSandboxPaymentState
+      summary: Simulator-side state of a simulated payment (DEVELOPMENT ONLY)
+      description: '**Stage 8 · SIMULATOR_ONLY** · Auth: staff + MFA · Authorization: `payment.sandbox.control` (non-staff → `404`). 404 SANDBOX_DISABLED
+        unless the sandbox simulator runs (never in production).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payment_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxPaymentStateS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: SIMULATOR_ONLY
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.sandbox.control
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYMENT_NOT_FOUND
+      - SANDBOX_DISABLED
+  /admin/payments/sandbox/attempts/{payment_id}/webhooks:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payment operations (Stage 8)
+      operationId: adminSandboxScheduleWebhook
+      summary: Make the simulator send webhooks (DEVELOPMENT ONLY)
+      description: '**Stage 8 · SIMULATOR_ONLY** · Auth: staff + MFA · Authorization: `payment.sandbox.control` (non-staff → `404`). The simulator signs and
+        POSTs the webhooks through the real ingestion endpoint (wrong keys, stale timestamps and copies included).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payment_id
+        in: path
+        required: true
+        schema: *id002
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SandboxWebhookScheduleS8'
+      responses:
+        '202':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control: *id001
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxScheduledS8Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: SIMULATOR_ONLY
+      x-fundzim-stage: 8
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.sandbox.control
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYMENT_NOT_FOUND
+      - SANDBOX_DISABLED
+      - VALIDATION_FAILED
 components:
   securitySchemes:
     session:
@@ -32446,40 +34064,6 @@ components:
       - needs_reconciliation
       - reversal_kind
       - audit
-    PaymentEvent:
-      type: object
-      description: Append-only payment status event.
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        from_status:
-          oneOf:
-          - $ref: '#/components/schemas/PaymentStatus'
-          - type: 'null'
-        to_status:
-          $ref: '#/components/schemas/PaymentStatus'
-        source:
-          type: string
-          enum:
-          - SYNC
-          - WEBHOOK
-          - POLL
-          - RECON
-          - SYSTEM
-          - STAFF
-        raw_status:
-          type: string
-        occurred_at:
-          $ref: '#/components/schemas/Timestamp'
-        recorded_at:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - id
-      - from_status
-      - to_status
-      - source
-      - occurred_at
-      - recorded_at
     DonorRefundRequestCreate:
       type: object
       description: Donor asks for a refund of their own donation (original instrument only).
@@ -36374,43 +37958,6 @@ components:
           $ref: '#/components/schemas/PaymentStatusView'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
-    StaffPaymentIntentPage:
-      type: object
-      description: Standard envelope (cursor page) for `StaffPaymentIntent`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/StaffPaymentIntent'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
-    StaffPaymentIntentEnvelope:
-      type: object
-      description: Standard envelope for `StaffPaymentIntent`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/StaffPaymentIntent'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    PaymentEventPage:
-      type: object
-      description: Standard envelope (cursor page) for `PaymentEvent`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/PaymentEvent'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
     AcceptedEnvelope:
       type: object
       description: Standard envelope for `Accepted`.
@@ -42708,3 +44255,1608 @@ components:
         shown:
           type: boolean
           description: 'Whether the pick is currently shown (a pick never overrides visibility: it is skipped unless the campaign is live and PUBLIC).'
+    PaymentProviderRefS8:
+      type: object
+      properties:
+        code:
+          type: string
+        display_name:
+          type: string
+        simulated:
+          type: boolean
+          description: true for the sandbox SIMULATOR (never a real provider).
+      required:
+      - code
+      - display_name
+      - simulated
+      additionalProperties: false
+    PaymentStatusS8:
+      type: string
+      enum:
+      - CREATED
+      - PENDING
+      - REQUIRES_ACTION
+      - AUTHORISED
+      - UNKNOWN
+      - SUCCEEDED
+      - FAILED
+      - EXPIRED
+      - CANCELLED
+      - PARTIALLY_REFUNDED
+      - REFUNDED
+      - DISPUTED
+      - CHARGED_BACK
+      description: Canonical payment status (baseline §8; ADR-020/024). Changes only through the 42-edge machine `payment_intent` with precedence (ranks) —
+        enforced in Go and in the database. `SUCCEEDED` only from authoritative provider evidence (sync answer, verified webhook, status query, reconciliation),
+        never from a browser redirect; `UNKNOWN` only after our own indeterminate call; a timeout never produces `FAILED`. The brief's PROCESSING/PROVIDER_PENDING
+        map to `PENDING`; RECONCILIATION_REQUIRED is the `needs_reconciliation` flag (ADR-039 §3).
+    PaymentMethodS8:
+      type: string
+      enum:
+      - ECOCASH
+      - ONEMONEY
+      - INNBUCKS
+      - OMARI
+      - ZIMSWITCH
+      - BANK_TRANSFER
+      - CARD
+    PaymentMethodCategoryS8:
+      type: string
+      enum:
+      - MOBILE_MONEY
+      - CARD
+      - BANK_TRANSFER
+      - ACCOUNT_TO_ACCOUNT
+      - OTHER
+    DonationIntentStatusS8:
+      type: string
+      enum:
+      - OPEN
+      - PAID
+      - EXPIRED
+      - CANCELLED
+      description: 'Machine `donation_intent`: '''' → OPEN; OPEN → PAID | EXPIRED | CANCELLED; EXPIRED/CANCELLED → PAID (a late authoritative success wins).
+        PAID is set only by the system when a payment succeeded.'
+    PaymentNextActionS8:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - NONE
+          - REDIRECT
+          - AWAIT_HANDSET_APPROVAL
+          - SHOW_INSTRUCTIONS
+        session_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        redirect_url:
+          type:
+          - string
+          - 'null'
+          description: https URL on a host the provider adapter declares (open-redirect protection).
+        instructions_code: &id001
+          type:
+          - string
+          - 'null'
+        expires_at: &id012
+          type:
+          - string
+          - 'null'
+          format: date-time
+      required:
+      - type
+      - session_id
+      - redirect_url
+      - instructions_code
+      - expires_at
+      additionalProperties: false
+    PaymentAttemptS8:
+      type: object
+      description: A payment attempt (Stage 2 `payment_intents`). A retry after a definite failure is a NEW attempt with a new reference.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: 'payment_id: our reference and the provider idempotency key; never reused.'
+        donation_intent_id: &id003
+          type: string
+          format: uuid
+        attempt_number:
+          type: integer
+          minimum: 1
+        method:
+          $ref: '#/components/schemas/PaymentMethodS8'
+        method_category:
+          $ref: '#/components/schemas/PaymentMethodCategoryS8'
+        status:
+          $ref: '#/components/schemas/PaymentStatusS8'
+        provider:
+          $ref: '#/components/schemas/PaymentProviderRefS8'
+        failure_code: *id001
+        message:
+          type: string
+          description: Donor-safe text; never claims money was received before SUCCEEDED.
+        next_action:
+          $ref: '#/components/schemas/PaymentNextActionS8'
+        created_at: &id002
+          $ref: '#/components/schemas/Timestamp'
+        updated_at: *id002
+      required:
+      - id
+      - donation_intent_id
+      - attempt_number
+      - method
+      - method_category
+      - status
+      - provider
+      - failure_code
+      - message
+      - next_action
+      - created_at
+      - updated_at
+      additionalProperties: false
+    DonationIntentS8:
+      type: object
+      description: A donor's validated request to give (ADR-039 §2). Not a donation received; changes no total (no totals exist).
+      properties:
+        id: *id003
+        campaign_id: *id003
+        amount_minor:
+          $ref: '#/components/schemas/PositiveAmountMinor'
+        currency:
+          $ref: '#/components/schemas/Currency'
+        status:
+          $ref: '#/components/schemas/DonationIntentStatusS8'
+        is_anonymous:
+          type: boolean
+          description: Public display choice only (LR-026); never anonymous processing.
+        simulated:
+          type: boolean
+        expires_at: *id002
+        created_at: *id002
+        updated_at: *id002
+        attempts:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentAttemptS8'
+      required:
+      - id
+      - campaign_id
+      - amount_minor
+      - currency
+      - status
+      - is_anonymous
+      - simulated
+      - expires_at
+      - created_at
+      - updated_at
+      additionalProperties: false
+    DonationIntentCreateS8:
+      type: object
+      properties:
+        campaign_id: *id003
+        amount_minor:
+          $ref: '#/components/schemas/PositiveAmountMinor'
+        currency:
+          $ref: '#/components/schemas/Currency'
+          description: 'Must be usable (verified minor units: ZWG refused, LR-043) and the campaign''s goal currency.'
+        is_anonymous:
+          type: boolean
+      required:
+      - campaign_id
+      - amount_minor
+      - currency
+      additionalProperties: false
+    PaymentAttemptCreateS8:
+      type: object
+      properties:
+        method:
+          $ref: '#/components/schemas/PaymentMethodS8'
+      required:
+      - method
+      additionalProperties: false
+    DonationStatusViewS8:
+      type: object
+      properties:
+        donation_intent_status:
+          $ref: '#/components/schemas/DonationIntentStatusS8'
+        attempt:
+          oneOf:
+          - $ref: '#/components/schemas/PaymentAttemptS8'
+          - type: 'null'
+        message:
+          type: string
+      required:
+      - donation_intent_status
+      - attempt
+      - message
+      additionalProperties: false
+    SessionReturnS8:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Single-use token from the return URL (replay-protected).
+      required:
+      - token
+      additionalProperties: false
+    SessionReturnResultS8:
+      type: object
+      properties:
+        attempt:
+          $ref: '#/components/schemas/PaymentAttemptS8'
+      required:
+      - attempt
+      additionalProperties: false
+    PaymentMethodAvailabilityS8:
+      type: object
+      properties:
+        method:
+          $ref: '#/components/schemas/PaymentMethodS8'
+        category:
+          $ref: '#/components/schemas/PaymentMethodCategoryS8'
+        currency:
+          $ref: '#/components/schemas/Currency'
+        simulated:
+          type: boolean
+      required:
+      - method
+      - category
+      - currency
+      - simulated
+      additionalProperties: false
+    PaymentMethodListS8:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentMethodAvailabilityS8'
+      required:
+      - items
+      additionalProperties: false
+    PaymentCapabilityS8:
+      type: object
+      properties:
+        id: *id003
+        method: &id004
+          $ref: '#/components/schemas/PaymentMethodS8'
+        method_category: &id005
+          $ref: '#/components/schemas/PaymentMethodCategoryS8'
+        currency: &id006
+          $ref: '#/components/schemas/Currency'
+        custody_model: &id007
+          type: string
+          enum:
+          - PSP_POOL
+          - MERCHANT_SETTLEMENT
+          - SPLIT_DIRECT
+        evidence_status: &id008
+          type: string
+          enum:
+          - VERIFIED
+          - UNVERIFIED
+          - NOT_SUPPORTED
+          - REQUIRES_PROVIDER_CONFIRMATION
+        evidence_source: *id001
+        pcr_ref: *id001
+        routable: &id009
+          type: boolean
+          description: VERIFIED, not MERCHANT_SETTLEMENT and an authoritative status path (generated column).
+        capability_version: &id010
+          type: integer
+        flags: &id011
+          type: object
+          additionalProperties:
+            type: boolean
+      required:
+      - id
+      - method
+      - method_category
+      - currency
+      - custody_model
+      - evidence_status
+      - evidence_source
+      - pcr_ref
+      - routable
+      - capability_version
+      - flags
+      additionalProperties: false
+    PublicPaymentCapabilityS8:
+      type: object
+      properties:
+        provider:
+          $ref: '#/components/schemas/PaymentProviderRefS8'
+        id: *id003
+        method: *id004
+        method_category: *id005
+        currency: *id006
+        custody_model: *id007
+        evidence_status: *id008
+        evidence_source: *id001
+        pcr_ref: *id001
+        routable: *id009
+        capability_version: *id010
+        flags: *id011
+      required:
+      - provider
+      - id
+      - method
+      - method_category
+      - currency
+      - custody_model
+      - evidence_status
+      - evidence_source
+      - pcr_ref
+      - routable
+      - capability_version
+      - flags
+      additionalProperties: false
+    PublicPaymentCapabilityListS8:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicPaymentCapabilityS8'
+      required:
+      - items
+      additionalProperties: false
+    WebhookAckS8:
+      type: object
+      properties:
+        received:
+          type: boolean
+        duplicate:
+          type: boolean
+          description: true when every event was already stored (acknowledged, not reprocessed).
+      required:
+      - received
+      - duplicate
+      additionalProperties: false
+    LiveExecutionGateS8:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          description: 'Effective state: constant AND kill switch. Always false in Stage 8.'
+        constant:
+          type: boolean
+          description: psp.LiveExecutionEnabled (a Go constant, false).
+        kill_switch:
+          type: boolean
+          description: Feature flag payments.live_execution.enabled (maker-checker; false).
+      required:
+      - enabled
+      - constant
+      - kill_switch
+      additionalProperties: false
+    PaymentsOverviewS8:
+      type: object
+      description: Counts only — never sums of money (no totals or balances exist).
+      properties:
+        attempts_by_status:
+          type: object
+          additionalProperties:
+            type: integer
+        unknown_count:
+          type: integer
+        needs_reconciliation_count:
+          type: integer
+        inbox_by_status:
+          type: object
+          additionalProperties:
+            type: integer
+        rejections_24h:
+          type: integer
+        open_refund_requests:
+          type: integer
+        providers:
+          type: array
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+              display_name:
+                type: string
+              simulated:
+                type: boolean
+              status:
+                type: string
+              circuit:
+                type: string
+                enum:
+                - CLOSED
+                - OPEN
+                - HALF_OPEN
+            required:
+            - code
+            - display_name
+            - simulated
+            - status
+            - circuit
+            additionalProperties: false
+        live_execution:
+          $ref: '#/components/schemas/LiveExecutionGateS8'
+        sandbox_enabled:
+          type: boolean
+      required:
+      - attempts_by_status
+      - unknown_count
+      - needs_reconciliation_count
+      - inbox_by_status
+      - rejections_24h
+      - open_refund_requests
+      - providers
+      - live_execution
+      - sandbox_enabled
+      additionalProperties: false
+    AdminPaymentAttemptS8:
+      type: object
+      properties:
+        id: *id003
+        donation_intent_id: *id003
+        campaign_id: *id003
+        attempt_number:
+          type: integer
+        method:
+          $ref: '#/components/schemas/PaymentMethodS8'
+        method_category:
+          $ref: '#/components/schemas/PaymentMethodCategoryS8'
+        status:
+          $ref: '#/components/schemas/PaymentStatusS8'
+        amount_minor:
+          $ref: '#/components/schemas/PositiveAmountMinor'
+        currency:
+          $ref: '#/components/schemas/Currency'
+        provider:
+          $ref: '#/components/schemas/PaymentProviderRefS8'
+        simulated:
+          type: boolean
+        needs_reconciliation:
+          type: boolean
+        unknown_since: *id012
+        unknown_reason: *id001
+        failure_code: *id001
+        created_at: *id002
+        updated_at: *id002
+      required:
+      - id
+      - donation_intent_id
+      - campaign_id
+      - attempt_number
+      - method
+      - method_category
+      - status
+      - amount_minor
+      - currency
+      - provider
+      - simulated
+      - needs_reconciliation
+      - unknown_since
+      - unknown_reason
+      - failure_code
+      - created_at
+      - updated_at
+      additionalProperties: false
+    PaymentEventS8:
+      type: object
+      description: Append-only history (applied and not applied).
+      properties:
+        id: *id003
+        subject_type:
+          type: string
+          enum:
+          - DONATION_INTENT
+          - PAYMENT_INTENT
+          - REFUND_REQUEST
+        from_status: *id001
+        to_status:
+          type: string
+        applied:
+          type: boolean
+        not_applied_reason:
+          type:
+          - string
+          - 'null'
+          enum:
+          - LOWER_RANK
+          - NOT_AN_EDGE
+          - ANOMALY
+          - DUPLICATE
+          - PARKED
+          - null
+        transition_code: *id001
+        source:
+          type: string
+          enum:
+          - SYNC
+          - WEBHOOK
+          - POLL
+          - RECON
+          - INTERNAL
+          - STAFF
+          - DONOR
+        provider_event_id: *id001
+        raw_status: *id001
+        actor_type:
+          type: string
+        reason: *id001
+        correlation_id: *id001
+        occurred_at: *id012
+        recorded_at: *id002
+      required:
+      - id
+      - subject_type
+      - from_status
+      - to_status
+      - applied
+      - not_applied_reason
+      - transition_code
+      - source
+      - provider_event_id
+      - raw_status
+      - actor_type
+      - reason
+      - correlation_id
+      - occurred_at
+      - recorded_at
+      additionalProperties: false
+    AdminDonationIntentS8:
+      type: object
+      properties:
+        id: *id003
+        campaign_id: *id003
+        donor_user_id: *id003
+        amount_minor:
+          $ref: '#/components/schemas/PositiveAmountMinor'
+        currency:
+          $ref: '#/components/schemas/Currency'
+        status:
+          $ref: '#/components/schemas/DonationIntentStatusS8'
+        is_anonymous:
+          type: boolean
+        simulated:
+          type: boolean
+        expires_at: *id002
+        created_at: *id002
+        updated_at: *id002
+        attempts:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminPaymentAttemptS8'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentEventS8'
+      required:
+      - id
+      - campaign_id
+      - donor_user_id
+      - amount_minor
+      - currency
+      - status
+      - is_anonymous
+      - simulated
+      - expires_at
+      - created_at
+      - updated_at
+      additionalProperties: false
+    WebhookInboxItemS8:
+      type: object
+      properties:
+        id: *id003
+        provider:
+          $ref: '#/components/schemas/PaymentProviderRefS8'
+        provider_event_id:
+          type: string
+        event_class:
+          type: string
+          enum:
+          - PAYMENT
+          - REFUND
+          - DISPUTE
+          - PAYOUT
+          - OTHER
+        event_type_raw:
+          type: string
+        our_reference: *id001
+        provider_reference: *id001
+        status:
+          type: string
+          enum:
+          - RECEIVED
+          - DISPATCHED
+          - PARKED
+          - FAILED_RETRYING
+          - PROCESSED
+          - UNRECOGNISED
+          - DEAD_LETTERED
+        attempts:
+          type: integer
+        last_error_code: *id001
+        simulated:
+          type: boolean
+        signature_key_slot: *id001
+        verification_method:
+          type: string
+        received_at: *id002
+        processed_at: *id012
+      required:
+      - id
+      - provider
+      - provider_event_id
+      - event_class
+      - event_type_raw
+      - our_reference
+      - provider_reference
+      - status
+      - attempts
+      - last_error_code
+      - simulated
+      - signature_key_slot
+      - verification_method
+      - received_at
+      - processed_at
+      additionalProperties: false
+    WebhookInboxDetailS8:
+      allOf:
+      - $ref: '#/components/schemas/WebhookInboxItemS8'
+      - type: object
+        properties:
+          payload_redacted:
+            type: object
+            additionalProperties: true
+            description: Allow-listed, masked provider fields only.
+          raw_body_sha256:
+            type: string
+            description: Hex SHA-256 of the exact verified bytes (the body itself is not kept).
+          dispatched_to: *id001
+          parked_subject_id: *id001
+          parked_until_status: *id001
+          park_deadline_at: *id012
+          next_attempt_at: *id012
+          headers_subset:
+            type: object
+            additionalProperties:
+              type: string
+    WebhookRejectionS8:
+      type: object
+      description: A rejected delivery. No payload or headers are stored.
+      properties:
+        id: *id003
+        provider_code:
+          type: string
+        reason_code:
+          type: string
+        body_bytes:
+          type: integer
+        body_sha256: *id001
+        received_at: *id002
+      required:
+      - id
+      - provider_code
+      - reason_code
+      - body_bytes
+      - body_sha256
+      - received_at
+      additionalProperties: false
+    PaymentProviderCallS8:
+      type: object
+      description: One outbound provider call, recorded IN_FLIGHT before the call and completed exactly once.
+      properties:
+        id: *id003
+        attempt_no:
+          type: integer
+        operation:
+          type: string
+          enum:
+          - CREATE
+          - GET_STATUS
+          - CANCEL
+          - CAPTURE
+        classification:
+          type: string
+          enum:
+          - IN_FLIGHT
+          - ACCEPTED
+          - REJECTED
+          - DEFINITELY_NOT_SENT
+          - OUTCOME_UNKNOWN
+          - NOT_FOUND
+          - AUTH_CONFIG_ERROR
+          - NOT_SUPPORTED
+          - RATE_LIMITED
+        error_class: *id001
+        unknown_reason: *id001
+        http_status:
+          type:
+          - integer
+          - 'null'
+        provider_status_raw: *id001
+        provider_reference_returned: *id001
+        latency_ms:
+          type:
+          - integer
+          - 'null'
+        correlation_id:
+          type: string
+        started_at: *id002
+        deadline_at: *id002
+        completed_at: *id012
+      required:
+      - id
+      - attempt_no
+      - operation
+      - classification
+      - error_class
+      - unknown_reason
+      - http_status
+      - provider_status_raw
+      - provider_reference_returned
+      - latency_ms
+      - correlation_id
+      - started_at
+      - deadline_at
+      - completed_at
+      additionalProperties: false
+    PaymentRefundRequestS8:
+      type: object
+      description: 'Refund request (maker-checker). Machine `refund_request` (Stage 8 edges): '''' → REQUESTED → PENDING_APPROVAL | WITHDRAWN; PENDING_APPROVAL
+        → APPROVED | REJECTED | ON_HOLD | WITHDRAWN; ON_HOLD → PENDING_APPROVAL | REJECTED. Over-refund is refused by the database.'
+      properties:
+        id: *id003
+        payment_id: *id003
+        amount_minor:
+          $ref: '#/components/schemas/PositiveAmountMinor'
+        currency:
+          $ref: '#/components/schemas/Currency'
+        reason_code:
+          type: string
+        reason_text:
+          type: string
+        status:
+          type: string
+          enum:
+          - REQUESTED
+          - PENDING_APPROVAL
+          - ON_HOLD
+          - APPROVED
+          - REJECTED
+          - WITHDRAWN
+        requested_by: *id003
+        requested_at: *id002
+        decided_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        decided_at: *id012
+        decision_reason: *id001
+        expires_at: *id002
+        execution:
+          type: string
+          enum:
+          - DISABLED
+          description: 'Refund execution is DISABLED in Stage 8: no APPROVED → EXECUTING edge exists (ADR-039 §4).'
+      required:
+      - id
+      - payment_id
+      - amount_minor
+      - currency
+      - reason_code
+      - reason_text
+      - status
+      - requested_by
+      - requested_at
+      - decided_by
+      - decided_at
+      - decision_reason
+      - expires_at
+      - execution
+      additionalProperties: false
+    PaymentReconciliationReferenceS8:
+      type: object
+      description: Reconciliation foundation (Stage 17 completes). Never marks a payment reconciled.
+      properties:
+        id: *id003
+        payment_id: *id003
+        reason:
+          type: string
+          enum:
+          - UNKNOWN_HORIZON_EXCEEDED
+          - NOT_FOUND_AFTER_HORIZON
+          - AMOUNT_MISMATCH
+          - CURRENCY_MISMATCH
+          - ANOMALY
+          - LATE_SUCCESS
+          - DUPLICATE_SUCCESS
+          - PARKED_DEADLINE_EXCEEDED
+          - UNMAPPED_STATUS
+        status:
+          type: string
+          enum:
+          - OPEN
+          - AWAITING_SETTLEMENT_DATA
+          - RESOLVED_BY_PROVIDER_STATUS
+        expected_amount_minor:
+          $ref: '#/components/schemas/PositiveAmountMinor'
+        expected_currency:
+          $ref: '#/components/schemas/Currency'
+        reported_amount_minor: *id001
+        reported_currency: *id001
+        provider_status_raw: *id001
+        provider_reference: *id001
+        evidence_at: *id002
+        created_at: *id002
+        resolved_at: *id012
+        resolution_note: *id001
+      required:
+      - id
+      - payment_id
+      - reason
+      - status
+      - expected_amount_minor
+      - expected_currency
+      - reported_amount_minor
+      - reported_currency
+      - provider_status_raw
+      - provider_reference
+      - evidence_at
+      - created_at
+      - resolved_at
+      - resolution_note
+      additionalProperties: false
+    AdminPaymentAttemptDetailS8:
+      allOf:
+      - $ref: '#/components/schemas/AdminPaymentAttemptS8'
+      - type: object
+        properties:
+          provider_payment_ref: *id001
+          last_authoritative_source: *id001
+          poll_attempts:
+            type: integer
+          next_poll_at: *id012
+          poll_horizon_at: *id012
+          provider_calls:
+            type: array
+            items:
+              $ref: '#/components/schemas/PaymentProviderCallS8'
+          transaction:
+            oneOf:
+            - type: object
+              properties:
+                provider_transaction_ref:
+                  type: string
+                raw_status:
+                  type: string
+                  description: Verbatim provider status.
+                raw_status_at: *id012
+                mapped_status:
+                  $ref: '#/components/schemas/PaymentStatusS8'
+                mapping_version:
+                  type: string
+                last_source:
+                  type: string
+                reported_amount_minor: *id001
+                reported_currency: *id001
+                payer_instrument_masked: *id001
+                updated_at: *id002
+              required:
+              - provider_transaction_ref
+              - raw_status
+              - raw_status_at
+              - mapped_status
+              - mapping_version
+              - last_source
+              - reported_amount_minor
+              - reported_currency
+              - payer_instrument_masked
+              - updated_at
+              additionalProperties: false
+            - type: 'null'
+          references:
+            type: array
+            items:
+              type: object
+              properties:
+                ref_kind:
+                  type: string
+                reference:
+                  type: string
+                source:
+                  type: string
+                recorded_at: *id002
+              required:
+              - ref_kind
+              - reference
+              - source
+              - recorded_at
+              additionalProperties: false
+          session:
+            oneOf:
+            - type: object
+              description: Never includes the return token.
+              properties:
+                id: *id003
+                kind:
+                  type: string
+                status:
+                  type: string
+                redirect_url: *id001
+                expires_at: *id002
+                returned_at: *id012
+              required:
+              - id
+              - kind
+              - status
+              - redirect_url
+              - expires_at
+              - returned_at
+              additionalProperties: false
+            - type: 'null'
+          webhooks:
+            type: array
+            items:
+              $ref: '#/components/schemas/WebhookInboxItemS8'
+          events:
+            type: array
+            items:
+              $ref: '#/components/schemas/PaymentEventS8'
+          reconciliation:
+            type: array
+            items:
+              $ref: '#/components/schemas/PaymentReconciliationReferenceS8'
+          refund_requests:
+            type: array
+            items:
+              $ref: '#/components/schemas/PaymentRefundRequestS8'
+    PaymentProviderAdminS8:
+      type: object
+      properties:
+        code:
+          type: string
+        display_name:
+          type: string
+        simulated:
+          type: boolean
+        status:
+          type: string
+        selection_status:
+          type: string
+        confirmation_mode:
+          type: string
+        circuit:
+          type: string
+          enum:
+          - CLOSED
+          - OPEN
+          - HALF_OPEN
+        accounts:
+          type: array
+          items:
+            type: object
+            properties:
+              id: *id003
+              environment:
+                type: string
+              label:
+                type: string
+              status:
+                type: string
+              api_credentials_secret_ref:
+                type: string
+                description: A secretref:// reference NAME; never a value.
+              webhook_secret_ref: *id001
+              webhook_secret_ref_previous: *id001
+              secrets_resolvable:
+                type: boolean
+              webhook_replay_window_seconds:
+                type: integer
+            required:
+            - id
+            - environment
+            - label
+            - status
+            - api_credentials_secret_ref
+            - webhook_secret_ref
+            - webhook_secret_ref_previous
+            - secrets_resolvable
+            - webhook_replay_window_seconds
+            additionalProperties: false
+        capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentCapabilityS8'
+      required:
+      - code
+      - display_name
+      - simulated
+      - status
+      - selection_status
+      - confirmation_mode
+      - circuit
+      - accounts
+      - capabilities
+      additionalProperties: false
+    PaymentProvidersViewS8:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentProviderAdminS8'
+        live_execution:
+          $ref: '#/components/schemas/LiveExecutionGateS8'
+        sandbox_enabled:
+          type: boolean
+      required:
+      - items
+      - live_execution
+      - sandbox_enabled
+      additionalProperties: false
+    ReasonInputS8:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 2000
+      required:
+      - reason
+      additionalProperties: false
+    NoteInputS8:
+      type: object
+      properties:
+        note:
+          type: string
+          minLength: 3
+          maxLength: 2000
+      required:
+      - note
+      additionalProperties: false
+    StatusQueryResultS8:
+      type: object
+      properties:
+        payment_id: *id003
+        status:
+          $ref: '#/components/schemas/PaymentStatusS8'
+      required:
+      - payment_id
+      - status
+      additionalProperties: false
+    ReconAwaitResultS8:
+      type: object
+      properties:
+        id: *id003
+        status:
+          type: string
+          enum:
+          - AWAITING_SETTLEMENT_DATA
+      required:
+      - id
+      - status
+      additionalProperties: false
+    RefundRequestCreateS8:
+      type: object
+      properties:
+        amount_minor:
+          $ref: '#/components/schemas/PositiveAmountMinor'
+        reason_code:
+          type: string
+          enum:
+          - DONOR_REQUEST
+          - DUPLICATE_PAYMENT
+          - PAYMENT_ERROR
+          - CAMPAIGN_CANCELLED
+          - CAMPAIGN_FRAUD
+          - COMPLIANCE_ORDER
+          - OTHER
+        reason_text:
+          type: string
+          minLength: 3
+          maxLength: 2000
+      required:
+      - amount_minor
+      - reason_code
+      - reason_text
+      additionalProperties: false
+    SandboxPaymentStateS8:
+      type: object
+      description: SIMULATOR-side state (development only).
+      properties:
+        provider_payment_ref:
+          type: string
+        our_reference: *id003
+        scenario:
+          type: string
+        raw_status:
+          type: string
+        amount_minor:
+          type: string
+        currency:
+          $ref: '#/components/schemas/Currency'
+        method:
+          $ref: '#/components/schemas/PaymentMethodS8'
+        created_at: *id002
+        updated_at: *id002
+        simulated:
+          type: boolean
+          const: true
+      required:
+      - provider_payment_ref
+      - our_reference
+      - scenario
+      - raw_status
+      - amount_minor
+      - currency
+      - method
+      - created_at
+      - updated_at
+      - simulated
+      additionalProperties: false
+    SandboxWebhookScheduleS8:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - pending
+          - action_required
+          - paid
+          - failed
+          - expired
+          - cancelled
+          - limbo
+          - refunded
+          - partially_refunded
+        delay_seconds:
+          type: integer
+          minimum: 0
+          maximum: 3600
+        copies:
+          type: integer
+          minimum: 0
+          maximum: 10
+        amount_minor:
+          $ref: '#/components/schemas/PositiveAmountMinor'
+        sign_with:
+          type: string
+          enum:
+          - current
+          - previous
+          - wrong
+        timestamp_offset_seconds:
+          type: integer
+          minimum: -86400
+          maximum: 86400
+      required:
+      - status
+      additionalProperties: false
+    SandboxScheduledS8:
+      type: object
+      properties:
+        scheduled:
+          type: boolean
+        simulated:
+          type: boolean
+      required:
+      - scheduled
+      - simulated
+      additionalProperties: false
+    DonationIntentS8Envelope:
+      type: object
+      description: Standard envelope for `DonationIntentS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/DonationIntentS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PaymentAttemptS8Envelope:
+      type: object
+      description: Standard envelope for `PaymentAttemptS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PaymentAttemptS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DonationStatusViewS8Envelope:
+      type: object
+      description: Standard envelope for `DonationStatusViewS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/DonationStatusViewS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    SessionReturnResultS8Envelope:
+      type: object
+      description: Standard envelope for `SessionReturnResultS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/SessionReturnResultS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PaymentMethodListS8Envelope:
+      type: object
+      description: Standard envelope for `PaymentMethodListS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PaymentMethodListS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PublicPaymentCapabilityListS8Envelope:
+      type: object
+      description: Standard envelope for `PublicPaymentCapabilityListS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PublicPaymentCapabilityListS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    WebhookAckS8Envelope:
+      type: object
+      description: Standard envelope for `WebhookAckS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/WebhookAckS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PaymentsOverviewS8Envelope:
+      type: object
+      description: Standard envelope for `PaymentsOverviewS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PaymentsOverviewS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    AdminDonationIntentS8Envelope:
+      type: object
+      description: Standard envelope for `AdminDonationIntentS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/AdminDonationIntentS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    AdminPaymentAttemptDetailS8Envelope:
+      type: object
+      description: Standard envelope for `AdminPaymentAttemptDetailS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/AdminPaymentAttemptDetailS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    WebhookInboxDetailS8Envelope:
+      type: object
+      description: Standard envelope for `WebhookInboxDetailS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/WebhookInboxDetailS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PaymentProvidersViewS8Envelope:
+      type: object
+      description: Standard envelope for `PaymentProvidersViewS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PaymentProvidersViewS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    StatusQueryResultS8Envelope:
+      type: object
+      description: Standard envelope for `StatusQueryResultS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/StatusQueryResultS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconAwaitResultS8Envelope:
+      type: object
+      description: Standard envelope for `ReconAwaitResultS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/ReconAwaitResultS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PaymentRefundRequestS8Envelope:
+      type: object
+      description: Standard envelope for `PaymentRefundRequestS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PaymentRefundRequestS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    SandboxPaymentStateS8Envelope:
+      type: object
+      description: Standard envelope for `SandboxPaymentStateS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/SandboxPaymentStateS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    SandboxScheduledS8Envelope:
+      type: object
+      description: Standard envelope for `SandboxScheduledS8`.
+      properties:
+        data:
+          $ref: '#/components/schemas/SandboxScheduledS8'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DonationIntentS8Page:
+      type: object
+      description: 'Page of `DonationIntentS8` (ADR-038 §7: `{items, next_cursor}`).'
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/DonationIntentS8'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: Opaque keyset cursor; null when there are no more items.
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PaymentAttemptS8Page:
+      type: object
+      description: 'Page of `PaymentAttemptS8` (ADR-038 §7: `{items, next_cursor}`).'
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PaymentAttemptS8'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: Opaque keyset cursor; null when there are no more items.
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    AdminDonationIntentS8Page:
+      type: object
+      description: 'Page of `AdminDonationIntentS8` (ADR-038 §7: `{items, next_cursor}`).'
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/AdminDonationIntentS8'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: Opaque keyset cursor; null when there are no more items.
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    AdminPaymentAttemptS8Page:
+      type: object
+      description: 'Page of `AdminPaymentAttemptS8` (ADR-038 §7: `{items, next_cursor}`).'
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/AdminPaymentAttemptS8'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: Opaque keyset cursor; null when there are no more items.
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    WebhookInboxItemS8Page:
+      type: object
+      description: 'Page of `WebhookInboxItemS8` (ADR-038 §7: `{items, next_cursor}`).'
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/WebhookInboxItemS8'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: Opaque keyset cursor; null when there are no more items.
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    WebhookRejectionS8Page:
+      type: object
+      description: 'Page of `WebhookRejectionS8` (ADR-038 §7: `{items, next_cursor}`).'
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/WebhookRejectionS8'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: Opaque keyset cursor; null when there are no more items.
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PaymentReconciliationReferenceS8Page:
+      type: object
+      description: 'Page of `PaymentReconciliationReferenceS8` (ADR-038 §7: `{items, next_cursor}`).'
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PaymentReconciliationReferenceS8'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: Opaque keyset cursor; null when there are no more items.
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PaymentRefundRequestS8Page:
+      type: object
+      description: 'Page of `PaymentRefundRequestS8` (ADR-038 §7: `{items, next_cursor}`).'
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PaymentRefundRequestS8'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+              description: Opaque keyset cursor; null when there are no more items.
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
