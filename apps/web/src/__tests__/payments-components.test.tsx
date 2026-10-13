@@ -198,6 +198,8 @@ describe("staff payment actions", () => {
     await user.click(screen.getByRole("button", { name: "Record refund request" }));
     expect(await screen.findByText("Enter the refund amount.")).toBeInTheDocument();
     expect(await screen.findByText("Choose a reason.")).toBeInTheDocument();
+    // an invalid submit moves focus to the error summary on the next frame: let it land before typing again
+    await waitFor(() => expect(screen.getByText("Please correct the errors below.")).toHaveFocus());
     await user.type(screen.getByLabelText("Amount (USD)"), "0.295");
     await user.click(screen.getByRole("button", { name: "Record refund request" }));
     expect(await screen.findByText(/fewer decimal places/)).toBeInTheDocument();
