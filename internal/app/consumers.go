@@ -32,6 +32,7 @@ func registerConsumers(ctx context.Context, d *WorkerDeps, reg *outbox.Registry)
 	registerRemediationConsumers(reg, d.Verification)                             // Stage 6 stream R (ADR-037)
 	registerCampaignConsumers(reg, d.Verification, d.DB, o, mailAdapter{d.Email}) // Stage 6 campaigns (ADR-036)
 	registerCampaignMediaConsumers(reg, d.Verification)                           // Stage 6 stream M
+	registerPaymentConsumers(reg, d.Verification)                                 // Stage 8 (ADR-039)
 	return nil
 }
 

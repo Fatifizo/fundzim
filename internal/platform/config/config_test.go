@@ -312,3 +312,32 @@ func TestStoragePublicCredentialOptionalButAllOrNothing(t *testing.T) {
 		t.Fatalf("expected missing private credential refusal, got %v", err)
 	}
 }
+
+// Stage 8 (ADR-039 §6): the payment sandbox simulator is refused in production; a PRODUCTION provider account
+// environment is refused outside production.
+func TestPaymentsSandboxRefusedInProduction(t *testing.T) {
+	m := map[string]string{"APP_ENV": "production", "PAYMENTS_SANDBOX_ENABLED": "true"}
+	_, err := Load(env(m))
+	if err == nil || !strings.Contains(err.Error(), "PAYMENTS_SANDBOX_ENABLED is refused in production") {
+		t.Fatalf("sandbox not refused in production: %v", err)
+	}
+	local := localEnv()
+	local["PAYMENTS_SANDBOX_ENABLED"] = "true"
+	c, err := Load(env(local))
+	if err != nil || !c.Payments.SandboxEnabled || c.Payments.ProviderAccountEnv != "SANDBOX" {
+		t.Fatalf("local sandbox: %v %+v", err, c.Payments)
+	}
+	local["PAYMENTS_PROVIDER_ENVIRONMENT"] = "PRODUCTION"
+	if _, err := Load(env(local)); err == nil || !strings.Contains(err.Error(), "allowed only in production") {
+		t.Fatalf("PRODUCTION accounts outside production: %v", err)
+	}
+	local["PAYMENTS_PROVIDER_ENVIRONMENT"] = "LIVE"
+	if _, err := Load(env(local)); err == nil {
+		t.Fatal("invalid provider environment accepted")
+	}
+	def := localEnv()
+	c, err = Load(env(def))
+	if err != nil || c.Payments.SandboxEnabled {
+		t.Fatalf("the sandbox must be off unless enabled: %v", err)
+	}
+}

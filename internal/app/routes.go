@@ -57,6 +57,7 @@ func NewRouter(d *Deps, checker *health.Checker) *httpx.Router {
 		registerCampaignMediaRoutes(r, d.Verification)                     // Stage 6 stream M
 		// Stage 6 stream U
 		registerCampaignUpdateRoutes(r, d.Verification)
+		registerPaymentRoutes(r, d.Verification, d.Idempotency, d.Limiter, d.Logger) // Stage 8 (ADR-039)
 	}
 	return r
 }

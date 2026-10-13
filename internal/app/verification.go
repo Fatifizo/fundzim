@@ -5,6 +5,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/Fatifizo/fundzim/internal/payments"
+	"github.com/Fatifizo/fundzim/internal/psp"
+	"github.com/Fatifizo/fundzim/internal/psp/sandbox"
 	"io"
 	"log/slog"
 	"time"
@@ -75,6 +78,11 @@ type VerificationModules struct {
 
 	// Stage 6 stream U (internal/app/campaign_updates.go)
 	CampaignUpdates *CampaignUpdatesService
+
+	// Stage 8 payment layer (internal/app/payments.go, ADR-039)
+	PSP      *psp.Service
+	Sandbox  *sandbox.Adapter // nil unless PAYMENTS_SANDBOX_ENABLED (never in production)
+	Payments *payments.Service
 }
 
 // Close closes the restricted pools.
@@ -203,6 +211,7 @@ func NewVerificationModules(ctx context.Context, d VerificationDeps) (*Verificat
 	m.CampaignMedia = newCampaignMedia(m, d) // Stage 6 stream M
 	// Stage 6 stream U
 	m.CampaignUpdates = newCampaignUpdates(m, d)
+	newPayments(m, d) // Stage 8 (ADR-039)
 	return m, nil
 }
 

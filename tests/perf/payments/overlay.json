@@ -1,0 +1,1 @@
+{"Replace": {"tests/integration/payments_perf_test.go": "tests/perf/payments/payments_perf_test.go"}}

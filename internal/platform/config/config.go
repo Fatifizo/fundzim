@@ -58,6 +58,16 @@ type Config struct {
 	SMS          SMS
 	Verification Verification
 	Security     Security
+	Payments     Payments
+}
+
+// Payments configures the Stage 8 payment layer (ADR-039 §6). Real payment execution is not configurable: it is
+// a code constant (psp.LiveExecutionEnabled = false) plus a maker-checker kill switch.
+type Payments struct {
+	SandboxEnabled     bool   // PAYMENTS_SANDBOX_ENABLED: the sandbox SIMULATOR; refused in production
+	SandboxWebhookURL  string // SANDBOX_WEBHOOK_URL: FundZim's own ingestion endpoint the simulator posts to
+	ProviderAccountEnv string // PAYMENTS_PROVIDER_ENVIRONMENT: SANDBOX | STAGING | PRODUCTION (real providers' accounts)
+	PublicSiteURL      string // PUBLIC_SITE_URL: base of the donor return URL given to providers (default APP_PUBLIC_URL)
 }
 
 // Auth configures authentication and sessions (ADR-027, ADR-032, SECURITY §4–§6).
@@ -456,6 +466,7 @@ func Load(get LookupFunc) (Config, error) {
 	loadEmailSMS(l, &c, env)
 	loadSecurity(l, &c, env)
 	loadVerification(l, &c, env)
+	loadPayments(l, &c, env)
 
 	if len(l.problems) > 0 {
 		sort.Strings(l.problems)
@@ -703,4 +714,32 @@ func loadVerification(l *loader, c *Config, env Env) {
 		l.fail("MALWARE_SCANNER must be clamd or dev")
 	}
 	c.Verification = v
+}
+
+func loadPayments(l *loader, c *Config, env Env) {
+	p := Payments{
+		SandboxEnabled:     l.boolean("PAYMENTS_SANDBOX_ENABLED", false),
+		SandboxWebhookURL:  l.str("SANDBOX_WEBHOOK_URL", "http://127.0.0.1:8080/api/v1/webhooks/payments/sandbox"),
+		ProviderAccountEnv: l.str("PAYMENTS_PROVIDER_ENVIRONMENT", "SANDBOX"),
+		PublicSiteURL:      l.str("PUBLIC_SITE_URL", c.Auth.PublicURL),
+	}
+	if p.SandboxEnabled && env == EnvProduction {
+		l.fail("PAYMENTS_SANDBOX_ENABLED is refused in production (the sandbox is a simulator, ADR-039)")
+	}
+	switch p.ProviderAccountEnv {
+	case "SANDBOX", "STAGING":
+	case "PRODUCTION":
+		if env != EnvProduction {
+			l.fail("PAYMENTS_PROVIDER_ENVIRONMENT=PRODUCTION is allowed only in production")
+		}
+	default:
+		l.fail("PAYMENTS_PROVIDER_ENVIRONMENT must be SANDBOX, STAGING or PRODUCTION")
+	}
+	if u, err := url.Parse(p.SandboxWebhookURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		l.fail("SANDBOX_WEBHOOK_URL must be an http(s) URL")
+	}
+	if u, err := url.Parse(p.PublicSiteURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		l.fail("PUBLIC_SITE_URL must be an http(s) origin")
+	}
+	c.Payments = p
 }

@@ -37,6 +37,10 @@ type Policies struct {
 	PublicReportIP           Policy // public.report.ip — campaign reports per client IP (Stage 7)
 	PublicReportCampaign     Policy // public.report.campaign — campaign reports per campaign (Stage 7)
 	PublicEventIP            Policy // public.event.ip — first-party analytics events per client IP (Stage 7)
+	PaymentsIntentUser       Policy // payments.intent.user — donation intents per donor (Stage 8)
+	PaymentsIntentCampaign   Policy // payments.intent.campaign — donation intents per campaign (Stage 8)
+	PaymentsAttemptUser      Policy // payments.attempt.user — payment attempts per donor (Stage 8)
+	PaymentsWebhookIP        Policy // payments.webhook.ip — webhook deliveries per client IP (Stage 8)
 }
 
 // DefaultPolicies returns the Stage 4 starting values.
@@ -61,6 +65,10 @@ func DefaultPolicies() Policies {
 		PublicReportIP:           Policy{Name: "public.report.ip", Limit: 5, Window: time.Hour, Protective: true},
 		PublicReportCampaign:     Policy{Name: "public.report.campaign", Limit: 50, Window: time.Hour, Protective: true},
 		PublicEventIP:            Policy{Name: "public.event.ip", Limit: 120, Window: time.Minute, Protective: true},
+		PaymentsIntentUser:       Policy{Name: "payments.intent.user", Limit: 20, Window: time.Hour, Protective: true},
+		PaymentsIntentCampaign:   Policy{Name: "payments.intent.campaign", Limit: 600, Window: time.Hour, Protective: true},
+		PaymentsAttemptUser:      Policy{Name: "payments.attempt.user", Limit: 30, Window: time.Hour, Protective: true},
+		PaymentsWebhookIP:        Policy{Name: "payments.webhook.ip", Limit: 600, Window: time.Minute, Protective: true},
 	}
 }
 
@@ -69,7 +77,8 @@ func (ps Policies) All() []Policy {
 	return []Policy{ps.GlobalIP, ps.AuthLoginIP, ps.AuthLoginAccount, ps.AuthRegisterIP, ps.AuthPasswordResetIP,
 		ps.AuthPasswordResetAccount, ps.AuthVerifyResendAccount, ps.AuthMFAChallenge, ps.AuthOTPSendPhone,
 		ps.AuthOTPSendUser, ps.AuthOTPVerify, ps.AuthStepUp, ps.AuthTokenIP, ps.AuthVerifyResendIP, ps.PublicReportIP,
-		ps.PublicReportCampaign, ps.PublicEventIP}
+		ps.PublicReportCampaign, ps.PublicEventIP, ps.PaymentsIntentUser, ps.PaymentsIntentCampaign, ps.PaymentsAttemptUser,
+		ps.PaymentsWebhookIP}
 }
 
 // Validate checks every policy.

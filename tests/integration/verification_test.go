@@ -36,6 +36,7 @@ type verifStaff struct {
 	compliance, linkedRev staffCred
 	campRev1, campRev2    staffCred // Stage 6: REVIEWER (campaign.review / decide / publish)
 	compliance2           staffCred // second COMPLIANCE officer (maker-checker)
+	finance1, finance2    staffCred // Stage 8: FINANCE (payment.view/operate, refund.approve)
 }
 
 var (
@@ -92,6 +93,8 @@ func staffFixture(t *testing.T, s *itServer) *verifStaff {
 		f.campRev1 = inviteStaff(t, s, a, b, "Campaign Reviewer One", "REVIEWER")
 		f.campRev2 = inviteStaff(t, s, a, b, "Campaign Reviewer Two", "REVIEWER")
 		f.compliance2 = inviteStaff(t, s, a, b, "Compliance Officer Two", "COMPLIANCE")
+		f.finance1 = inviteStaff(t, s, a, b, "Finance Officer One", "FINANCE")
+		f.finance2 = inviteStaff(t, s, a, b, "Finance Officer Two", "FINANCE")
 		vStaff = f
 		ok = true
 	})

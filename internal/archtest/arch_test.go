@@ -40,6 +40,10 @@ var allowedImports = map[string][]string{
 	"verification": {"platform", "audit", "users", "organisations", "kyc", "beneficiaries", "payouts", "storage", "risk", "compliance"},
 	// Stage 6 campaign engine (interface-contracts §1): core, media and updates packages
 	"campaigns": {"platform", "audit", "users", "organisations", "kyc", "beneficiaries", "compliance", "risk", "storage"},
+	// Stage 8 (ADR-039): provider layer and payments (baseline §3: psp imports platform and audit only; payments
+	// imports campaigns, risk and psp; compliance is reached through an interface implemented in internal/app)
+	"psp":      {"platform", "audit"},
+	"payments": {"platform", "audit", "campaigns", "risk", "psp"},
 }
 
 // ownedTables is design-baseline §5 (plus the Stage 4 additions recorded in docs/stage-4/implementation.md:
@@ -73,6 +77,13 @@ var ownedTables = map[string][]string{
 		"app.campaign_beneficiaries", "app.campaign_reviews", "app.campaign_status_history", "app.campaign_eligibility_evaluations",
 		"app.campaign_media", "app.campaign_media_events", "app.campaign_media_variants", "app.campaign_updates", "app.campaign_update_events",
 		"app.campaign_reports", "app.campaign_featured", "app.public_event_counters"}, // Stage 7
+	// Stage 8 (ADR-039)
+	"psp": {"app.payment_providers", "app.provider_capabilities", "app.provider_capabilities_current", "app.provider_accounts",
+		"app.provider_webhook_inbox", "app.provider_webhook_rejections", "app.provider_health_events", "app.sandbox_provider_payments",
+		"app.sandbox_scheduled_webhooks"},
+	"payments": {"app.donation_intents", "app.payment_intents", "app.payment_attempts", "app.payment_transactions",
+		"app.payment_provider_references", "app.payment_sessions", "app.payment_events", "app.refund_requests",
+		"app.payment_reconciliation_references", "app.payment_status_rank"},
 }
 
 // moduleOf maps a repository-relative directory to its module ("" = not a constrained module).

@@ -348,3 +348,35 @@ func nonNil(m map[string]any) map[string]any {
 	}
 	return m
 }
+
+// MoneyLimit is one approved MONEY limit row in force (limit types stay separate: REGULATORY, PROVIDER,
+// INTERNAL_RISK; brief §27).
+type MoneyLimit struct {
+	ID         string
+	Key        string
+	LimitType  string
+	ScopeType  string
+	ScopeValue string
+	Currency   string
+	ValueMinor int64
+}
+
+// MoneyLimits returns every APPROVED MONEY limit in force at `at` for key and currency, scoped GLOBAL or
+// CURRENCY=currency — the highest approved version per (limit type, scope). Callers combine them (a missing
+// limit is not invented here).
+func (s *Service) MoneyLimits(ctx context.Context, key, currency string, at time.Time) ([]MoneyLimit, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT DISTINCT ON (limit_type, scope_type) id, limit_key, limit_type, scope_type,
+		coalesce(scope_value, ''), currency, value_minor FROM risk.limits
+		WHERE status = 'APPROVED' AND value_kind = 'MONEY' AND limit_key = $1 AND currency = $2
+		  AND (scope_type = 'GLOBAL' OR (scope_type = 'CURRENCY' AND scope_value = $2))
+		  AND effective_from <= $3 AND (effective_to IS NULL OR effective_to > $3)
+		ORDER BY limit_type, scope_type, version DESC`, key, currency, at)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (MoneyLimit, error) {
+		var m MoneyLimit
+		err := r.Scan(&m.ID, &m.Key, &m.LimitType, &m.ScopeType, &m.ScopeValue, &m.Currency, &m.ValueMinor)
+		return m, err
+	})
+}
