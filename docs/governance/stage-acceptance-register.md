@@ -25,7 +25,7 @@
 | 5 | KYC/KYB, beneficiaries, payout destinations | see the stage report | **NOT_RECORDED** | Screening provider not selected (KI-S5-04); see docs/stage-5/known-issues.md |
 | 6 | Campaign engine | PASS WITH CONDITIONS | **NOT_RECORDED** | LR-046 – LR-048, LR-070; see docs/stage-6/known-issues.md |
 | 7 | Public fundraising experience | PASS WITH CONDITIONS | **NOT_RECORDED** | Manual WCAG 2.2 AA audit; link-preview/crawl verification; LR-012, LR-022, LR-035; field performance monitoring |
-| 8 | Payment abstraction layer | (pending report) | **NOT_RECORDED** | Production payment execution BLOCKED (see docs/stage-8/known-issues.md) |
+| 8 | Payment abstraction layer | PASS WITH CONDITIONS (sandbox only; production BLOCKED) | **NOT_RECORDED** | Production payment execution BLOCKED (see docs/stage-8/known-issues.md) |
 
 ## Effect of a missing acceptance
 

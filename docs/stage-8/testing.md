@@ -91,4 +91,15 @@ marks a payment succeeded or failed, axe + CSP. The public campaign page still a
 
 ## 6. Remote CI
 
-CI_RESULT
+**GitHub Actions run 38362216597 on `baa42c4` (2026-10-13): all 8 jobs passed** — Go (format, vet, race unit tests incl.
+the explicit Stage 8 payment-layer step, govulncheck), Web (lint, types, Vitest, build, audit), Web end-to-end (mock
+API), Integration (public notice: **114 passed, 0 failed, 3 skipped** — skipped `TestDistributedLoginLimitAcrossReplicas`,
+`TestFrontendReachesBackend`, `TestRateLimitFallbackWhenValkeyContainerStopped`, all env-gated; **`TestPayments*`
+passed: 16**; then the destructive migration round trip including both Stage 8 migrations), Real-stack E2E
+(**47 passed**), OpenAPI and SQL drafts, container images, secret scanning.
+
+Earlier runs on this branch, fixed rather than retried: 38358710049 (`29c066f`) was green but had no public evidence
+that the payment tests ran, so a summary notice was added; 38359789918 failed on a gitleaks false positive (prose in
+this file; reviewed and added to `.gitleaksignore`, line reworded) and a Vitest timing race in the refund-form test;
+38361049281 failed on a second race in the same test (an invalid submit moves focus to the error summary on the next
+frame, and on a slow runner the next keystrokes landed there) — the test now waits for focus to settle.
