@@ -1,7 +1,7 @@
 import { browserApi, type ApiClient } from "@/lib/api/client";
 
 import { readRefund } from "./normalise";
-import type { RefundAction } from "./types";
+import type { ProviderAction, RefundAction } from "./types";
 
 /**
  * Browser-side calls for the Stage 8 staff payment actions (interface-contracts §4) through the same-origin
@@ -42,6 +42,11 @@ export function createPaymentsApi(api: ApiClient = browserApi) {
       post<unknown>(`${BASE}/attempts/${enc(paymentId)}/refund-requests`, input, { "Idempotency-Key": idempotencyKey }).then(readRefund),
     /** approve/reject/hold/resume: refund.approve + step-up; withdraw: the requester. Approval never executes a refund in Stage 8. */
     refundAction: (refundId: string, action: RefundAction, reason: string) => post<unknown>(`${BASE}/refund-requests/${enc(refundId)}/${action}`, { reason }).then(readRefund),
+    /**
+     * Stage 9 provider controls (payment.operate, step-up): enable SANDBOX execution, disable, declare or resolve an
+     * outage. None of them can enable production execution (migration + ADR only) or change a payment.
+     */
+    providerAction: (providerId: string, action: ProviderAction, reason: string) => post<unknown>(`${BASE}/providers/${enc(providerId)}/${action}`, { reason }),
     /** DEVELOPMENT ONLY: asks the sandbox simulator to send signed webhooks through the real endpoint. */
     sandboxWebhook: (paymentId: string, input: SandboxWebhookInput) => post<unknown>(`${BASE}/sandbox/attempts/${enc(paymentId)}/webhooks`, input),
   };

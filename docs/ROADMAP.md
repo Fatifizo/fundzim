@@ -337,6 +337,14 @@ Notes on ordering:
 
 ## Stage 9 — Zimbabwe Payment Integrations
 
+> **Status: implemented as readiness work (awaiting acceptance); provider integration BLOCKED.** No provider is
+> selected ([ADR-040](adr/ADR-040-payment-provider-selection-deferred.md), DECISION_DEFERRED): no merchant agreement,
+> sandbox credentials or written PCR answers exist, so no adapter was built and no provider is certified. Built:
+> secret manager integration (ADR-041), execution environments and the layered kill switch, error categories,
+> derived health, evidence log, provider controls, method availability endpoint, adapter conformance suite, legal
+> review and provider registers: [stage-9/implementation.md](stage-9/implementation.md). Provider adapters, sandbox
+> certification and settlement-report formats move to the stage after the owner selects a provider (before Stage 20).
+
 - **Objective:** Contract and integrate the PSP(s) chosen from the Stage 1 shortlist for target rails (mobile money, ZimSwitch / bank,
   cards) **in test/sandbox environments**.
 - **Dependencies:** Stage 8; Stage 1 (PSP selection, settlement model, contracts).

@@ -26,6 +26,7 @@
 | 6 | Campaign engine | PASS WITH CONDITIONS | **NOT_RECORDED** | LR-046 – LR-048, LR-070; see docs/stage-6/known-issues.md |
 | 7 | Public fundraising experience | PASS WITH CONDITIONS | **NOT_RECORDED** | Manual WCAG 2.2 AA audit; link-preview/crawl verification; LR-012, LR-022, LR-035; field performance monitoring |
 | 8 | Payment abstraction layer | PASS WITH CONDITIONS (sandbox only; production BLOCKED) | **NOT_RECORDED** | Production payment execution BLOCKED (see docs/stage-8/known-issues.md) |
+| 9 | Zimbabwe payment provider integration readiness | see docs/stage-9 (provider integration and certification BLOCKED; no provider selected) | **NOT_RECORDED** | ADR-040 DECISION_DEFERRED; provider confirmations and legal items open; secret manager operation (Stage 18/20); see docs/stage-9/known-issues.md |
 
 ## Effect of a missing acceptance
 

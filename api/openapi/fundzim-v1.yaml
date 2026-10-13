@@ -91,6 +91,10 @@ tags:
   description: Donation intents and payment attempts (SIMULATOR_ONLY in Stage 8; real execution disabled, ADR-039).
 - name: Payment operations (Stage 8)
   description: Staff payment operations (payment.view / payment.operate / refund.request / refund.approve).
+- name: Donor payments (Stage 9)
+  description: Public payment-method availability by execution environment (no provider names; test mode while payments are not real).
+- name: Payment operations (Stage 9)
+  description: Provider detail, derived health, evidence log and provider controls (no control can enable production or change a payment).
 - name: Webhooks
   description: 'Provider callbacks: signature-authenticated, CSRF/session-exempt, inbox + 2xx fast.'
 - name: Health
@@ -30469,6 +30473,469 @@ paths:
       x-fundzim-permission: payment.view
       x-fundzim-step-up: false
       x-fundzim-idempotency: n/a
+  /payment-methods/available:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Donor payments (Stage 9)
+      operationId: listPaymentMethodAvailability
+      summary: Availability of every payment method now
+      description: '**Stage 9 · IMPLEMENTED** · Auth: none · Authorization: —. Every known method with `available` and a reason when not. Derived from the
+        router (capability evidence, provider enablement, allowlist, credentials, circuit, outages), never from configuration alone. Names no provider. `test_mode`
+        is true whenever payments are not real (always in Stage 9); `live_payments` is false.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-PUBLIC · Audit: — · Cache-Control: no-store'
+      security: []
+      parameters:
+      - name: currency
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Currency'
+        description: Default USD.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: payment data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentMethodAvailabilityViewS9Envelope'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 9
+      x-fundzim-auth: public
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - VALIDATION_FAILED
+  /admin/payments/providers/{provider_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 9)
+      operationId: adminGetPaymentProvider
+      summary: One provider with health, contract basis, recent health events and error categories
+      description: '**Stage 9 · IMPLEMENTED** · Auth: staff + MFA · Authorization: payment.view (non-staff → `404`). Secret reference NAMES and whether they
+        resolve and are in scope — never values.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: provider_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: payment data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentProviderDetailS9Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 9
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYMENT_PROVIDER_NOT_FOUND
+  /admin/payments/providers/{provider_id}/enable-sandbox:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payment operations (Stage 9)
+      operationId: adminEnableProviderSandbox
+      summary: Enable SANDBOX execution for a provider
+      description: '**Stage 9 · IMPLEMENTED** · Auth: staff + MFA · Authorization: payment.operate + fresh step-up (non-staff → `404`). Sets `sandbox_status
+        = ENABLED`. A real provider needs an enabled SANDBOX account whose secret references are in scope and resolve. Never enables production (migration
+        + ADR only).
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: psp.provider.sandbox_enabled (PROVIDER_ENABLED_SANDBOX) · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: provider_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonInputS8'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: payment data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentProviderDetailS9Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 9
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYMENT_PROVIDER_NOT_FOUND
+      - PROVIDER_RETIRED
+      - PROVIDER_NOT_CONFIGURED
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payments/providers/{provider_id}/disable:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payment operations (Stage 9)
+      operationId: adminDisableProvider
+      summary: Disable a provider
+      description: '**Stage 9 · IMPLEMENTED** · Auth: staff + MFA · Authorization: payment.operate + fresh step-up (non-staff → `404`). Sandbox execution
+        off; a real provider''s production status DISABLED too. Existing payments are never failed.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: psp.provider.disabled (PROVIDER_DISABLED) · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: provider_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonInputS8'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: payment data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentProviderDetailS9Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 9
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYMENT_PROVIDER_NOT_FOUND
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payments/providers/{provider_id}/outage:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payment operations (Stage 9)
+      operationId: adminDeclareProviderOutage
+      summary: Declare a provider outage
+      description: '**Stage 9 · IMPLEMENTED** · Auth: staff + MFA · Authorization: payment.operate + fresh step-up (non-staff → `404`). Health UNAVAILABLE
+        and no routing until resolved. No payment is changed.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: psp.provider.unavailable (PROVIDER_UNAVAILABLE) · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: provider_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonInputS8'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: payment data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentProviderDetailS9Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 9
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYMENT_PROVIDER_NOT_FOUND
+      - PROVIDER_OUTAGE_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payments/providers/{provider_id}/outage/resolve:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payment operations (Stage 9)
+      operationId: adminResolveProviderOutage
+      summary: Resolve a declared outage
+      description: '**Stage 9 · IMPLEMENTED** · Auth: staff + MFA · Authorization: payment.operate + fresh step-up (non-staff → `404`). Routing resumes if
+        every other gate allows it.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: psp.provider.outage_resolved · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: provider_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonInputS8'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: payment data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentProviderDetailS9Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 9
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYMENT_PROVIDER_NOT_FOUND
+      - PROVIDER_OUTAGE_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payments/health:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 9)
+      operationId: adminGetPaymentHealth
+      summary: Derived provider health and secret-manager reachability
+      description: '**Stage 9 · IMPLEMENTED** · Auth: staff + MFA · Authorization: payment.view (non-staff → `404`). Health is HEALTHY / DEGRADED / UNAVAILABLE
+        / UNKNOWN from observations only; no recent observation is UNKNOWN.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: payment data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentHealthViewS9Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 9
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/payments/attempts/{payment_id}/evidence:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payment operations (Stage 9)
+      operationId: adminListPaymentEvidence
+      summary: Append-only provider evidence for one payment
+      description: '**Stage 9 · IMPLEMENTED** · Auth: staff + MFA · Authorization: payment.view (non-staff → `404`). Every provider observation (synchronous
+        response, webhook, status query) with its consistency against earlier evidence. A contradiction is escalated to reconciliation, never applied.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`: payment data is never cached.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentEvidenceListS9Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 9
+      x-fundzim-auth: staff
+      x-fundzim-permission: payment.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYMENT_NOT_FOUND
   /admin/payments/reconciliation:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -44422,6 +44889,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PaymentAttemptS8'
+        execution_environment:
+          $ref: '#/components/schemas/ExecutionEnvironmentS9'
+        test_payment:
+          type: boolean
+          description: 'True unless PRODUCTION: a test payment never counts as a donation (Stage 9).'
       required:
       - id
       - campaign_id
@@ -44433,6 +44905,8 @@ components:
       - expires_at
       - created_at
       - updated_at
+      - execution_environment
+      - test_payment
       additionalProperties: false
     DonationIntentCreateS8:
       type: object
@@ -44724,6 +45198,11 @@ components:
         failure_code: *id001
         created_at: *id002
         updated_at: *id002
+        execution_environment:
+          $ref: '#/components/schemas/ExecutionEnvironmentS9'
+        test_payment:
+          type: boolean
+          description: 'True unless PRODUCTION: a test payment never counts as a donation (Stage 9).'
       required:
       - id
       - donation_intent_id
@@ -44742,6 +45221,8 @@ components:
       - failure_code
       - created_at
       - updated_at
+      - execution_environment
+      - test_payment
       additionalProperties: false
     PaymentEventS8:
       type: object
@@ -44988,6 +45469,22 @@ components:
         started_at: *id002
         deadline_at: *id002
         completed_at: *id012
+        error_category:
+          type:
+          - string
+          - 'null'
+          enum:
+          - AUTHENTICATION_FAILED
+          - INVALID_REQUEST
+          - UNSUPPORTED_METHOD
+          - UNSUPPORTED_CURRENCY
+          - RATE_LIMITED
+          - PROVIDER_UNAVAILABLE
+          - PROVIDER_TIMEOUT
+          - UNKNOWN_OUTCOME
+          - PAYMENT_DECLINED
+          - RECONCILIATION_REQUIRED
+          - null
       required:
       - id
       - attempt_no
@@ -45257,6 +45754,9 @@ components:
                 type: boolean
               webhook_replay_window_seconds:
                 type: integer
+              credential_scope_ok:
+                type: boolean
+                description: Every reference lives under the account environment (secretref://fundzim/<environment>/…).
             required:
             - id
             - environment
@@ -45267,11 +45767,36 @@ components:
             - webhook_secret_ref_previous
             - secrets_resolvable
             - webhook_replay_window_seconds
+            - credential_scope_ok
             additionalProperties: false
         capabilities:
           type: array
           items:
             $ref: '#/components/schemas/PaymentCapabilityS8'
+        id:
+          type: string
+          format: uuid
+        sandbox_status:
+          type: string
+          enum:
+          - DISABLED
+          - ENABLED
+        selection_adr:
+          type:
+          - string
+          - 'null'
+        allowlisted:
+          type: boolean
+        adapter_registered:
+          type: boolean
+        usable:
+          type: boolean
+        contract:
+          oneOf:
+          - $ref: '#/components/schemas/ProviderContractS9'
+          - type: 'null'
+        health:
+          $ref: '#/components/schemas/ProviderHealthS9'
       required:
       - code
       - display_name
@@ -45282,6 +45807,473 @@ components:
       - circuit
       - accounts
       - capabilities
+      - id
+      - sandbox_status
+      - selection_adr
+      - allowlisted
+      - adapter_registered
+      - usable
+      - contract
+      - health
+      additionalProperties: false
+    PaymentProviderDetailS9:
+      type: object
+      properties:
+        code:
+          type: string
+        display_name:
+          type: string
+        simulated:
+          type: boolean
+        status:
+          type: string
+        selection_status:
+          type: string
+        confirmation_mode:
+          type: string
+        circuit:
+          type: string
+          enum:
+          - CLOSED
+          - OPEN
+          - HALF_OPEN
+        accounts:
+          type: array
+          items:
+            type: object
+            properties:
+              id: *id003
+              environment:
+                type: string
+              label:
+                type: string
+              status:
+                type: string
+              api_credentials_secret_ref:
+                type: string
+                description: A secretref:// reference NAME; never a value.
+              webhook_secret_ref: *id001
+              webhook_secret_ref_previous: *id001
+              secrets_resolvable:
+                type: boolean
+              webhook_replay_window_seconds:
+                type: integer
+              credential_scope_ok:
+                type: boolean
+                description: Every reference lives under the account environment (secretref://fundzim/<environment>/…).
+            required:
+            - id
+            - environment
+            - label
+            - status
+            - api_credentials_secret_ref
+            - webhook_secret_ref
+            - webhook_secret_ref_previous
+            - secrets_resolvable
+            - webhook_replay_window_seconds
+            - credential_scope_ok
+            additionalProperties: false
+        capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentCapabilityS8'
+        id:
+          type: string
+          format: uuid
+        sandbox_status:
+          type: string
+          enum:
+          - DISABLED
+          - ENABLED
+        selection_adr:
+          type:
+          - string
+          - 'null'
+        allowlisted:
+          type: boolean
+        adapter_registered:
+          type: boolean
+        usable:
+          type: boolean
+        contract:
+          oneOf:
+          - $ref: '#/components/schemas/ProviderContractS9'
+          - type: 'null'
+        health:
+          $ref: '#/components/schemas/ProviderHealthS9'
+        execution_environment:
+          $ref: '#/components/schemas/ExecutionEnvironmentS9'
+        recent_health_events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderHealthEventS9'
+        error_categories_24h:
+          type: object
+          additionalProperties:
+            type: integer
+      required:
+      - code
+      - display_name
+      - simulated
+      - status
+      - selection_status
+      - confirmation_mode
+      - circuit
+      - accounts
+      - capabilities
+      - id
+      - sandbox_status
+      - selection_adr
+      - allowlisted
+      - adapter_registered
+      - usable
+      - contract
+      - health
+      additionalProperties: false
+    ExecutionEnvironmentS9:
+      type: string
+      description: Payment execution environment of the deployment (one per process). PRODUCTION rows are refused by the database in Stage 9.
+      enum:
+      - DISABLED
+      - LOCAL_SIMULATOR
+      - PROVIDER_SANDBOX
+      - PRODUCTION
+    ProviderHealthS9:
+      type: object
+      description: Derived from observations only; configuration alone is never HEALTHY.
+      properties:
+        status:
+          type: string
+          enum:
+          - HEALTHY
+          - DEGRADED
+          - UNAVAILABLE
+          - UNKNOWN
+        reason:
+          type: string
+        window_seconds:
+          type: integer
+        calls:
+          type: integer
+        errors:
+          type: integer
+        timeouts:
+          type: integer
+        webhooks_verified:
+          type: integer
+        p95_latency_ms:
+          type:
+          - integer
+          - 'null'
+        circuit:
+          type: string
+        outage_declared:
+          type: boolean
+        credentials_usable:
+          type:
+          - boolean
+          - 'null'
+          description: null when the provider is not usable in this environment.
+        last_observed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+      required:
+      - status
+      - reason
+      - window_seconds
+      - calls
+      - errors
+      - timeouts
+      - webhooks_verified
+      - p95_latency_ms
+      - circuit
+      - outage_declared
+      - credentials_usable
+      - last_observed_at
+      additionalProperties: false
+    ProviderContractS9:
+      type: object
+      properties:
+        basis:
+          type: string
+          enum:
+          - OFFICIAL_PROVIDER_CONTRACT
+          - PROVIDER_SANDBOX_OBSERVED
+          - DOCUMENTED_BUT_UNVERIFIED
+          - SIMULATED
+        sources:
+          type: array
+          items:
+            type: string
+        verified_on:
+          type: string
+          format: date
+      required:
+      - basis
+      - sources
+      additionalProperties: false
+    ProviderHealthEventS9:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        operation:
+          type: string
+        method:
+          type:
+          - string
+          - 'null'
+        currency:
+          type:
+          - string
+          - 'null'
+        event_kind:
+          type: string
+        error_class:
+          type:
+          - string
+          - 'null'
+        latency_ms:
+          type:
+          - integer
+          - 'null'
+        detail:
+          type: object
+        staff_declared:
+          type: boolean
+        observed_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - operation
+      - event_kind
+      - staff_declared
+      - observed_at
+      additionalProperties: false
+    PaymentHealthViewS9:
+      type: object
+      properties:
+        execution_environment:
+          $ref: '#/components/schemas/ExecutionEnvironmentS9'
+        live_execution:
+          $ref: '#/components/schemas/LiveExecutionGateS8'
+        secret_manager:
+          type: string
+          enum:
+          - ENVIRONMENT
+          - HEALTHY
+          - UNAVAILABLE
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              provider:
+                type: object
+              usable:
+                type: boolean
+              health:
+                $ref: '#/components/schemas/ProviderHealthS9'
+            required:
+            - id
+            - provider
+            - usable
+            - health
+            additionalProperties: false
+      required:
+      - execution_environment
+      - live_execution
+      - secret_manager
+      - items
+      additionalProperties: false
+    PaymentEvidenceS9:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source:
+          type: string
+          enum:
+          - SYNC
+          - WEBHOOK
+          - POLL
+          - RECON
+        execution_environment:
+          $ref: '#/components/schemas/ExecutionEnvironmentS9'
+        provider_reference:
+          type:
+          - string
+          - 'null'
+        provider_event_id:
+          type:
+          - string
+          - 'null'
+        raw_status:
+          type: string
+        mapped_status:
+          type: string
+        mapped:
+          type: boolean
+        mapping_version:
+          type: string
+        reported_amount_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[1-9][0-9]{0,18}$
+        reported_currency:
+          type:
+          - string
+          - 'null'
+        provider_occurred_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        observed_at:
+          type: string
+          format: date-time
+        consistency:
+          type: string
+          enum:
+          - FIRST
+          - CONSISTENT
+          - PROGRESSION
+          - CONTRADICTS
+        contradicts_evidence_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      required:
+      - id
+      - source
+      - execution_environment
+      - provider_reference
+      - provider_event_id
+      - raw_status
+      - mapped_status
+      - mapped
+      - mapping_version
+      - reported_amount_minor
+      - reported_currency
+      - provider_occurred_at
+      - observed_at
+      - consistency
+      - contradicts_evidence_id
+      additionalProperties: false
+    PaymentEvidenceListS9:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentEvidenceS9'
+      required:
+      - items
+      additionalProperties: false
+    PaymentMethodAvailabilityViewS9:
+      type: object
+      description: Public; names no provider.
+      properties:
+        currency:
+          $ref: '#/components/schemas/Currency'
+        execution_environment:
+          $ref: '#/components/schemas/ExecutionEnvironmentS9'
+        live_payments:
+          type: boolean
+        test_mode:
+          type: boolean
+        methods:
+          type: array
+          items:
+            type: object
+            properties:
+              method:
+                type: string
+              category:
+                $ref: '#/components/schemas/PaymentMethodCategoryS8'
+              available:
+                type: boolean
+              simulated:
+                type: boolean
+              reason:
+                type:
+                - string
+                - 'null'
+                enum:
+                - EXECUTION_DISABLED
+                - NOT_AVAILABLE
+                - null
+            required:
+            - method
+            - category
+            - available
+            - simulated
+            - reason
+            additionalProperties: false
+      required:
+      - currency
+      - execution_environment
+      - live_payments
+      - test_mode
+      - methods
+      additionalProperties: false
+    PaymentEvidenceListS9Envelope:
+      type: object
+      description: Standard envelope for `PaymentEvidenceListS9`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PaymentEvidenceListS9'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PaymentHealthViewS9Envelope:
+      type: object
+      description: Standard envelope for `PaymentHealthViewS9`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PaymentHealthViewS9'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PaymentProviderDetailS9Envelope:
+      type: object
+      description: Standard envelope for `PaymentProviderDetailS9`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PaymentProviderDetailS9'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PaymentMethodAvailabilityViewS9Envelope:
+      type: object
+      description: Standard envelope for `PaymentMethodAvailabilityViewS9`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PaymentMethodAvailabilityViewS9'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
       additionalProperties: false
     PaymentProvidersViewS8:
       type: object
@@ -45294,10 +46286,18 @@ components:
           $ref: '#/components/schemas/LiveExecutionGateS8'
         sandbox_enabled:
           type: boolean
+        execution_environment:
+          $ref: '#/components/schemas/ExecutionEnvironmentS9'
+        allowlist:
+          type: array
+          items:
+            type: string
       required:
       - items
       - live_execution
       - sandbox_enabled
+      - execution_environment
+      - allowlist
       additionalProperties: false
     ReasonInputS8:
       type: object

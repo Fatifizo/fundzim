@@ -26,7 +26,7 @@ import { requireStaff, serverGetOptional, serverGetOr404 } from "@/lib/auth/sess
 import { isUuid } from "@/lib/campaigns/paths";
 import { humanise } from "@/lib/payments/labels";
 import { minorUnitsFor } from "@/lib/payments/money";
-import { readAttemptDetail, readOverview, readSandboxState } from "@/lib/payments/normalise";
+import { readAttemptDetail, readEvidence, readOverview, readSandboxState } from "@/lib/payments/normalise";
 import { REFUNDABLE_PAYMENT_STATUSES } from "@/lib/payments/types";
 
 export const metadata: Metadata = { title: "Payment", robots: { index: false, follow: false, nocache: true } };
@@ -44,10 +44,12 @@ export default async function PaymentAttemptPage({ params }: PageProps<"/admin/p
   const { id } = await params;
   if (!isUuid(id)) notFound();
   const path = `${PAYMENTS_BASE}/attempts/${id}`;
-  const [result, overviewRaw] = await Promise.all([
+  const [result, overviewRaw, evidenceRaw] = await Promise.all([
     serverGetOr404<unknown>(`/api/v1/admin/payments/attempts/${id}`, path),
     serverGetOptional<unknown>("/api/v1/admin/payments/overview", path, null),
+    serverGetOptional<unknown>(`/api/v1/admin/payments/attempts/${id}/evidence`, path, null),
   ]);
+  const evidence = evidenceRaw !== null ? readEvidence(evidenceRaw) : [];
   const a = readAttemptDetail(result.data);
   if (!a) notFound();
   const sandboxEnabled = overviewRaw !== null && readOverview(overviewRaw).sandbox_enabled;
@@ -116,6 +118,7 @@ export default async function PaymentAttemptPage({ params }: PageProps<"/admin/p
                 <td className="p-3">
                   <StatusBadge status={c.classification} />
                   {c.error_class ? <span className="block text-sm">{humanise(c.error_class)}</span> : null}
+                  {c.error_category ? <span className="block text-sm font-semibold">{humanise(c.error_category)}</span> : null}
                 </td>
                 <td className="p-3">{c.unknown_reason ? humanise(c.unknown_reason) : "—"}</td>
                 <td className="p-3">{c.http_status ?? "—"}</td>
@@ -159,6 +162,44 @@ export default async function PaymentAttemptPage({ params }: PageProps<"/admin/p
           />
         ) : (
           <p className="text-ink-700">The provider has not reported a transaction yet.</p>
+        )}
+      </Section>
+
+      <Section
+        id="evidence-title"
+        title="Provider evidence"
+        description="Every provider observation of this payment, append-only. A contradiction with earlier evidence is escalated to reconciliation; it never changes the payment by itself."
+      >
+        {evidence.length === 0 ? (
+          <p className="text-ink-700">No provider evidence recorded.</p>
+        ) : (
+          <TableShell caption="Provider evidence" head={["Observed", "Source", "Raw status", "Mapped", "Reported amount", "Consistency", "Environment"]} minWidthClass="min-w-[56rem]">
+            {evidence.map((e) => (
+              <tr key={e.id} className="border-b border-line align-top last:border-b-0">
+                <td className="p-3">
+                  <When at={e.observed_at} />
+                </td>
+                <td className="p-3">{humanise(e.source)}</td>
+                <th scope="row" className="p-3 font-normal">
+                  <Code>{e.raw_status}</Code>
+                  {e.provider_event_id ? (
+                    <span className="block text-sm">
+                      Event <Code>{e.provider_event_id}</Code>
+                    </span>
+                  ) : null}
+                </th>
+                <td className="p-3">
+                  <StatusBadge status={e.mapped_status} />
+                  {!e.mapped ? <span className="block text-sm">Not mapped</span> : null}
+                </td>
+                <td className="p-3">{e.reported ? <Amount money={e.reported} /> : "—"}</td>
+                <td className="p-3">
+                  <StatusBadge status={e.consistency} />
+                </td>
+                <td className="p-3">{humanise(e.execution_environment)}</td>
+              </tr>
+            ))}
+          </TableShell>
         )}
       </Section>
 

@@ -4,7 +4,7 @@
 > towards. Almost nothing here is implemented yet. Where a choice is deferred, the stage that decides it is
 > named. Significant changes require an ADR (see [`docs/adr/`](adr/)).
 
-> **Implementation status (Stage 8).** In code: Go binaries `api`, `worker` (River on PostgreSQL, outbox relay
+> **Implementation status (Stage 9).** In code: Go binaries `api`, `worker` (River on PostgreSQL, outbox relay
 > and delivery, purge, scan, rescan and verification-sweep jobs) and `fundzimctl`; `internal/app` (composition
 > root), `internal/platform` (config, logging, errors, HTTP middleware incl. trusted client IP and per-route
 > body-limit exemptions, distributed rate limiting, idempotency, health, db, cache, storage incl. SSE-C,
@@ -466,6 +466,19 @@ setting.
 > media sweep, BASIC re-evaluation and registration attestations. Campaigns hold no financial state. Details:
 > [stage-6/implementation.md](stage-6/implementation.md).
 
+> **Stage 9 as built (provider integration readiness; [ADR-040](adr/ADR-040-payment-provider-selection-deferred.md),
+> [ADR-041](adr/ADR-041-secret-management.md)).** No provider is selected and no real adapter exists. New: platform
+> package `secretstore` (Vault KV v2 client: token or AppRole, TTL cache, fail closed, version tracking) behind
+> `psp.SecretResolver`; OpenBao dev server in compose/CI. `psp` gains per-process execution environments
+> (`DISABLED`/`LOCAL_SIMULATOR`/`PROVIDER_SANDBOX`/`PRODUCTION`), a provider allowlist, credential scoping
+> (`secretref://fundzim/<environment>/…`, DB CHECK), a startup gate (refuses PRODUCTION while live execution is off;
+> audited), sandbox enablement separate from production status, staff outage declarations, health derived from
+> observations, ten normalised error categories, and the adapter conformance suite `psp/psptest`. `payments` stamps
+> `execution_environment`/`test_payment` on intents and payments (DB refuses PRODUCTION rows), records every provider
+> observation in the append-only `app.payment_provider_evidence` and escalates contradictions
+> (`CONTRADICTORY_EVIDENCE`); only PRODUCTION payments may reach the ledger seam. Details:
+> [stage-9/implementation.md](stage-9/implementation.md).
+
 > **Stage 8 as built (payment abstraction; [ADR-039](adr/ADR-039-payment-abstraction-donation-intents-and-sandbox-execution.md)).**
 > New modules `psp` (imports platform, audit) and `payments` (imports platform, audit, campaigns, risk, psp); psp
 > dispatches verified webhooks to a handler payments registers at composition time. A payment attempt commits the
@@ -499,7 +512,8 @@ setting.
 | HTTP router | **Decided Stage 2: stdlib `ServeMux`** ([ADR-031](adr/ADR-031-data-access-and-http-stack.md)) |
 | Go module path | 3 |
 | Identity verification vendor | 5 |
-| PSP selection (criteria + shortlist; contract + sandbox integration; live acceptance) | 1; 9; 20 |
-| Production hosting/topology, CDN, KMS, secret manager | 18/20 |
+| PSP selection (criteria + shortlist; contract + sandbox integration; live acceptance) | 1; 9 (**DECISION_DEFERRED**, ADR-040); 20 |
+| Secret manager API | **Decided Stage 9: Vault KV v2, OpenBao default** ([ADR-041](adr/ADR-041-secret-management.md)); operating it: 18/20 |
+| Production hosting/topology, CDN, KMS | 18/20 |
 | Whether the staff portal is a separate host/app | 14 |
 | Whether FundZim's ledger balances are on its own balance sheet (custody question) | 1, LEGAL_REVIEW_REQUIRED (LR-001, LR-002) |

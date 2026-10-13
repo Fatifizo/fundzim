@@ -3,18 +3,22 @@ package app
 import (
 	"context"
 	"crypto/md5"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/riverqueue/river"
 
 	"github.com/Fatifizo/fundzim/internal/compliance"
 	"github.com/Fatifizo/fundzim/internal/payments"
+	"github.com/Fatifizo/fundzim/internal/platform/config"
 	"github.com/Fatifizo/fundzim/internal/platform/httpx"
 	"github.com/Fatifizo/fundzim/internal/platform/idempotency"
 	"github.com/Fatifizo/fundzim/internal/platform/outbox"
 	"github.com/Fatifizo/fundzim/internal/platform/ratelimit"
+	"github.com/Fatifizo/fundzim/internal/platform/secretstore"
 	"github.com/Fatifizo/fundzim/internal/psp"
 	"github.com/Fatifizo/fundzim/internal/psp/sandbox"
 )
@@ -44,11 +48,34 @@ func (d donorRestrictions) Restricted(ctx context.Context, userID string) (bool,
 	return got[sub] != compliance.LevelNone, nil
 }
 
-func newPayments(m *VerificationModules, d VerificationDeps) {
+// newSecretResolver builds the provider secret resolver (ADR-041): the secret manager (KV v2) or, outside
+// production only, the environment. onRotate receives KV version changes (never values).
+func newSecretResolver(cfg config.Secrets, onRotate func(ref string, from, to int)) (psp.SecretResolver, error) {
+	if cfg.Provider != "kv2" {
+		return psp.EnvResolver{Lookup: os.LookupEnv}, nil
+	}
+	return secretstore.New(secretstore.Config{Addr: cfg.KV2Addr, Mount: cfg.KV2Mount, Token: cfg.KV2Token.Reveal(), RoleID: cfg.KV2RoleID,
+		SecretID: cfg.KV2SecretID.Reveal(), CACert: cfg.KV2CAFile, CacheTTL: cfg.KV2CacheTTL, Timeout: cfg.KV2Timeout, OnRotate: onRotate})
+}
+
+func newPayments(ctx context.Context, m *VerificationModules, d VerificationDeps) error {
 	cfg := d.Config.Payments
-	secrets := psp.EnvResolver{Lookup: os.LookupEnv}
-	m.PSP = psp.New(d.AppPool, d.Clock, d.Logger, secrets, psp.Config{SandboxEnabled: cfg.SandboxEnabled, AccountEnv: cfg.ProviderAccountEnv},
-		psp.NewMetrics(d.Registry))
+	var rotated func(ref string, from, to int) // bound after psp exists (the resolver is built first)
+	secrets, err := newSecretResolver(d.Config.Secrets, func(ref string, from, to int) {
+		if rotated != nil {
+			rotated(ref, from, to)
+		}
+	})
+	if err != nil {
+		return fmt.Errorf("payments secret manager: %w", err)
+	}
+	allow := map[string]bool{}
+	for _, code := range cfg.ProviderAllowlist {
+		allow[code] = true
+	}
+	m.PSP = psp.New(d.AppPool, d.Clock, d.Logger, secrets, psp.Config{SandboxEnabled: cfg.SandboxEnabled, ExecEnv: cfg.ExecutionEnvironment,
+		Allowlist: allow}, psp.NewMetrics(d.Registry))
+	rotated = m.PSP.RecordCredentialRotation
 	if cfg.SandboxEnabled {
 		m.Sandbox = sandbox.New(d.AppPool, d.Clock, d.Logger, secrets, SandboxProviderID, cfg.SandboxWebhookURL)
 		m.PSP.Register(m.Sandbox)
@@ -58,6 +85,20 @@ func newPayments(m *VerificationModules, d VerificationDeps) {
 		Restrictions: donorRestrictions{m.Compliance}, Limits: m.Risk, Limiter: d.Limiter, Keyed: m.appKeyed, Registerer: d.Registry,
 		PublicSiteURL: cfg.PublicSiteURL})
 	m.PSP.Handle("PAYMENT", m.Payments.ApplyWebhook)
+	process := "api"
+	if d.WithScans {
+		process = "worker"
+	}
+	rep, err := m.PSP.StartupGate(ctx, d.Config.Secrets.Provider, process)
+	if errors.Is(err, psp.ErrStartupRefused) {
+		return fmt.Errorf("payments: %w: %s", err, strings.Join(rep.Reasons, "; "))
+	}
+	if err != nil {
+		return fmt.Errorf("payments startup gate: %w", err)
+	}
+	d.Logger.Info("payments: execution gate", "execution_environment", rep.ExecEnv, "live_execution", rep.LiveExecutionConstant,
+		"kill_switch", rep.KillSwitch, "allowlist", rep.Allowlist, "key_store", rep.SecretsProvider)
+	return nil
 }
 
 // registerPaymentRoutes registers the payments API and the webhook endpoint.

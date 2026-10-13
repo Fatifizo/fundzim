@@ -50,6 +50,12 @@ for p in "${PATTERNS[@]}"; do
            | xargs -0 -r grep -InEi -e "$p" -- 2>/dev/null | cut -c1-200 || true)
 done
 
+# Stage 9: CI workflows use no repository secrets at all (generated throwaway keys only). Real provider sandbox
+# credentials live in the secret manager and must never reach a workflow, least of all a pull_request one.
+while IFS= read -r hit; do
+  report "$hit (workflows must not use repository secrets)"
+done < <(grep -rnE '\$\{\{[[:space:]]*secrets\.' .github/workflows/ 2>/dev/null || true)
+
 if [[ $found -ne 0 ]]; then
   echo
   echo "Possible secrets found. Remove them, rotate any real credential, and re-run."

@@ -228,12 +228,14 @@ func (s *Service) CreateAttempt(ctx context.Context, donorID, donationID, idemKe
 		}
 		p = payRow{ID: ids.New(), DonationIntentID: cur.ID, CampaignID: cur.CampaignID, Currency: cur.Currency, Method: in.Method,
 			ProviderID: route.Provider.ID, AccountID: route.Account.ID, CapabilityID: route.Capability.ID, Status: psp.StatusCreated,
-			IdemKey: idemKey, Correlation: corr, Amount: cur.Amount, Simulated: cur.Simulated, AttemptSeq: seq, CreatedAt: now, UpdatedAt: now}
+			IdemKey: idemKey, Correlation: corr, Amount: cur.Amount, Simulated: cur.Simulated, ExecEnv: cur.ExecEnv, AttemptSeq: seq,
+			CreatedAt: now, UpdatedAt: now}
 		if _, err := tx.Exec(ctx, `INSERT INTO app.payment_intents (id, donation_intent_id, campaign_id, currency, amount_minor, method,
 			is_simulated, provider_id, provider_account_id, capability_id, custody_model, capability_routable, routing_reason, attempt_seq,
-			status, status_rank, idempotency_key, correlation_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-			'CREATED', 0, $15, $16)`, p.ID, p.DonationIntentID, p.CampaignID, p.Currency, p.Amount, p.Method, p.Simulated, p.ProviderID,
-			p.AccountID, p.CapabilityID, route.Capability.CustodyModel, route.Capability.Routable, route.Reason, seq, idemKey, corr); err != nil {
+			status, status_rank, idempotency_key, correlation_id, execution_environment) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+			$12, $13, $14, 'CREATED', 0, $15, $16, $17)`, p.ID, p.DonationIntentID, p.CampaignID, p.Currency, p.Amount, p.Method, p.Simulated,
+			p.ProviderID, p.AccountID, p.CapabilityID, route.Capability.CustodyModel, route.Capability.Routable, route.Reason, seq, idemKey, corr,
+			p.ExecEnv); err != nil {
 			return err
 		}
 		if err := s.insertEvent(ctx, tx, eventRow{subject: "PAYMENT_INTENT", donationID: p.DonationIntentID, paymentID: p.ID, to: psp.StatusCreated,
@@ -246,7 +248,8 @@ func (s *Service) CreateAttempt(ctx context.Context, donorID, donationID, idemKe
 		}
 		return audit.Record(ctx, tx, audit.Event{Action: "payments.attempt.created", ActorType: "user", ActorID: donorID,
 			TargetType: "payment", TargetID: p.ID, Metadata: map[string]any{"donation_intent_id": p.DonationIntentID, "method": p.Method,
-				"provider": route.Provider.Code, "simulated": p.Simulated}})
+				"provider": route.Provider.Code, "simulated": p.Simulated, "execution_environment": p.ExecEnv,
+				"audit_event": initiatedEvent(p.ExecEnv)}})
 	})
 	if err != nil {
 		return PaymentAttempt{}, err
@@ -355,7 +358,16 @@ var classification = map[psp.Class]string{
 	psp.ClassRateLimited: "RATE_LIMITED", psp.ClassNotSupported: "NOT_SUPPORTED", psp.ClassInvalidRequest: "REJECTED",
 }
 
-// completeCall records a call's result exactly once (app.attempt_complete_once).
+// initiatedEvent names the brief's audit event for a payment initiation in an environment.
+func initiatedEvent(env string) string {
+	if env == psp.ExecProduction {
+		return "PAYMENT_INITIATED"
+	}
+	return "PAYMENT_INITIATED_SANDBOX"
+}
+
+// completeCall records a call's result exactly once (app.attempt_complete_once) with its normalised error
+// category, and audits PROVIDER_RESPONSE_RECEIVED (no payload; classification, category and timing only).
 func (s *Service) completeCall(ctx context.Context, tx pgx.Tx, attemptID string, obs psp.Observation) error {
 	cl, ok := classification[obs.Class]
 	if !ok {
@@ -381,10 +393,35 @@ func (s *Service) completeCall(ctx context.Context, tx pgx.Tx, attemptID string,
 		raw = raw[:200]
 	}
 	lat := int(obs.Latency.Milliseconds())
-	_, err := tx.Exec(ctx, `UPDATE app.payment_attempts SET completed_at = $2, classification = $3, error_class = $4, unknown_reason = $5,
-		http_status = $6, provider_status_raw = nullif($7, ''), provider_reference_returned = nullif($8, ''), latency_ms = $9
-		WHERE id = $1 AND classification = 'IN_FLIGHT'`, attemptID, s.now(), cl, errClass, unknown, http, raw, obs.ProviderRef, lat)
-	return err
+	cat := psp.NormaliseError(obs)
+	var op, paymentID, providerID, env string
+	err := tx.QueryRow(ctx, `UPDATE app.payment_attempts a SET completed_at = $2, classification = $3, error_class = $4, unknown_reason = $5,
+		http_status = $6, provider_status_raw = nullif($7, ''), provider_reference_returned = nullif($8, ''), latency_ms = $9,
+		error_category = nullif($10, '')
+		FROM app.payment_intents p
+		WHERE a.id = $1 AND a.classification = 'IN_FLIGHT' AND p.id = a.payment_intent_id
+		RETURNING a.operation, p.id::text, p.provider_id::text, p.execution_environment`,
+		attemptID, s.now(), cl, errClass, unknown, http, raw, obs.ProviderRef, lat, cat).Scan(&op, &paymentID, &providerID, &env)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil // already completed (the sweeper got there first)
+	}
+	if err != nil {
+		return err
+	}
+	provider := providerID
+	if pr, err := s.PSP.ProviderForDisplay(ctx, providerID); err == nil {
+		provider = pr.Code
+	}
+	md := map[string]any{"audit_event": "PROVIDER_RESPONSE_RECEIVED", "provider": provider, "operation": op, "classification": cl,
+		"latency_ms": lat, "execution_environment": env}
+	if cat != "" {
+		md["error_category"] = cat
+	}
+	if http != nil {
+		md["http_status"] = *http
+	}
+	return audit.Record(ctx, tx, audit.Event{Action: "payments.provider.response_received", ActorType: "provider", TargetType: "payment",
+		TargetID: paymentID, Metadata: md})
 }
 
 // openSession records the donor's next step. A redirect URL must be https on a host the adapter declares; an

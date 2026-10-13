@@ -41,7 +41,11 @@ type Config struct {
 	// timeout scenarios are deliberate and would otherwise open the circuit for every following scenario. Real
 	// providers are always subject to it.
 	SandboxCircuitBreaker bool
-	AccountEnv            string // provider account environment for real providers: SANDBOX | STAGING | PRODUCTION
+	// ExecEnv is the execution environment of this process (Stage 9): DISABLED | LOCAL_SIMULATOR |
+	// PROVIDER_SANDBOX | PRODUCTION. It decides which providers and which account environment may execute.
+	ExecEnv string
+	// Allowlist holds the provider codes allowed to execute in this process (PAYMENTS_PROVIDER_ALLOWLIST).
+	Allowlist map[string]bool
 }
 
 // Service is the psp public service.
@@ -66,7 +70,7 @@ func New(pool *pgxpool.Pool, clk clock.Clock, logger *slog.Logger, secrets Secre
 	if m == nil {
 		m = NewMetrics(nil)
 	}
-	return &Service{Pool: pool, Clock: clk, Logger: logger, Secrets: secrets, Cfg: cfg, Metrics: m,
+	return &Service{Pool: pool, Clock: clk, Logger: logger, Secrets: secrets, Cfg: normaliseConfig(cfg), Metrics: m,
 		adapters: map[string]Adapter{}, handlers: map[string]EventHandler{}}
 }
 
@@ -96,6 +100,8 @@ type Provider struct {
 	SelectionStatus  string
 	Status           string
 	ConfirmationMode string
+	SandboxStatus    string
+	SelectionADR     string
 }
 
 // Capability is a current capability row.
@@ -121,11 +127,13 @@ type Capability struct {
 	DocumentedExpirySeconds *int
 }
 
-const providerCols = `id, code, display_name, is_sandbox, selection_status, status, confirmation_mode`
+const providerCols = `id, code, display_name, is_sandbox, selection_status, status, confirmation_mode, sandbox_status,
+	coalesce(selection_adr, '')`
 
 func scanProvider(row pgx.Row) (Provider, error) {
 	var p Provider
-	err := row.Scan(&p.ID, &p.Code, &p.DisplayName, &p.IsSandbox, &p.SelectionStatus, &p.Status, &p.ConfirmationMode)
+	err := row.Scan(&p.ID, &p.Code, &p.DisplayName, &p.IsSandbox, &p.SelectionStatus, &p.Status, &p.ConfirmationMode, &p.SandboxStatus,
+		&p.SelectionADR)
 	return p, err
 }
 
@@ -153,17 +161,6 @@ func (s *Service) ProviderByID(ctx context.Context, id string) (Provider, error)
 	return p, err
 }
 
-// Usable reports whether payments may run through a provider now (the execution gates of ADR-039 §6).
-func (s *Service) Usable(ctx context.Context, p Provider) (bool, error) {
-	if p.Status != "ENABLED" {
-		return false, nil
-	}
-	if p.IsSandbox {
-		return s.Cfg.SandboxEnabled, nil
-	}
-	return s.LiveExecution(ctx)
-}
-
 // LiveExecution reports whether real payment execution is enabled: the constant AND the kill switch.
 func (s *Service) LiveExecution(ctx context.Context) (bool, error) {
 	if !LiveExecutionEnabled {
@@ -180,17 +177,6 @@ func (s *Service) LiveExecution(ctx context.Context) (bool, error) {
 func (s *Service) KillSwitch(ctx context.Context) bool {
 	on, err := featureflags.Enabled(ctx, s.Pool, KillSwitchFlag)
 	return err == nil && on
-}
-
-// accountEnv is the account environment used for a provider.
-func (s *Service) accountEnv(p Provider) string {
-	if p.IsSandbox {
-		return EnvSandbox
-	}
-	if s.Cfg.AccountEnv != "" {
-		return s.Cfg.AccountEnv
-	}
-	return EnvSandbox
 }
 
 const accountCols = `id, provider_id, environment, account_label, coalesce(merchant_reference, ''), api_credentials_secret_ref,
@@ -210,8 +196,12 @@ var ErrNoAccount = errors.New("psp: no enabled provider account")
 
 // ActiveAccount returns the provider's enabled account for the current environment (oldest label first).
 func (s *Service) ActiveAccount(ctx context.Context, p Provider) (Account, error) {
+	env := s.accountEnv(p)
+	if env == "" {
+		return Account{}, ErrNoAccount
+	}
 	a, err := scanAccount(s.Pool.QueryRow(ctx, `SELECT `+accountCols+` FROM app.provider_accounts
-		WHERE provider_id = $1 AND environment = $2 AND status = 'ENABLED' ORDER BY created_at, id LIMIT 1`, p.ID, s.accountEnv(p)))
+		WHERE provider_id = $1 AND environment = $2 AND status = 'ENABLED' ORDER BY created_at, id LIMIT 1`, p.ID, env))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Account{}, ErrNoAccount
 	}
@@ -279,8 +269,10 @@ type Route struct {
 	Reason     string
 }
 
-// Route selects a provider (payment-provider-interfaces §8). It never routes on unverified evidence, never to
-// MERCHANT_SETTLEMENT (routable is false for both, and the payment FK requires routable), never to a disabled
+// Route selects a provider (payment-provider-interfaces §8). It never routes on unverified evidence, never to a
+// provider outside this process's execution environment or allowlist, never to an account whose credentials do not
+// resolve inside its own environment, never to MERCHANT_SETTLEMENT (routable is false for both, and the payment FK
+// requires routable), never to a disabled
 // provider or account, never past an open circuit, never outside the provider's declared limits, and never to a
 // real provider while live execution is disabled. SPLIT_DIRECT (Model C) is not routed: no campaign has a
 // Model C settlement model.
@@ -295,7 +287,7 @@ func (s *Service) Route(ctx context.Context, q RouteQuery) (Route, error) {
 		return Route{}, err
 	}
 	var candidates []Route
-	disabledByGate, outOfRange, outage := false, false, false
+	disabledByGate, outOfRange, outage, noCredentials := false, false, false, false
 	for _, c := range caps {
 		if !c.Routable || c.CustodyModel != "PSP_POOL" {
 			continue
@@ -328,6 +320,16 @@ func (s *Service) Route(ctx context.Context, q RouteQuery) (Route, error) {
 		if err != nil {
 			return Route{}, err
 		}
+		if open, err := outageOpen(ctx, s.Pool, p.ID); err != nil {
+			return Route{}, err
+		} else if open {
+			outage = true // staff-declared outage
+			continue
+		}
+		if !s.CredentialsUsable(ctx, acct) {
+			noCredentials = true // credentials missing, unresolvable or outside the account's environment: fail closed
+			continue
+		}
 		lim, ok := a.Limits(c.Method, c.Currency)
 		if !ok {
 			continue // unknown provider limit: excluded (fail closed)
@@ -351,7 +353,7 @@ func (s *Service) Route(ctx context.Context, q RouteQuery) (Route, error) {
 			return Route{}, ErrAmountOutOfRange
 		case disabledByGate:
 			return Route{}, ErrExecutionDisabled
-		case outage:
+		case outage, noCredentials:
 			return Route{}, ErrProviderUnavailable
 		}
 		return Route{}, ErrMethodUnavailable
@@ -372,7 +374,7 @@ type MethodOption struct {
 func (s *Service) AvailableMethods(ctx context.Context, currency string, simulated bool) ([]MethodOption, error) {
 	rows, err := s.Pool.Query(ctx, `SELECT DISTINCT c.method FROM app.provider_capabilities_current c
 		JOIN app.payment_providers p ON p.id = c.provider_id
-		WHERE c.currency = $1 AND c.routable AND c.custody_model = 'PSP_POOL' AND p.status = 'ENABLED' AND p.is_sandbox = $2
+		WHERE c.currency = $1 AND c.routable AND c.custody_model = 'PSP_POOL' AND p.status <> 'RETIRED' AND p.is_sandbox = $2
 		ORDER BY c.method`, currency, simulated)
 	if err != nil {
 		return nil, err

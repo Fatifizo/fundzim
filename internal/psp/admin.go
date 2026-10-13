@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -71,6 +72,7 @@ type AdminAccount struct {
 	WebhookSecretRef         *string `json:"webhook_secret_ref"`
 	WebhookSecretRefPrevious *string `json:"webhook_secret_ref_previous"`
 	SecretsResolvable        bool    `json:"secrets_resolvable"`
+	CredentialScopeOK        bool    `json:"credential_scope_ok"`
 	ReplayWindowSeconds      int     `json:"webhook_replay_window_seconds"`
 }
 
@@ -91,15 +93,23 @@ type AdminCapability struct {
 
 // AdminProvider is a provider with accounts, capabilities and circuit state.
 type AdminProvider struct {
-	Code             string            `json:"code"`
-	DisplayName      string            `json:"display_name"`
-	Simulated        bool              `json:"simulated"`
-	Status           string            `json:"status"`
-	SelectionStatus  string            `json:"selection_status"`
-	ConfirmationMode string            `json:"confirmation_mode"`
-	Circuit          string            `json:"circuit"`
-	Accounts         []AdminAccount    `json:"accounts"`
-	Capabilities     []AdminCapability `json:"capabilities"`
+	ID                string            `json:"id"`
+	Code              string            `json:"code"`
+	DisplayName       string            `json:"display_name"`
+	Simulated         bool              `json:"simulated"`
+	Status            string            `json:"status"`
+	SandboxStatus     string            `json:"sandbox_status"`
+	SelectionStatus   string            `json:"selection_status"`
+	SelectionADR      *string           `json:"selection_adr"`
+	Allowlisted       bool              `json:"allowlisted"`
+	AdapterRegistered bool              `json:"adapter_registered"`
+	Usable            bool              `json:"usable"`
+	Contract          *ContractInfo     `json:"contract"`
+	Health            HealthSummary     `json:"health"`
+	ConfirmationMode  string            `json:"confirmation_mode"`
+	Circuit           string            `json:"circuit"`
+	Accounts          []AdminAccount    `json:"accounts"`
+	Capabilities      []AdminCapability `json:"capabilities"`
 }
 
 // GateState describes the live-execution gates (ADR-039 §6).
@@ -111,9 +121,11 @@ type GateState struct {
 
 // ProvidersView is GET /admin/payments/providers.
 type ProvidersView struct {
-	Items          []AdminProvider `json:"items"`
-	LiveExecution  GateState       `json:"live_execution"`
-	SandboxEnabled bool            `json:"sandbox_enabled"`
+	Items                []AdminProvider `json:"items"`
+	LiveExecution        GateState       `json:"live_execution"`
+	SandboxEnabled       bool            `json:"sandbox_enabled"`
+	ExecutionEnvironment string          `json:"execution_environment"`
+	Allowlist            []string        `json:"allowlist"`
 }
 
 // Gates returns the live-execution gate state.
@@ -128,37 +140,173 @@ func (s *Service) AdminProviders(ctx context.Context) (ProvidersView, error) {
 	if err != nil {
 		return ProvidersView{}, err
 	}
-	out := ProvidersView{Items: []AdminProvider{}, LiveExecution: s.Gates(ctx), SandboxEnabled: s.Cfg.SandboxEnabled}
+	out := ProvidersView{Items: []AdminProvider{}, LiveExecution: s.Gates(ctx), SandboxEnabled: s.Cfg.SandboxEnabled,
+		ExecutionEnvironment: s.Cfg.ExecEnv, Allowlist: s.allowlist()}
 	for _, p := range ps {
-		ap := AdminProvider{Code: p.Code, DisplayName: p.DisplayName, Simulated: p.IsSandbox, Status: p.Status,
-			SelectionStatus: p.SelectionStatus, ConfirmationMode: p.ConfirmationMode, Circuit: s.ProviderCircuit(ctx, p.ID),
-			Accounts: []AdminAccount{}, Capabilities: []AdminCapability{}}
-		rows, err := s.Pool.Query(ctx, `SELECT `+accountCols+` FROM app.provider_accounts WHERE provider_id = $1 ORDER BY environment, account_label`, p.ID)
+		ap, err := s.adminProvider(ctx, p)
 		if err != nil {
 			return ProvidersView{}, err
-		}
-		accts, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Account, error) { return scanAccount(r) })
-		if err != nil {
-			return ProvidersView{}, err
-		}
-		for _, a := range accts {
-			resolvable := Resolvable(ctx, s.Secrets, a.APISecretRef) &&
-				(a.WebhookSecretRef == "" || Resolvable(ctx, s.Secrets, a.WebhookSecretRef))
-			ap.Accounts = append(ap.Accounts, AdminAccount{ID: a.ID, Environment: a.Environment, Label: a.Label, Status: a.Status,
-				APICredentialsSecretRef: a.APISecretRef, WebhookSecretRef: nonEmpty(a.WebhookSecretRef),
-				WebhookSecretRefPrevious: nonEmpty(a.WebhookSecretRefPrevious), SecretsResolvable: resolvable,
-				ReplayWindowSeconds: int(a.ReplayWindow / time.Second)})
-		}
-		caps, err := s.Capabilities(ctx, p.ID)
-		if err != nil {
-			return ProvidersView{}, err
-		}
-		for _, c := range caps {
-			ap.Capabilities = append(ap.Capabilities, c.Admin())
 		}
 		out.Items = append(out.Items, ap)
 	}
 	return out, nil
+}
+
+func (s *Service) allowlist() []string {
+	out := []string{}
+	for code, ok := range s.Cfg.Allowlist {
+		if ok {
+			out = append(out, code)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (s *Service) adminProvider(ctx context.Context, p Provider) (AdminProvider, error) {
+	ap := AdminProvider{ID: p.ID, Code: p.Code, DisplayName: p.DisplayName, Simulated: p.IsSandbox, Status: p.Status,
+		SandboxStatus: p.SandboxStatus, SelectionStatus: p.SelectionStatus, SelectionADR: nonEmpty(p.SelectionADR),
+		ConfirmationMode: p.ConfirmationMode, Circuit: s.ProviderCircuit(ctx, p.ID), Allowlisted: s.Allowed(p.Code),
+		Accounts: []AdminAccount{}, Capabilities: []AdminCapability{}}
+	_, ap.AdapterRegistered = s.Adapter(p.Code)
+	if c, ok := s.ContractOf(p.Code); ok {
+		ap.Contract = &c
+	}
+	var err error
+	if ap.Usable, err = s.Usable(ctx, p); err != nil {
+		return ap, err
+	}
+	if ap.Health, err = s.ProviderHealth(ctx, p); err != nil {
+		return ap, err
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT `+accountCols+` FROM app.provider_accounts WHERE provider_id = $1 ORDER BY environment, account_label`, p.ID)
+	if err != nil {
+		return ap, err
+	}
+	accts, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Account, error) { return scanAccount(r) })
+	if err != nil {
+		return ap, err
+	}
+	for _, a := range accts {
+		resolvable := Resolvable(ctx, s.Secrets, a.APISecretRef) &&
+			(a.WebhookSecretRef == "" || Resolvable(ctx, s.Secrets, a.WebhookSecretRef))
+		ap.Accounts = append(ap.Accounts, AdminAccount{ID: a.ID, Environment: a.Environment, Label: a.Label, Status: a.Status,
+			APICredentialsSecretRef: a.APISecretRef, WebhookSecretRef: nonEmpty(a.WebhookSecretRef),
+			WebhookSecretRefPrevious: nonEmpty(a.WebhookSecretRefPrevious), SecretsResolvable: resolvable,
+			CredentialScopeOK: CredentialScopeOK(a), ReplayWindowSeconds: int(a.ReplayWindow / time.Second)})
+	}
+	caps, err := s.Capabilities(ctx, p.ID)
+	if err != nil {
+		return ap, err
+	}
+	for _, c := range caps {
+		ap.Capabilities = append(ap.Capabilities, c.Admin())
+	}
+	return ap, nil
+}
+
+// HealthEventView is one provider health event (no payloads).
+type HealthEventView struct {
+	ID         string         `json:"id"`
+	Operation  string         `json:"operation"`
+	Method     *string        `json:"method"`
+	Currency   *string        `json:"currency"`
+	Kind       string         `json:"event_kind"`
+	ErrorClass *string        `json:"error_class"`
+	LatencyMs  *int           `json:"latency_ms"`
+	Detail     map[string]any `json:"detail"`
+	StaffActor bool           `json:"staff_declared"`
+	ObservedAt time.Time      `json:"observed_at"`
+}
+
+// ProviderDetail is GET /admin/payments/providers/{provider_id}.
+type ProviderDetail struct {
+	AdminProvider
+	ExecutionEnvironment string            `json:"execution_environment"`
+	RecentHealthEvents   []HealthEventView `json:"recent_health_events"`
+	ErrorCategories24h   map[string]int    `json:"error_categories_24h"`
+}
+
+// AdminProviderDetail returns one provider with its recent health events and normalised error counts.
+func (s *Service) AdminProviderDetail(ctx context.Context, id string) (ProviderDetail, error) {
+	p, err := s.ProviderByID(ctx, id)
+	if err != nil {
+		return ProviderDetail{}, err
+	}
+	ap, err := s.adminProvider(ctx, p)
+	if err != nil {
+		return ProviderDetail{}, err
+	}
+	d := ProviderDetail{AdminProvider: ap, ExecutionEnvironment: s.Cfg.ExecEnv, RecentHealthEvents: []HealthEventView{},
+		ErrorCategories24h: map[string]int{}}
+	rows, err := s.Pool.Query(ctx, `SELECT id, operation, method, currency, event_kind, error_class, latency_ms, detail, actor_id IS NOT NULL,
+		observed_at FROM app.provider_health_events WHERE provider_id = $1 ORDER BY observed_at DESC, id DESC LIMIT 50`, p.ID)
+	if err != nil {
+		return d, err
+	}
+	d.RecentHealthEvents, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (HealthEventView, error) {
+		var e HealthEventView
+		var detail []byte
+		err := r.Scan(&e.ID, &e.Operation, &e.Method, &e.Currency, &e.Kind, &e.ErrorClass, &e.LatencyMs, &detail, &e.StaffActor, &e.ObservedAt)
+		e.Detail = map[string]any{}
+		_ = json.Unmarshal(detail, &e.Detail)
+		return e, err
+	})
+	if err != nil {
+		return d, err
+	}
+	for _, c := range ErrorCategories {
+		d.ErrorCategories24h[c] = 0 // filled by the payments module, which owns provider calls
+	}
+	return d, nil
+}
+
+// ProviderHealthView is one row of GET /admin/payments/health.
+type ProviderHealthView struct {
+	ID       string        `json:"id"`
+	Provider ProviderRef   `json:"provider"`
+	Usable   bool          `json:"usable"`
+	Health   HealthSummary `json:"health"`
+}
+
+// HealthView is GET /admin/payments/health.
+type HealthView struct {
+	ExecutionEnvironment string               `json:"execution_environment"`
+	LiveExecution        GateState            `json:"live_execution"`
+	SecretManager        string               `json:"secret_manager"`
+	Items                []ProviderHealthView `json:"items"`
+}
+
+// SecretHealth is implemented by secret resolvers that can report reachability (the KV v2 client).
+type SecretHealth interface {
+	Health(ctx context.Context) error
+}
+
+// AdminHealth derives every provider's health and the secret manager's reachability.
+func (s *Service) AdminHealth(ctx context.Context) (HealthView, error) {
+	v := HealthView{ExecutionEnvironment: s.Cfg.ExecEnv, LiveExecution: s.Gates(ctx), SecretManager: "ENVIRONMENT", Items: []ProviderHealthView{}}
+	if h, ok := s.Secrets.(SecretHealth); ok {
+		v.SecretManager = HealthHealthy
+		if err := h.Health(ctx); err != nil {
+			v.SecretManager = HealthUnavailable
+		}
+	}
+	ps, err := s.Providers(ctx)
+	if err != nil {
+		return v, err
+	}
+	for _, p := range ps {
+		h, err := s.ProviderHealth(ctx, p)
+		if err != nil {
+			return v, err
+		}
+		u, err := s.Usable(ctx, p)
+		if err != nil {
+			return v, err
+		}
+		v.Items = append(v.Items, ProviderHealthView{ID: p.ID, Provider: p.Ref(), Usable: u, Health: h})
+	}
+	return v, nil
 }
 
 // Admin renders a capability for staff and the public capability list.

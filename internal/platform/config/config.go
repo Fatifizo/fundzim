@@ -13,6 +13,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -59,15 +60,43 @@ type Config struct {
 	Verification Verification
 	Security     Security
 	Payments     Payments
+	Secrets      Secrets
 }
 
-// Payments configures the Stage 8 payment layer (ADR-039 §6). Real payment execution is not configurable: it is
-// a code constant (psp.LiveExecutionEnabled = false) plus a maker-checker kill switch.
+// Payments configures the payment layer (ADR-039 §6, Stage 9). Real payment execution is not configurable: it is
+// a code constant (psp.LiveExecutionEnabled = false) plus a maker-checker kill switch. The execution environment
+// isolates the simulator, provider sandboxes and production from each other.
 type Payments struct {
-	SandboxEnabled     bool   // PAYMENTS_SANDBOX_ENABLED: the sandbox SIMULATOR; refused in production
-	SandboxWebhookURL  string // SANDBOX_WEBHOOK_URL: FundZim's own ingestion endpoint the simulator posts to
-	ProviderAccountEnv string // PAYMENTS_PROVIDER_ENVIRONMENT: SANDBOX | STAGING | PRODUCTION (real providers' accounts)
-	PublicSiteURL      string // PUBLIC_SITE_URL: base of the donor return URL given to providers (default APP_PUBLIC_URL)
+	SandboxEnabled    bool   // PAYMENTS_SANDBOX_ENABLED: the sandbox SIMULATOR; refused in production
+	SandboxWebhookURL string // SANDBOX_WEBHOOK_URL: FundZim's own ingestion endpoint the simulator posts to
+	PublicSiteURL     string // PUBLIC_SITE_URL: base of the donor return URL given to providers (default APP_PUBLIC_URL)
+	// ExecutionEnvironment (PAYMENTS_EXECUTION_ENVIRONMENT): DISABLED | LOCAL_SIMULATOR | PROVIDER_SANDBOX | PRODUCTION.
+	// PRODUCTION is accepted here only in production; the payments layer then refuses to start while live execution
+	// is disabled in code (psp.LiveExecutionEnabled).
+	ExecutionEnvironment string
+	// ProviderAllowlist (PAYMENTS_PROVIDER_ALLOWLIST): provider codes allowed to execute in this process.
+	ProviderAllowlist []string
+}
+
+// Execution environments (Stage 9).
+const (
+	ExecDisabled        = "DISABLED"
+	ExecLocalSimulator  = "LOCAL_SIMULATOR"
+	ExecProviderSandbox = "PROVIDER_SANDBOX"
+	ExecProduction      = "PRODUCTION"
+)
+
+// Secrets configures the secret manager that resolves provider secret references (ADR-041).
+type Secrets struct {
+	Provider    string        // SECRETS_PROVIDER: env | kv2 (production requires kv2)
+	KV2Addr     string        // SECRETS_KV2_ADDR (https in production)
+	KV2Mount    string        // SECRETS_KV2_MOUNT (default secret)
+	KV2Token    Secret        // SECRETS_KV2_TOKEN (development and CI only)
+	KV2RoleID   string        // SECRETS_KV2_ROLE_ID (AppRole; required in production)
+	KV2SecretID Secret        // SECRETS_KV2_SECRET_ID
+	KV2CAFile   string        // SECRETS_KV2_CA_FILE (optional private CA)
+	KV2CacheTTL time.Duration // SECRETS_KV2_CACHE_TTL
+	KV2Timeout  time.Duration // SECRETS_KV2_TIMEOUT
 }
 
 // Auth configures authentication and sessions (ADR-027, ADR-032, SECURITY §4–§6).
@@ -467,6 +496,7 @@ func Load(get LookupFunc) (Config, error) {
 	loadSecurity(l, &c, env)
 	loadVerification(l, &c, env)
 	loadPayments(l, &c, env)
+	loadSecrets(l, &c, env)
 
 	if len(l.problems) > 0 {
 		sort.Strings(l.problems)
@@ -718,22 +748,53 @@ func loadVerification(l *loader, c *Config, env Env) {
 
 func loadPayments(l *loader, c *Config, env Env) {
 	p := Payments{
-		SandboxEnabled:     l.boolean("PAYMENTS_SANDBOX_ENABLED", false),
-		SandboxWebhookURL:  l.str("SANDBOX_WEBHOOK_URL", "http://127.0.0.1:8080/api/v1/webhooks/payments/sandbox"),
-		ProviderAccountEnv: l.str("PAYMENTS_PROVIDER_ENVIRONMENT", "SANDBOX"),
-		PublicSiteURL:      l.str("PUBLIC_SITE_URL", c.Auth.PublicURL),
+		SandboxEnabled:    l.boolean("PAYMENTS_SANDBOX_ENABLED", false),
+		SandboxWebhookURL: l.str("SANDBOX_WEBHOOK_URL", "http://127.0.0.1:8080/api/v1/webhooks/payments/sandbox"),
+		PublicSiteURL:     l.str("PUBLIC_SITE_URL", c.Auth.PublicURL),
+		ProviderAllowlist: l.list("PAYMENTS_PROVIDER_ALLOWLIST"),
 	}
+	if _, set := l.get("PAYMENTS_PROVIDER_ENVIRONMENT"); set {
+		l.fail("PAYMENTS_PROVIDER_ENVIRONMENT was replaced by PAYMENTS_EXECUTION_ENVIRONMENT (Stage 9)")
+	}
+	def := ExecDisabled
+	if p.SandboxEnabled {
+		def = ExecLocalSimulator
+	}
+	p.ExecutionEnvironment = l.str("PAYMENTS_EXECUTION_ENVIRONMENT", def)
 	if p.SandboxEnabled && env == EnvProduction {
 		l.fail("PAYMENTS_SANDBOX_ENABLED is refused in production (the sandbox is a simulator, ADR-039)")
 	}
-	switch p.ProviderAccountEnv {
-	case "SANDBOX", "STAGING":
-	case "PRODUCTION":
+	switch p.ExecutionEnvironment {
+	case ExecDisabled:
+	case ExecLocalSimulator:
+		if env == EnvProduction {
+			l.fail("PAYMENTS_EXECUTION_ENVIRONMENT=LOCAL_SIMULATOR is refused in production")
+		}
+		if !p.SandboxEnabled {
+			l.fail("PAYMENTS_EXECUTION_ENVIRONMENT=LOCAL_SIMULATOR requires PAYMENTS_SANDBOX_ENABLED=true")
+		}
+	case ExecProviderSandbox:
+		if env == EnvProduction {
+			l.fail("PAYMENTS_EXECUTION_ENVIRONMENT=PROVIDER_SANDBOX is refused in production (provider sandboxes are tested from staging)")
+		}
+	case ExecProduction:
 		if env != EnvProduction {
-			l.fail("PAYMENTS_PROVIDER_ENVIRONMENT=PRODUCTION is allowed only in production")
+			l.fail("PAYMENTS_EXECUTION_ENVIRONMENT=PRODUCTION is allowed only in production")
 		}
 	default:
-		l.fail("PAYMENTS_PROVIDER_ENVIRONMENT must be SANDBOX, STAGING or PRODUCTION")
+		l.fail("PAYMENTS_EXECUTION_ENVIRONMENT must be DISABLED, LOCAL_SIMULATOR, PROVIDER_SANDBOX or PRODUCTION")
+	}
+	if p.ProviderAllowlist == nil && p.SandboxEnabled {
+		p.ProviderAllowlist = []string{"sandbox"}
+	}
+	for _, code := range p.ProviderAllowlist {
+		if !providerCodeRE.MatchString(code) {
+			l.fail("PAYMENTS_PROVIDER_ALLOWLIST entries must be provider codes (lower case, e.g. sandbox)")
+			break
+		}
+		if strings.HasPrefix(code, "sandbox") && (env == EnvProduction || p.ExecutionEnvironment == ExecProduction) {
+			l.fail("PAYMENTS_PROVIDER_ALLOWLIST must not contain the sandbox simulator in production")
+		}
 	}
 	if u, err := url.Parse(p.SandboxWebhookURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		l.fail("SANDBOX_WEBHOOK_URL must be an http(s) URL")
@@ -742,4 +803,59 @@ func loadPayments(l *loader, c *Config, env Env) {
 		l.fail("PUBLIC_SITE_URL must be an http(s) origin")
 	}
 	c.Payments = p
+}
+
+var providerCodeRE = regexp.MustCompile(`^[a-z][a-z0-9_]{1,31}$`)
+
+// loadSecrets validates the secret manager settings (ADR-041). Production refuses environment-variable secrets,
+// plain HTTP and static tokens; a provider sandbox needs the secret manager too (real sandbox credentials never
+// live in .env files).
+func loadSecrets(l *loader, c *Config, env Env) {
+	s := Secrets{
+		Provider:    l.str("SECRETS_PROVIDER", "env"),
+		KV2Addr:     l.str("SECRETS_KV2_ADDR", ""),
+		KV2Mount:    l.str("SECRETS_KV2_MOUNT", "secret"),
+		KV2Token:    Secret(l.str("SECRETS_KV2_TOKEN", "")),
+		KV2RoleID:   l.str("SECRETS_KV2_ROLE_ID", ""),
+		KV2SecretID: Secret(l.str("SECRETS_KV2_SECRET_ID", "")),
+		KV2CAFile:   l.str("SECRETS_KV2_CA_FILE", ""),
+		KV2CacheTTL: l.duration("SECRETS_KV2_CACHE_TTL", time.Minute, time.Second, 15*time.Minute),
+		KV2Timeout:  l.duration("SECRETS_KV2_TIMEOUT", 5*time.Second, 500*time.Millisecond, 30*time.Second),
+	}
+	switch s.Provider {
+	case "env":
+		if env == EnvProduction {
+			l.fail("SECRETS_PROVIDER=env is refused in production (use kv2, ADR-041)")
+		}
+		if c.Payments.ExecutionEnvironment == ExecProviderSandbox || c.Payments.ExecutionEnvironment == ExecProduction {
+			l.fail("PAYMENTS_EXECUTION_ENVIRONMENT=%s requires SECRETS_PROVIDER=kv2 (provider credentials live in the secret manager)",
+				c.Payments.ExecutionEnvironment)
+		}
+	case "kv2":
+		u, err := url.Parse(s.KV2Addr)
+		switch {
+		case s.KV2Addr == "" || err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https"):
+			l.fail("SECRETS_KV2_ADDR must be an http(s) URL when SECRETS_PROVIDER=kv2")
+		case env == EnvProduction && u.Scheme != "https":
+			l.fail("SECRETS_KV2_ADDR must use https in production")
+		}
+		if !regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`).MatchString(s.KV2Mount) {
+			l.fail("SECRETS_KV2_MOUNT must be a mount name such as secret")
+		}
+		approle := s.KV2RoleID != "" || s.KV2SecretID != ""
+		switch {
+		case approle && (s.KV2RoleID == "" || s.KV2SecretID == ""):
+			l.fail("SECRETS_KV2_ROLE_ID and SECRETS_KV2_SECRET_ID must be set together")
+		case approle && s.KV2Token != "":
+			l.fail("set either SECRETS_KV2_TOKEN or the AppRole, not both")
+		case !approle && s.KV2Token == "":
+			l.fail("SECRETS_PROVIDER=kv2 needs SECRETS_KV2_TOKEN or SECRETS_KV2_ROLE_ID + SECRETS_KV2_SECRET_ID")
+		}
+		if env == EnvProduction && !approle {
+			l.fail("production requires AppRole authentication to the secret manager (static tokens are refused)")
+		}
+	default:
+		l.fail("SECRETS_PROVIDER must be env or kv2")
+	}
+	c.Secrets = s
 }

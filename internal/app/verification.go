@@ -211,7 +211,9 @@ func NewVerificationModules(ctx context.Context, d VerificationDeps) (*Verificat
 	m.CampaignMedia = newCampaignMedia(m, d) // Stage 6 stream M
 	// Stage 6 stream U
 	m.CampaignUpdates = newCampaignUpdates(m, d)
-	newPayments(m, d) // Stage 8 (ADR-039)
+	if err := newPayments(ctx, m, d); err != nil { // Stage 8 (ADR-039), Stage 9 execution gates (ADR-041)
+		return fail(err)
+	}
 	return m, nil
 }
 

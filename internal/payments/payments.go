@@ -86,6 +86,7 @@ var (
 	ErrInProgress           = errs.New(errs.Conflict, "PAYMENT_IN_PROGRESS", "A payment for this donation is still in progress.")
 	ErrOutcomeUnknown       = errs.New(errs.Conflict, "PAYMENT_OUTCOME_UNKNOWN", "We're confirming your earlier payment with the provider. Please don't pay again.")
 	ErrPaymentNotFound      = errs.New(errs.NotFound, "PAYMENT_NOT_FOUND", "No such payment.")
+	ErrProviderNotFound     = errs.New(errs.NotFound, "PAYMENT_PROVIDER_NOT_FOUND", "No such payment provider.")
 	ErrSessionInvalid       = errs.New(errs.NotFound, "PAYMENT_SESSION_INVALID", "This payment link is invalid or has already been used.")
 	ErrStaffNotAllowed      = errs.New(errs.Forbidden, "ACCOUNT_KIND_NOT_ALLOWED", "Staff accounts cannot donate. Use your personal account.")
 	ErrRefundNotAllowed     = errs.New(errs.Conflict, "REFUND_NOT_ALLOWED", "This payment cannot be refunded.")

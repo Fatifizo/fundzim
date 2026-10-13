@@ -15,12 +15,27 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
-**Stage 8 — Payment Abstraction Layer (complete; awaiting acceptance; sandbox only).** Stage 0 is complete; Stages
-1–7 are complete but their acceptance has not been recorded (`docs/governance/stage-acceptance-register.md` is a
-proposed template — never mark a stage accepted yourself). What Stage 8 built: `docs/stage-8/implementation.md`
+**Stage 9 — Zimbabwe payment provider integration readiness (complete; awaiting acceptance; no provider selected).**
+Stages 1–9 are complete but their acceptance has not been recorded (`docs/governance/stage-acceptance-register.md` is
+a proposed template — never mark a stage accepted yourself). What Stage 9 built: `docs/stage-9/implementation.md`
+(prerequisites, legal review, provider confirmation register, evaluation, selection **DECISION_DEFERRED** (ADR-040),
+capabilities, contracts, sandbox certification, webhook security, secret management (ADR-041), payment security,
+reconciliation evidence, testing, known issues); Stage 10 starts from `docs/stage-handover/STAGE-9-TO-STAGE-10.md`.
+Binding Stage 9 rules: **no real provider adapter exists and none may be added without a selection ADR superseding
+ADR-040, sandbox credentials in the secret manager and the conformance suite (`internal/psp/psptest`) passing**;
+never sign up with a provider or put provider credentials anywhere but the secret manager
+(`secretref://fundzim/<environment>/…`, enforced by a DB CHECK); `PAYMENTS_EXECUTION_ENVIRONMENT` is one of
+`DISABLED | LOCAL_SIMULATOR | PROVIDER_SANDBOX | PRODUCTION` per process — PRODUCTION is refused at startup and no
+PRODUCTION donation intent or payment can exist (`ck_*_no_production_stage9`); every payment carries
+`execution_environment` and `test_payment`, and only PRODUCTION payments may ever reach the ledger seam; provider
+health comes from observations only (no observation = UNKNOWN); contradictory provider evidence is recorded in
+`app.payment_provider_evidence` and escalated (`CONTRADICTORY_EVIDENCE`), never applied or discarded; provider errors
+use the ten `psp.ErrCat*` categories and an outcome that may have reached the provider is never retried blindly;
+production refuses `SECRETS_PROVIDER=env`, plain HTTP and static tokens. Local secrets live in the compose OpenBao
+dev server (`fundzim-secrets`, seeded by `fundzim-secrets-init`). Stage 8 (`docs/stage-8/implementation.md`
 (architecture, provider interface with the sandbox contract, state machine, webhooks, idempotency, refunds,
-reconciliation, security, testing, performance, known issues alongside it; decisions in ADR-039); Stage 9 starts from
-`docs/stage-handover/STAGE-8-TO-STAGE-9.md`. Binding payment rules: the only provider is the sandbox **simulator**
+reconciliation, security, testing, performance, known issues alongside it; decisions in ADR-039) rules still hold.
+Binding payment rules: the only provider is the sandbox **simulator**
 (`PAYMENTS_SANDBOX_ENABLED`, refused in production); real execution is disabled by the Go constant
 `psp.LiveExecutionEnabled = false`, the kill switch `payments.live_execution.enabled` and DB checks — never change
 them without an ADR, legal sign-off and stage acceptance. `payments.apply()` is the only path that changes a payment's
@@ -50,7 +65,8 @@ STOPS.
 |---|---|
 | `apps/web/` | Next.js 16 (App Router, TypeScript, Tailwind v4). **Presentation only.** Has its own `AGENTS.md` — read it: this Next.js version differs from older training data; consult `apps/web/node_modules/next/dist/docs/` before writing Next.js code. |
 | `apps/api/` | Go entrypoints: `cmd/api` (HTTP API), `cmd/worker` (River jobs, outbox relay/delivery), `cmd/fundzimctl` (config check, migrations, `bootstrap-admins`, healthcheck). |
-| `internal/` | Go code: `app/` (composition root), `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, crypto, authz, clock, ratelimit, idempotency, outbox, jobs, version) and domain modules `users`, `auth`, `organisations`, `audit`, `notifications`, `storage` (documents: quarantine, ClamAV scanning, SSE-C, download tickets), `kyc` (KYC/KYB cases, identities, review engine, verification policy — `fundzim_kyc` pool only), `beneficiaries`, `payouts` (payout **destinations** only), `risk` (signals, versioned model, routing decisions), `compliance` (compliance cases and the subject-restriction projection — `fundzim_compliance` pool only), `verification` (HTTP orchestration; owns no tables) and `campaigns` (core: lifecycle, eligibility, review, publication, public read/search; subpackages `campaigns/media` — image upload, scan, re-encode, serving — and `campaigns/updates` — owner updates and moderation; no financial state), `psp` (Stage 8: provider registry, routing, webhook inbox, health, sandbox simulator in `psp/sandbox`) and `payments` (Stage 8: donation intents, payments, state machine, refund requests, reconciliation references; no balances or postings). `archtest/` enforces the module import graph and table ownership — register every new module there. One Go module (`github.com/Fatifizo/fundzim`) rooted at repo root. |
+| `internal/` | Go code: `app/` (composition root), `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, crypto, authz, clock, ratelimit, idempotency, outbox, jobs, version) and domain modules `users`, `auth`, `organisations`, `audit`, `notifications`, `storage` (documents: quarantine, ClamAV scanning, SSE-C, download tickets), `kyc` (KYC/KYB cases, identities, review engine, verification policy — `fundzim_kyc` pool only), `beneficiaries`, `payouts` (payout **destinations** only), `risk` (signals, versioned model, routing decisions), `compliance` (compliance cases and the subject-restriction projection — `fundzim_compliance` pool only), `verification` (HTTP orchestration; owns no tables) and `campaigns` (core: lifecycle, eligibility, review, publication, public read/search; subpackages `campaigns/media` — image upload, scan, re-encode, serving — and `campaigns/updates` — owner updates and moderation; no financial state), `psp` (Stage 8: provider registry, routing, webhook inbox, health, sandbox simulator in `psp/sandbox`; Stage 9:
+execution environments, startup gate, error categories, derived health, adapter conformance suite in `psp/psptest`) and `payments` (Stage 8: donation intents, payments, state machine, refund requests, reconciliation references; no balances or postings). `archtest/` enforces the module import graph and table ownership — register every new module there. One Go module (`github.com/Fatifizo/fundzim`) rooted at repo root. |
 | `migrations/` | Executable goose SQL migrations, embedded and run by `fundzimctl migrate` as `fundzim_migrator` (`docs/development/migrations.md`). |
 | `docs/` | Specifications. `docs/adr/` holds Architecture Decision Records. |
 | `api/openapi/` | OpenAPI 3.1 contract for `/api/v1` (source of truth, ADR-026). |

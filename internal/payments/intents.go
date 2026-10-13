@@ -30,33 +30,37 @@ const (
 
 // DonationIntent is the donor view of a donation intent.
 type DonationIntent struct {
-	ID          string           `json:"id"`
-	CampaignID  string           `json:"campaign_id"`
-	AmountMinor string           `json:"amount_minor"`
-	Currency    string           `json:"currency"`
-	Status      string           `json:"status"`
-	IsAnonymous bool             `json:"is_anonymous"`
-	Simulated   bool             `json:"simulated"`
-	ExpiresAt   time.Time        `json:"expires_at"`
-	CreatedAt   time.Time        `json:"created_at"`
-	UpdatedAt   time.Time        `json:"updated_at"`
-	Attempts    []PaymentAttempt `json:"attempts,omitempty"`
+	ID          string `json:"id"`
+	CampaignID  string `json:"campaign_id"`
+	AmountMinor string `json:"amount_minor"`
+	Currency    string `json:"currency"`
+	Status      string `json:"status"`
+	IsAnonymous bool   `json:"is_anonymous"`
+	Simulated   bool   `json:"simulated"`
+	// ExecutionEnvironment and TestPayment make a test payment impossible to mistake for a real donation.
+	ExecutionEnvironment string           `json:"execution_environment"`
+	TestPayment          bool             `json:"test_payment"`
+	ExpiresAt            time.Time        `json:"expires_at"`
+	CreatedAt            time.Time        `json:"created_at"`
+	UpdatedAt            time.Time        `json:"updated_at"`
+	Attempts             []PaymentAttempt `json:"attempts,omitempty"`
 }
 
 type donationRow struct {
 	ID, CampaignID, DonorID, Currency, Status, Correlation, IdemKey string
 	Amount                                                          int64
 	Anonymous, Simulated                                            bool
+	ExecEnv                                                         string
 	ExpiresAt, CreatedAt, UpdatedAt                                 time.Time
 }
 
 const donationSelect = `SELECT id, campaign_id, donor_user_id, currency, status, correlation_id, idempotency_key::text, amount_minor,
-	is_anonymous, is_simulated, expires_at, created_at, updated_at FROM app.donation_intents`
+	is_anonymous, is_simulated, expires_at, created_at, updated_at, execution_environment FROM app.donation_intents`
 
 func scanDonation(r pgx.Row) (donationRow, error) {
 	var d donationRow
 	err := r.Scan(&d.ID, &d.CampaignID, &d.DonorID, &d.Currency, &d.Status, &d.Correlation, &d.IdemKey, &d.Amount, &d.Anonymous,
-		&d.Simulated, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt)
+		&d.Simulated, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt, &d.ExecEnv)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, ErrIntentNotFound
 	}
@@ -65,7 +69,8 @@ func scanDonation(r pgx.Row) (donationRow, error) {
 
 func (d donationRow) view() DonationIntent {
 	return DonationIntent{ID: d.ID, CampaignID: d.CampaignID, AmountMinor: strconv.FormatInt(d.Amount, 10), Currency: d.Currency,
-		Status: d.Status, IsAnonymous: d.Anonymous, Simulated: d.Simulated, ExpiresAt: d.ExpiresAt, CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt}
+		Status: d.Status, IsAnonymous: d.Anonymous, Simulated: d.Simulated, ExecutionEnvironment: d.ExecEnv,
+		TestPayment: d.ExecEnv != psp.ExecProduction, ExpiresAt: d.ExpiresAt, CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt}
 }
 
 // CreateIntentInput is POST /donation-intents.
@@ -78,9 +83,17 @@ type CreateIntentInput struct {
 
 var amountRE = regexp.MustCompile(`^[1-9][0-9]{0,17}$`)
 
-// Simulated reports whether new donation intents are simulations: in Stage 8 every payment runs through the
-// sandbox (real execution is disabled), so an intent is simulated whenever the sandbox runs.
-func (s *Service) Simulated() bool { return s.PSP != nil && s.PSP.Cfg.SandboxEnabled }
+// ExecEnv is this process's payment execution environment (Stage 9); DISABLED without a provider layer.
+func (s *Service) ExecEnv() string {
+	if s.PSP == nil {
+		return psp.ExecDisabled
+	}
+	return s.PSP.Cfg.ExecEnv
+}
+
+// Simulated reports whether new donation intents are simulations (LOCAL_SIMULATOR). PROVIDER_SANDBOX intents are
+// not simulated but are still test payments.
+func (s *Service) Simulated() bool { return s.ExecEnv() == psp.ExecLocalSimulator }
 
 // CreateIntent validates everything that can be validated before any provider is involved (ADR-039 §3:
 // "VALIDATED" is not a state — a failed check stores nothing), then stores the intent with its first event.
@@ -124,13 +137,17 @@ func (s *Service) CreateIntent(ctx context.Context, donorID, idemKey, corr strin
 	if err := s.checkLimits(ctx, amount, in.Currency); err != nil {
 		return DonationIntent{}, err
 	}
-	if !s.Simulated() {
-		// no sandbox and real execution disabled: payments are not available at all
+	switch s.ExecEnv() {
+	case psp.ExecLocalSimulator, psp.ExecProviderSandbox:
+	case psp.ExecProduction:
+		// unreachable in Stage 9 (startup refuses PRODUCTION; the DB refuses PRODUCTION intents) — kept fail closed
 		if live, err := s.PSP.LiveExecution(ctx); err != nil {
 			return DonationIntent{}, err
 		} else if !live {
 			return DonationIntent{}, psp.ErrPaymentsUnavailable
 		}
+	default:
+		return DonationIntent{}, psp.ErrPaymentsUnavailable
 	}
 	// at least one method must route for this amount and currency, or the intent would be unpayable
 	if opts, err := s.PSP.AvailableMethods(ctx, in.Currency, s.Simulated()); err != nil {
@@ -140,13 +157,14 @@ func (s *Service) CreateIntent(ctx context.Context, donorID, idemKey, corr strin
 	}
 	now := s.now()
 	d := donationRow{ID: ids.New(), CampaignID: in.CampaignID, DonorID: donorID, Currency: in.Currency, Status: DonationOpen,
-		Correlation: corrOr(corr), IdemKey: idemKey, Amount: amount, Anonymous: in.IsAnonymous, Simulated: s.Simulated(),
+		Correlation: corrOr(corr), IdemKey: idemKey, Amount: amount, Anonymous: in.IsAnonymous, Simulated: s.Simulated(), ExecEnv: s.ExecEnv(),
 		ExpiresAt: now.Add(DonationIntentTTL), CreatedAt: now, UpdatedAt: now}
 	err = db.WithTx(ctx, s.Pool, db.TxOptions{}, func(ctx context.Context, tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `INSERT INTO app.donation_intents (id, campaign_id, donor_user_id, currency, amount_minor, is_anonymous,
-			is_simulated, status, expires_at, correlation_id, idempotency_key) VALUES ($1, $2, $3, $4, $5, $6, $7, 'OPEN', $8, $9, $10)
+			is_simulated, status, expires_at, correlation_id, idempotency_key, execution_environment)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, 'OPEN', $8, $9, $10, $11)
 			ON CONFLICT (donor_user_id, idempotency_key) DO NOTHING`,
-			d.ID, d.CampaignID, donorID, d.Currency, d.Amount, d.Anonymous, d.Simulated, d.ExpiresAt, d.Correlation, idemKey)
+			d.ID, d.CampaignID, donorID, d.Currency, d.Amount, d.Anonymous, d.Simulated, d.ExpiresAt, d.Correlation, idemKey, d.ExecEnv)
 		if err != nil {
 			return err
 		}
@@ -159,11 +177,12 @@ func (s *Service) CreateIntent(ctx context.Context, donorID, idemKey, corr strin
 		}
 		if _, err := outbox.Write(ctx, tx, outbox.Event{AggregateType: "donation_intent", AggregateID: d.ID,
 			EventType: "payments.donation_intent_created", Payload: map[string]any{"donation_intent_id": d.ID, "campaign_id": d.CampaignID,
-				"simulated": d.Simulated}, CorrelationID: d.Correlation, OccurredAt: now}); err != nil {
+				"simulated": d.Simulated, "execution_environment": d.ExecEnv}, CorrelationID: d.Correlation, OccurredAt: now}); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Event{Action: "payments.donation_intent.created", ActorType: "user", ActorID: donorID,
-			TargetType: "donation_intent", TargetID: d.ID, Metadata: map[string]any{"campaign_id": d.CampaignID, "simulated": d.Simulated}})
+			TargetType: "donation_intent", TargetID: d.ID, Metadata: map[string]any{"campaign_id": d.CampaignID, "simulated": d.Simulated,
+				"execution_environment": d.ExecEnv}})
 	})
 	if errors.Is(err, errConcurrentReplay) {
 		existing, err := scanDonation(s.Pool.QueryRow(ctx, donationSelect+` WHERE donor_user_id = $1 AND idempotency_key = $2`, donorID, idemKey))

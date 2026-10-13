@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Fatifizo/fundzim/internal/platform/authz"
@@ -39,6 +40,7 @@ func (s *Service) Routes(sb *sandbox.Adapter) []Route {
 		{Pattern: "POST " + di + "/cancel", Policy: user, Handler: s.handleCancel},
 		{Pattern: "POST /api/v1/payment-sessions/{session_id}/return", Policy: user, Handler: s.handleSessionReturn},
 		{Pattern: "GET /api/v1/payment-methods", Policy: public, Handler: s.handleMethods},
+		{Pattern: "GET /api/v1/payment-methods/available", Policy: public, Handler: s.handleAvailable},
 		{Pattern: "GET /api/v1/payment-providers/capabilities", Policy: public, Handler: s.handleCapabilities},
 
 		{Pattern: "GET " + adm + "/overview", Policy: perm("payment.view"), Handler: s.handleOverview},
@@ -53,6 +55,13 @@ func (s *Service) Routes(sb *sandbox.Adapter) []Route {
 		{Pattern: "POST " + adm + "/webhooks/{inbox_id}/requeue", Policy: perm("payment.operate"), Handler: s.handleRequeue},
 		{Pattern: "GET " + adm + "/webhook-rejections", Policy: perm("payment.view"), Handler: s.handleRejections},
 		{Pattern: "GET " + adm + "/providers", Policy: perm("payment.view"), Handler: s.handleProviders},
+		{Pattern: "GET " + adm + "/providers/{provider_id}", Policy: perm("payment.view"), Handler: s.handleProvider},
+		{Pattern: "POST " + adm + "/providers/{provider_id}/enable-sandbox", Policy: perm("payment.operate"), Handler: s.providerAction(actEnableSandbox)},
+		{Pattern: "POST " + adm + "/providers/{provider_id}/disable", Policy: perm("payment.operate"), Handler: s.providerAction(actDisable)},
+		{Pattern: "POST " + adm + "/providers/{provider_id}/outage", Policy: perm("payment.operate"), Handler: s.providerAction(actDeclareOutage)},
+		{Pattern: "POST " + adm + "/providers/{provider_id}/outage/resolve", Policy: perm("payment.operate"), Handler: s.providerAction(actResolveOutage)},
+		{Pattern: "GET " + adm + "/health", Policy: perm("payment.view"), Handler: s.handleHealth},
+		{Pattern: "GET " + adm + "/attempts/{payment_id}/evidence", Policy: perm("payment.view"), Handler: s.handleEvidence},
 		{Pattern: "GET " + adm + "/reconciliation", Policy: perm("payment.view"), Handler: s.handleRecon},
 		{Pattern: "POST " + adm + "/reconciliation/{reference_id}/await-settlement", Policy: perm("payment.operate"), Handler: s.handleAwaitSettlement},
 		{Pattern: "POST " + adm + "/attempts/{payment_id}/refund-requests", Policy: perm("refund.request"), Handler: s.handleRequestRefund,
@@ -404,6 +413,100 @@ func (s *Service) handleRejections(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) handleProviders(w http.ResponseWriter, r *http.Request) {
 	v, err := s.PSP.AdminProviders(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.ok(w, r, http.StatusOK, v)
+}
+
+func (s *Service) handleProvider(w http.ResponseWriter, r *http.Request) {
+	v, err := s.PSP.AdminProviderDetail(r.Context(), r.PathValue("provider_id"))
+	if errors.Is(err, psp.ErrProviderNotFound) {
+		err = ErrProviderNotFound
+	}
+	if err == nil {
+		err = s.errorCategoryCounts(r.Context(), v.ID, v.ErrorCategories24h)
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.ok(w, r, http.StatusOK, v)
+}
+
+const (
+	actEnableSandbox = iota
+	actDisable
+	actDeclareOutage
+	actResolveOutage
+)
+
+// providerAction runs a staff provider control (payment.operate with step-up, by route policy). None of them can
+// enable production execution or change a payment.
+func (s *Service) providerAction(act int) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var in reasonBody
+		if err := httpx.DecodeJSON(r, &in); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		reason, ok := cleanReason(in.Reason)
+		if !ok {
+			s.fail(w, r, invalidReason("reason"))
+			return
+		}
+		ctx, staff, id := r.Context(), principal(r).UserID, r.PathValue("provider_id")
+		var err error
+		switch act {
+		case actEnableSandbox:
+			_, err = s.PSP.EnableSandbox(ctx, staff, id, reason)
+		case actDisable:
+			_, err = s.PSP.Disable(ctx, staff, id, reason)
+		case actDeclareOutage:
+			err = s.PSP.DeclareOutage(ctx, staff, id, reason)
+		case actResolveOutage:
+			err = s.PSP.ResolveOutage(ctx, staff, id, reason)
+		}
+		if errors.Is(err, psp.ErrProviderNotFound) {
+			err = ErrProviderNotFound
+		}
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.handleProvider(w, r)
+	}
+}
+
+func (s *Service) handleHealth(w http.ResponseWriter, r *http.Request) {
+	v, err := s.PSP.AdminHealth(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.ok(w, r, http.StatusOK, v)
+}
+
+func (s *Service) handleEvidence(w http.ResponseWriter, r *http.Request) {
+	items, err := s.PaymentEvidence(r.Context(), r.PathValue("payment_id"))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.ok(w, r, http.StatusOK, map[string]any{"items": items})
+}
+
+func (s *Service) handleAvailable(w http.ResponseWriter, r *http.Request) {
+	ccy := r.URL.Query().Get("currency")
+	if ccy == "" {
+		ccy = "USD"
+	}
+	if len(ccy) != 3 || strings.ToUpper(ccy) != ccy {
+		s.fail(w, r, httpx.Validation(errs.Detail{Field: "currency", Code: "INVALID_FORMAT"}))
+		return
+	}
+	v, err := s.AvailablePaymentMethods(r.Context(), ccy)
 	if err != nil {
 		s.fail(w, r, err)
 		return

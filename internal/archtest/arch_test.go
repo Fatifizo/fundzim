@@ -83,7 +83,7 @@ var ownedTables = map[string][]string{
 		"app.sandbox_scheduled_webhooks"},
 	"payments": {"app.donation_intents", "app.payment_intents", "app.payment_attempts", "app.payment_transactions",
 		"app.payment_provider_references", "app.payment_sessions", "app.payment_events", "app.refund_requests",
-		"app.payment_reconciliation_references", "app.payment_status_rank"},
+		"app.payment_reconciliation_references", "app.payment_status_rank", "app.payment_provider_evidence"},
 }
 
 // moduleOf maps a repository-relative directory to its module ("" = not a constrained module).

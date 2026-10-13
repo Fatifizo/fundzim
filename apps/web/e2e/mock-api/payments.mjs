@@ -15,6 +15,7 @@ const ROLE_PERMISSIONS = {
 const PAGE_SIZE = 25;
 const SANDBOX_ENABLED = true;
 const PROVIDER = { code: "sandbox", display_name: "FundZim Sandbox", simulated: true };
+const PROVIDER_ID = "0192a000-0000-7000-8000-0000000b0001";
 /** A staff member who is not any test user: the maker of seeded refund requests. */
 const OTHER_STAFF = { id: "0192a000-0000-7000-8000-00000000f001", display_name: "Maker Staff" };
 
@@ -37,6 +38,8 @@ export function createPaymentsMock({ send, err, stepUpTtlMs }) {
   const sandbox = new Map(); // paymentId -> SandboxState
   const statusQueries = []; // {payment_id, reason}
   const sandboxWebhooks = []; // {payment_id, body}
+  const providerActions = []; // Stage 9: {provider_id, action, reason}
+  const providerState = { sandbox_status: "ENABLED", outage: false };
 
   const perms = (user) => (user?.account_kind === "STAFF" ? new Set((user.roles ?? []).flatMap((r) => ROLE_PERMISSIONS[r] ?? [])) : new Set());
 
@@ -228,16 +231,39 @@ export function createPaymentsMock({ send, err, stepUpTtlMs }) {
     };
   }
 
+  // Stage 9: health is derived from observations; with a declared outage it is UNAVAILABLE.
+  function health() {
+    return providerState.outage
+      ? { status: "UNAVAILABLE", reason: "OUTAGE_DECLARED", window_seconds: 900, calls: 3, errors: 0, timeouts: 0, webhooks_verified: 2, p95_latency_ms: 41, circuit: "CLOSED", outage_declared: true, credentials_usable: true, last_observed_at: iso(60_000) }
+      : { status: "HEALTHY", reason: "RECENT_CALLS_SUCCEEDED", window_seconds: 900, calls: 3, errors: 0, timeouts: 0, webhooks_verified: 2, p95_latency_ms: 41, circuit: "CLOSED", outage_declared: false, credentials_usable: true, last_observed_at: iso(60_000) };
+  }
+
+  function providerRow() {
+    return {
+      ...PROVIDER,
+      id: PROVIDER_ID,
+      status: "ENABLED",
+      sandbox_status: providerState.sandbox_status,
+      selection_status: "PENDING",
+      selection_adr: null,
+      confirmation_mode: "WEBHOOK_SIGNED",
+      circuit: "CLOSED",
+      allowlisted: true,
+      adapter_registered: true,
+      usable: providerState.sandbox_status === "ENABLED" && !providerState.outage,
+      contract: { basis: "SIMULATED", sources: ["docs/stage-8/provider-interface.md §6"] },
+      health: health(),
+    };
+  }
+
   function providers() {
     return {
+      execution_environment: "LOCAL_SIMULATOR",
+      allowlist: ["sandbox"],
       items: [
         {
-          ...PROVIDER,
-          status: "ENABLED",
-          selection_status: "PENDING",
-          confirmation_mode: "WEBHOOK_SIGNED",
-          circuit: "CLOSED",
-          accounts: [{ id: "0192a000-0000-7000-8000-0000000a0001", environment: "SANDBOX", label: "Local simulator", status: "ENABLED", api_credentials_secret_ref: "env:PAYMENTS_SANDBOX_API_KEY", webhook_secret_ref: "env:PAYMENTS_SANDBOX_WEBHOOK_SECRET", webhook_secret_ref_previous: null, secrets_resolvable: true, webhook_replay_window_seconds: 300 }],
+          ...providerRow(),
+          accounts: [{ id: "0192a000-0000-7000-8000-0000000a0001", environment: "SANDBOX", label: "Local simulator", status: "ENABLED", api_credentials_secret_ref: "secretref://fundzim/sandbox/api", webhook_secret_ref: "secretref://fundzim/sandbox/webhook-current", webhook_secret_ref_previous: null, secrets_resolvable: true, credential_scope_ok: true, webhook_replay_window_seconds: 300 }],
           capabilities: [
             { id: "0192a000-0000-7000-8000-0000000c0001", method: "ECOCASH", method_category: "MOBILE_MONEY", currency: "USD", custody_model: "PSP_POOL", evidence_status: "VERIFIED", evidence_source: "Sandbox contract (internal/psp/sandbox)", pcr_ref: null, routable: true, capability_version: 1, flags: { refund_api: false, partial_refund: false, idempotent_create: true, supports_cancel: true, signed_webhooks: true, status_api: true, separate_capture: false, documented_expiry: true } },
             { id: "0192a000-0000-7000-8000-0000000c0002", method: "CARD", method_category: "CARD", currency: "USD", custody_model: "PSP_POOL", evidence_status: "VERIFIED", evidence_source: "Sandbox contract (internal/psp/sandbox)", pcr_ref: null, routable: true, capability_version: 1, flags: { refund_api: false, partial_refund: false, idempotent_create: true, supports_cancel: false, signed_webhooks: true, status_api: true, separate_capture: false, documented_expiry: true } },
@@ -262,6 +288,9 @@ export function createPaymentsMock({ send, err, stepUpTtlMs }) {
     refundAction: re(`/refund-requests/(${UUID})/(approve|reject|hold|resume|withdraw)`),
     sandboxState: re(`/sandbox/attempts/(${UUID})`),
     sandboxWebhook: re(`/sandbox/attempts/(${UUID})/webhooks`),
+    provider: re(`/providers/(${UUID})`),
+    providerAction: re(`/providers/(${UUID})/(enable-sandbox|disable|outage|outage/resolve)`),
+    evidence: re(`/attempts/(${UUID})/evidence`),
   };
   const reasonOk = (v) => typeof v === "string" && [...v.trim()].length >= 3 && [...v.trim()].length <= 2000;
 
@@ -287,6 +316,26 @@ export function createPaymentsMock({ send, err, stepUpTtlMs }) {
     if (method === "GET") {
       if (path === "/api/v1/admin/payments/overview") return need("payment.view") && send(res, 200, overview()), true;
       if (path === "/api/v1/admin/payments/providers") return need("payment.view") && send(res, 200, providers()), true;
+      if ((m = ROUTES.provider.exec(path))) {
+        if (!need("payment.view")) return true;
+        if (m[1] !== PROVIDER_ID) return err(res, 404, "PAYMENT_PROVIDER_NOT_FOUND"), true;
+        const p = providers().items[0];
+        return send(res, 200, { ...p, execution_environment: "LOCAL_SIMULATOR", recent_health_events: [{ id: randomUUID(), operation: "CREATE_PAYMENT", method: "ECOCASH", currency: "USD", event_kind: "TIMEOUT", error_class: "INDETERMINATE", latency_ms: 30000, detail: {}, staff_declared: false, observed_at: iso(120_000) }], error_categories_24h: { PROVIDER_TIMEOUT: 1, PAYMENT_DECLINED: 0 } }), true;
+      }
+      if (path === "/api/v1/admin/payments/health") {
+        if (!need("payment.view")) return true;
+        return send(res, 200, { execution_environment: "LOCAL_SIMULATOR", live_execution: { enabled: false, constant: false, kill_switch: false }, secret_manager: "HEALTHY", items: [{ id: PROVIDER_ID, provider: PROVIDER, usable: providerRow().usable, health: health() }] }), true;
+      }
+      if ((m = ROUTES.evidence.exec(path))) {
+        if (!need("payment.view")) return true;
+        const a = attempts.get(m[1]);
+        if (!a) return err(res, 404, "PAYMENT_NOT_FOUND"), true;
+        const first = randomUUID();
+        return send(res, 200, { items: [
+          { id: first, source: "SYNC", execution_environment: "LOCAL_SIMULATOR", provider_reference: "sbx_pay_1", provider_event_id: null, raw_status: "pending", mapped_status: "PENDING", mapped: true, mapping_version: "sandbox-map-v1", reported_amount_minor: null, reported_currency: null, provider_occurred_at: null, observed_at: iso(300_000), consistency: "FIRST", contradicts_evidence_id: null },
+          { id: randomUUID(), source: "WEBHOOK", execution_environment: "LOCAL_SIMULATOR", provider_reference: "sbx_pay_1", provider_event_id: "sbx_evt_00000000000000000001", raw_status: "limbo", mapped_status: "UNKNOWN", mapped: false, mapping_version: "sandbox-map-v1", reported_amount_minor: a.amount_minor, reported_currency: a.currency, provider_occurred_at: iso(200_000), observed_at: iso(200_000), consistency: "CONTRADICTS", contradicts_evidence_id: first },
+        ] }), true;
+      }
       if (path === "/api/v1/admin/payments/intents") {
         if (!need("payment.view")) return true;
         return send(res, 200, page(filter([...intents.values()], ["status", "campaign_id"]).sort(newestFirst), url)), true;
@@ -414,6 +463,20 @@ export function createPaymentsMock({ send, err, stepUpTtlMs }) {
         }
         return send(res, 200, refundView(r)), true; // approval never executes a refund (no EXECUTING edge)
       }
+      if ((m = ROUTES.providerAction.exec(path))) {
+        if (!need("payment.operate") || !stepUp()) return true;
+        if (m[1] !== PROVIDER_ID) return err(res, 404, "PAYMENT_PROVIDER_NOT_FOUND"), true;
+        if (!reasonOk(body.reason)) return err(res, 422, "VALIDATION_FAILED", { details: [{ field: "reason", code: "INVALID_LENGTH" }] }), true;
+        const action = m[2];
+        if (action === "outage" && providerState.outage) return err(res, 409, "PROVIDER_OUTAGE_STATE"), true;
+        if (action === "outage/resolve" && !providerState.outage) return err(res, 409, "PROVIDER_OUTAGE_STATE"), true;
+        if (action === "outage") providerState.outage = true;
+        if (action === "outage/resolve") providerState.outage = false;
+        if (action === "disable") providerState.sandbox_status = "DISABLED";
+        if (action === "enable-sandbox") providerState.sandbox_status = "ENABLED";
+        providerActions.push({ provider_id: m[1], action, reason: body.reason });
+        return send(res, 200, { ...providers().items[0], execution_environment: "LOCAL_SIMULATOR", recent_health_events: [], error_categories_24h: {} }), true;
+      }
       if ((m = ROUTES.sandboxWebhook.exec(path))) {
         if (!SANDBOX_ENABLED) return err(res, 404, "SANDBOX_DISABLED"), true;
         if (!need("payment.sandbox.control")) return true;
@@ -429,7 +492,7 @@ export function createPaymentsMock({ send, err, stepUpTtlMs }) {
   /** Test-only control endpoints. */
   async function control(path, _body, res) {
     if (path === "/api/v1/__mock/payments/seed") return send(res, 201, seed()), true;
-    if (path === "/api/v1/__mock/payments/log") return send(res, 200, { status_queries: statusQueries, sandbox_webhooks: sandboxWebhooks }), true;
+    if (path === "/api/v1/__mock/payments/log") return send(res, 200, { status_queries: statusQueries, sandbox_webhooks: sandboxWebhooks, provider_actions: providerActions }), true;
     return false;
   }
 

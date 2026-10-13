@@ -10,6 +10,10 @@ import type {
   AdminIntentDetail,
   AttemptDetail,
   CapabilityFlags,
+  EvidenceRow,
+  HealthEvent,
+  HealthRow,
+  HealthView,
   InboxDetail,
   InboxItem,
   LiveExecution,
@@ -22,6 +26,9 @@ import type {
   ProviderAccount,
   ProviderCall,
   ProviderCapability,
+  ProviderContract,
+  ProviderDetail,
+  ProviderHealth,
   ProviderRef,
   ProviderReference,
   ProviderRow,
@@ -181,6 +188,7 @@ function readCall(v: unknown): ProviderCall | null {
     operation: str(v.operation),
     classification: str(v.classification, "UNKNOWN"),
     error_class: strOrNull(v.error_class),
+    error_category: strOrNull(v.error_category),
     unknown_reason: strOrNull(v.unknown_reason),
     http_status: intOrNull(v.http_status),
     provider_status_raw: strOrNull(v.provider_status_raw),
@@ -375,27 +383,147 @@ function readAccount(v: unknown): ProviderAccount | null {
     webhook_secret_ref: strOrNull(v.webhook_secret_ref),
     webhook_secret_ref_previous: strOrNull(v.webhook_secret_ref_previous),
     secrets_resolvable: bool(v.secrets_resolvable),
+    credential_scope_ok: bool(v.credential_scope_ok),
     webhook_replay_window_seconds: intOrNull(v.webhook_replay_window_seconds),
+  };
+}
+
+const HEALTH = new Set(["HEALTHY", "DEGRADED", "UNAVAILABLE", "UNKNOWN"]);
+
+/** Health from the API; anything unrecognised is UNKNOWN (never assumed healthy). */
+export function readHealth(v: unknown): ProviderHealth {
+  const h = rec(v);
+  const status = typeof h.status === "string" && HEALTH.has(h.status) ? h.status : "UNKNOWN";
+  return {
+    status,
+    reason: str(h.reason),
+    window_seconds: Math.max(0, int(h.window_seconds)),
+    calls: Math.max(0, int(h.calls)),
+    errors: Math.max(0, int(h.errors)),
+    timeouts: Math.max(0, int(h.timeouts)),
+    webhooks_verified: Math.max(0, int(h.webhooks_verified)),
+    p95_latency_ms: intOrNull(h.p95_latency_ms),
+    circuit: str(h.circuit, "UNKNOWN"),
+    outage_declared: bool(h.outage_declared),
+    credentials_usable: typeof h.credentials_usable === "boolean" ? h.credentials_usable : null,
+    last_observed_at: strOrNull(h.last_observed_at),
+  };
+}
+
+const CONTRACT_BASES = new Set(["OFFICIAL_PROVIDER_CONTRACT", "PROVIDER_SANDBOX_OBSERVED", "DOCUMENTED_BUT_UNVERIFIED", "SIMULATED"]);
+
+function readContract(v: unknown): ProviderContract | null {
+  if (!isRec(v) || typeof v.basis !== "string") return null;
+  return {
+    // an unknown basis is shown as the weakest real-provider basis, never as verified
+    basis: CONTRACT_BASES.has(v.basis) ? v.basis : "DOCUMENTED_BUT_UNVERIFIED",
+    sources: (Array.isArray(v.sources) ? v.sources : []).filter((s): s is string => typeof s === "string"),
+    verified_on: strOrNull(v.verified_on),
+  };
+}
+
+function readProviderRow(x: unknown): ProviderRow | null {
+  if (!isRec(x) || typeof x.code !== "string") return null;
+  return {
+    ...readProviderRef(x),
+    id: str(x.id),
+    status: str(x.status),
+    sandbox_status: str(x.sandbox_status, "DISABLED"),
+    selection_status: str(x.selection_status),
+    selection_adr: strOrNull(x.selection_adr),
+    confirmation_mode: str(x.confirmation_mode),
+    circuit: str(x.circuit, "UNKNOWN"),
+    allowlisted: bool(x.allowlisted),
+    adapter_registered: bool(x.adapter_registered),
+    usable: bool(x.usable),
+    contract: readContract(x.contract),
+    health: readHealth(x.health),
+    accounts: many(x.accounts, readAccount),
+    capabilities: many(x.capabilities, readCapability),
   };
 }
 
 export function readProviders(v: unknown): ProvidersView {
   const d = rec(v);
-  const items = list(d).flatMap((x): ProviderRow[] => {
-    if (!isRec(x) || typeof x.code !== "string") return [];
-    return [
-      {
-        ...readProviderRef(x),
-        status: str(x.status),
-        selection_status: str(x.selection_status),
-        confirmation_mode: str(x.confirmation_mode),
-        circuit: str(x.circuit, "UNKNOWN"),
-        accounts: many(x.accounts, readAccount),
-        capabilities: many(x.capabilities, readCapability),
-      },
-    ];
+  return {
+    items: many(d, readProviderRow),
+    live_execution: readLiveExecution(d.live_execution),
+    sandbox_enabled: bool(d.sandbox_enabled),
+    execution_environment: str(d.execution_environment, "UNKNOWN"),
+    allowlist: (Array.isArray(d.allowlist) ? d.allowlist : []).filter((s): s is string => typeof s === "string"),
+  };
+}
+
+function readHealthEvent(v: unknown): HealthEvent | null {
+  if (!isRec(v) || typeof v.id !== "string") return null;
+  return {
+    id: v.id,
+    operation: str(v.operation),
+    method: strOrNull(v.method),
+    currency: strOrNull(v.currency),
+    event_kind: str(v.event_kind),
+    error_class: strOrNull(v.error_class),
+    latency_ms: intOrNull(v.latency_ms),
+    staff_declared: bool(v.staff_declared),
+    observed_at: strOrNull(v.observed_at),
+  };
+}
+
+export function readProviderDetail(v: unknown): ProviderDetail | null {
+  const row = readProviderRow(v);
+  if (!row) return null;
+  const d = rec(v);
+  const counts: Record<string, number> = {};
+  for (const [k, n] of Object.entries(rec(d.error_categories_24h))) {
+    if (/^[A-Z_]{3,40}$/.test(k)) counts[k] = Math.max(0, int(n));
+  }
+  return {
+    ...row,
+    execution_environment: str(d.execution_environment, "UNKNOWN"),
+    recent_health_events: many(d.recent_health_events, readHealthEvent),
+    error_categories_24h: counts,
+  };
+}
+
+export function readHealthView(v: unknown): HealthView {
+  const d = rec(v);
+  const items = list(d).flatMap((x): HealthRow[] => {
+    if (!isRec(x) || typeof x.id !== "string") return [];
+    return [{ id: x.id, provider: readProviderRef(x.provider), usable: bool(x.usable), health: readHealth(x.health) }];
   });
-  return { items, live_execution: readLiveExecution(d.live_execution), sandbox_enabled: bool(d.sandbox_enabled) };
+  return {
+    execution_environment: str(d.execution_environment, "UNKNOWN"),
+    live_execution: readLiveExecution(d.live_execution),
+    secret_manager: str(d.secret_manager, "UNKNOWN"),
+    items,
+  };
+}
+
+const CONSISTENCY = new Set(["FIRST", "CONSISTENT", "PROGRESSION", "CONTRADICTS"]);
+
+function readEvidenceRow(v: unknown): EvidenceRow | null {
+  if (!isRec(v) || typeof v.id !== "string") return null;
+  return {
+    id: v.id,
+    source: str(v.source),
+    execution_environment: str(v.execution_environment, "UNKNOWN"),
+    provider_reference: strOrNull(v.provider_reference),
+    provider_event_id: strOrNull(v.provider_event_id),
+    raw_status: str(v.raw_status),
+    mapped_status: str(v.mapped_status, "UNKNOWN"),
+    mapped: bool(v.mapped),
+    mapping_version: str(v.mapping_version),
+    reported: readPaymentMoney(v.reported_amount_minor, v.reported_currency),
+    provider_occurred_at: strOrNull(v.provider_occurred_at),
+    observed_at: strOrNull(v.observed_at),
+    // an unknown consistency value is shown as a contradiction to be looked at, never as consistent
+    consistency: typeof v.consistency === "string" && CONSISTENCY.has(v.consistency) ? v.consistency : "CONTRADICTS",
+    contradicts_evidence_id: strOrNull(v.contradicts_evidence_id),
+  };
+}
+
+export function readEvidence(v: unknown): EvidenceRow[] {
+  return many(v, readEvidenceRow);
 }
 
 export function readSandboxState(v: unknown): SandboxState | null {

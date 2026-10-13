@@ -912,9 +912,10 @@ func TestPaymentsProviderOutageOpensCircuit(t *testing.T) {
 // ===== exactly-once effects, webhook vs poll race, dead letters =========================================
 
 // postingRecorder is the TEST-ONLY ledger stub (ROADMAP Stage 8; TESTING.md §3.9). It counts every posting request
-// made inside an apply transaction (a request in a transaction that later rolled back would also be counted, so a
-// count of at most one is a strict check); the committed database state is asserted separately. Stage 8 wires no
-// poster at runtime and has no ledger tables.
+// made inside an apply transaction; the committed database state is asserted separately. Stage 8 wires no poster
+// at runtime and has no ledger tables. Stage 9: only PRODUCTION payments reach the seam, so a simulated payment must
+// produce no request at all (a stricter check than Stage 8's "at most one"). Exactly-once for real payments is
+// enforced by the single SUCCEEDED transition and the posting key, asserted below.
 type postingRecorder struct {
 	mu   sync.Mutex
 	keys map[string]int
@@ -961,20 +962,18 @@ func TestPaymentsPostingRequestsExactlyOnce(t *testing.T) {
 		rec.mu.Lock()
 		n := rec.keys[key]
 		rec.mu.Unlock()
-		// the compose worker may have applied the success instead of this process: then the recorder saw none,
-		// but the database must still show exactly one SUCCEEDED transition and one outbox success event
-		if n > 1 {
-			t.Fatalf("%s posted %d times", key, n)
+		// Stage 9: simulated (test) payments are never handed to the ledger seam, in this process or the worker;
+		// the database must still show exactly one SUCCEEDED transition and one outbox success event
+		if n != 0 {
+			t.Fatalf("%s: a test payment was posted %d times", key, n)
 		}
 		if p.count(t, `SELECT count(*) FROM app.payment_events WHERE payment_intent_id = $1 AND applied AND to_status = 'SUCCEEDED'`, id) != 1 ||
 			p.count(t, `SELECT count(*) FROM app.outbox_events WHERE event_type = 'payments.payment_succeeded' AND aggregate_id = $1`, id) != 1 {
 			t.Fatalf("%s: success not exactly once", id)
 		}
 	}
-	for key := range rec.keys {
-		if !strings.HasPrefix(key, "payment:") || !strings.HasSuffix(key, ":capture") {
-			t.Fatalf("unexpected posting key %s", key)
-		}
+	if len(rec.keys) != 0 {
+		t.Fatalf("test payments reached the ledger seam: %v", rec.keys)
 	}
 }
 

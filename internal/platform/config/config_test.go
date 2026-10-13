@@ -149,6 +149,10 @@ func TestProductionOtherwiseValidRefusedOnlyForMissingKMS(t *testing.T) {
 		"SMTP_TLS":                  "starttls",
 		"EMAIL_FROM":                "FundZim <no-reply@fundzim.example>",
 		"SMS_PROVIDER":              "disabled",
+		"SECRETS_PROVIDER":          "kv2",
+		"SECRETS_KV2_ADDR":          "https://secrets.internal:8200",
+		"SECRETS_KV2_ROLE_ID":       "fundzim-api",
+		"SECRETS_KV2_SECRET_ID":     "approle-secret-id",
 	}
 	_, err := Load(env(m))
 	var v *ValidationError
@@ -313,8 +317,8 @@ func TestStoragePublicCredentialOptionalButAllOrNothing(t *testing.T) {
 	}
 }
 
-// Stage 8 (ADR-039 §6): the payment sandbox simulator is refused in production; a PRODUCTION provider account
-// environment is refused outside production.
+// Stage 8 (ADR-039 §6) and Stage 9: the payment sandbox simulator is refused in production; each execution
+// environment is accepted only where it belongs; the old provider-environment variable is refused loudly.
 func TestPaymentsSandboxRefusedInProduction(t *testing.T) {
 	m := map[string]string{"APP_ENV": "production", "PAYMENTS_SANDBOX_ENABLED": "true"}
 	_, err := Load(env(m))
@@ -324,20 +328,91 @@ func TestPaymentsSandboxRefusedInProduction(t *testing.T) {
 	local := localEnv()
 	local["PAYMENTS_SANDBOX_ENABLED"] = "true"
 	c, err := Load(env(local))
-	if err != nil || !c.Payments.SandboxEnabled || c.Payments.ProviderAccountEnv != "SANDBOX" {
+	if err != nil || !c.Payments.SandboxEnabled || c.Payments.ExecutionEnvironment != ExecLocalSimulator ||
+		strings.Join(c.Payments.ProviderAllowlist, ",") != "sandbox" {
 		t.Fatalf("local sandbox: %v %+v", err, c.Payments)
 	}
-	local["PAYMENTS_PROVIDER_ENVIRONMENT"] = "PRODUCTION"
-	if _, err := Load(env(local)); err == nil || !strings.Contains(err.Error(), "allowed only in production") {
-		t.Fatalf("PRODUCTION accounts outside production: %v", err)
+	local["PAYMENTS_PROVIDER_ENVIRONMENT"] = "SANDBOX"
+	if _, err := Load(env(local)); err == nil || !strings.Contains(err.Error(), "replaced by PAYMENTS_EXECUTION_ENVIRONMENT") {
+		t.Fatalf("old variable accepted: %v", err)
 	}
-	local["PAYMENTS_PROVIDER_ENVIRONMENT"] = "LIVE"
-	if _, err := Load(env(local)); err == nil {
-		t.Fatal("invalid provider environment accepted")
+	delete(local, "PAYMENTS_PROVIDER_ENVIRONMENT")
+	for _, bad := range []struct{ v, want string }{
+		{"PRODUCTION", "allowed only in production"},
+		{"LIVE", "must be DISABLED, LOCAL_SIMULATOR, PROVIDER_SANDBOX or PRODUCTION"},
+		{"PROVIDER_SANDBOX", "requires SECRETS_PROVIDER=kv2"},
+	} {
+		local["PAYMENTS_EXECUTION_ENVIRONMENT"] = bad.v
+		if _, err := Load(env(local)); err == nil || !strings.Contains(err.Error(), bad.want) {
+			t.Fatalf("%s: want %q, got %v", bad.v, bad.want, err)
+		}
+	}
+	local["PAYMENTS_EXECUTION_ENVIRONMENT"] = "LOCAL_SIMULATOR"
+	local["PAYMENTS_SANDBOX_ENABLED"] = "false"
+	if _, err := Load(env(local)); err == nil || !strings.Contains(err.Error(), "requires PAYMENTS_SANDBOX_ENABLED=true") {
+		t.Fatalf("simulator environment without the simulator: %v", err)
 	}
 	def := localEnv()
 	c, err = Load(env(def))
-	if err != nil || c.Payments.SandboxEnabled {
-		t.Fatalf("the sandbox must be off unless enabled: %v", err)
+	if err != nil || c.Payments.SandboxEnabled || c.Payments.ExecutionEnvironment != ExecDisabled || len(c.Payments.ProviderAllowlist) != 0 {
+		t.Fatalf("payments must be off unless enabled: %v %+v", err, c.Payments)
+	}
+	def["PAYMENTS_PROVIDER_ALLOWLIST"] = "Sandbox"
+	if _, err := Load(env(def)); err == nil || !strings.Contains(err.Error(), "must be provider codes") {
+		t.Fatalf("invalid allowlist accepted: %v", err)
+	}
+	for _, v := range []string{"LOCAL_SIMULATOR", "PROVIDER_SANDBOX"} {
+		m := map[string]string{"APP_ENV": "production", "PAYMENTS_EXECUTION_ENVIRONMENT": v}
+		if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), v+" is refused in production") {
+			t.Fatalf("%s accepted in production: %v", v, err)
+		}
+	}
+	m = map[string]string{"APP_ENV": "production", "PAYMENTS_PROVIDER_ALLOWLIST": "sandbox"}
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "must not contain the sandbox simulator in production") {
+		t.Fatalf("simulator allow-listed in production: %v", err)
+	}
+}
+
+// Stage 9 (ADR-041): production refuses environment-variable secrets, plain HTTP and static tokens.
+func TestSecretsManagerRules(t *testing.T) {
+	m := map[string]string{"APP_ENV": "production"}
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "SECRETS_PROVIDER=env is refused in production") {
+		t.Fatalf("env secrets accepted in production: %v", err)
+	}
+	m["SECRETS_PROVIDER"] = "kv2"
+	m["SECRETS_KV2_ADDR"] = "http://bao:8200"
+	m["SECRETS_KV2_TOKEN"] = "t"
+	_, err := Load(env(m))
+	for _, want := range []string{"must use https in production", "requires AppRole authentication"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("want %q, got %v", want, err)
+		}
+	}
+	m["SECRETS_KV2_ADDR"] = "https://bao:8200"
+	delete(m, "SECRETS_KV2_TOKEN")
+	m["SECRETS_KV2_ROLE_ID"] = "r"
+	m["SECRETS_KV2_SECRET_ID"] = "s"
+	if _, err := Load(env(m)); err != nil && strings.Contains(err.Error(), "SECRETS_") {
+		t.Fatalf("valid production secret manager refused: %v", err)
+	}
+	local := localEnv()
+	local["SECRETS_PROVIDER"] = "kv2"
+	if _, err := Load(env(local)); err == nil || !strings.Contains(err.Error(), "SECRETS_KV2_ADDR must be an http(s) URL") {
+		t.Fatalf("missing address accepted: %v", err)
+	}
+	local["SECRETS_KV2_ADDR"] = "http://127.0.0.1:8200"
+	if _, err := Load(env(local)); err == nil || !strings.Contains(err.Error(), "needs SECRETS_KV2_TOKEN") {
+		t.Fatalf("missing credentials accepted: %v", err)
+	}
+	local["SECRETS_KV2_TOKEN"] = "dev"
+	local["SECRETS_KV2_ROLE_ID"] = "r"
+	if _, err := Load(env(local)); err == nil || !strings.Contains(err.Error(), "must be set together") {
+		t.Fatalf("half an AppRole accepted: %v", err)
+	}
+	delete(local, "SECRETS_KV2_ROLE_ID")
+	local["PAYMENTS_EXECUTION_ENVIRONMENT"] = "PROVIDER_SANDBOX"
+	c, err := Load(env(local))
+	if err != nil || c.Secrets.Provider != "kv2" || c.Secrets.KV2Mount != "secret" || c.Payments.ExecutionEnvironment != ExecProviderSandbox {
+		t.Fatalf("development kv2 + provider sandbox: %v %+v", err, c.Secrets.Provider)
 	}
 }

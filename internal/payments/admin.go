@@ -173,6 +173,8 @@ type AdminAttempt struct {
 	Currency            string          `json:"currency"`
 	Provider            psp.ProviderRef `json:"provider"`
 	Simulated           bool            `json:"simulated"`
+	ExecutionEnv        string          `json:"execution_environment"`
+	TestPayment         bool            `json:"test_payment"`
 	NeedsReconciliation bool            `json:"needs_reconciliation"`
 	UnknownSince        *time.Time      `json:"unknown_since"`
 	UnknownReason       *string         `json:"unknown_reason"`
@@ -188,7 +190,8 @@ func (s *Service) adminAttempt(ctx context.Context, p payRow) (AdminAttempt, err
 	}
 	return AdminAttempt{ID: p.ID, DonationIntentID: p.DonationIntentID, CampaignID: p.CampaignID, AttemptNumber: p.AttemptSeq,
 		Method: p.Method, MethodCategory: psp.MethodCategory(p.Method), Status: p.Status, AmountMinor: strconv.FormatInt(p.Amount, 10),
-		Currency: p.Currency, Provider: prov.Ref(), Simulated: p.Simulated, NeedsReconciliation: p.NeedsRecon, UnknownSince: p.UnknownSince,
+		Currency: p.Currency, Provider: prov.Ref(), Simulated: p.Simulated, ExecutionEnv: p.ExecEnv, TestPayment: p.ExecEnv != psp.ExecProduction,
+		NeedsReconciliation: p.NeedsRecon, UnknownSince: p.UnknownSince,
 		UnknownReason: p.UnknownReason, FailureCode: p.FailureCode, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt}, nil
 }
 
@@ -270,6 +273,7 @@ type ProviderCall struct {
 	Operation                 string     `json:"operation"`
 	Classification            string     `json:"classification"`
 	ErrorClass                *string    `json:"error_class"`
+	ErrorCategory             *string    `json:"error_category"`
 	UnknownReason             *string    `json:"unknown_reason"`
 	HTTPStatus                *int       `json:"http_status"`
 	ProviderStatusRaw         *string    `json:"provider_status_raw"`
@@ -384,7 +388,7 @@ func (s *Service) AdminAttemptDetail(ctx context.Context, id string) (AttemptDet
 	d := AttemptDetail{AdminAttempt: a, ProviderPaymentRef: p.ProviderPaymentRef, LastAuthoritativeSource: p.LastSource,
 		PollAttempts: p.PollAttempts, NextPollAt: p.NextPollAt, PollHorizonAt: p.PollHorizonAt}
 	rows, err := s.Pool.Query(ctx, `SELECT id, attempt_no, operation, classification, error_class, unknown_reason, http_status, provider_status_raw,
-		provider_reference_returned, latency_ms, correlation_id, started_at, deadline_at, completed_at FROM app.payment_attempts
+		provider_reference_returned, latency_ms, correlation_id, started_at, deadline_at, completed_at, error_category FROM app.payment_attempts
 		WHERE payment_intent_id = $1 ORDER BY attempt_no`, id)
 	if err != nil {
 		return d, err
@@ -393,7 +397,7 @@ func (s *Service) AdminAttemptDetail(ctx context.Context, id string) (AttemptDet
 		var c ProviderCall
 		var http *int16
 		err := r.Scan(&c.ID, &c.AttemptNo, &c.Operation, &c.Classification, &c.ErrorClass, &c.UnknownReason, &http, &c.ProviderStatusRaw,
-			&c.ProviderReferenceReturned, &c.LatencyMS, &c.CorrelationID, &c.StartedAt, &c.DeadlineAt, &c.CompletedAt)
+			&c.ProviderReferenceReturned, &c.LatencyMS, &c.CorrelationID, &c.StartedAt, &c.DeadlineAt, &c.CompletedAt, &c.ErrorCategory)
 		if http != nil {
 			h := int(*http)
 			c.HTTPStatus = &h

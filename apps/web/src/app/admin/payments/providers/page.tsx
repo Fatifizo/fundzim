@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { AccountPage } from "@/components/account/account-shell";
 import { Code, LiveExecutionPanel, PAYMENTS_BASE, SimulatedBadge, StatusBadge, TableShell } from "@/components/admin/payments/common";
+import { ContractBasis, ExecutionEnvironmentNotice, HealthSummary } from "@/components/admin/payments/provider-health";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { requireStaff, serverGetOr404 } from "@/lib/auth/session";
@@ -32,13 +34,17 @@ export default async function ProvidersPage() {
   const view = readProviders(result.data);
   return (
     <AccountPage title="Payment providers" intro="Configured providers, their accounts and current capabilities.">
+      <ExecutionEnvironmentNotice env={view.execution_environment} />
       <LiveExecutionPanel live={view.live_execution} sandboxEnabled={view.sandbox_enabled} />
+      <p className="text-ink-700">
+        Allow-listed providers in this deployment: {view.allowlist.length === 0 ? "none" : view.allowlist.map((c) => <Code key={c}>{c} </Code>)}
+      </p>
       {view.items.length === 0 ? <EmptyState title="No providers configured" /> : null}
       {view.items.map((p) => (
         <section key={p.code} aria-labelledby={`provider-${p.code}`} className="space-y-4 rounded-card border border-line bg-surface p-5">
           <div className="flex flex-wrap items-center gap-2">
             <h2 id={`provider-${p.code}`} className="font-display text-2xl font-semibold text-ink-900">
-              {p.display_name}
+              {p.id ? <Link href={`${PAYMENTS_BASE}/providers/${encodeURIComponent(p.id)}`}>{p.display_name}</Link> : p.display_name}
             </h2>
             <SimulatedBadge simulated={p.simulated} />
           </div>
@@ -62,14 +68,28 @@ export default async function ProvidersPage() {
               </dd>
             </div>
             <div>
+              <dt className="text-sm font-semibold text-ink-600">Sandbox execution</dt>
+              <dd>
+                <StatusBadge status={p.sandbox_status} />
+              </dd>
+            </div>
+            <div>
               <dt className="text-sm font-semibold text-ink-600">Selection</dt>
               <dd>{humanise(p.selection_status)}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-semibold text-ink-600">Contract basis</dt>
+              <dd>
+                <ContractBasis contract={p.contract} />
+              </dd>
             </div>
             <div>
               <dt className="text-sm font-semibold text-ink-600">Confirmation mode</dt>
               <dd>{humanise(p.confirmation_mode)}</dd>
             </div>
           </dl>
+          <h3 className="font-semibold text-ink-900">Health</h3>
+          <HealthSummary health={p.health} />
           <h3 className="font-semibold text-ink-900">Accounts</h3>
           {p.accounts.length === 0 ? (
             <p className="text-ink-700">No accounts.</p>

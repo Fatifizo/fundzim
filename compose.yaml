@@ -45,10 +45,13 @@ x-common-env: &common-env
   STORAGE_SSE_C_KEY: ${STORAGE_SSE_C_KEY:?run scripts/dev-env-init.sh}   # SSE-C for private objects (local key; KMS in Stage 18)
   # Stage 8 (ADR-039): payment SANDBOX SIMULATOR only — never real payments; refused in production
   PAYMENTS_SANDBOX_ENABLED: ${PAYMENTS_SANDBOX_ENABLED:-false}
+  PAYMENTS_EXECUTION_ENVIRONMENT: ${PAYMENTS_EXECUTION_ENVIRONMENT:-}   # empty = LOCAL_SIMULATOR when the simulator is on
   SANDBOX_WEBHOOK_URL: http://fundzim-api:8080/api/v1/webhooks/payments/sandbox
-  SECRETREF_FUNDZIM_SANDBOX_API: ${SECRETREF_FUNDZIM_SANDBOX_API:-}
-  SECRETREF_FUNDZIM_SANDBOX_WEBHOOK_CURRENT: ${SECRETREF_FUNDZIM_SANDBOX_WEBHOOK_CURRENT:-}
-  SECRETREF_FUNDZIM_SANDBOX_WEBHOOK_PREVIOUS: ${SECRETREF_FUNDZIM_SANDBOX_WEBHOOK_PREVIOUS:-}
+  # Stage 9 (ADR-041): provider secret references resolve from the secret manager (OpenBao dev mode below);
+  # the sandbox test secrets live only there, not in these containers' environment.
+  SECRETS_PROVIDER: ${SECRETS_PROVIDER:-kv2}
+  SECRETS_KV2_ADDR: http://fundzim-secrets:8200
+  SECRETS_KV2_TOKEN: ${SECRETS_KV2_TOKEN:?run scripts/dev-env-init.sh}
 
 services:
   fundzim-postgres:
@@ -134,6 +137,49 @@ services:
       STORAGE_EVIDENCE_SECRET_ACCESS_KEY: ${STORAGE_EVIDENCE_SECRET_ACCESS_KEY:?}
     logging: *logging
 
+  fundzim-secrets:
+    # Stage 9 (ADR-041): OpenBao in DEV MODE — in-memory storage, plain HTTP, a fixed root token from .env.
+    # Local development and CI only; production uses a hardened OpenBao/Vault with AppRole (Stage 18/20).
+    # Dev mode keeps nothing across restarts: fundzim-secrets-init re-seeds it (docker compose up re-runs it).
+    image: openbao/openbao:2.4.1
+    restart: unless-stopped
+    command: ["server", "-dev", "-dev-listen-address=0.0.0.0:8200", "-dev-no-store-token"]
+    environment:
+      BAO_DEV_ROOT_TOKEN_ID: ${SECRETS_KV2_TOKEN:?run scripts/dev-env-init.sh}
+      SKIP_SETCAP: "true"
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8200/v1/sys/health"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+    ports:
+      - "127.0.0.1:${SECRETS_HOST_PORT:-8200}:8200"
+    mem_limit: 256m
+    logging: *logging
+
+  fundzim-secrets-init:
+    # Copies the simulator's generated test secrets from .env into the secret manager (stdin, never argv).
+    image: openbao/openbao:2.4.1
+    restart: "no"
+    depends_on:
+      fundzim-secrets: { condition: service_healthy }
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        put() { printf '%s' "$$2" | bao kv put -mount=secret "$$1" value=- >/dev/null; echo "seeded $$1"; }
+        put fundzim/sandbox/api "$$SB_API"
+        put fundzim/sandbox/webhook-current "$$SB_WEBHOOK_CURRENT"
+        put fundzim/sandbox/webhook-previous "$$SB_WEBHOOK_PREVIOUS"
+    environment:
+      BAO_ADDR: http://fundzim-secrets:8200
+      BAO_TOKEN: ${SECRETS_KV2_TOKEN:?run scripts/dev-env-init.sh}
+      SB_API: ${SECRETREF_FUNDZIM_SANDBOX_API:?run scripts/dev-env-init.sh}
+      SB_WEBHOOK_CURRENT: ${SECRETREF_FUNDZIM_SANDBOX_WEBHOOK_CURRENT:?run scripts/dev-env-init.sh}
+      SB_WEBHOOK_PREVIOUS: ${SECRETREF_FUNDZIM_SANDBOX_WEBHOOK_PREVIOUS:?run scripts/dev-env-init.sh}
+    healthcheck: { disable: true }
+    logging: *logging
+
   fundzim-migrate:
     build: &api-build
       context: .
@@ -159,6 +205,7 @@ services:
     restart: unless-stopped
     depends_on: &api-depends
       fundzim-migrate: { condition: service_completed_successfully }
+      fundzim-secrets-init: { condition: service_completed_successfully }
       fundzim-storage-init: { condition: service_completed_successfully }
       fundzim-redis: { condition: service_healthy }
       fundzim-mail: { condition: service_started }
@@ -213,6 +260,7 @@ services:
     restart: unless-stopped
     depends_on:
       fundzim-migrate: { condition: service_completed_successfully }
+      fundzim-secrets-init: { condition: service_completed_successfully }
       fundzim-mail: { condition: service_started }
     entrypoint: ["/usr/local/bin/worker"]
     environment:

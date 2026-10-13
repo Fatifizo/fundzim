@@ -12,7 +12,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { paymentsApi, type PaymentsApi } from "@/lib/payments/api";
 import { describePaymentError } from "@/lib/payments/errors";
 import { REFUND_ACTION_LABELS, REFUND_ACTION_NOTICES, reasonProblem, refundActions } from "@/lib/payments/labels";
-import type { RefundAction } from "@/lib/payments/types";
+import type { ProviderAction, RefundAction } from "@/lib/payments/types";
 
 /**
  * Staff payment actions that take a reason or note (interface-contracts §4), using the existing staff-action +
@@ -26,7 +26,8 @@ import type { RefundAction } from "@/lib/payments/types";
 export type PaymentActionTarget =
   | { kind: "status-query"; paymentId: string }
   | { kind: "requeue"; inboxId: string }
-  | { kind: "await-settlement"; referenceId: string };
+  | { kind: "await-settlement"; referenceId: string }
+  | { kind: "provider"; providerId: string; action: ProviderAction };
 
 interface Copy {
   button: string;
@@ -37,7 +38,45 @@ interface Copy {
   notice: string;
 }
 
-const COPY: Record<PaymentActionTarget["kind"], Copy> = {
+/** Stage 9 provider controls. None enables production execution or changes a payment. */
+const PROVIDER_COPY: Record<ProviderAction, Copy> = {
+  "enable-sandbox": {
+    button: "Enable sandbox execution",
+    title: "Enable sandbox execution for this provider?",
+    description:
+      "Test payments may route to this provider's SANDBOX account in a sandbox deployment. Production execution is not affected: it needs a provider selection under an ADR and stays disabled in code.",
+    field: "Reason (staff only)",
+    confirm: "Confirm: Enable sandbox execution",
+    notice: "Sandbox execution enabled.",
+  },
+  disable: {
+    button: "Disable provider",
+    title: "Disable this provider?",
+    description:
+      "No new payment will route to it. Existing payments keep their status and are resolved only by authoritative provider status. Re-enabling production needs a migration under an ADR.",
+    field: "Reason (staff only)",
+    confirm: "Confirm: Disable provider",
+    notice: "Provider disabled.",
+  },
+  outage: {
+    button: "Declare outage",
+    title: "Declare a provider outage?",
+    description: "The provider is shown as UNAVAILABLE and receives no new payments until the outage is resolved. No payment is failed.",
+    field: "Reason (staff only)",
+    confirm: "Confirm: Declare outage",
+    notice: "Outage declared.",
+  },
+  "outage/resolve": {
+    button: "Resolve outage",
+    title: "Resolve the declared outage?",
+    description: "Routing resumes if every other gate allows it. Health is then derived from new observations again.",
+    field: "Reason (staff only)",
+    confirm: "Confirm: Resolve outage",
+    notice: "Outage resolved.",
+  },
+};
+
+const COPY: Record<Exclude<PaymentActionTarget["kind"], "provider">, Copy> = {
   "status-query": {
     button: "Request provider status query",
     title: "Request a provider status query?",
@@ -133,7 +172,7 @@ function ReasonDialog({
 export function PaymentAction({ target, available = true, api = paymentsApi }: { target: PaymentActionTarget; available?: boolean; api?: PaymentsApi }) {
   const router = useRouter();
   const withStepUp = useStepUp();
-  const copy = COPY[target.kind];
+  const copy = target.kind === "provider" ? PROVIDER_COPY[target.action] : COPY[target.kind];
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const { error, setError, notice, setNotice, noticeRef, errorRef, fail } = useActionFeedback();
@@ -150,6 +189,8 @@ export function PaymentAction({ target, available = true, api = paymentsApi }: {
             return api.requeueWebhook(target.inboxId, value);
           case "await-settlement":
             return api.awaitSettlement(target.referenceId, value);
+          case "provider":
+            return api.providerAction(target.providerId, target.action, value);
         }
       });
       setOpen(false);

@@ -77,13 +77,19 @@ func New(pool *pgxpool.Pool, clk clock.Clock, logger *slog.Logger, secrets psp.S
 // Code implements psp.Adapter.
 func (a *Adapter) Code() string { return Code }
 
+// Contract implements psp.ContractDescriber: the simulator's behaviour is FundZim's own (provider-interface §6).
+func (a *Adapter) Contract() psp.ContractInfo {
+	return psp.ContractInfo{Basis: psp.ContractSimulated, Sources: []string{"docs/stage-8/provider-interface.md §6"}}
+}
+
 // RedirectHosts implements psp.Adapter.
 func (a *Adapter) RedirectHosts() []string { return []string{RedirectHost} }
 
 // Limits implements psp.Adapter: the sandbox contract's limits (USD 1.00 – 10 000.00). They are simulator facts,
-// not statements about any real rail.
+// not statements about any real rail. An unknown method has no limits (fail closed; found by the Stage 9
+// conformance suite).
 func (a *Adapter) Limits(method, currency string) (psp.Limits, bool) {
-	if currency != "USD" {
+	if currency != "USD" || !psp.ValidMethod(method) {
 		return psp.Limits{}, false
 	}
 	return psp.Limits{MinMinor: 100, MaxMinor: 1_000_000}, true

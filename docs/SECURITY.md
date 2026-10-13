@@ -528,6 +528,20 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 > endpoints expose approved snapshots only and no private data. Full analysis:
 > [stage-6/campaign-security.md](stage-6/campaign-security.md).
 
+## 21d. Payment execution isolation and secrets (Stage 9, summary)
+
+> **Stage 9 as built ([ADR-040](adr/ADR-040-payment-provider-selection-deferred.md), [ADR-041](adr/ADR-041-secret-management.md)):**
+> provider secrets resolve from a Vault-KV-v2 secret manager (OpenBao): AppRole, HTTPS and no static tokens in
+> production, no environment-variable secrets in production, TTL cache that fails closed, rotation detected and
+> audited by version (never values), redirects never followed. Account references are environment-scoped
+> (`secretref://fundzim/<environment>/…`, DB CHECK) and secret-manager policies must mirror the split. The production
+> kill switch is layered (code constant, maker-checker flag, environment validation, provider allowlist, credential
+> scope, startup refusal, audit, no frontend or admin override, DB refusal of PRODUCTION intents and payments). Test
+> payments carry `execution_environment` and `test_payment` and never reach the ledger seam. Webhook authentication
+> failures against known providers are audited (security stream); unknown endpoints only reach the rejection log. CI
+> workflows may not reference repository secrets (`scripts/check-secrets.sh`). Full table:
+> [stage-9/payment-security.md](stage-9/payment-security.md), [stage-9/secret-management.md](stage-9/secret-management.md).
+
 ## 21c. Payment layer security (Stage 8, summary)
 
 > **Stage 8 as built ([ADR-039](adr/ADR-039-payment-abstraction-donation-intents-and-sandbox-execution.md)), sandbox
@@ -538,7 +552,7 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 > backstops; payment rows are locked for every decision; `SUCCEEDED` only from provider evidence, `UNKNOWN` only from
 > our own indeterminate call, `FAILED` never from a timeout (Go and SQL). A browser return never confirms a payment
 > (single-use, donor-bound token; it only schedules a status query). Provider secrets are `secretref://` references
-> resolved at call time (environment today; KMS required before real providers). No card or PIN data exists anywhere.
+> resolved at call time (Stage 9: from the secret manager, ADR-041). No card or PIN data exists anywhere.
 > Staff actions: `payment.operate` and `refund.approve` need step-up; refund requests are maker-checker and never
 > executed; there is no manual success override. Real execution is disabled by a code constant, a kill switch and DB
 > checks; the simulator is refused in production. Full table: [stage-8/security-review.md](stage-8/security-review.md).

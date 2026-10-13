@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Fatifizo/fundzim/internal/audit"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
 	"github.com/Fatifizo/fundzim/internal/platform/outbox"
 	"github.com/Fatifizo/fundzim/internal/psp"
@@ -18,6 +19,7 @@ type payRow struct {
 	ID, DonationIntentID, CampaignID, Currency, Method, ProviderID, AccountID, CapabilityID, Status, IdemKey, Correlation string
 	Amount                                                                                                                int64
 	Simulated, NeedsRecon                                                                                                 bool
+	ExecEnv                                                                                                               string
 	AttemptSeq, PollAttempts, Version                                                                                     int
 	ProviderPaymentRef, UnknownReason, FailureCode, LastSource                                                            *string
 	UnknownSince, NextPollAt, PollHorizonAt, ExpiresAt                                                                    *time.Time
@@ -27,14 +29,14 @@ type payRow struct {
 const paySelect = `SELECT id, donation_intent_id, campaign_id, currency, method, provider_id, provider_account_id, capability_id, status,
 	idempotency_key::text, correlation_id, amount_minor, is_simulated, needs_reconciliation, attempt_seq, poll_attempts, version,
 	provider_payment_ref, unknown_reason, failure_code, last_authoritative_source, unknown_since, next_poll_at, poll_horizon_at, expires_at,
-	created_at, updated_at FROM app.payment_intents`
+	created_at, updated_at, execution_environment FROM app.payment_intents`
 
 func scanPay(row pgx.Row) (payRow, error) {
 	var p payRow
 	err := row.Scan(&p.ID, &p.DonationIntentID, &p.CampaignID, &p.Currency, &p.Method, &p.ProviderID, &p.AccountID, &p.CapabilityID,
 		&p.Status, &p.IdemKey, &p.Correlation, &p.Amount, &p.Simulated, &p.NeedsRecon, &p.AttemptSeq, &p.PollAttempts, &p.Version,
 		&p.ProviderPaymentRef, &p.UnknownReason, &p.FailureCode, &p.LastSource, &p.UnknownSince, &p.NextPollAt, &p.PollHorizonAt,
-		&p.ExpiresAt, &p.CreatedAt, &p.UpdatedAt)
+		&p.ExpiresAt, &p.CreatedAt, &p.UpdatedAt, &p.ExecEnv)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, ErrPaymentNotFound
 	}
@@ -102,6 +104,9 @@ func (s *Service) apply(ctx context.Context, tx pgx.Tx, p *payRow, o Obs) (Outco
 	prov := fromProvider(o.Source)
 	if prov && o.RawStatus != "" {
 		if err := s.recordTransaction(ctx, tx, p, o); err != nil {
+			return Outcome{}, err
+		}
+		if err := s.recordEvidence(ctx, tx, p, o); err != nil {
 			return Outcome{}, err
 		}
 	}
@@ -238,8 +243,16 @@ func (s *Service) transition(ctx context.Context, tx pgx.Tx, p *payRow, o Obs) (
 	p.Version++
 	if _, err := outbox.Write(ctx, tx, outbox.Event{AggregateType: "payment", AggregateID: p.ID, EventType: "payments.payment_status_changed",
 		Payload: map[string]any{"payment_id": p.ID, "donation_intent_id": p.DonationIntentID, "from": from, "to": to, "source": o.Source,
-			"simulated": p.Simulated}, CorrelationID: o.Correlation, OccurredAt: now}); err != nil {
+			"simulated": p.Simulated, "execution_environment": p.ExecEnv, "test_payment": p.ExecEnv != psp.ExecProduction},
+		CorrelationID: o.Correlation, OccurredAt: now}); err != nil {
 		return Outcome{}, err
+	}
+	if from == psp.StatusUnknown && fromProvider(o.Source) {
+		if err := audit.Record(ctx, tx, audit.Event{Action: "payments.payment.status_reconciled", ActorType: "system", TargetType: "payment",
+			TargetID: p.ID, Metadata: map[string]any{"audit_event": "PAYMENT_STATUS_RECONCILED", "from": from, "to": to, "source": o.Source,
+				"execution_environment": p.ExecEnv, "raw_status": o.RawStatus}}); err != nil {
+			return Outcome{}, err
+		}
 	}
 	if to == psp.StatusSucceeded && from != psp.StatusDisputed {
 		if err := s.onSucceeded(ctx, tx, p, from, o); err != nil {
@@ -265,7 +278,7 @@ func (s *Service) transition(ctx context.Context, tx pgx.Tx, p *payRow, o Obs) (
 // onSucceeded: posting request (Stage 10 seam), outbox, late success, donation intent PAID, duplicate success.
 func (s *Service) onSucceeded(ctx context.Context, tx pgx.Tx, p *payRow, from string, o Obs) error {
 	key := "payment:" + p.ID + ":capture"
-	if s.Ledger != nil {
+	if s.Ledger != nil && p.ExecEnv == psp.ExecProduction { // test payments are never posted (Stage 9)
 		if err := s.Ledger.Post(ctx, tx, PostingRequest{Key: key, Rule: "DONATION_CAPTURED", PaymentID: p.ID, CampaignID: p.CampaignID,
 			Currency: p.Currency, AmountMinor: p.Amount}); err != nil {
 			return err
@@ -274,7 +287,9 @@ func (s *Service) onSucceeded(ctx context.Context, tx pgx.Tx, p *payRow, from st
 	now := s.now()
 	if _, err := outbox.Write(ctx, tx, outbox.Event{AggregateType: "payment", AggregateID: p.ID, EventType: "payments.payment_succeeded",
 		Payload: map[string]any{"payment_id": p.ID, "donation_intent_id": p.DonationIntentID, "campaign_id": p.CampaignID,
-			"posting_key": key, "simulated": p.Simulated}, CorrelationID: o.Correlation, OccurredAt: now}); err != nil {
+			"posting_key": key, "simulated": p.Simulated, "execution_environment": p.ExecEnv,
+			// Stage 10 posts only PRODUCTION payments; simulator and provider-sandbox successes are test payments
+			"test_payment": p.ExecEnv != psp.ExecProduction}, CorrelationID: o.Correlation, OccurredAt: now}); err != nil {
 		return err
 	}
 	if from == psp.StatusFailed || from == psp.StatusExpired || from == psp.StatusCancelled {

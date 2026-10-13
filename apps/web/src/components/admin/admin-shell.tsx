@@ -23,6 +23,7 @@ const ITEMS = [
   { href: "/admin/payments/reconciliation", label: "Reconciliation" },
   { href: "/admin/payments/refunds", label: "Refund requests" },
   { href: "/admin/payments/providers", label: "Payment providers" },
+  { href: "/admin/payments/health", label: "Provider health" },
   { href: "/admin/account/personal-link", label: "Personal account link" },
 ] as const;
 

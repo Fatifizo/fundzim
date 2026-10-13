@@ -139,7 +139,7 @@ test("overview, navigation and attempt detail: SIMULATED labels, raw vs mapped s
   await expect(page.getByRole("heading", { level: 1, name: "Reconciliation" })).toBeVisible();
   expect(await axe(page)).toEqual([]);
   await page.goto("/admin/payments/providers");
-  await expect(page.getByText("env:PAYMENTS_SANDBOX_WEBHOOK_SECRET")).toBeVisible();
+  await expect(page.getByText("secretref://fundzim/sandbox/webhook-current")).toBeVisible();
   await expect(page.getByText("Live payment execution:")).toContainText("DISABLED");
   expect(await axe(page)).toEqual([]);
   await page.goto(`/admin/payments/intents/${s.intent_id}`);
@@ -222,4 +222,69 @@ test("payment pages are a 404 for users and for staff without payment.view", asy
   const admin = await createStaff(page, ["ADMIN"]); // payment.sandbox.control only
   await signInStaff(page, admin, "/admin/campaigns/featured");
   expect((await page.goto("/admin/payments"))?.status()).toBe(404);
+});
+
+test("Stage 9: provider detail, derived health, outage declaration with step-up, health page, evidence log, transactions route", async ({ page }) => {
+  await trackCspViolations(page);
+  const problems = watchForBreakage(page);
+  const s = await seed(page);
+  const staff = await createStaff(page, ["FINANCE"], "Farai Finance");
+  await signInStaff(page, staff, "/admin/payments/providers");
+
+  const main = page.locator("main");
+  await expect(main).toContainText("Execution environment: LOCAL_SIMULATOR");
+  await expect(main).toContainText("Simulated — FundZim's own simulator, no provider behind it");
+  await expect(main.getByText("Healthy").first()).toBeVisible();
+  expect(await axe(page)).toEqual([]);
+  await main.getByRole("link", { name: "FundZim Sandbox" }).click();
+  await expect(page).toHaveURL(/\/admin\/payments\/providers\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole("heading", { level: 1, name: "FundZim Sandbox" })).toBeVisible();
+  await expect(main).toContainText("Usable in this environment");
+  await expect(page.getByRole("table", { name: "Error categories" })).toContainText("Provider timeout");
+  await expect(page.getByRole("table", { name: "Recent health events" })).toContainText("Timeout");
+  await expect(main).not.toContainText(/enable production|go live/i);
+  await expectNoStatusSettingButton(page);
+  expect(await axe(page)).toEqual([]);
+
+  // Declare an outage: reason + step-up; health becomes UNAVAILABLE; the control flips to "Resolve outage".
+  await page.getByRole("button", { name: "Declare outage" }).click();
+  const dialog = page.getByRole("dialog", { name: "Declare a provider outage?" });
+  await expect(dialog).toContainText("No payment is failed");
+  await dialog.getByRole("button", { name: "Confirm: Declare outage" }).click();
+  await expect(dialog.getByLabel("Reason (staff only)")).toHaveAttribute("aria-invalid", "true"); // a reason is required
+  await dialog.getByLabel("Reason (staff only)").fill("Provider status page reports an incident.");
+  await dialog.getByRole("button", { name: "Confirm: Declare outage" }).click();
+  await stepUp(page);
+  await expect(page.getByRole("status").filter({ hasText: "Outage declared." })).toBeVisible();
+  await expect(main.getByText("Unavailable").first()).toBeVisible();
+  await expect(main).toContainText("Outage declared by staff.");
+  await page.getByRole("button", { name: "Resolve outage" }).click();
+  const resolve = page.getByRole("dialog", { name: "Resolve the declared outage?" });
+  await resolve.getByLabel("Reason (staff only)").fill("Provider reports recovery.");
+  await resolve.getByRole("button", { name: "Confirm: Resolve outage" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Outage resolved." })).toBeVisible();
+  const log = await (await page.request.post(`${AUTH_BASE_URL}/api/v1/__mock/payments/log`, { data: {} })).json();
+  expect(log.data.provider_actions.map((a: { action: string }) => a.action)).toEqual(expect.arrayContaining(["outage", "outage/resolve"]));
+
+  // Health page via the staff navigation.
+  await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Provider health" }).click();
+  await expect(page).toHaveURL(/\/admin\/payments\/health$/);
+  await expect(page.getByRole("table", { name: "Provider health" })).toContainText("FundZim Sandbox");
+  await expect(main).toContainText("No observation means UNKNOWN");
+  expect(await axe(page)).toEqual([]);
+
+  // Evidence log on the payment page: a contradiction is shown, never resolved by the UI.
+  await page.goto(`/admin/payments/attempts/${s.unknown_payment_id}`);
+  const evidence = page.getByRole("table", { name: "Provider evidence" });
+  await expect(evidence).toContainText("Contradicts");
+  await expect(evidence).toContainText("Not mapped");
+  expect(await axe(page)).toEqual([]);
+
+  // /admin/payments/transactions renders the provider transaction (attempt) list.
+  await page.goto("/admin/payments/transactions");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(main).toContainText(s.unknown_payment_id);
+
+  expect(problems).toEqual([]);
+  expect(await cspViolations(page)).toEqual([]);
 });

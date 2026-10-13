@@ -11,6 +11,18 @@ providers.
 FundZim is **not** an investment, lending, equity or rewards platform, and it is not a wallet or a payment
 provider.
 
+> **Status: Stage 9 — Payment provider integration readiness (complete; awaiting acceptance; no provider
+> selected).** No Zimbabwean payment provider could be integrated or certified: none is selected (ADR-040,
+> DECISION_DEFERRED), and there are no merchant agreements, sandbox credentials or written provider confirmations.
+> Stage 9 therefore delivers the preparation: a Vault-KV-v2 secret manager integration (OpenBao in compose; AppRole,
+> rotation audit, fail closed; ADR-041), per-process execution environments (`LOCAL_SIMULATOR`,
+> `PROVIDER_SANDBOX`, `PRODUCTION` refused at startup), a layered production kill switch, environment-scoped
+> credentials, normalised provider error categories, provider health derived from observations, an append-only
+> provider evidence log with contradiction escalation, staff provider controls, the public
+> `GET /api/v1/payment-methods/available`, an adapter conformance suite, and the legal review, provider confirmation
+> register and evaluation. Docs: [docs/stage-9/implementation.md](docs/stage-9/implementation.md); handover
+> [STAGE-9-TO-STAGE-10.md](docs/stage-handover/STAGE-9-TO-STAGE-10.md).
+>
 > **Status: Stage 8 — Payment Abstraction Layer (complete; awaiting acceptance; sandbox only).** The provider-neutral
 > payment layer exists: donation intents, payment attempts with a 42-edge, database-guarded state machine
 > (precedence, parking, unknown outcomes never treated as failures), a provider registry with versioned,
@@ -221,7 +233,8 @@ Reset deletes the Postgres and Garage volumes (database, roles, objects). `.env`
 | [Stage 3 implementation](docs/stage-3/implementation.md) · [security review](docs/stage-3/security-review.md) | What Stage 3 built, deviations, endpoint status, security baseline findings |
 | [Configuration](docs/development/configuration.md) · [Migrations](docs/development/migrations.md) · [Seed data](docs/development/seed-data.md) | Environment variables and refusals, migration guide, development data rules |
 | [Stage 8 implementation](docs/stage-8/implementation.md) · [architecture](docs/stage-8/payment-architecture.md) · [provider interface](docs/stage-8/provider-interface.md) · [state machine](docs/stage-8/payment-state-machine.md) · [webhooks](docs/stage-8/webhook-security.md) · [security](docs/stage-8/security-review.md) · [testing](docs/stage-8/testing.md) · [known issues](docs/stage-8/known-issues.md) | Payment abstraction layer (sandbox only) |
-| [Stage handovers](docs/stage-handover/STAGE-8-TO-STAGE-9.md) | Stage 8 → 9 (Zimbabwe payment integrations); earlier handovers in the same folder |
+| [Stage 9 implementation](docs/stage-9/implementation.md) · [legal review](docs/stage-9/legal-review.md) · [provider confirmations](docs/stage-9/provider-confirmation-register.md) · [evaluation](docs/stage-9/provider-evaluation.md) · [selection](docs/stage-9/provider-selection.md) · [secret management](docs/stage-9/secret-management.md) · [payment security](docs/stage-9/payment-security.md) · [certification](docs/stage-9/sandbox-certification.md) · [known issues](docs/stage-9/known-issues.md) | Provider integration readiness (no provider selected) |
+| [Stage handovers](docs/stage-handover/STAGE-9-TO-STAGE-10.md) | Stage 9 → 10 (double-entry ledger); earlier handovers in the same folder |
 
 ## Licence
 

@@ -11,7 +11,7 @@ import type { RefundAction } from "./types";
 
 export { humanise };
 
-const GOOD = new Set(["SUCCEEDED", "PAID", "PROCESSED", "APPROVED", "CLOSED", "ENABLED", "RESOLVED_BY_PROVIDER_STATUS", "ACCEPTED"]);
+const GOOD = new Set(["SUCCEEDED", "PAID", "PROCESSED", "APPROVED", "CLOSED", "ENABLED", "RESOLVED_BY_PROVIDER_STATUS", "ACCEPTED", "HEALTHY"]);
 const ATTENTION = new Set([
   "UNKNOWN",
   "FAILED",
@@ -25,6 +25,10 @@ const ATTENTION = new Set([
   "DISPUTED",
   "OUTCOME_UNKNOWN",
   "AWAITING_SETTLEMENT_DATA",
+  // Stage 9: provider health and evidence
+  "DEGRADED",
+  "UNAVAILABLE",
+  "CONTRADICTS",
 ]);
 const PROGRESS = new Set(["CREATED", "PENDING", "REQUIRES_ACTION", "AUTHORISED", "RECEIVED", "DISPATCHED", "PARKED", "REQUESTED", "PENDING_APPROVAL", "IN_FLIGHT", "HALF_OPEN"]);
 

@@ -285,6 +285,10 @@ func headerSubset(h http.Header) map[string]string {
 	return out
 }
 
+// authReasons are the rejection reasons that mean a delivery failed authentication or integrity checks.
+var authReasons = map[string]bool{"SIGNATURE_MISSING": true, "SIGNATURE_INVALID": true, "UNKNOWN_KEY": true,
+	"TIMESTAMP_OUT_OF_WINDOW": true, "SIMULATION_MISMATCH": true, "MALFORMED_PAYLOAD": true}
+
 func (s *Service) reject(ctx context.Context, p *Provider, code, reason string, sum []byte, n int, at time.Time) {
 	prov := code
 	if !providerCodeRE.MatchString(prov) {
@@ -297,9 +301,21 @@ func (s *Service) reject(ctx context.Context, p *Provider, code, reason string, 
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 	defer cancel()
+	id := ids.New()
 	if _, err := s.Pool.Exec(ctx, `INSERT INTO app.provider_webhook_rejections (id, provider_id, provider_code, reason_code, body_sha256,
-		body_bytes, received_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`, ids.New(), pid, prov, reason, sum, n, at); err != nil {
+		body_bytes, received_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`, id, pid, prov, reason, sum, n, at); err != nil {
 		s.Logger.Warn("psp: record webhook rejection failed", "err", err)
+	}
+	// WEBHOOK_REJECTED is audited for authentication failures against a known provider (security stream). Unknown
+	// endpoints and transport refusals stay in the rejection log only, so scanners cannot flood the audit chain.
+	if p != nil && authReasons[reason] {
+		if err := db.WithTx(ctx, s.Pool, db.TxOptions{}, func(ctx context.Context, tx pgx.Tx) error {
+			return audit.Record(ctx, tx, audit.Event{Stream: audit.Security, Action: "psp.webhook.rejected", ActorType: "provider",
+				TargetType: "provider_webhook_rejection", TargetID: id, Outcome: "denied", Reason: reason,
+				Metadata: map[string]any{"audit_event": "WEBHOOK_REJECTED", "provider": p.Code, "reason_code": reason}})
+		}); err != nil {
+			s.Logger.Warn("psp: webhook rejection audit failed", "err", err)
+		}
 	}
 }
 
@@ -374,14 +390,14 @@ func (s *Service) claim(ctx context.Context, inboxID string) (InboxEvent, bool, 
 	var ev InboxEvent
 	run := false
 	err := db.WithTx(ctx, s.Pool, db.TxOptions{}, func(ctx context.Context, tx pgx.Tx) error {
-		var status string
+		var status, method, slot string
 		var payload []byte
 		err := tx.QueryRow(ctx, `SELECT i.id, i.provider_id, p.code, i.provider_event_id, i.event_class, i.event_type_raw,
 			coalesce(i.provider_reference, ''), coalesce(i.our_reference::text, ''), i.provider_occurred_at, i.received_at,
-			i.payload_redacted, i.is_simulated, i.status
+			i.payload_redacted, i.is_simulated, i.status, i.verification_method, coalesce(i.signature_key_slot, '')
 			FROM app.provider_webhook_inbox i JOIN app.payment_providers p ON p.id = i.provider_id WHERE i.id = $1 FOR UPDATE OF i`, inboxID).
 			Scan(&ev.ID, &ev.ProviderID, &ev.ProviderCode, &ev.ProviderEventID, &ev.Class, &ev.TypeRaw, &ev.ProviderReference,
-				&ev.OurReference, &ev.OccurredAt, &ev.ReceivedAt, &payload, &ev.Simulated, &status)
+				&ev.OurReference, &ev.OccurredAt, &ev.ReceivedAt, &payload, &ev.Simulated, &status, &method, &slot)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
@@ -397,6 +413,16 @@ func (s *Service) claim(ctx context.Context, inboxID string) (InboxEvent, bool, 
 		case InboxReceived, InboxFailedRetrying, InboxDispatched:
 		default:
 			return nil
+		}
+		// WEBHOOK_VERIFIED is audited on the first claim, not in the ingest transaction: the hash-chained audit log
+		// serialises writers, and the provider-facing endpoint must stay fast (Stage 9 performance, testing.md §4).
+		// Every stored event is claimed before anything is applied, so the record precedes any effect.
+		if status == InboxReceived {
+			if err := audit.Record(ctx, tx, audit.Event{Action: "psp.webhook.verified", ActorType: "provider", TargetType: "provider_webhook",
+				TargetID: ev.ID, OccurredAt: ev.ReceivedAt, Metadata: map[string]any{"audit_event": "WEBHOOK_VERIFIED", "provider": ev.ProviderCode,
+					"event_class": ev.Class, "verification_method": method, "key_slot": slot, "simulated": ev.Simulated}}); err != nil {
+				return err
+			}
 		}
 		if ev.Class == "OTHER" {
 			return s.MarkUnrecognised(ctx, tx, ev.ID, "UNMAPPED_EVENT_TYPE")

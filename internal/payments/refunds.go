@@ -135,7 +135,8 @@ func (s *Service) RequestRefund(ctx context.Context, staffID, paymentID, idemKey
 			return err
 		}
 		if err := audit.Record(ctx, tx, audit.Event{Action: "payments.refund.requested", ActorType: "staff", ActorID: staffID,
-			TargetType: "refund_request", TargetID: id, Metadata: map[string]any{"payment_id": p.ID, "reason_code": in.ReasonCode}}); err != nil {
+			TargetType: "refund_request", TargetID: id, Metadata: map[string]any{"payment_id": p.ID, "reason_code": in.ReasonCode,
+				"audit_event": refundRequestedEvent(p.ExecEnv), "execution_environment": p.ExecEnv}}); err != nil {
 			return err
 		}
 		out, err = scanRefund(tx.QueryRow(ctx, refundSelect+` WHERE id = $1`, id))
@@ -298,4 +299,13 @@ func (s *Service) ListRefunds(ctx context.Context, status, cursor string, limit 
 		next = psp.NextCursor(len(list), limit, list[len(list)-1].RequestedAt, list[len(list)-1].ID)
 	}
 	return list, next, nil
+}
+
+// refundRequestedEvent names the brief's audit event: refund requests on test payments are sandbox requests (and no
+// refund is ever executed in Stage 9).
+func refundRequestedEvent(env string) string {
+	if env == psp.ExecProduction {
+		return "REFUND_REQUESTED"
+	}
+	return "REFUND_REQUESTED_SANDBOX"
 }

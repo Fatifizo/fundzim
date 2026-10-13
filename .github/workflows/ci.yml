@@ -116,7 +116,9 @@ jobs:
         run: ./scripts/dev-env-init.sh
       - name: Start infrastructure, initialise storage, migrate
         run: |
-          docker compose up -d --wait fundzim-postgres fundzim-redis fundzim-storage fundzim-mail
+          docker compose up -d --wait fundzim-postgres fundzim-redis fundzim-storage fundzim-mail fundzim-secrets
+          # Stage 9 (ADR-041): OpenBao dev server seeded with the generated sandbox test keys (secret manager)
+          docker compose up --exit-code-from fundzim-secrets-init fundzim-secrets-init
           # ClamAV downloads its signatures on first start (several minutes); the worker scans uploads with it
           docker compose up -d fundzim-clamav
           docker compose up --exit-code-from fundzim-storage-init fundzim-storage-init
@@ -140,7 +142,7 @@ jobs:
           go build -o bin/worker ./apps/api/cmd/worker
           LOG_FORMAT=json ./bin/worker > worker.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:9091/readyz && break; sleep 1; done
-      - name: Integration tests (identity, verification, campaigns and Stage 8 payments end to end — sandbox simulator, webhook security, concurrency, failure injection — via the running worker, ClamAV and Mailpit)
+      - name: Integration tests (identity, verification, campaigns, Stage 8 payments and Stage 9 execution isolation, secret manager, conformance suite, evidence — via the running worker, OpenBao, ClamAV and Mailpit)
         run: |
           set -a; . ./.env; set +a
           set -o pipefail
@@ -187,7 +189,9 @@ jobs:
         run: ./scripts/dev-env-init.sh
       - name: Start infrastructure, initialise storage, migrate
         run: |
-          docker compose up -d --wait fundzim-postgres fundzim-redis fundzim-storage fundzim-mail
+          docker compose up -d --wait fundzim-postgres fundzim-redis fundzim-storage fundzim-mail fundzim-secrets
+          # Stage 9 (ADR-041): OpenBao dev server seeded with the generated sandbox test keys (secret manager)
+          docker compose up --exit-code-from fundzim-secrets-init fundzim-secrets-init
           # ClamAV downloads its signatures on first start (several minutes); the worker scans every upload with it
           docker compose up -d fundzim-clamav
           docker compose up --exit-code-from fundzim-storage-init fundzim-storage-init

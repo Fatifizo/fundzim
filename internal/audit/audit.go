@@ -12,6 +12,7 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/netip"
 	"regexp"
@@ -141,4 +142,21 @@ func nullUUID(s string) any {
 		return nil
 	}
 	return s
+}
+
+// Querier is satisfied by pgx.Tx, *pgxpool.Pool and *pgx.Conn.
+type Querier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// LatestMetadata returns the metadata of the most recent business audit event with this action and target, or
+// (nil, nil) when there is none. It lets a module avoid repeating an idempotent configuration record.
+func LatestMetadata(ctx context.Context, q Querier, action, targetID string) ([]byte, error) {
+	var md []byte
+	err := q.QueryRow(ctx, `SELECT metadata FROM audit.audit_events WHERE action = $1 AND target_id = $2 ORDER BY seq DESC LIMIT 1`,
+		action, targetID).Scan(&md)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return md, err
 }

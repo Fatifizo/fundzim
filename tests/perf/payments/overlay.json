@@ -1,1 +1,1 @@
-{"Replace": {"tests/integration/payments_perf_test.go": "tests/perf/payments/payments_perf_test.go"}}
+{"Replace": {"tests/integration/payments_perf_test.go": "tests/perf/payments/payments_perf_test.go", "tests/integration/payments_stage9_perf_test.go": "tests/perf/payments/stage9_perf_test.go"}}

@@ -100,6 +100,8 @@ export interface ProviderCall {
   operation: string;
   classification: string;
   error_class: string | null;
+  /** Stage 9 normalised provider error category (AUTHENTICATION_FAILED … RECONCILIATION_REQUIRED). */
+  error_category: string | null;
   unknown_reason: string | null;
   http_status: number | null;
   provider_status_raw: string | null;
@@ -239,6 +241,8 @@ export interface ProviderAccount {
   webhook_secret_ref: string | null;
   webhook_secret_ref_previous: string | null;
   secrets_resolvable: boolean;
+  /** Stage 9: every reference lives under the account's own environment (secretref://fundzim/<environment>/…). */
+  credential_scope_ok: boolean;
   webhook_replay_window_seconds: number | null;
 }
 
@@ -267,14 +271,45 @@ export interface ProviderCapability {
   flags: CapabilityFlags;
 }
 
+/** Stage 9 derived provider health (observations only; configuration alone is never HEALTHY). */
+export interface ProviderHealth {
+  status: string; // HEALTHY | DEGRADED | UNAVAILABLE | UNKNOWN
+  reason: string;
+  window_seconds: number;
+  calls: number;
+  errors: number;
+  timeouts: number;
+  webhooks_verified: number;
+  p95_latency_ms: number | null;
+  circuit: string;
+  outage_declared: boolean;
+  credentials_usable: boolean | null;
+  last_observed_at: string | null;
+}
+
+/** Stage 9 adapter contract basis. */
+export interface ProviderContract {
+  basis: string; // OFFICIAL_PROVIDER_CONTRACT | PROVIDER_SANDBOX_OBSERVED | DOCUMENTED_BUT_UNVERIFIED | SIMULATED
+  sources: string[];
+  verified_on: string | null;
+}
+
 export interface ProviderRow {
+  id: string;
   code: string;
   display_name: string;
   simulated: boolean;
   status: string;
+  sandbox_status: string;
   selection_status: string;
+  selection_adr: string | null;
   confirmation_mode: string;
   circuit: string;
+  allowlisted: boolean;
+  adapter_registered: boolean;
+  usable: boolean;
+  contract: ProviderContract | null;
+  health: ProviderHealth;
   accounts: ProviderAccount[];
   capabilities: ProviderCapability[];
 }
@@ -283,7 +318,61 @@ export interface ProvidersView {
   items: ProviderRow[];
   live_execution: LiveExecution;
   sandbox_enabled: boolean;
+  execution_environment: string;
+  allowlist: string[];
 }
+
+export interface HealthEvent {
+  id: string;
+  operation: string;
+  method: string | null;
+  currency: string | null;
+  event_kind: string;
+  error_class: string | null;
+  latency_ms: number | null;
+  staff_declared: boolean;
+  observed_at: string | null;
+}
+
+export interface ProviderDetail extends ProviderRow {
+  execution_environment: string;
+  recent_health_events: HealthEvent[];
+  error_categories_24h: Record<string, number>;
+}
+
+export interface HealthRow {
+  id: string;
+  provider: ProviderRef;
+  usable: boolean;
+  health: ProviderHealth;
+}
+
+export interface HealthView {
+  execution_environment: string;
+  live_execution: LiveExecution;
+  secret_manager: string;
+  items: HealthRow[];
+}
+
+/** Stage 9 append-only provider evidence (one row per provider observation). */
+export interface EvidenceRow {
+  id: string;
+  source: string;
+  execution_environment: string;
+  provider_reference: string | null;
+  provider_event_id: string | null;
+  raw_status: string;
+  mapped_status: string;
+  mapped: boolean;
+  mapping_version: string;
+  reported: PaymentMoney | null;
+  provider_occurred_at: string | null;
+  observed_at: string | null;
+  consistency: string; // FIRST | CONSISTENT | PROGRESSION | CONTRADICTS
+  contradicts_evidence_id: string | null;
+}
+
+export type ProviderAction = "enable-sandbox" | "disable" | "outage" | "outage/resolve";
 
 export interface SandboxState {
   provider_payment_ref: string | null;
