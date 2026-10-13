@@ -5,7 +5,7 @@ anyone who can see the run). Exits 1 if any test or package failed."""
 import json
 import sys
 
-outputs, failed = {}, []
+outputs, failed, passed, skipped = {}, [], [], []
 pkg_failed = False
 for line in sys.stdin:
     try:
@@ -18,6 +18,10 @@ for line in sys.stdin:
         out = e.get("Output", "")
         sys.stdout.write(out)
         outputs.setdefault(key, []).append(out)
+    elif e.get("Action") == "pass" and e.get("Test") and "/" not in e["Test"]:
+        passed.append(key)
+    elif e.get("Action") == "skip" and e.get("Test") and "/" not in e["Test"]:
+        skipped.append(key)
     elif e.get("Action") == "fail":
         if e.get("Test"):
             failed.append(key)
@@ -32,4 +36,10 @@ for pkg, test in failed:
         continue  # subtests are reported through their parent
     tail = "".join(outputs.get((pkg, test), []))[-3000:]
     print(f"::error title=FAIL {test}::{esc(tail)}")
+# public summary (job logs need authentication): counts, skipped tests, and how many Stage 8 payment tests passed
+top_failed = [k for k in failed if "/" not in k[1]]
+pay = sum(1 for _, t in passed if t.startswith("TestPayments"))
+names = ", ".join(sorted(t for _, t in skipped)) or "none"
+print(f"::notice title=Go test summary::passed {len(passed)}, failed {len(top_failed)}, skipped {len(skipped)} "
+      f"(skipped: {esc(names)}); TestPayments* passed: {pay}")
 sys.exit(1 if failed or pkg_failed else 0)
