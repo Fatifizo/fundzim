@@ -201,12 +201,16 @@ describe("staff payment actions", () => {
     await user.type(screen.getByLabelText("Amount (USD)"), "0.295");
     await user.click(screen.getByRole("button", { name: "Record refund request" }));
     expect(await screen.findByText(/fewer decimal places/)).toBeInTheDocument();
+    // an invalid submit moves focus to the error summary on the next frame: let it land before typing again
+    await waitFor(() => expect(screen.getByText("Please correct the errors below.")).toHaveFocus());
     await user.clear(screen.getByLabelText("Amount (USD)"));
     await user.type(screen.getByLabelText("Amount (USD)"), "2000");
     await user.selectOptions(screen.getByLabelText("Reason"), "DUPLICATE_PAYMENT");
     await user.type(screen.getByLabelText("Explanation (staff only)"), "Paid twice.");
     await user.click(screen.getByRole("button", { name: "Record refund request" }));
     expect(await screen.findByText(/more than the payment amount/)).toBeInTheDocument();
+    // an invalid submit moves focus to the error summary on the next frame: let it land before typing again
+    await waitFor(() => expect(screen.getByText("Please correct the errors below.")).toHaveFocus());
     expect(createRefundRequest).not.toHaveBeenCalled();
     await user.clear(screen.getByLabelText("Amount (USD)"));
     await user.type(screen.getByLabelText("Amount (USD)"), "0.29");
