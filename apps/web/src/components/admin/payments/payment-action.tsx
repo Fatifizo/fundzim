@@ -119,7 +119,7 @@ function useActionFeedback() {
   return { error, setError, notice, setNotice, noticeRef, errorRef, fail };
 }
 
-function ReasonDialog({
+export function ReasonDialog({
   title,
   description,
   field,

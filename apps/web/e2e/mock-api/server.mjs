@@ -12,6 +12,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import http from "node:http";
 
 import { createCampaignsMock } from "./campaigns.mjs";
+import { createLedgerMock } from "./ledger.mjs";
 import { createPaymentsMock } from "./payments.mjs";
 import { createVerificationMock } from "./verification.mjs";
 
@@ -142,6 +143,7 @@ async function readJson(req) {
 const verification = createVerificationMock({ send, err, userById, users, addUser, me, stepUpTtlMs: STEP_UP_TTL_MS });
 const campaigns = createCampaignsMock({ send, err, userById, users, verification, stepUpTtlMs: STEP_UP_TTL_MS });
 const payments = createPaymentsMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS });
+const ledger = createLedgerMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS });
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://mock");
@@ -179,6 +181,7 @@ const server = http.createServer(async (req, res) => {
     if (await verification.control(path, controlBody, res)) return;
     if (await campaigns.control(path, controlBody, res)) return;
     if (await payments.control(path, controlBody, res)) return;
+    if (await ledger.control(path, controlBody, res)) return;
   }
   if (path === "/api/v1/health") return send(res, 200, { status: "ok" });
   if (path === "/api/v1/version") return send(res, 200, { name: "fundzim-api", version: "mock", build: "mock", commit: "mock" });
@@ -363,6 +366,7 @@ const server = http.createServer(async (req, res) => {
         return err(res, 404, "RESOURCE_NOT_FOUND");
       }
       if (await payments.handle({ req, res, method, path, url, user, session, body })) return;
+      if (await ledger.handle({ req, res, method, path, url, user, session, body })) return;
       if (await campaigns.handle({ req, res, method, path, url, user, session, body, raw })) return;
       if (await verification.handle({ req, res, method, path, url, user, session, sessionToken, body, raw })) return;
       return err(res, 404, "ROUTE_NOT_FOUND");

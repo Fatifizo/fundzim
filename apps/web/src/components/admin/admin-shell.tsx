@@ -24,6 +24,12 @@ const ITEMS = [
   { href: "/admin/payments/refunds", label: "Refund requests" },
   { href: "/admin/payments/providers", label: "Payment providers" },
   { href: "/admin/payments/health", label: "Provider health" },
+  { href: "/admin/finance/ledger", label: "Ledger", exact: true },
+  { href: "/admin/finance/accounts", label: "Ledger accounts" },
+  { href: "/admin/finance/journals", label: "Journals" },
+  { href: "/admin/finance/trial-balance", label: "Trial balance" },
+  { href: "/admin/finance/reconciliation", label: "Ledger reconciliation" },
+  { href: "/admin/finance/exceptions", label: "Ledger exceptions" },
   { href: "/admin/account/personal-link", label: "Personal account link" },
 ] as const;
 
