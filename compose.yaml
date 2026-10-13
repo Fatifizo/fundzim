@@ -43,6 +43,12 @@ x-common-env: &common-env
   MALWARE_SCANNER: ${MALWARE_SCANNER:-clamd}   # real ClamAV (fundzim-clamav); dev = EICAR-only test scanner
   CLAMAV_ADDR: fundzim-clamav:3310
   STORAGE_SSE_C_KEY: ${STORAGE_SSE_C_KEY:?run scripts/dev-env-init.sh}   # SSE-C for private objects (local key; KMS in Stage 18)
+  # Stage 8 (ADR-039): payment SANDBOX SIMULATOR only — never real payments; refused in production
+  PAYMENTS_SANDBOX_ENABLED: ${PAYMENTS_SANDBOX_ENABLED:-false}
+  SANDBOX_WEBHOOK_URL: http://fundzim-api:8080/api/v1/webhooks/payments/sandbox
+  SECRETREF_FUNDZIM_SANDBOX_API: ${SECRETREF_FUNDZIM_SANDBOX_API:-}
+  SECRETREF_FUNDZIM_SANDBOX_WEBHOOK_CURRENT: ${SECRETREF_FUNDZIM_SANDBOX_WEBHOOK_CURRENT:-}
+  SECRETREF_FUNDZIM_SANDBOX_WEBHOOK_PREVIOUS: ${SECRETREF_FUNDZIM_SANDBOX_WEBHOOK_PREVIOUS:-}
 
 services:
   fundzim-postgres:
