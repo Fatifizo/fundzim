@@ -32,11 +32,17 @@ jobs:
           if [ -n "$out" ]; then echo "gofmt needed:"; echo "$out"; exit 1; fi
       - run: go vet ./apps/api/... ./internal/... ./migrations/...
       - run: go vet -tags integration ./tests/...
+      - name: vet the payments performance harness (never run in CI)
+        run: go vet -tags integration,perf -overlay tests/perf/payments/overlay.json ./tests/integration/
       - run: go test -race -count=1 ./apps/api/... ./internal/... ./migrations/...
       - name: fuzz smoke (money)
         run: |
           go test -run=^$ -fuzz=FuzzParseNeverPanicsOrRounds -fuzztime=20s ./internal/platform/money/
           go test -run=^$ -fuzz=FuzzUnmarshalNeverPanics -fuzztime=20s ./internal/platform/money/
+      - name: Payment layer (Stage 8) — state machine vs SQL, webhook signatures, simulator scenarios, execution gates
+        run: |
+          set -o pipefail
+          go test -race -count=1 -v ./internal/payments/ ./internal/psp/... | grep -E '^(--- |ok|FAIL|PASS)'
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./apps/api/... ./internal/... ./migrations/...
 
   web:
@@ -134,7 +140,7 @@ jobs:
           go build -o bin/worker ./apps/api/cmd/worker
           LOG_FORMAT=json ./bin/worker > worker.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:9091/readyz && break; sleep 1; done
-      - name: Integration tests (identity and verification end to end via the running worker, ClamAV and Mailpit)
+      - name: Integration tests (identity, verification, campaigns and Stage 8 payments end to end — sandbox simulator, webhook security, concurrency, failure injection — via the running worker, ClamAV and Mailpit)
         run: |
           set -a; . ./.env; set +a
           set -o pipefail
