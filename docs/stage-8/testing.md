@@ -8,8 +8,8 @@ What was added, what it proves, and what was run. No test was skipped, disabled 
 |---|---|---|
 | Go format, vet | `gofmt -l apps internal migrations tests`; `go vet` (incl. `-tags integration` and the perf harness overlay) | clean |
 | Go unit, race detector | `go test -race -count=1 ./apps/api/... ./internal/... ./migrations/...` (in `golang:1.27.2`) | 32 packages ok; 223 tests + 60 subtests passed, 0 failed |
-| Integration | `go test -tags integration -count=1 ./tests/integration/...` with `FUNDZIM_IT_API_URL`, `FUNDZIM_IT_WEB_URL`, `FUNDZIM_IT_PERF=1`, under the host lock, after rebuilding API/worker/web | INTEGRATION_RESULT |
-| Real-stack Playwright | `npm run test:e2e:real`, twice, under the host lock | E2E_RESULT |
+| Integration | `go test -tags integration -count=1 ./tests/integration/...` with `FUNDZIM_IT_API_URL`, `FUNDZIM_IT_WEB_URL`, `FUNDZIM_IT_PERF=1`, under the host lock, after rebuilding API/worker/web | 115 passed, 0 failed, 2 skipped (env-gated: multi-replica API profile; stopping the Valkey container); all 16 `TestPayments*` passed |
+| Real-stack Playwright | `npm run test:e2e:real`, twice, under the host lock | 47 / 47 passed in both runs (projects staff-desktop, desktop-chromium, mobile-chromium; unchanged suite — no checkout exists) |
 | Web lint, typecheck | `npm run lint`, `npm run typecheck` | 0 errors |
 | Vitest | `npx vitest run` | 471 / 471 passed (48 files) |
 | Mock-API Playwright | `npm run test:e2e` | 155 passed, 1 skipped (existing browser-conditional skip in `public.spec.ts`) |
@@ -30,7 +30,7 @@ Remote CI: §6.
 | `TestSourceRules` | `SUCCEEDED` only from SYNC/WEBHOOK/POLL/RECON; `UNKNOWN` only INTERNAL; `FAILED` never INTERNAL except from CREATED, never STAFF without evidence; a donor (browser) source never changes a payment |
 | `TestEdgesRespectPrecedence` | Every lower-rank edge is a listed exception; REFUNDED/CHARGED_BACK final; no SUCCEEDED → FAILED |
 | `TestPollBackoffIsBounded`, `TestSafeRedirect`, `TestCleanReason`, `TestDonorMessagesNeverClaimMoneyBeforeSuccess`, `TestAmountFormat` | Poll backoff ≤ 10 min; open-redirect refusal; reason validation; donor messages; money format |
-| `TestVerify` (sandbox) | Current/previous key slots, missing/forged/swapped signatures, unknown kid, tampered body, stale and future timestamps |
+| `TestVerify` (sandbox) | Rotation overlap (current and previous slot); absent, forged and altered signature headers; unknown kid; tampered body; stale and future timestamps |
 | `TestParseRedactsAndValidates`, `TestMappingNeverGuesses`, `TestScenarioTable`, `TestLimitsAreSandboxContractOnly` | Strict parsing and redaction, livemode never simulated, unknown types kept as OTHER, unmapped statuses never guessed, scenario table, no ZWG |
 | `TestLiveExecutionIsDisabled`, `TestEnvVarFor`, `TestEnvResolver`, `TestMethodCategories`, `TestCursor`, `TestVerifyReasonMapping` (psp) | Execution constant false; secret references; method categories (no ZIPIT code); cursors; sensitive headers never kept |
 | `TestPaymentsSandboxRefusedInProduction` (config) | Sandbox refused in production; PRODUCTION accounts only in production; sandbox off by default |
