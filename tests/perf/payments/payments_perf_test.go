@@ -64,14 +64,14 @@ func perfGate(t *testing.T) {
 // ---- measurement ---------------------------------------------------------------------------------------------
 
 type pres struct {
-	name                 string
-	n, conc              int
-	p50, p95, p99, max   time.Duration
-	wall                 time.Duration
-	rps                  float64
-	codes                map[int]int
-	errors, throttled    int // errors: transport failures + any status other than want (429 included); throttled: 429s
-	bytes                int64
+	name               string
+	n, conc            int
+	p50, p95, p99, max time.Duration
+	wall               time.Duration
+	rps                float64
+	codes              map[int]int
+	errors, throttled  int // errors: transport failures + any status other than want (429 included); throttled: 429s
+	bytes              int64
 }
 
 func ppct(d []time.Duration, p float64) time.Duration {
@@ -133,7 +133,9 @@ func pmeasure(name string, n, conc, want int, f func(i int) (int, int, error)) p
 	return r
 }
 
-func pms(d time.Duration) string { return strconv.FormatFloat(float64(d.Microseconds())/1000, 'f', 1, 64) }
+func pms(d time.Duration) string {
+	return strconv.FormatFloat(float64(d.Microseconds())/1000, 'f', 1, 64)
+}
 
 func codesStr(m map[int]int) string {
 	keys := make([]int, 0, len(m))
