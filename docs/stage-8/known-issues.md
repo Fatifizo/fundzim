@@ -23,7 +23,7 @@
 | KI-S8-19 | Rejections are recorded for every refused delivery (bounded by per-IP limits only); no aggregation | Storage under attack | OPEN |
 | KI-S8-20 | Stage 2 design paths PAY-02..05 removed from OpenAPI (superseded); other design payment paths remain PLANNED | Contract drift to resolve with receipts/donations | OPEN |
 | KI-S8-21 | Real-stack Playwright suite has no payment flow (no checkout exists); the staff payment UI is covered by the mock suite and the API by integration tests | — | ACCEPTED |
-
 | KI-S8-22 | A provider delivering webhooks from one IP address is limited by `global.ip` (40 per 2 s) before `payments.webhook.ip` (600/min): 260 of 300 rapid deliveries from one address got 429 in [performance.md](performance.md) §3 | Delivery retries and delays under bursts | OPEN — set limits per the selected provider's IP ranges and delivery profile (Stage 9) |
+
 Carried from Stage 7 unchanged: KI-S7-02, 04, 05, 06, 07, 08, 10, 12, 13, 14, 15, 17, 19, 20, 21, 22, 23, 24
 ([stage-7/known-issues.md](../stage-7/known-issues.md)).
