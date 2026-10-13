@@ -11,6 +11,17 @@ providers.
 FundZim is **not** an investment, lending, equity or rewards platform, and it is not a wallet or a payment
 provider.
 
+> **Status: Stage 10 — Immutable double-entry ledger (complete; awaiting acceptance; TEST ledger only).** The ledger
+> exists: a database-enforced double-entry ledger (balanced journals checked at COMMIT, append-only history, rule
+> conformance, per-currency journals, non-negative obligations), a dedicated `fundzim_ledger` posting role
+> (`fundzim_app` has no ledger access), an idempotent posting engine, maker-checker reversals and corrections,
+> account freeze/close, accounting periods with maker-checker close, an integrity checker, a reconciliation
+> foundation (settlement reconciliation NOT_PERFORMED: no settlement evidence), and the staff finance UI under
+> `/admin/finance/**`. The ledger database is designated **TEST**; production posting is disabled; test payments are
+> never posted; every journal is a synthetic TEST_ONLY fixture. Docs:
+> [docs/stage-10/implementation.md](docs/stage-10/implementation.md); ADR-042; handover
+> [STAGE-10-TO-STAGE-11.md](docs/stage-handover/STAGE-10-TO-STAGE-11.md).
+>
 > **Status: Stage 9 — Payment provider integration readiness (complete; awaiting acceptance; no provider
 > selected).** No Zimbabwean payment provider could be integrated or certified: none is selected (ADR-040,
 > DECISION_DEFERRED), and there are no merchant agreements, sandbox credentials or written provider confirmations.
@@ -234,7 +245,8 @@ Reset deletes the Postgres and Garage volumes (database, roles, objects). `.env`
 | [Configuration](docs/development/configuration.md) · [Migrations](docs/development/migrations.md) · [Seed data](docs/development/seed-data.md) | Environment variables and refusals, migration guide, development data rules |
 | [Stage 8 implementation](docs/stage-8/implementation.md) · [architecture](docs/stage-8/payment-architecture.md) · [provider interface](docs/stage-8/provider-interface.md) · [state machine](docs/stage-8/payment-state-machine.md) · [webhooks](docs/stage-8/webhook-security.md) · [security](docs/stage-8/security-review.md) · [testing](docs/stage-8/testing.md) · [known issues](docs/stage-8/known-issues.md) | Payment abstraction layer (sandbox only) |
 | [Stage 9 implementation](docs/stage-9/implementation.md) · [legal review](docs/stage-9/legal-review.md) · [provider confirmations](docs/stage-9/provider-confirmation-register.md) · [evaluation](docs/stage-9/provider-evaluation.md) · [selection](docs/stage-9/provider-selection.md) · [secret management](docs/stage-9/secret-management.md) · [payment security](docs/stage-9/payment-security.md) · [certification](docs/stage-9/sandbox-certification.md) · [known issues](docs/stage-9/known-issues.md) | Provider integration readiness (no provider selected) |
-| [Stage handovers](docs/stage-handover/STAGE-9-TO-STAGE-10.md) | Stage 9 → 10 (double-entry ledger); earlier handovers in the same folder |
+| [Stage 10 implementation](docs/stage-10/implementation.md) · [ledger architecture](docs/stage-10/ledger-architecture.md) · [chart of accounts](docs/stage-10/chart-of-accounts.md) · [posting rules](docs/stage-10/posting-rules.md) · [reconciliation](docs/stage-10/reconciliation.md) · [security review](docs/stage-10/security-review.md) · [tests](docs/stage-10/financial-integrity-tests.md) · [performance](docs/stage-10/performance.md) · [known issues](docs/stage-10/known-issues.md) | Double-entry ledger (TEST ledger only) |
+| [Stage handovers](docs/stage-handover/STAGE-10-TO-STAGE-11.md) | Stage 10 → 11 (withdrawals & payouts); earlier handovers in the same folder |
 
 ## Licence
 

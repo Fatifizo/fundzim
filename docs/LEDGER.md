@@ -2,8 +2,9 @@
 
 > Status: Stage 0 specification, amended in Stage 1 by [ADR-014](adr/ADR-014-accounting-separated-from-custody.md)
 > (chart of accounts and settlement states; detail in
-> [ledger/settlement-and-custody-model.md](ledger/settlement-and-custody-model.md)). Implementation is **Stage 10**, preceded by schema design in Stage 2. Nothing
-> in this repository posts ledger entries yet. Normative for all future financial code. Changes require an ADR
+> [ledger/settlement-and-custody-model.md](ledger/settlement-and-custody-model.md)). Implementation is **Stage 10**, preceded by schema design in Stage 2. Stage 10
+> implemented it ([ADR-042](adr/ADR-042-ledger-implementation.md), [stage-10/implementation.md](stage-10/implementation.md))
+> in a **TEST** ledger only: production posting is disabled and only synthetic TEST_ONLY fixtures are posted. Normative for all future financial code. Changes require an ADR
 > amending [ADR-006](adr/ADR-006-double-entry-ledger.md).
 >
 > Related: [MONEY.md](MONEY.md) · [PAYMENTS.md](PAYMENTS.md) · [DATABASE.md](DATABASE.md) · [AUDIT.md](AUDIT.md)

@@ -371,10 +371,29 @@ func (s *Service) endAdjustment(ctx context.Context, staffID, id, reason, to str
 	return s.AdjustmentByID(ctx, id)
 }
 
-// ExpireAdjustments marks overdue pending requests EXPIRED (job).
+// ExpireAdjustments marks overdue pending requests EXPIRED (job), auditing each one in the same transaction.
 func (s *Service) ExpireAdjustments(ctx context.Context) (int64, error) {
-	tag, err := s.Pool.Exec(ctx, `UPDATE ledger.ledger_adjustments SET status = 'EXPIRED' WHERE status = 'PENDING_APPROVAL' AND expires_at <= $1`, s.now())
-	return tag.RowsAffected(), err
+	var n int64
+	err := db.WithTx(ctx, s.Pool, db.TxOptions{}, func(ctx context.Context, tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `UPDATE ledger.ledger_adjustments SET status = 'EXPIRED' WHERE status = 'PENDING_APPROVAL' AND expires_at <= $1
+			RETURNING id::text`, s.now())
+		if err != nil {
+			return err
+		}
+		expired, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			return err
+		}
+		for _, id := range expired {
+			if _, err := audit.RecordGateway(ctx, tx, audit.Event{Action: "ledger.adjustment.expired", ActorType: "system",
+				TargetType: "ledger_adjustment", TargetID: id, Outcome: "success"}); err != nil {
+				return err
+			}
+		}
+		n = int64(len(expired))
+		return nil
+	})
+	return n, err
 }
 
 const adjustmentSelect = `SELECT id, kind, posting_rule, currency, target_transaction_id::text, proposed_lines, reason_code, reason, status,

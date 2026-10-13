@@ -15,9 +15,27 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
+**Stage 10 — Immutable double-entry ledger (complete; awaiting acceptance; TEST ledger only).** Stages 1–10 are
+complete but their acceptance has not been recorded (`docs/governance/stage-acceptance-register.md` is a proposed
+template — never mark a stage accepted yourself); Stage 9 is PARTIAL. What Stage 10 built: `docs/stage-10/implementation.md`
+(prerequisites, architecture, chart of accounts, journal model, posting engine and rules, currency controls,
+idempotency, reversals, balances, reconciliation, security review, tests, performance, known issues; ADR-042); Stage 11
+starts from `docs/stage-handover/STAGE-10-TO-STAGE-11.md`. Binding Stage 10 rules: **only `internal/ledger` on the
+`fundzim_ledger` pool (`DATABASE_LEDGER_URL`) writes ledger tables** — `fundzim_app` has no ledger privilege and no
+other module may get one; the ledger database is designated TEST (`ledger.ledger_environment`), PRODUCTION is refused
+(`ck_*_no_production_stage10`) and `ledger.ProductionPostingEnabled = false` — never change either without an ADR,
+legal sign-off, an accounting review and stage acceptance; test payments are never posted (the `ledger.payments`
+consumer records NOT_ELIGIBLE); payments and webhooks never write journals; journals are created POSTED and never
+edited — corrections are maker-checker reversals/adjustments (`ledger_adjustments`); there is no free-form or public
+posting endpoint; synthetic fixtures are TEST-only, labelled TEST_ONLY and never shown as real funds; no balance is
+withdrawable; settlement reconciliation is NOT_PERFORMED until real settlement evidence exists; never weaken a ledger
+trigger, CHECK or grant to make a test or benchmark pass; new money movements need a new posting rule (migration,
+new version) and the Go chart must stay identical to `ledger.account_class_signature()`; the ledger perf harness
+(`tests/perf/ledger`, tag `perf`) runs only against a scratch database (`fundzim_perf`), never the development
+ledger (append-only). Retention of ledger records is LEGAL_REVIEW_REQUIRED (LR-012): never purge.
+
 **Stage 9 — Zimbabwe payment provider integration readiness (complete; awaiting acceptance; no provider selected).**
-Stages 1–9 are complete but their acceptance has not been recorded (`docs/governance/stage-acceptance-register.md` is
-a proposed template — never mark a stage accepted yourself). What Stage 9 built: `docs/stage-9/implementation.md`
+What Stage 9 built: `docs/stage-9/implementation.md`
 (prerequisites, legal review, provider confirmation register, evaluation, selection **DECISION_DEFERRED** (ADR-040),
 capabilities, contracts, sandbox certification, webhook security, secret management (ADR-041), payment security,
 reconciliation evidence, testing, known issues); Stage 10 starts from `docs/stage-handover/STAGE-9-TO-STAGE-10.md`.
@@ -43,14 +61,14 @@ status (edge + precedence + source rules, mirrored in SQL); a timeout or unknown
 `FAILED`; a browser return never confirms a payment; provider calls are committed `IN_FLIGHT` before the call and
 never run inside a transaction; webhooks are verified, stored once (inbox) and dispatched through the outbox;
 payment mutations require an `Idempotency-Key`; refund requests are maker-checker and cannot be executed; there is no
-manual success override; provider secrets are `secretref://` references only. No ledger tables, postings, fees,
-totals or balances exist; the public campaign page still shows a disabled "Donations are not yet available." button.
+manual success override; provider secrets are `secretref://` references only. (Stage 8 had no ledger; Stage 10 added one — see above.) No fees or
+payout balances exist; the public campaign page still shows a disabled "Donations are not yet available." button.
 Stage 7 rules still hold: public campaign data is `public, no-cache` + ETag and fetched `no-store` by the web app;
 errors are always `no-store`; a handler's `Cache-Control` must not be overwritten; rate-limit errors carry their real
 wait through `RetryAfter()`; campaign-family APIs use `{campaign_id}`, 428/412 for `If-Match` and
 `{items, next_cursor}` lists (ADR-038 §7); a public report never changes a campaign's status; analytics are
 first-party aggregate counters only. The real-stack Playwright suite (`apps/web/e2e-real`), the Go integration tests
-(including `TestPayments*`) and container rebuilds share the development database: run them under
+(including `TestPayments*` and `TestLedger*`) and container rebuilds share the development database: run them under
 `flock /tmp/claude-1000/fundzim-stack.lock`. Never report CI as green without seeing the run. Gate on
 `kyc.Service.Level`, enforce compliance restrictions through `compliance.Service.Restrictions`, and check
 self-review with `kyc.Service.ActorIdentities` / `app.actor_identities()` (linked staff accounts). A
@@ -65,7 +83,7 @@ STOPS.
 |---|---|
 | `apps/web/` | Next.js 16 (App Router, TypeScript, Tailwind v4). **Presentation only.** Has its own `AGENTS.md` — read it: this Next.js version differs from older training data; consult `apps/web/node_modules/next/dist/docs/` before writing Next.js code. |
 | `apps/api/` | Go entrypoints: `cmd/api` (HTTP API), `cmd/worker` (River jobs, outbox relay/delivery), `cmd/fundzimctl` (config check, migrations, `bootstrap-admins`, healthcheck). |
-| `internal/` | Go code: `app/` (composition root), `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, crypto, authz, clock, ratelimit, idempotency, outbox, jobs, version) and domain modules `users`, `auth`, `organisations`, `audit`, `notifications`, `storage` (documents: quarantine, ClamAV scanning, SSE-C, download tickets), `kyc` (KYC/KYB cases, identities, review engine, verification policy — `fundzim_kyc` pool only), `beneficiaries`, `payouts` (payout **destinations** only), `risk` (signals, versioned model, routing decisions), `compliance` (compliance cases and the subject-restriction projection — `fundzim_compliance` pool only), `verification` (HTTP orchestration; owns no tables) and `campaigns` (core: lifecycle, eligibility, review, publication, public read/search; subpackages `campaigns/media` — image upload, scan, re-encode, serving — and `campaigns/updates` — owner updates and moderation; no financial state), `psp` (Stage 8: provider registry, routing, webhook inbox, health, sandbox simulator in `psp/sandbox`; Stage 9:
+| `internal/` | Go code: `app/` (composition root), `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, crypto, authz, clock, ratelimit, idempotency, outbox, jobs, version) and domain modules `users`, `auth`, `organisations`, `audit`, `notifications`, `storage` (documents: quarantine, ClamAV scanning, SSE-C, download tickets), `kyc` (KYC/KYB cases, identities, review engine, verification policy — `fundzim_kyc` pool only), `beneficiaries`, `payouts` (payout **destinations** only), `risk` (signals, versioned model, routing decisions), `compliance` (compliance cases and the subject-restriction projection — `fundzim_compliance` pool only), `verification` (HTTP orchestration; owns no tables) and `campaigns` (core: lifecycle, eligibility, review, publication, public read/search; subpackages `campaigns/media` — image upload, scan, re-encode, serving — and `campaigns/updates` — owner updates and moderation; no financial state), `ledger` (Stage 10: double-entry ledger, posting engine, adjustments, periods, integrity, reconciliation — `fundzim_ledger` pool only), `psp` (Stage 8: provider registry, routing, webhook inbox, health, sandbox simulator in `psp/sandbox`; Stage 9:
 execution environments, startup gate, error categories, derived health, adapter conformance suite in `psp/psptest`) and `payments` (Stage 8: donation intents, payments, state machine, refund requests, reconciliation references; no balances or postings). `archtest/` enforces the module import graph and table ownership — register every new module there. One Go module (`github.com/Fatifizo/fundzim`) rooted at repo root. |
 | `migrations/` | Executable goose SQL migrations, embedded and run by `fundzimctl migrate` as `fundzim_migrator` (`docs/development/migrations.md`). |
 | `docs/` | Specifications. `docs/adr/` holds Architecture Decision Records. |

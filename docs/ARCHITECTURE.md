@@ -18,8 +18,11 @@
 > SECURITY DEFINER gateways (ADR-035). ClamAV runs as a compose service. The Next.js app has authentication,
 > verification, organisation, campaign (owner and staff) and public pages (home, discovery, categories, campaign pages,
 > sharing, SEO, PWA). Module boundaries are enforced by `internal/archtest`.
-> **Not yet built:** real provider integrations (payments run only through the sandbox simulator), ledger, payout
-> execution, fees, refund execution, disputes, reconciliation, identity /
+> **Stage 10 (ADR-042):** the double-entry ledger exists in a database designated **TEST**, written only by the
+> `fundzim_ledger` role through `internal/ledger`; payments reach it only through the outbox (test payments are
+> recorded NOT_ELIGIBLE, never posted) — [stage-10/ledger-architecture.md](stage-10/ledger-architecture.md).
+> **Not yet built:** real provider integrations (payments run only through the sandbox simulator), production ledger
+> posting, payout execution, fees, refund execution, disputes, settlement reconciliation, identity /
 > screening / account-lookup provider integrations, tracing export. Details:
 > [stage-7/implementation.md](stage-7/implementation.md), [stage-6/implementation.md](stage-6/implementation.md),
 > [stage-5/implementation.md](stage-5/implementation.md) (Stage 4: [stage-4/implementation.md](stage-4/implementation.md);
@@ -345,7 +348,8 @@ Database roles (summary):
 | Role | Can do |
 |---|---|
 | `fundzim_migrator` | Sole owner of all schemas and objects; runs DDL. Used only by migrations. |
-| `fundzim_app` | DML on its tables. `INSERT`/`SELECT` only on `ledger_entries`, `ledger_transactions` and `audit_events`; `UPDATE` only on the `ledger_balances` projection. No access to `kyc.*`. |
+| `fundzim_app` | DML on its tables. **No ledger access** (Stage 10, ADR-042). `audit_events` only through gateways. No access to `kyc.*`. |
+| `fundzim_ledger` | Stage 10: the only writer of the `ledger` schema (INSERT-only on history; guarded UPDATE on status-bearing tables; projection rows lockable but written only by SECURITY DEFINER functions). Audit and outbox through gateways. |
 | `fundzim_kyc` | Used only by the kyc module's connection pool. DML on `kyc` tables; does not own the schema. |
 | `fundzim_readonly` | Reporting and analytics on approved views. No `kyc` schema access. |
 

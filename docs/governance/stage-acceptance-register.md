@@ -27,6 +27,7 @@
 | 7 | Public fundraising experience | PASS WITH CONDITIONS | **NOT_RECORDED** | Manual WCAG 2.2 AA audit; link-preview/crawl verification; LR-012, LR-022, LR-035; field performance monitoring |
 | 8 | Payment abstraction layer | PASS WITH CONDITIONS (sandbox only; production BLOCKED) | **NOT_RECORDED** | Production payment execution BLOCKED (see docs/stage-8/known-issues.md) |
 | 9 | Zimbabwe payment provider integration readiness | see docs/stage-9 (provider integration and certification BLOCKED; no provider selected) | **NOT_RECORDED** | ADR-040 DECISION_DEFERRED; provider confirmations and legal items open; secret manager operation (Stage 18/20); see docs/stage-9/known-issues.md |
+| 10 | Immutable double-entry ledger, posting engine, reconciliation foundation | see docs/stage-10 (TEST ledger only; production posting BLOCKED) | **NOT_RECORDED** | Accounting review of the chart and rules (KI-S10-02); production ledger database, backups and DR (KI-S10-06); settlement reconciliation BLOCKED (KI-S10-04); LR-001/002/003/012/076; see docs/stage-10/known-issues.md |
 
 ## Effect of a missing acceptance
 

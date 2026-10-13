@@ -28,6 +28,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Fatifizo/fundzim/internal/ledger"
+	"github.com/Fatifizo/fundzim/internal/platform/clock"
 	"github.com/Fatifizo/fundzim/internal/platform/config"
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
@@ -442,6 +443,44 @@ func TestLedgerReversalsMakerCheckerAndNoDoubleReversal(t *testing.T) {
 			action).Scan(&n); err != nil || n == 0 {
 			t.Fatalf("%s not audited: %v", action, err)
 		}
+	}
+}
+
+// An overdue maker request expires (maintenance job), is audited, and can no longer be approved.
+func TestLedgerAdjustmentExpiry(t *testing.T) {
+	l := newLedgerIT(t)
+	camp, src := ids.New(), ids.New()
+	res, err := l.svc.PostOnce(ctx(t), synth("DONATION_CAPTURED", "fixture:"+src+":exp", "payment", src,
+		ledger.Dr(acct(ledger.ClassPSPClearing, ledger.SyntheticProviderID), 700), ledger.Cr(acct(ledger.ClassCampaignUnsettled, camp), 700)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := l.svc.RequestAdjustment(ctx(t), l.f.finance1.id, ledger.AdjustmentRequest{Kind: ledger.AdjReversal, Target: res.TransactionID,
+		ReasonCode: "TEST_FIXTURE_CORRECTION", Reason: "integration test: this request is left to expire"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	later := ledger.New(l.lp, clock.NewFake(time.Now().Add(ledger.AdjustmentTTL+time.Hour)), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := later.Warm(ctx(t)); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := later.ExpireAdjustments(ctx(t)); err != nil || n < 1 {
+		t.Fatalf("expire: %d %v", n, err)
+	}
+	got, err := l.svc.AdjustmentByID(ctx(t), a.ID)
+	if err != nil || got.Status != "EXPIRED" {
+		t.Fatalf("status after expiry: %+v %v", got.Status, err)
+	}
+	var audited int
+	if err := l.mig.QueryRow(ctx(t), `SELECT count(*) FROM audit.audit_events WHERE action = 'ledger.adjustment.expired' AND target_id = $1`,
+		a.ID).Scan(&audited); err != nil || audited != 1 {
+		t.Fatalf("expiry not audited: %d %v", audited, err)
+	}
+	if _, err := l.svc.ApproveAdjustment(ctx(t), l.f.finance2.id, a.ID, "approval after expiry must be refused"); err == nil {
+		t.Fatal("expired adjustment approved")
+	}
+	if l.count(t, `SELECT count(*) FROM ledger.ledger_transactions WHERE reverses_transaction_id = $1`, res.TransactionID) != 0 {
+		t.Fatal("expired adjustment posted")
 	}
 }
 

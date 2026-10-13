@@ -380,6 +380,15 @@ Notes on ordering:
   exactly one posting; ledger posting enabled in non-production / PSP test environments (Gate A). Live donor
   money still waits for Stage 20 (Gate C).
 
+- **Stage 10 as delivered (2026-10-13, awaiting acceptance):** ledger, posting engine, database invariants,
+  dedicated posting role, reversals and maker-checker adjustments, periods, integrity checker, reconciliation
+  foundation and staff finance UI ([stage-10/implementation.md](stage-10/implementation.md), ADR-042). **Deviation
+  from the acceptance criteria above:** confirmed *test* payments are **not** posted, even to the TEST ledger — the
+  ledger records each one as NOT_ELIGIBLE (Stage 9 handover rule "never post a test payment"; ADR-042 §3). Posting
+  rules are exercised with synthetic TEST_ONLY fixtures instead. "Every confirmed payment produces exactly one
+  posting" therefore applies to production payments, of which none can exist yet; it is verified by
+  reconciliation (MISSING_POSTING / DUPLICATE_POSTING) rather than by an in-transaction call.
+
 ## Stage 11 — Withdrawals & Payouts
 
 - **Objective:** Safe payout requests, approval and execution to verified beneficiaries.

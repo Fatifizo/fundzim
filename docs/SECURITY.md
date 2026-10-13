@@ -427,7 +427,8 @@ Separate PostgreSQL roles (created in Stage 3 migrations, documented in [DATABAS
 | Role | Purpose | Key restrictions |
 |---|---|---|
 | `fundzim_migrator` | Owns schemas; runs migrations only (CI/deploy step) | Never used by the running app |
-| `fundzim_app` | Running API and workers | No DDL. `INSERT`+`SELECT` only on `ledger_transactions`, `ledger_entries`, `audit_events`; `UPDATE` only on the `ledger_balances` projection (ledger module); no `UPDATE`/`DELETE`/`TRUNCATE` on them. No access to `kyc` schema |
+| `fundzim_app` | Running API and workers | No DDL. **No access to the `ledger` schema** (Stage 10, ADR-042); audit only through gateways. No access to `kyc` schema |
+| `fundzim_ledger` | The ledger module's own pool (Stage 10) | Only writer of the `ledger` schema; INSERT-only on journals, entries and evidence tables; no `DELETE`/`TRUNCATE`; status changes guarded by triggers |
 | `fundzim_kyc` | Used only by the `kyc` module’s connection pool | DML on `kyc` tables only; does not own the schema |
 | `fundzim_readonly` | Reporting/analytics, read replica where available | `SELECT` on approved views; C3 columns excluded |
 
@@ -527,6 +528,16 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 > sandbox CSP — ClamAV does not detect payloads embedded in valid images, so the re-encode is the control; public
 > endpoints expose approved snapshots only and no private data. Full analysis:
 > [stage-6/campaign-security.md](stage-6/campaign-security.md).
+
+## 21e. Ledger security (Stage 10, summary)
+
+> **Stage 10 as built ([ADR-042](adr/ADR-042-ledger-implementation.md)):** the ledger database is designated TEST
+> (production refused by CHECK and a code constant); only `fundzim_ledger` writes ledger tables and `fundzim_app` has
+> no ledger privilege; history is INSERT-only (grants + triggers + per-transaction seal); every journal is balanced,
+> rule-conforming and single-currency at COMMIT; obligations cannot go negative (row lock + CHECK); staff journals are
+> maker-checker with step-up; there is no public or free-form posting endpoint; synthetic fixtures are TEST-only and
+> labelled. **Not** protected against database superusers or storage administrators (KI-S10-05). Full review:
+> [stage-10/security-review.md](stage-10/security-review.md).
 
 ## 21d. Payment execution isolation and secrets (Stage 9, summary)
 
