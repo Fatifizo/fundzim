@@ -15,20 +15,28 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
-**Stage 7 — Public Fundraising Experience, Campaign Discovery, Social Sharing, SEO, Accessibility & Mobile-First UX
-(complete; awaiting acceptance).** Stage 0 is complete; Stages 1–6 are complete but their acceptance has not been
-recorded (`docs/stage-7/prerequisite-assessment.md`). What Stage 7 built: `docs/stage-7/implementation.md` (public
-experience, discovery, sharing, SEO, accessibility, security review, performance, testing and known issues alongside
-it; decisions in ADR-038); Stage 8 starts from `docs/stage-handover/STAGE-7-TO-STAGE-8.md`. Public campaign data is
-`public, no-cache` + ETag and fetched `no-store` by the web app (no shared cache to invalidate); errors are always
-`no-store`; a handler's `Cache-Control` must not be overwritten. Rate-limit errors carry their real wait through
-`RetryAfter()`. Campaign-family APIs use `{campaign_id}`, 428/412 for `If-Match` and `{items, next_cursor}` lists
-(ADR-038 §7). A public report never changes a campaign's status; analytics are first-party aggregate counters only
-(no cookies, identifiers, query text or third-party scripts); trust indicators are shown only when true now. The
-real-stack Playwright suite (`apps/web/e2e-real`) and the Go integration tests share the development database: run
-either under `flock /tmp/claude-1000/fundzim-stack.lock`. Never report CI as green without seeing the run. Campaigns
-hold **no financial state**: no donations, totals, balances, payments or payouts; the goal is `amount_minor` +
-currency and the public page shows a disabled "Donations are not yet available." button. Gate on
+**Stage 8 — Payment Abstraction Layer (complete; awaiting acceptance; sandbox only).** Stage 0 is complete; Stages
+1–7 are complete but their acceptance has not been recorded (`docs/governance/stage-acceptance-register.md` is a
+proposed template — never mark a stage accepted yourself). What Stage 8 built: `docs/stage-8/implementation.md`
+(architecture, provider interface with the sandbox contract, state machine, webhooks, idempotency, refunds,
+reconciliation, security, testing, performance, known issues alongside it; decisions in ADR-039); Stage 9 starts from
+`docs/stage-handover/STAGE-8-TO-STAGE-9.md`. Binding payment rules: the only provider is the sandbox **simulator**
+(`PAYMENTS_SANDBOX_ENABLED`, refused in production); real execution is disabled by the Go constant
+`psp.LiveExecutionEnabled = false`, the kill switch `payments.live_execution.enabled` and DB checks — never change
+them without an ADR, legal sign-off and stage acceptance. `payments.apply()` is the only path that changes a payment's
+status (edge + precedence + source rules, mirrored in SQL); a timeout or unknown outcome becomes `UNKNOWN`, never
+`FAILED`; a browser return never confirms a payment; provider calls are committed `IN_FLIGHT` before the call and
+never run inside a transaction; webhooks are verified, stored once (inbox) and dispatched through the outbox;
+payment mutations require an `Idempotency-Key`; refund requests are maker-checker and cannot be executed; there is no
+manual success override; provider secrets are `secretref://` references only. No ledger tables, postings, fees,
+totals or balances exist; the public campaign page still shows a disabled "Donations are not yet available." button.
+Stage 7 rules still hold: public campaign data is `public, no-cache` + ETag and fetched `no-store` by the web app;
+errors are always `no-store`; a handler's `Cache-Control` must not be overwritten; rate-limit errors carry their real
+wait through `RetryAfter()`; campaign-family APIs use `{campaign_id}`, 428/412 for `If-Match` and
+`{items, next_cursor}` lists (ADR-038 §7); a public report never changes a campaign's status; analytics are
+first-party aggregate counters only. The real-stack Playwright suite (`apps/web/e2e-real`), the Go integration tests
+(including `TestPayments*`) and container rebuilds share the development database: run them under
+`flock /tmp/claude-1000/fundzim-stack.lock`. Never report CI as green without seeing the run. Gate on
 `kyc.Service.Level`, enforce compliance restrictions through `compliance.Service.Restrictions`, and check
 self-review with `kyc.Service.ActorIdentities` / `app.actor_identities()` (linked staff accounts). A
 documentation-stage PASS is never permission to operate a live crowdfunding business or to move real money.
@@ -42,7 +50,7 @@ STOPS.
 |---|---|
 | `apps/web/` | Next.js 16 (App Router, TypeScript, Tailwind v4). **Presentation only.** Has its own `AGENTS.md` — read it: this Next.js version differs from older training data; consult `apps/web/node_modules/next/dist/docs/` before writing Next.js code. |
 | `apps/api/` | Go entrypoints: `cmd/api` (HTTP API), `cmd/worker` (River jobs, outbox relay/delivery), `cmd/fundzimctl` (config check, migrations, `bootstrap-admins`, healthcheck). |
-| `internal/` | Go code: `app/` (composition root), `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, crypto, authz, clock, ratelimit, idempotency, outbox, jobs, version) and domain modules `users`, `auth`, `organisations`, `audit`, `notifications`, `storage` (documents: quarantine, ClamAV scanning, SSE-C, download tickets), `kyc` (KYC/KYB cases, identities, review engine, verification policy — `fundzim_kyc` pool only), `beneficiaries`, `payouts` (payout **destinations** only), `risk` (signals, versioned model, routing decisions), `compliance` (compliance cases and the subject-restriction projection — `fundzim_compliance` pool only), `verification` (HTTP orchestration; owns no tables) and `campaigns` (core: lifecycle, eligibility, review, publication, public read/search; subpackages `campaigns/media` — image upload, scan, re-encode, serving — and `campaigns/updates` — owner updates and moderation; no financial state). `archtest/` enforces the module import graph and table ownership — register every new module there. One Go module (`github.com/Fatifizo/fundzim`) rooted at repo root. |
+| `internal/` | Go code: `app/` (composition root), `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, crypto, authz, clock, ratelimit, idempotency, outbox, jobs, version) and domain modules `users`, `auth`, `organisations`, `audit`, `notifications`, `storage` (documents: quarantine, ClamAV scanning, SSE-C, download tickets), `kyc` (KYC/KYB cases, identities, review engine, verification policy — `fundzim_kyc` pool only), `beneficiaries`, `payouts` (payout **destinations** only), `risk` (signals, versioned model, routing decisions), `compliance` (compliance cases and the subject-restriction projection — `fundzim_compliance` pool only), `verification` (HTTP orchestration; owns no tables) and `campaigns` (core: lifecycle, eligibility, review, publication, public read/search; subpackages `campaigns/media` — image upload, scan, re-encode, serving — and `campaigns/updates` — owner updates and moderation; no financial state), `psp` (Stage 8: provider registry, routing, webhook inbox, health, sandbox simulator in `psp/sandbox`) and `payments` (Stage 8: donation intents, payments, state machine, refund requests, reconciliation references; no balances or postings). `archtest/` enforces the module import graph and table ownership — register every new module there. One Go module (`github.com/Fatifizo/fundzim`) rooted at repo root. |
 | `migrations/` | Executable goose SQL migrations, embedded and run by `fundzimctl migrate` as `fundzim_migrator` (`docs/development/migrations.md`). |
 | `docs/` | Specifications. `docs/adr/` holds Architecture Decision Records. |
 | `api/openapi/` | OpenAPI 3.1 contract for `/api/v1` (source of truth, ADR-026). |

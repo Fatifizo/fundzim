@@ -308,6 +308,12 @@ Notes on ordering:
 
 ## Stage 8 — Payment Abstraction Layer
 
+> **Status: implemented (awaiting acceptance), sandbox only.** What was built and the deviations (donation intents as
+> the parent of payments; fees, ledger postings, refund execution, disputes and chargebacks deferred; the `ledger.Post`
+> stub is a test-only recorder; no donation-flow UI because no checkout may exist yet):
+> [stage-8/implementation.md](stage-8/implementation.md), [ADR-039](adr/ADR-039-payment-abstraction-donation-intents-and-sandbox-execution.md).
+> Production payment execution stays BLOCKED ([stage-8/known-issues.md](stage-8/known-issues.md)).
+
 - **Objective:** The provider-neutral payments module, with sandbox provider, webhook inbox, idempotency and
   payment state machine.
 - **Dependencies:** Stages 3, 6.

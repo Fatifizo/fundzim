@@ -4,20 +4,22 @@
 > towards. Almost nothing here is implemented yet. Where a choice is deferred, the stage that decides it is
 > named. Significant changes require an ADR (see [`docs/adr/`](adr/)).
 
-> **Implementation status (Stage 7).** In code: Go binaries `api`, `worker` (River on PostgreSQL, outbox relay
+> **Implementation status (Stage 8).** In code: Go binaries `api`, `worker` (River on PostgreSQL, outbox relay
 > and delivery, purge, scan, rescan and verification-sweep jobs) and `fundzimctl`; `internal/app` (composition
 > root), `internal/platform` (config, logging, errors, HTTP middleware incl. trusted client IP and per-route
 > body-limit exemptions, distributed rate limiting, idempotency, health, db, cache, storage incl. SSE-C,
 > metrics, money, ids, crypto, outbox, jobs, authz, clock, verifcase) and the domain modules `users`, `auth`,
 > `organisations`, `audit`, `notifications`, `storage`, `kyc`, `beneficiaries`, `payouts` (destinations
 > only), `risk`, `compliance`, `campaigns` (Stage 6–7: lifecycle, review, publication, public read and search, reports,
-> featured picks, event counters; subpackages `campaigns/media` and `campaigns/updates`) and the orchestration package
-> `verification`. The `kyc` and `compliance`
+> featured picks, event counters; subpackages `campaigns/media` and `campaigns/updates`), `psp` (Stage 8: provider registry,
+> routing, webhook inbox, health, sandbox simulator) and `payments` (Stage 8: donation intents, payments, state machine,
+> refund requests, reconciliation references) and the orchestration package `verification`. The `kyc` and `compliance`
 > modules run on their own restricted database roles and pools and reach audit/outbox only through
 > SECURITY DEFINER gateways (ADR-035). ClamAV runs as a compose service. The Next.js app has authentication,
 > verification, organisation, campaign (owner and staff) and public pages (home, discovery, categories, campaign pages,
 > sharing, SEO, PWA). Module boundaries are enforced by `internal/archtest`.
-> **Not yet built:** every financial module (payments, psp, ledger, payout execution, fees, reconciliation), identity /
+> **Not yet built:** real provider integrations (payments run only through the sandbox simulator), ledger, payout
+> execution, fees, refund execution, disputes, reconciliation, identity /
 > screening / account-lookup provider integrations, tracing export. Details:
 > [stage-7/implementation.md](stage-7/implementation.md), [stage-6/implementation.md](stage-6/implementation.md),
 > [stage-5/implementation.md](stage-5/implementation.md) (Stage 4: [stage-4/implementation.md](stage-4/implementation.md);
@@ -463,6 +465,17 @@ setting.
 > restriction enforcement (suspends affected campaigns), campaign notifications, media scan/processing and a 30 s
 > media sweep, BASIC re-evaluation and registration attestations. Campaigns hold no financial state. Details:
 > [stage-6/implementation.md](stage-6/implementation.md).
+
+> **Stage 8 as built (payment abstraction; [ADR-039](adr/ADR-039-payment-abstraction-donation-intents-and-sandbox-execution.md)).**
+> New modules `psp` (imports platform, audit) and `payments` (imports platform, audit, campaigns, risk, psp); psp
+> dispatches verified webhooks to a handler payments registers at composition time. A payment attempt commits the
+> payment and its provider call `IN_FLIGHT` before calling the adapter, then classifies the outcome in a second
+> transaction (timeout ⇒ `UNKNOWN`, never `FAILED`). `apply()` is the only path that changes a payment's status (edge +
+> precedence + source checks, mirrored by `app.guard_transition` and `ck_payment_events_*`). Webhooks: verify → inbox
+> (dedupe) + outbox in one transaction → worker dispatch → apply; rejections are logged without payloads. Real
+> execution is disabled (`psp.LiveExecutionEnabled` constant, kill switch, DB checks); the sandbox simulator runs only
+> outside production. No ledger, fees, refund execution, disputes or totals. Details:
+> [stage-8/payment-architecture.md](stage-8/payment-architecture.md).
 
 > **Stage 7 as built (public experience; [ADR-038](adr/ADR-038-public-experience-caching-reporting-and-api-consistency.md)).**
 > No new module: the public read side, reports, staff picks and event counters live in `campaigns` (new tables

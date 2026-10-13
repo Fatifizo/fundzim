@@ -69,7 +69,7 @@ func donorMessage(st string) string {
 }
 
 func (s *Service) attemptView(ctx context.Context, q rowQuerier, p payRow) (PaymentAttempt, error) {
-	prov, err := s.PSP.ProviderByID(ctx, p.ProviderID)
+	prov, err := s.PSP.ProviderForDisplay(ctx, p.ProviderID)
 	if err != nil {
 		return PaymentAttempt{}, err
 	}

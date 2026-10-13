@@ -528,6 +528,21 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 > endpoints expose approved snapshots only and no private data. Full analysis:
 > [stage-6/campaign-security.md](stage-6/campaign-security.md).
 
+## 21c. Payment layer security (Stage 8, summary)
+
+> **Stage 8 as built ([ADR-039](adr/ADR-039-payment-abstraction-donation-intents-and-sandbox-execution.md)), sandbox
+> only:** webhooks are verified by the provider adapter over the exact bytes (sandbox: HMAC-SHA256 with current/previous
+> key slots and a 300 s replay window; real providers must use their documented procedure, PCR-017), deduplicated by
+> (provider, event id), stored with a redacted payload and the body hash, and dispatched through the outbox; rejected
+> deliveries leave only a rejection row (no payload). Payment mutations require an `Idempotency-Key` with database
+> backstops; payment rows are locked for every decision; `SUCCEEDED` only from provider evidence, `UNKNOWN` only from
+> our own indeterminate call, `FAILED` never from a timeout (Go and SQL). A browser return never confirms a payment
+> (single-use, donor-bound token; it only schedules a status query). Provider secrets are `secretref://` references
+> resolved at call time (environment today; KMS required before real providers). No card or PIN data exists anywhere.
+> Staff actions: `payment.operate` and `refund.approve` need step-up; refund requests are maker-checker and never
+> executed; there is no manual success override. Real execution is disabled by a code constant, a kill switch and DB
+> checks; the simulator is refused in production. Full table: [stage-8/security-review.md](stage-8/security-review.md).
+
 ## 21b. Public experience security (Stage 7, summary)
 
 > **Stage 7 as built ([ADR-038](adr/ADR-038-public-experience-caching-reporting-and-api-consistency.md)):** public

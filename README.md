@@ -11,6 +11,17 @@ providers.
 FundZim is **not** an investment, lending, equity or rewards platform, and it is not a wallet or a payment
 provider.
 
+> **Status: Stage 8 — Payment Abstraction Layer (complete; awaiting acceptance; sandbox only).** The provider-neutral
+> payment layer exists: donation intents, payment attempts with a 42-edge, database-guarded state machine
+> (precedence, parking, unknown outcomes never treated as failures), a provider registry with versioned,
+> evidence-backed capabilities and Model A routing guards, verified webhook ingestion with an inbox, outbox dispatch,
+> dead letters and a rejection log, required idempotency keys, refund requests under maker-checker (never executed),
+> reconciliation references and a staff payment operations UI. The only provider is a **sandbox simulator**
+> (`PAYMENTS_SANDBOX_ENABLED`, refused in production); real payment execution is disabled by a code constant and a
+> kill switch, and no provider is selected. There are still **no real donations, ledger postings, totals or
+> payouts**; the public donation button stays disabled. Stage 8 docs: [docs/stage-8/implementation.md](docs/stage-8/implementation.md),
+> ADR-039; handover [STAGE-8-TO-STAGE-9.md](docs/stage-handover/STAGE-8-TO-STAGE-9.md).
+>
 > **Status: Stage 7 — Public Fundraising Experience (complete; awaiting acceptance).** On top of the Stage 6
 > campaign engine (verification, drafts with exact USD goals, review with conflict-of-interest checks and four eyes,
 > controlled publication, updates, restriction enforcement), the repository now has the public experience: a home
@@ -209,7 +220,8 @@ Reset deletes the Postgres and Garage volumes (database, roles, objects). `.env`
 | [Stage 4 implementation](docs/stage-4/implementation.md) · [security review](docs/stage-4/security-review.md) · [testing](docs/stage-4/testing.md) | Authentication, sessions, RBAC, MFA, organisations, worker, distributed limits |
 | [Stage 3 implementation](docs/stage-3/implementation.md) · [security review](docs/stage-3/security-review.md) | What Stage 3 built, deviations, endpoint status, security baseline findings |
 | [Configuration](docs/development/configuration.md) · [Migrations](docs/development/migrations.md) · [Seed data](docs/development/seed-data.md) | Environment variables and refusals, migration guide, development data rules |
-| [Stage handovers](docs/stage-handover/STAGE-7-TO-STAGE-8.md) | Stage 7 → 8 (payment abstraction layer); earlier handovers in the same folder |
+| [Stage 8 implementation](docs/stage-8/implementation.md) · [architecture](docs/stage-8/payment-architecture.md) · [provider interface](docs/stage-8/provider-interface.md) · [state machine](docs/stage-8/payment-state-machine.md) · [webhooks](docs/stage-8/webhook-security.md) · [security](docs/stage-8/security-review.md) · [testing](docs/stage-8/testing.md) · [known issues](docs/stage-8/known-issues.md) | Payment abstraction layer (sandbox only) |
+| [Stage handovers](docs/stage-handover/STAGE-8-TO-STAGE-9.md) | Stage 8 → 9 (Zimbabwe payment integrations); earlier handovers in the same folder |
 
 ## Licence
 

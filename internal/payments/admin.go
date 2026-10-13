@@ -182,7 +182,7 @@ type AdminAttempt struct {
 }
 
 func (s *Service) adminAttempt(ctx context.Context, p payRow) (AdminAttempt, error) {
-	prov, err := s.PSP.ProviderByID(ctx, p.ProviderID)
+	prov, err := s.PSP.ProviderForDisplay(ctx, p.ProviderID)
 	if err != nil {
 		return AdminAttempt{}, err
 	}

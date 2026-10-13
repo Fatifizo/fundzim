@@ -445,3 +445,36 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 	}
 	return m
 }
+
+// refCacheTTL bounds the display-only provider cache (names and flags change only by migration).
+const refCacheTTL = 30 * time.Second
+
+type refEntry struct {
+	p  Provider
+	at time.Time
+}
+
+var (
+	refMu    sync.Mutex
+	refCache = map[string]refEntry{}
+)
+
+// ProviderForDisplay returns a provider for response rendering (lists and detail views) from a short-lived cache, so
+// a page of N payments does not cost N registry queries. Routing and webhook checks never use it: they read the
+// registry directly so status changes apply immediately.
+func (s *Service) ProviderForDisplay(ctx context.Context, id string) (Provider, error) {
+	refMu.Lock()
+	e, ok := refCache[id]
+	refMu.Unlock()
+	if ok && s.Clock.Now().Sub(e.at) < refCacheTTL {
+		return e.p, nil
+	}
+	p, err := s.ProviderByID(ctx, id)
+	if err != nil {
+		return Provider{}, err
+	}
+	refMu.Lock()
+	refCache[id] = refEntry{p: p, at: s.Clock.Now()}
+	refMu.Unlock()
+	return p, nil
+}

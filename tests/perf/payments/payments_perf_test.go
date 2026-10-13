@@ -468,6 +468,7 @@ func TestPaymentsPerfDonorAPI(t *testing.T) {
 		start.Add(1)
 		var ready sync.WaitGroup
 		ready.Add(100)
+		go func() { ready.Wait(); start.Done() }() // release all 100 workers at once
 		r := pmeasure(v.name, 100, 100, 201, func(i int) (int, int, error) {
 			ready.Done()
 			start.Wait() // release all 100 together
