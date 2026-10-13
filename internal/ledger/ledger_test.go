@@ -115,6 +115,8 @@ func TestValidateRejectsEveryInvalidShape(t *testing.T) {
 		{"rejected evidence", func(p *Posting) { p.EvidenceClass = EvidenceRejected }, EnvTest, "LEDGER_EVIDENCE_NOT_POSTABLE"},
 		{"simulated evidence in production", func(p *Posting) {}, EnvProduction, "LEDGER_PRODUCTION_POSTING_DISABLED"},
 		{"synthetic outside TEST", func(p *Posting) { p.EvidenceClass = EvidenceProviderVerified }, EnvTest, "LEDGER_ENVIRONMENT_MISMATCH"},
+		{"payments-sourced journal in a TEST ledger", func(p *Posting) { p.SourceSystem, p.EvidenceClass = SourcePayments, EvidenceProviderReported },
+			EnvTest, "LEDGER_ENVIRONMENT_MISMATCH"},
 		{"reversal field on a non-reversal rule", func(p *Posting) { p.Reverses = src }, EnvTest, "LEDGER_INVALID_POSTING:REVERSAL_RULE_MISMATCH"},
 		{"approval rule without adjustment", func(p *Posting) {
 			p.Rule, p.SourceType = "ADJUSTMENT", "adjustment"

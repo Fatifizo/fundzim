@@ -266,3 +266,36 @@ func TestLedgerPerf(t *testing.T) {
 		_ = os.WriteFile(filepath.Join(dir, "ledger-perf.md"), []byte(b.String()), 0o644)
 	}
 }
+
+// TestLedgerPerfIntegrityOnly re-measures the integrity checker on the dataset already in the scratch database
+// (no loading): used after a change to the checker.
+func TestLedgerPerfIntegrityOnly(t *testing.T) {
+	url := os.Getenv("FUNDZIM_PERF_LEDGER_URL")
+	if url == "" || !strings.Contains(url, "fundzim_perf") || os.Getenv("FUNDZIM_PERF_INTEGRITY_ONLY") == "" {
+		t.Skip("set FUNDZIM_PERF_LEDGER_URL (fundzim_perf) and FUNDZIM_PERF_INTEGRITY_ONLY=1")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	svc := ledger.New(pool, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err := svc.Warm(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var nTx int64
+	_ = pool.QueryRow(ctx, `SELECT count(*) FROM ledger.ledger_transactions`).Scan(&nTx)
+	r := measure("Integrity checker (L1–L15, one snapshot, recorded)", 3, 1, func(int) error {
+		rep, err := svc.RunIntegrity(ctx, "SYSTEM", "perf")
+		if err == nil && !rep.Passed {
+			return fmt.Errorf("integrity failed")
+		}
+		return err
+	})
+	out := fmt.Sprintf("%d journals\n\n%s%s", nTx, header, r.row())
+	fmt.Println(out)
+	if r.errors > 0 {
+		t.Fatalf("integrity errors: %d", r.errors)
+	}
+}

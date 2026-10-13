@@ -17,7 +17,7 @@ decision [ADR-042](../adr/ADR-042-ledger-implementation.md).
 
 | Area | Artefacts |
 |---|---|
-| Schema | `migrations/20261013120000_ledger.sql` (Stage 2 draft ported + environment designation, versioned rules, account status, evidence/source columns, source and reconciliation references, permissions, runtime grants for `fundzim_ledger`, gateway updates); Down restores the previous gateways |
+| Schema | `migrations/20261013120100_ledger_no_test_payment_postings.sql` (TEST ledger refuses payments-sourced journals) and `migrations/20261013120000_ledger.sql` (Stage 2 draft ported + environment designation, versioned rules, account status, evidence/source columns, source and reconciliation references, permissions, runtime grants for `fundzim_ledger`, gateway updates); Down restores the previous gateways |
 | Role | `fundzim_ledger` (created by `deploy/docker/postgres/init/20-ledger-role.sh`; existing volumes: run it with `docker compose exec`); config `DATABASE_LEDGER_URL` (must differ from every other database URL) |
 | Engine | `internal/ledger` ([ledger-architecture.md](ledger-architecture.md) §2) |
 | Wiring | `internal/app/ledger.go` (pool, payment-facts adapter, routes, outbox consumer `ledger.payments`, jobs); `internal/payments/facts.go` (read-only facts) |
@@ -53,7 +53,7 @@ amounts as strings — no personal data. No consumer exists yet.
 Layers (none of them a single boolean): (1) the database ledger environment row (TEST), checked by trigger on every
 record; (2) CHECK `ck_*_no_production_stage10`; (3) CHECK synthetic ⇒ TEST + SIMULATED; (4)
 `ledger.ProductionPostingEnabled = false`; (5) the payments consumer never posts a test payment and records the
-decision; (6) payment-side Stage 9 guards (no PRODUCTION payment can exist); (7) `fundzim_app` has no ledger
+decision, and a TEST ledger refuses any payments-sourced journal (Go + CHECK, migration `20261013120100`); (6) payment-side Stage 9 guards (no PRODUCTION payment can exist); (7) `fundzim_app` has no ledger
 privilege. A production ledger would be a **separate database** designated PRODUCTION by its own migration (ADR-042).
 
 Synthetic fixtures (staff API `POST /api/v1/admin/ledger/synthetic-fixtures`, body `{"scenario": …}`; there is no UI control): `donations` (USD 10.00 +

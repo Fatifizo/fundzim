@@ -50,7 +50,7 @@ test("synthetic fixture posted by an ADMIN appears balanced and TEST_ONLY in the
 
   await page.goto("/admin/finance/trial-balance");
   await expect(page.getByRole("table", { name: "Trial balance USD" })).toBeVisible();
-  await expect(page.locator("#tb-USD")).toContainText(/Difference[^0-9]*0\.00(?!\d)/);
+  await expect(main).toContainText("Difference US$0.00"); // USD is the only currency a TEST ledger can hold
   await ctx.close();
 
   // a REVIEWER (no ledger.view) does not find the finance pages

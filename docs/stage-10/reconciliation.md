@@ -18,6 +18,11 @@ nothing in Stage 10 claims funds were settled. Statement ingestion and matching 
 | A payment UNKNOWN for more than 1 h | UNKNOWN_OUTCOME (informational; resolved by payments, never by the ledger) |
 | A suspense account with a non-zero balance | SUSPENSE_BALANCE |
 
+A TEST ledger can hold no payments-sourced journal (Go validation and CHECK
+`ck_ledger_transactions_no_payment_postings_in_test`), so the journal-side checks are exercised in tests against
+synthetic capture journals through `Service.ReconcileJournalsFrom = SourceSynthetic` (a test seam; the runtime always
+reconciles `payments`).
+
 Payment facts come from the payments module through the read-only `ledger.PaymentFacts` interface (adapter in
 `internal/app/ledger.go`); the ledger never reads payments tables. A run scans at most 10 000 payment journals and
 5 000 succeeded payments (KI-S10-08).

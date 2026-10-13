@@ -35,7 +35,7 @@ export default defineConfig({
     // Staff moderation mutates shared state and runs once (desktop). Listed first so its UI sign-ins are reused
     // by the later projects (support/browser.ts staffPage signs in again when a saved session is gone). No
     // `dependencies`: a staff failure must not hide the public results.
-    { name: "staff-desktop", use: { ...devices["Desktop Chrome"] }, testMatch: ["staff-moderation.spec.ts"] },
+    { name: "staff-desktop", use: { ...devices["Desktop Chrome"] }, testMatch: ["staff-moderation.spec.ts", "staff-ledger.spec.ts"] },
     {
       name: "desktop-chromium",
       use: { ...devices["Desktop Chrome"] },

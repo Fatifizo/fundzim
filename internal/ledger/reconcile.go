@@ -156,13 +156,17 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconcileR
 	rep := ReconcileReport{RunID: "recon:" + ids.New(), Environment: env, StartedAt: s.now(), Checked: map[string]int{}, ByType: map[string]int{},
 		SettlementReconciliation: "NOT_PERFORMED: no provider settlement evidence (PCR-007, PCR-016; Stage 17)"}
 	var found []exception
+	from := s.ReconcileJournalsFrom
+	if from == "" {
+		from = SourcePayments
+	}
 
 	// 1. journals sourced from payments
 	rows, err := s.Pool.Query(ctx, `SELECT t.id, t.source_id::text, t.currency, coalesce(t.provider_reference, ''),
 		(SELECT coalesce(sum(e.amount_minor) FILTER (WHERE e.direction = 'DEBIT'), 0) FROM ledger.ledger_entries e
 		  JOIN ledger.ledger_accounts a ON a.id = e.account_id WHERE e.transaction_id = t.id AND a.account_class = 'asset:psp_clearing')
-		FROM ledger.ledger_transactions t WHERE t.source_system = 'payments' AND t.source_type = 'payment' AND t.posting_rule = 'DONATION_CAPTURED'
-		ORDER BY t.posted_at LIMIT 10000`)
+		FROM ledger.ledger_transactions t WHERE t.source_system = $1 AND t.source_type = 'payment' AND t.posting_rule = 'DONATION_CAPTURED'
+		ORDER BY t.posted_at LIMIT 10000`, from)
 	if err != nil {
 		return rep, err
 	}
@@ -220,8 +224,8 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconcileR
 		for _, f := range facts {
 			rep.Checked["succeeded_payments"]++
 			var decision string
-			err := s.Pool.QueryRow(ctx, `SELECT decision FROM ledger.ledger_source_references WHERE source_system = 'payments'
-				AND source_type = 'payment' AND source_id = $1 AND posting_rule = 'DONATION_CAPTURED' ORDER BY created_at LIMIT 1`, f.ID).Scan(&decision)
+			err := s.Pool.QueryRow(ctx, `SELECT decision FROM ledger.ledger_source_references WHERE source_system = $2
+				AND source_type = 'payment' AND source_id = $1 AND posting_rule = 'DONATION_CAPTURED' ORDER BY created_at LIMIT 1`, f.ID, from).Scan(&decision)
 			if errors.Is(err, pgx.ErrNoRows) {
 				a := f.AmountMinor
 				found = append(found, exception{typ: ExMissingPosting, sourceType: "payment", sourceID: f.ID, currency: f.Currency, expected: &a,

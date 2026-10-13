@@ -22,7 +22,7 @@ invariant runs and the environment row.
 | Unbalanced or rule-breaking journal (bug or compromised ledger role) | Deferred trigger at COMMIT (L1, L2, L7, L12, L14); Go validation first |
 | Editing or deleting history | INSERT-only grants + mutation triggers + L11 seal (`created_txid`) |
 | Simulated payment in a production ledger | Database environment designation + CHECKs + `ProductionPostingEnabled=false` + payment-side guards; synthetic ⇒ TEST by CHECK |
-| Payments/webhooks writing journals | `fundzim_app` has no ledger privilege; consumer records decisions only |
+| Payments/webhooks writing journals | `fundzim_app` has no ledger privilege; consumer records decisions only; a TEST ledger refuses any `source_system = payments` journal (Go + CHECK `ck_ledger_transactions_no_payment_postings_in_test`, added after an integration test was found posting such journals — KI-S10-17) |
 | Overdrawing an obligation | Row lock + sufficiency check + CHECK on the projection |
 | Direct balance edit | Guard trigger; balances written only by SECURITY DEFINER functions |
 | Unauthorised staff posting | No free posting endpoint; maker-checker with step-up; self-approval refused; requests expire |

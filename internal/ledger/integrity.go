@@ -91,9 +91,11 @@ var checks = []check{
 	{"L15", "every record carries this database's ledger environment",
 		`SELECT (SELECT count(*) FROM ledger.ledger_accounts) + (SELECT count(*) FROM ledger.ledger_transactions)
 		      + (SELECT count(*) FROM ledger.ledger_source_references)`,
-		`SELECT id::text FROM ledger.ledger_accounts WHERE environment <> ledger.database_environment()
-		 UNION ALL SELECT id::text FROM ledger.ledger_transactions WHERE environment <> ledger.database_environment()
-		 UNION ALL SELECT id::text FROM ledger.ledger_source_references WHERE environment <> ledger.database_environment()`},
+		// the designation is read once (scalar subquery): the SECURITY DEFINER function is not inlined, and calling it
+		// per row took 32 s at one million journals (docs/stage-10/performance.md)
+		`SELECT id::text FROM ledger.ledger_accounts WHERE environment <> (SELECT ledger.database_environment())
+		 UNION ALL SELECT id::text FROM ledger.ledger_transactions WHERE environment <> (SELECT ledger.database_environment())
+		 UNION ALL SELECT id::text FROM ledger.ledger_source_references WHERE environment <> (SELECT ledger.database_environment())`},
 }
 
 // RunIntegrity runs every check and records the results (triggeredBy: SYSTEM component or STAFF user id).
@@ -108,6 +110,11 @@ func (s *Service) RunIntegrity(ctx context.Context, triggeredByType, triggeredBy
 		return rep, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	// The checks scan the whole ledger; the fundzim_ledger role's 30 s statement timeout (sized for postings) would
+	// abort them on a large ledger. This read-only snapshot gets its own bound instead.
+	if _, err := tx.Exec(ctx, `SET LOCAL statement_timeout = '15min'`); err != nil {
+		return rep, err
+	}
 	for _, c := range checks {
 		res := Check{Code: c.code, Name: c.name, Status: "PASSED", Sample: []string{}}
 		if err := tx.QueryRow(ctx, c.count).Scan(&res.Checked); err != nil {

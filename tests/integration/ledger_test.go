@@ -251,6 +251,8 @@ func TestLedgerDatabaseInvariantsDirectSQL(t *testing.T) {
 	// refused by the environment designation trigger first (the Stage 10 CHECK is the second line)
 	mustFail("production journal", "differs from this database's ledger environment TEST", direct("PRODUCTION", "payments", "PROVIDER_VERIFIED",
 		"DONATION_CAPTURED", [][3]any{{clearingID, "DEBIT", 100}, {unsettledID, "CREDIT", 100}}))
+	mustFail("payments-sourced journal in a TEST ledger", "ck_ledger_transactions_no_payment_postings_in_test", direct("TEST", "payments",
+		"PROVIDER_REPORTED", "DONATION_CAPTURED", [][3]any{{clearingID, "DEBIT", 100}, {unsettledID, "CREDIT", 100}}))
 	mustFail("synthetic with real evidence", "ck_ledger_transactions_synthetic_is_test", direct("TEST", "synthetic_fixture", "PROVIDER_VERIFIED",
 		"DONATION_CAPTURED", [][3]any{{clearingID, "DEBIT", 100}, {unsettledID, "CREDIT", 100}}))
 	mustFail("overdraw a non-negative account", "ck_ledger_balances_non_negative", direct("TEST", "synthetic_fixture", "SIMULATED",
@@ -638,16 +640,23 @@ func TestLedgerReconciliationFindsExceptionsAndWorkflow(t *testing.T) {
 	mismatch, orphan, missing, unknown := ids.New(), ids.New(), ids.New(), ids.New()
 	camp := ids.New()
 	paymentJournal := func(pid string, amount int64) {
+		// a TEST ledger refuses payments-sourced journals (Go and ck_ledger_transactions_no_payment_postings_in_test)
 		p := synth("DONATION_CAPTURED", "payment:"+pid+":capture", "payment", pid,
 			ledger.Dr(acct(ledger.ClassPSPClearing, ledger.SyntheticProviderID), amount), ledger.Cr(acct(ledger.ClassCampaignUnsettled, camp), amount))
 		p.SourceSystem, p.EvidenceClass = ledger.SourcePayments, ledger.EvidenceProviderReported
-		if _, err := l.svc.PostOnce(ctx(t), p); err != nil {
+		if _, err := l.svc.PostOnce(ctx(t), p); ecode(err) != "LEDGER_ENVIRONMENT_MISMATCH" {
+			t.Fatalf("payments-sourced journal in a TEST ledger: %v", err)
+		}
+		// the reconciliation logic is exercised on honestly labelled synthetic capture journals instead
+		if _, err := l.svc.PostOnce(ctx(t), synth("DONATION_CAPTURED", "fixture:"+pid+":capture", "payment", pid,
+			ledger.Dr(acct(ledger.ClassPSPClearing, ledger.SyntheticProviderID), amount), ledger.Cr(acct(ledger.ClassCampaignUnsettled, camp), amount))); err != nil {
 			t.Fatal(err)
 		}
 	}
 	paymentJournal(mismatch, 1000) // facts say 1500
 	paymentJournal(orphan, 700)    // no such payment
 	svc := ledger.New(l.lp, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	svc.ReconcileJournalsFrom = ledger.SourceSynthetic
 	svc.Facts = fakeFacts{m: map[string]ledger.PaymentFact{
 		mismatch: {ID: mismatch, Status: "SUCCEEDED", AmountMinor: 1500, Currency: "USD", ExecutionEnvironment: "LOCAL_SIMULATOR"},
 		missing:  {ID: missing, Status: "SUCCEEDED", AmountMinor: 900, Currency: "USD", ExecutionEnvironment: "LOCAL_SIMULATOR"},

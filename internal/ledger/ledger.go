@@ -222,6 +222,11 @@ type Service struct {
 	Facts  PaymentFacts // reconciliation input (nil: payment reconciliation skipped)
 	// SyntheticEnabled allows TEST_ONLY synthetic fixtures (TEST ledger, non-production deployments only).
 	SyntheticEnabled bool
+	// ReconcileJournalsFrom is the source system whose capture journals and source references reconciliation compares
+	// with payment facts:
+	// SourcePayments (the default when empty). Tests of the reconciliation logic in a TEST ledger set
+	// SourceSynthetic, because a TEST ledger can hold no payments-sourced journal.
+	ReconcileJournalsFrom string
 
 	envMu sync.RWMutex
 	env   string
@@ -412,7 +417,13 @@ func (s *Service) validate(ctx context.Context, q rowQuerier, env string, p Post
 		if env != EnvTest || p.EvidenceClass != EvidenceSimulated {
 			return Rule{}, ErrEnvironment
 		}
-	case SourcePayments, SourceReconciliation, SourceStaff:
+	case SourcePayments:
+		// every payment that can exist in a TEST environment is a test payment, and test payments are never posted
+		// (ADR-042 §3; ck_ledger_transactions_no_payment_postings_in_test)
+		if env == EnvTest {
+			return Rule{}, ErrEnvironment
+		}
+	case SourceReconciliation, SourceStaff:
 	default:
 		return Rule{}, invalid("source_system", "INVALID_VALUE")
 	}

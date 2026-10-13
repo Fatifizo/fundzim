@@ -17,6 +17,7 @@
 | KI-S10-13 | ZWG cannot be posted (minor units unverified, LR-043/PCR-018) | USD only | BLOCKED — legal/provider |
 | KI-S10-14 | Restricted-fund and agency treatment of campaign money is not modelled (LR-002) | Accounting representation only | OPEN — LEGAL_REVIEW_REQUIRED |
 | KI-S10-15 | Campaign freeze and payouts do not post (`CAMPAIGN_FROZEN`, `PAYOUT_*` rules exist, unused until Stage 11+) | — | DEFERRED (Stage 11) |
+| KI-S10-17 | Before migration `20261013120100`, an integration test posted ten TEST journals with `source_system = payments` and PROVIDER_REPORTED evidence for fictitious payment ids into the local development ledger (description "TEST_ONLY integration …"). Journals are append-only, so they remain in that development database; the new CHECK `ck_ledger_transactions_no_payment_postings_in_test` (NOT VALID: new rows only) and the Go validation now refuse any payments-sourced journal in a TEST ledger, and the test uses synthetic journals. CI and any fresh database never contain them | Misleading test residue in one local TEST database; no real or test payment was ever posted | ACCEPTED (documented; recreate the local database to remove) |
 | KI-S10-16 | Concurrent PostOnce throughput is bounded by the serial audit hash chain (each posting appends one audit event); see [performance.md](performance.md) | Throughput ceiling, not a correctness issue | OPEN |
 
 ## Stage 9 known issues

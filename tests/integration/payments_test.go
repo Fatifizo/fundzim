@@ -191,6 +191,7 @@ func (p *payIT) donationStatus(t *testing.T, id string) string {
 func TestPaymentsSandboxSuccessAndIdempotency(t *testing.T) {
 	p := newPayIT(t)
 	u := p.donor
+	paymentJournalsBefore := p.count(t, `SELECT count(*) FROM ledger.ledger_transactions WHERE source_system = 'payments'`)
 	// intent creation is idempotent per key; a reused key with a different body fails safely
 	key := idemKey()
 	body := map[string]any{"campaign_id": p.campaign, "amount_minor": "1000", "currency": "USD"}
@@ -256,9 +257,15 @@ func TestPaymentsSandboxSuccessAndIdempotency(t *testing.T) {
 	if raw != "paid" || mapped != "SUCCEEDED" {
 		t.Fatalf("transaction raw %q mapped %q", raw, mapped)
 	}
-	// no ledger exists and nothing posted: no ledger tables at all in Stage 8
-	if p.count(t, `SELECT count(*) FROM information_schema.tables WHERE table_schema = 'ledger'`) != 0 {
-		t.Fatal("Stage 8 must not create ledger tables")
+	// nothing posted (Stage 8 asserted that no ledger tables existed; Stage 10 created the ledger, ADR-042): a test
+	// payment never becomes a journal, and no payments-sourced journal appears in the TEST ledger (development
+	// databases may hold ten such rows from an earlier Stage 10 test, KI-S10-17; new ones are refused by CHECK)
+	if p.count(t, `SELECT count(*) FROM ledger.ledger_transactions WHERE source_id IN (SELECT (payload->>'payment_id')::uuid
+		FROM app.outbox_events WHERE event_type = 'payments.payment_succeeded' AND aggregate_id = $1)`, a.ID) != 0 {
+		t.Fatal("a test payment reached the ledger")
+	}
+	if p.count(t, `SELECT count(*) FROM ledger.ledger_transactions WHERE source_system = 'payments'`) != paymentJournalsBefore {
+		t.Fatal("a payments-sourced journal was posted to the TEST ledger")
 	}
 	// donor status endpoint and cross-user isolation
 	st := u.do("GET", "/donation-intents/"+id+"/status", nil)
