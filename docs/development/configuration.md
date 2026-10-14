@@ -65,6 +65,7 @@ Related: [DEVELOPMENT.md §4](../DEVELOPMENT.md) · [SECURITY.md §14](../SECURI
 | `DATABASE_MIGRATION_URL` | empty | Same URL checks when set. Not used by the API process | `sslmode=verify-full` required when set |
 | `DATABASE_LEDGER_URL` | — (**required**, Stage 10) | Same URL checks; role `fundzim_ledger`, the only writer of the ledger schema; must differ from `DATABASE_URL`, `DATABASE_KYC_URL` and `DATABASE_COMPLIANCE_URL` (ADR-042) | `sslmode=verify-full` required |
 | `LEDGER_SYNTHETIC_FIXTURES_ENABLED` | `false` (`.env.example`: `true`) | boolean; allows TEST_ONLY synthetic ledger fixtures in a TEST ledger | **refused** in production |
+| `PAYOUTS_EXECUTION_ENVIRONMENT` | `DISABLED` (`.env.example`: `LOCAL_SIMULATOR`) | `DISABLED` or `LOCAL_SIMULATOR` (needs `PAYMENTS_SANDBOX_ENABLED`); `PROVIDER_SANDBOX`/`PRODUCTION` refused (ADR-043) | `LOCAL_SIMULATOR` refused in production |
 | `DATABASE_MAX_CONNS` | `20` | integer 1–500 | — |
 | `DATABASE_CONNECT_TIMEOUT` | `5s` | Go duration, 500ms–1m | — |
 

@@ -255,6 +255,20 @@ func status(st ...string) func(payouts.Payout) bool {
 	}
 }
 
+// journal waits for a derived payout journal: journals follow the committed state (syncLedger, possibly in the compose
+// worker that applied the webhook), so they can trail the status by a moment.
+func (p *payoutIT) journal(t *testing.T, key string) ledger.JournalRef {
+	t.Helper()
+	var j ledger.JournalRef
+	waitFor(t, 30*time.Second, "journal "+key, func() bool {
+		_ = p.po.Recover(ctx(t)) // re-drives missing journals, exactly as the recovery job does
+		var ok bool
+		j, ok, _ = p.led.JournalByKey(ctx(t), key)
+		return ok
+	})
+	return j
+}
+
 func (p *payoutIT) integrity(t *testing.T) {
 	t.Helper()
 	rep, err := p.led.RunIntegrity(ctx(t), "SYSTEM", "payouts-it")
@@ -306,11 +320,16 @@ func TestPayoutHappyPathReserveApproveSubmitComplete(t *testing.T) {
 		t.Fatal(err)
 	}
 	po = p.drive(t, 30*time.Second, "payout completed", status(payouts.StCompleted), id)
-	if po.Reservation.Status != payouts.ResConsumed || po.ProviderPayoutRef == nil || po.CompletedAt == nil {
+	if po.ProviderPayoutRef == nil || po.CompletedAt == nil {
 		t.Fatalf("after completion: %+v / %+v", po, po.Reservation)
 	}
 	if pay, pend := p.balances(t, camp); pay != 40_000 || pend != 0 {
 		t.Fatalf("after completion payable %d pending %d", pay, pend)
+	}
+	p.journal(t, "payout:"+id+":completed")
+	po = p.payout(t, id)
+	if po.Reservation.Status != payouts.ResConsumed {
+		t.Fatalf("reservation after completion: %s", po.Reservation.Status)
 	}
 	d, _ := p.po.StaffDetail(ctx(t), id)
 	for _, j := range d.Journals {
@@ -554,8 +573,8 @@ func TestPayoutSimulatorScenarios(t *testing.T) {
 				t.Fatalf("%s: the late lower-rank webhook must be recorded, not applied", c.name)
 			}
 		case "RETURNED_AFTER_COMPLETION":
-			if j, ok, _ := p.led.JournalByKey(ctx(t), "payout:"+id+":reversed"); !ok || j.DebitMinor != c.amount {
-				t.Fatalf("return journal: %+v %v", j, ok)
+			if j := p.journal(t, "payout:"+id+":reversed"); j.DebitMinor != c.amount {
+				t.Fatalf("return journal: %+v", j)
 			}
 		}
 	}

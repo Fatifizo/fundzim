@@ -30,6 +30,12 @@ const ITEMS = [
   { href: "/admin/finance/trial-balance", label: "Trial balance" },
   { href: "/admin/finance/reconciliation", label: "Ledger reconciliation" },
   { href: "/admin/finance/exceptions", label: "Ledger exceptions" },
+  { href: "/admin/finance/payouts", label: "Payouts", exact: true },
+  { href: "/admin/finance/withdrawals", label: "Withdrawal requests" },
+  { href: "/admin/finance/payouts/approvals", label: "Payout approvals" },
+  { href: "/admin/finance/payouts/reservations", label: "Payout reservations" },
+  { href: "/admin/finance/payouts/exceptions", label: "Payout exceptions" },
+  { href: "/admin/finance/payouts/reconciliation", label: "Payout reconciliation" },
   { href: "/admin/account/personal-link", label: "Personal account link" },
 ] as const;
 

@@ -37,6 +37,13 @@ export function useStepUp(): WithStepUp {
   return value;
 }
 
+const noStepUp: WithStepUp = (operation) => operation();
+
+/** useStepUp for components that may also render outside a provider (then a STEP_UP_REQUIRED error surfaces). */
+export function useOptionalStepUp(): WithStepUp {
+  return useContext(StepUpContext) ?? noStepUp;
+}
+
 interface Pending {
   resolve: () => void;
   reject: (error: unknown) => void;

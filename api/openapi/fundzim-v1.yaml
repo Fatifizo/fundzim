@@ -42297,6 +42297,7 @@ components:
       - last_reviewed_at
       - expires_at
       - eligible_for_payout
+      - payout_readiness
       - created_at
       - updated_at
       - version
@@ -42416,7 +42417,36 @@ components:
         eligible_for_payout:
           type: boolean
           const: false
-          description: 'Always false in Stage 5: no payout processing exists, and the development mock provider can never make a destination eligible.'
+          description: 'Production payout eligibility: always false (Stage 11 executes TEST payouts only; the development mock provider can never make a
+            destination eligible).'
+        payout_readiness:
+          type: object
+          additionalProperties: false
+          required:
+          - ownership_verified
+          - payout_eligible
+          - provider_confirmed
+          - scope
+          description: 'Stage 11 (brief §11): ownership verification, eligibility for a TEST payout now (VERIFIED, compliance APPROVED, not expired, cooling-off
+            over) and provider confirmation are separate facts. No integrated provider can confirm ownership, so provider_confirmed is always false.'
+          properties:
+            ownership_verified:
+              type: boolean
+            payout_eligible:
+              type: boolean
+            provider_confirmed:
+              type: boolean
+              const: false
+            scope:
+              type: string
+              enum:
+              - TEST_PAYOUTS_ONLY
+            reason:
+              type: string
+              enum:
+              - NOT_VERIFIED
+              - VERIFICATION_EXPIRED
+              - COOLING_OFF
         created_at:
           $ref: '#/components/schemas/Timestamp'
         updated_at:

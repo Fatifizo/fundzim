@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { formatDateTime } from "@/components/account/format";
+import { useOptionalStepUp } from "@/components/auth/step-up";
 import { FormError, FormStatus } from "@/components/forms/form-error";
 import { SelectField, toOptions } from "@/components/forms/select-field";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -104,11 +105,36 @@ function Checks({ destination }: { destination: PayoutDestination }) {
           </dd>
         </div>
       </dl>
+      {destination.payout_readiness ? <Readiness r={destination.payout_readiness} /> : null}
     </div>
   );
 }
 
+/** Ownership verified ≠ eligible for a (test) payout ≠ confirmed by a payout provider (none can confirm yet). */
+function Readiness({ r }: { r: NonNullable<PayoutDestination["payout_readiness"]> }) {
+  const reason: Record<string, string> = { NOT_VERIFIED: "not verified yet", VERIFICATION_EXPIRED: "verification expired", COOLING_OFF: "in its waiting period after being added or changed" };
+  return (
+    <dl className="mt-3 grid gap-3 sm:grid-cols-3">
+      <div className="rounded-xl border border-line p-3">
+        <dt className="text-sm font-semibold text-ink-600">Ownership verified</dt>
+        <dd className="mt-1">{r.ownership_verified ? "Yes" : "No"}</dd>
+      </div>
+      <div className="rounded-xl border border-line p-3">
+        <dt className="text-sm font-semibold text-ink-600">Usable for test withdrawals</dt>
+        <dd className="mt-1">
+          {r.payout_eligible ? "Yes (TEST_ONLY)" : `No${r.reason && reason[r.reason] ? ` — ${reason[r.reason]}` : ""}`}
+        </dd>
+      </div>
+      <div className="rounded-xl border border-line p-3">
+        <dt className="text-sm font-semibold text-ink-600">Confirmed by a payout provider</dt>
+        <dd className="mt-1">Not available — no payout provider can confirm accounts yet</dd>
+      </div>
+    </dl>
+  );
+}
+
 function DestinationCard({ initial, beneficiaries, api, onRetired }: { initial: PayoutDestination; beneficiaries: Beneficiary[]; api: VerificationApi; onRetired: (id: string) => void }) {
+  const withStepUp = useOptionalStepUp(); // adding, changing or retiring a payout account needs a fresh step-up
   const [item, setItem] = useState(initial);
   const [mode, setMode] = useState<null | "edit" | "verify">(null);
   const [busy, setBusy] = useState<null | "save" | "verify" | "retire">(null);
@@ -143,7 +169,7 @@ function DestinationCard({ initial, beneficiaries, api, onRetired }: { initial: 
       const body: { holder_name?: string; account_identifier?: string; bank_code?: string } = { holder_name: holder };
       if (account) body.account_identifier = account;
       if (bank && bankCode) body.bank_code = bankCode;
-      setItem(await api.updateDestination(item.id, body, item.version));
+      setItem(await withStepUp(() => api.updateDestination(item.id, body, item.version)));
       setMode(null);
       setStatus("Changes saved. Because the details changed, this account needs to be verified again.");
     } catch (error) {
@@ -182,7 +208,7 @@ function DestinationCard({ initial, beneficiaries, api, onRetired }: { initial: 
     setConfirmRetire(false);
     setBusy("retire");
     try {
-      await api.retireDestination(item.id);
+      await withStepUp(() => api.retireDestination(item.id));
       onRetired(item.id);
     } catch (error) {
       editFailWith(error, "We couldn't remove this account. Please try again.");
@@ -340,6 +366,7 @@ export function PayoutDestinationsManager({
   organisations: MyOrganisation[];
   api?: VerificationApi;
 }) {
+  const withStepUp = useOptionalStepUp();
   const [items, setItems] = useState(initial.filter((d) => d.status !== "RETIRED"));
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -363,7 +390,7 @@ export function PayoutDestinationsManager({
     createClear();
     setBusy(true);
     try {
-      const destination = await api.createDestination(body);
+      const destination = await withStepUp(() => api.createDestination(body));
       form.reset(); // drops the typed account number from the page
       setItems((current) => [destination, ...current]);
       setCreating(false);

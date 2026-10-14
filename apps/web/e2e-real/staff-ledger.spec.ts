@@ -59,3 +59,28 @@ test("synthetic fixture posted by an ADMIN appears balanced and TEST_ONLY in the
   expect(r?.status()).toBe(404);
   await reviewer.ctx.close();
 });
+
+test("payout operations overview: TEST payouts through the simulator only, production BLOCKED; no access without payout.view", async ({ browser }) => {
+  const staff = loadFixture().staff;
+  const S = (key: string) => {
+    const c = staff[key];
+    if (!c) throw new Error(`staff fixture ${key} missing`);
+    return c;
+  };
+  // COMPLIANCE holds payout.view (read only)
+  const { ctx, page } = await staffPage(browser, S("compliance"), "/admin/finance/payouts");
+  const main = page.locator("main");
+  await expect(page.getByRole("heading", { level: 1, name: "Payouts" })).toBeVisible();
+  await expect(main).toContainText("Production payouts");
+  await expect(main).toContainText("BLOCKED");
+  await expect(main).toContainText("LOCAL_SIMULATOR");
+  await expect(main).toContainText("NOT_PERFORMED");
+  await page.goto("/admin/finance/payouts/exceptions");
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await ctx.close();
+  // the API itself: a reviewer without payout.view is refused
+  const reviewer = await staffPage(browser, S("reviewer"), "/admin");
+  expect((await reviewer.page.request.get("/api/v1/admin/payouts/overview")).status()).toBe(403);
+  expect((await reviewer.page.goto("/admin/finance/payouts"))?.status()).toBe(404);
+  await reviewer.ctx.close();
+});

@@ -21,8 +21,10 @@
 > **Stage 10 (ADR-042):** the double-entry ledger exists in a database designated **TEST**, written only by the
 > `fundzim_ledger` role through `internal/ledger`; payments reach it only through the outbox (test payments are
 > recorded NOT_ELIGIBLE, never posted) — [stage-10/ledger-architecture.md](stage-10/ledger-architecture.md).
-> **Not yet built:** real provider integrations (payments run only through the sandbox simulator), production ledger
-> posting, payout execution, fees, refund execution, disputes, settlement reconciliation, identity /
+> **Stage 11 (ADR-043):** withdrawal (payout) requests, eligibility, ledger reservations, maker-checker approvals and
+> orchestration exist for **TEST payouts through the simulator only** ([stage-11/payout-architecture.md](stage-11/payout-architecture.md)).
+> **Not yet built:** real provider integrations (payments and payouts run only through the sandbox simulator), production ledger
+> posting, real payout execution, fees, refund execution, disputes, settlement reconciliation, identity /
 > screening / account-lookup provider integrations, tracing export. Details:
 > [stage-7/implementation.md](stage-7/implementation.md), [stage-6/implementation.md](stage-6/implementation.md),
 > [stage-5/implementation.md](stage-5/implementation.md) (Stage 4: [stage-4/implementation.md](stage-4/implementation.md);

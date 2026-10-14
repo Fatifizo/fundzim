@@ -413,6 +413,13 @@ Notes on ordering:
   ledger entries. Gate B lifts only after Stage 17 reconciliation covers the rails in use, and then only in
   non-production until Stage 20 (Gate C).
 
+- **Stage 11 as delivered (2026-10-14, awaiting acceptance):** withdrawal requests, eligibility engine (EC-01–EC-22),
+  ledger reservations, FINANCE maker-checker approvals, provider-neutral payout orchestration through the sandbox simulator,
+  reconciliation and exception queue, staff and organiser UIs ([stage-11/implementation.md](stage-11/implementation.md),
+  ADR-043). **Deviations:** no provider payout adapters (none selected, ADR-040) — TEST payouts only; no hold registry
+  (EC-12 uses campaign, ledger-account and destination states); minimal rule-based risk indicators only; AUTO approval
+  absent (PD-24); limits unconfigured (LR-030) so every payout needs DUAL approval.
+
 ## Stage 12 — Fees & Platform Revenue
 
 - **Objective:** Configurable, exact fee calculation and accounting.

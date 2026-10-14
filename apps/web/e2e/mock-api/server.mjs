@@ -13,6 +13,7 @@ import http from "node:http";
 
 import { createCampaignsMock } from "./campaigns.mjs";
 import { createLedgerMock } from "./ledger.mjs";
+import { createPayoutsMock } from "./payouts.mjs";
 import { createPaymentsMock } from "./payments.mjs";
 import { createVerificationMock } from "./verification.mjs";
 
@@ -144,6 +145,7 @@ const verification = createVerificationMock({ send, err, userById, users, addUse
 const campaigns = createCampaignsMock({ send, err, userById, users, verification, stepUpTtlMs: STEP_UP_TTL_MS });
 const payments = createPaymentsMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS });
 const ledger = createLedgerMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS });
+const payouts = createPayoutsMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS, users, getDestination: (id) => verification.getDestination(id) });
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://mock");
@@ -182,6 +184,7 @@ const server = http.createServer(async (req, res) => {
     if (await campaigns.control(path, controlBody, res)) return;
     if (await payments.control(path, controlBody, res)) return;
     if (await ledger.control(path, controlBody, res)) return;
+    if (await payouts.control(path, controlBody, res)) return;
   }
   if (path === "/api/v1/health") return send(res, 200, { status: "ok" });
   if (path === "/api/v1/version") return send(res, 200, { name: "fundzim-api", version: "mock", build: "mock", commit: "mock" });
@@ -367,6 +370,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (await payments.handle({ req, res, method, path, url, user, session, body })) return;
       if (await ledger.handle({ req, res, method, path, url, user, session, body })) return;
+      if (await payouts.handle({ req, res, method, path, url, user, session, body })) return;
       if (await campaigns.handle({ req, res, method, path, url, user, session, body, raw })) return;
       if (await verification.handle({ req, res, method, path, url, user, session, sessionToken, body, raw })) return;
       return err(res, 404, "ROUTE_NOT_FOUND");

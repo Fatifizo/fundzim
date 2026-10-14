@@ -238,6 +238,8 @@ export function createVerificationMock({ send, err, userById, users, me }) {
       id: d.id, owner: d.owner, payee: d.payee, category: BANK.has(d.rail) ? "BANK_ACCOUNT" : "MOBILE_MONEY_WALLET", rail: d.rail, provider_name: PROVIDERS[d.rail],
       currency: d.currency, holder_name: d.holder_name, masked_identifier: mask(d.account_identifier), status: d.status, checks: d.checks,
       last_reviewed_at: d.last_reviewed_at, eligible_for_payout: false, created_at: d.created_at, updated_at: d.updated_at, version: d.version,
+      // Stage 11: three separate facts; a payout provider can never confirm an account yet (always false)
+      payout_readiness: { ownership_verified: d.status === "VERIFIED", payout_eligible: d.status === "VERIFIED" && d.cooled === true, provider_confirmed: false, scope: "TEST_PAYOUTS_ONLY", ...(d.status === "VERIFIED" && d.cooled === true ? {} : { reason: d.status === "VERIFIED" ? "COOLING_OFF" : "NOT_VERIFIED" }) },
     };
   }
 
@@ -899,6 +901,19 @@ export function createVerificationMock({ send, err, userById, users, me }) {
   // =====================================================================================================
   /** Test-only control endpoints (`/api/v1/__mock/...`). */
   async function control(path, body, res) {
+    if (path === "/api/v1/__mock/payout-destination-verified") {
+      // Stage 11 E2E: a VERIFIED, cooled-off wallet usable for TEST withdrawals
+      const user = users.get(body.email);
+      if (!user) return err(res, 404, "RESOURCE_NOT_FOUND"), true;
+      const d = {
+        id: randomUUID(), owner: { type: "USER", id: user.id }, payee: { type: "OWNER", beneficiary_id: null }, rail: "ECOCASH", currency: body.currency ?? "USD",
+        holder_name: body.holder_name ?? "Chipo Ncube", account_identifier: "0771234567", bank_code: null, status: "VERIFIED", cooled: true,
+        checks: { format_validated: true, ownership: "VERIFIED", compliance: "CLEARED" }, last_reviewed_at: now(), submitted_at: now(),
+        created_at: now(), updated_at: now(), version: 1, review: newReview(),
+      };
+      destinations.set(d.id, d);
+      return send(res, 201, destView(d)), true;
+    }
     if (path === "/api/v1/__mock/kyc-submitted") {
       const user = users.get(body.email);
       if (!user) return err(res, 404, "RESOURCE_NOT_FOUND"), true;
@@ -955,5 +970,5 @@ export function createVerificationMock({ send, err, userById, users, me }) {
     return b;
   }
 
-  return { handle, control, setLevel, me, getProfile: profile, getBeneficiary: (id) => beneficiaries.get(id), getOrg: (id) => orgs.get(id), seedBeneficiary };
+  return { handle, control, setLevel, me, getProfile: profile, getBeneficiary: (id) => beneficiaries.get(id), getOrg: (id) => orgs.get(id), seedBeneficiary, getDestination: (id) => destinations.get(id) };
 }

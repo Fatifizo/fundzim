@@ -529,6 +529,16 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 > endpoints expose approved snapshots only and no private data. Full analysis:
 > [stage-6/campaign-security.md](stage-6/campaign-security.md).
 
+## 21f. Payout security (Stage 11, summary)
+
+> **Stage 11 as built ([ADR-043](adr/ADR-043-withdrawals-and-payouts.md)):** TEST payouts only (constant, kill switch,
+> configuration and CHECKs refuse anything else); owner/ORG_ADMIN-only requests with fresh step-up and a per-user rate
+> limit; FINANCE-only maker-checker with linked-identity separation of duties enforced in Go and the database; approval
+> rounds invalidated by destination changes and pre-submission findings; destination create/change/retire need step-up;
+> single in-flight payout and ledger row locks prevent double reservation; provider calls recorded IN_FLIGHT first and never
+> repeated after one may have reached the provider; owner-facing refusals reveal no compliance or risk detail. Full review:
+> [stage-11/security-review.md](stage-11/security-review.md).
+
 ## 21e. Ledger security (Stage 10, summary)
 
 > **Stage 10 as built ([ADR-042](adr/ADR-042-ledger-implementation.md)):** the ledger database is designated TEST

@@ -309,9 +309,22 @@ export interface PayoutDestination {
   checks: { format_validated: boolean; ownership: OwnershipCheck; compliance: ComplianceCheck };
   last_reviewed_at: string | null;
   eligible_for_payout: false;
+  /**
+   * Stage 11: three separate facts. Documentary ownership verification is not permission to pay out; payout
+   * eligibility is for TEST payouts only; no provider can confirm ownership (always false).
+   */
+  payout_readiness?: PayoutReadiness;
   created_at: string;
   updated_at: string;
   version: number;
+}
+
+export interface PayoutReadiness {
+  ownership_verified: boolean;
+  payout_eligible: boolean;
+  provider_confirmed: boolean;
+  scope: string;
+  reason?: string;
 }
 
 export interface PayoutDestinationInput {

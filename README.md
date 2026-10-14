@@ -11,6 +11,17 @@ providers.
 FundZim is **not** an investment, lending, equity or rewards platform, and it is not a wallet or a payment
 provider.
 
+> **Status: Stage 11 — Withdrawals & payouts (complete; awaiting acceptance; TEST payouts only).** Campaign owners can
+> request withdrawals of synthetic TEST_ONLY funds to a verified payout destination: a 22-check eligibility engine (recorded
+> and hashed), an atomic ledger reservation (one in-flight payout per campaign and currency), FINANCE maker-checker
+> approval with step-up and linked-identity separation of duties, a pre-submission re-check, provider-neutral
+> orchestration through the sandbox SIMULATOR (UNKNOWN outcomes keep their reservation and are never resubmitted),
+> ledger journals derived from each payout's state, reconciliation and an exception queue, plus staff and organiser UIs.
+> No real payout can execute (no provider: ADR-040; constant, kill switch, configuration and database refuse it) and
+> production available funds are BLOCKED (no settlement evidence). Docs:
+> [docs/stage-11/implementation.md](docs/stage-11/implementation.md); ADR-043; handover
+> [STAGE-11-TO-STAGE-12.md](docs/stage-handover/STAGE-11-TO-STAGE-12.md).
+>
 > **Status: Stage 10 — Immutable double-entry ledger (complete; awaiting acceptance; TEST ledger only).** The ledger
 > exists: a database-enforced double-entry ledger (balanced journals checked at COMMIT, append-only history, rule
 > conformance, per-currency journals, non-negative obligations), a dedicated `fundzim_ledger` posting role
@@ -246,7 +257,8 @@ Reset deletes the Postgres and Garage volumes (database, roles, objects). `.env`
 | [Stage 8 implementation](docs/stage-8/implementation.md) · [architecture](docs/stage-8/payment-architecture.md) · [provider interface](docs/stage-8/provider-interface.md) · [state machine](docs/stage-8/payment-state-machine.md) · [webhooks](docs/stage-8/webhook-security.md) · [security](docs/stage-8/security-review.md) · [testing](docs/stage-8/testing.md) · [known issues](docs/stage-8/known-issues.md) | Payment abstraction layer (sandbox only) |
 | [Stage 9 implementation](docs/stage-9/implementation.md) · [legal review](docs/stage-9/legal-review.md) · [provider confirmations](docs/stage-9/provider-confirmation-register.md) · [evaluation](docs/stage-9/provider-evaluation.md) · [selection](docs/stage-9/provider-selection.md) · [secret management](docs/stage-9/secret-management.md) · [payment security](docs/stage-9/payment-security.md) · [certification](docs/stage-9/sandbox-certification.md) · [known issues](docs/stage-9/known-issues.md) | Provider integration readiness (no provider selected) |
 | [Stage 10 implementation](docs/stage-10/implementation.md) · [ledger architecture](docs/stage-10/ledger-architecture.md) · [chart of accounts](docs/stage-10/chart-of-accounts.md) · [posting rules](docs/stage-10/posting-rules.md) · [reconciliation](docs/stage-10/reconciliation.md) · [security review](docs/stage-10/security-review.md) · [tests](docs/stage-10/financial-integrity-tests.md) · [performance](docs/stage-10/performance.md) · [known issues](docs/stage-10/known-issues.md) | Double-entry ledger (TEST ledger only) |
-| [Stage handovers](docs/stage-handover/STAGE-10-TO-STAGE-11.md) | Stage 10 → 11 (withdrawals & payouts); earlier handovers in the same folder |
+| [Stage 11 implementation](docs/stage-11/implementation.md) · [architecture](docs/stage-11/payout-architecture.md) · [lifecycle](docs/stage-11/withdrawal-lifecycle.md) · [eligibility](docs/stage-11/eligibility-engine.md) · [available funds](docs/stage-11/available-funds.md) · [simulator](docs/stage-11/payout-simulator.md) · [security review](docs/stage-11/security-review.md) · [testing](docs/stage-11/testing.md) · [known issues](docs/stage-11/known-issues.md) | Withdrawals & payouts (TEST payouts only) |
+| [Stage handovers](docs/stage-handover/STAGE-11-TO-STAGE-12.md) | Stage 11 → 12 (fees & platform revenue); earlier handovers in the same folder |
 
 ## Licence
 

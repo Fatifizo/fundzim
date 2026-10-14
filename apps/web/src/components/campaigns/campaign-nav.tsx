@@ -6,6 +6,7 @@ const TABS = [
   { sub: "/media", label: "Photos" },
   { sub: "/beneficiaries", label: "Beneficiary" },
   { sub: "/updates", label: "Updates" },
+  { sub: "/withdrawals", label: "Withdrawals" },
   { sub: "/settings", label: "Settings" },
 ] as const;
 
