@@ -62,6 +62,15 @@ type Config struct {
 	Payments     Payments
 	Secrets      Secrets
 	Ledger       Ledger
+	Payouts      Payouts
+}
+
+// Payouts configures withdrawals and payouts (Stage 11, ADR-043). Real payout execution is not configurable: it is
+// the code constant payouts.LiveExecutionEnabled = false plus a kill switch. Only the simulator may execute.
+type Payouts struct {
+	// ExecutionEnvironment (PAYOUTS_EXECUTION_ENVIRONMENT): DISABLED (default) | LOCAL_SIMULATOR. PROVIDER_SANDBOX and
+	// PRODUCTION are refused: no payout provider is confirmed (ADR-040).
+	ExecutionEnvironment string
 }
 
 // Ledger configures the Stage 10 ledger (ADR-042). Production posting is a code constant (ledger.ProductionPostingEnabled).
@@ -514,6 +523,20 @@ func Load(get LookupFunc) (Config, error) {
 	c.Ledger = Ledger{SyntheticFixturesEnabled: l.boolean("LEDGER_SYNTHETIC_FIXTURES_ENABLED", false)}
 	if c.Ledger.SyntheticFixturesEnabled && env == EnvProduction {
 		l.fail("LEDGER_SYNTHETIC_FIXTURES_ENABLED is refused in production (synthetic fixtures are TEST_ONLY)")
+	}
+	c.Payouts = Payouts{ExecutionEnvironment: l.str("PAYOUTS_EXECUTION_ENVIRONMENT", ExecDisabled)}
+	switch c.Payouts.ExecutionEnvironment {
+	case ExecDisabled:
+	case ExecLocalSimulator:
+		if env == EnvProduction {
+			l.fail("PAYOUTS_EXECUTION_ENVIRONMENT=LOCAL_SIMULATOR is refused in production")
+		} else if !c.Payments.SandboxEnabled {
+			l.fail("PAYOUTS_EXECUTION_ENVIRONMENT=LOCAL_SIMULATOR requires PAYMENTS_SANDBOX_ENABLED=true")
+		}
+	case ExecProviderSandbox, ExecProduction:
+		l.fail("PAYOUTS_EXECUTION_ENVIRONMENT=%s is refused: no payout provider is confirmed (ADR-040, ADR-043)", c.Payouts.ExecutionEnvironment)
+	default:
+		l.fail("PAYOUTS_EXECUTION_ENVIRONMENT must be DISABLED or LOCAL_SIMULATOR")
 	}
 
 	if len(l.problems) > 0 {

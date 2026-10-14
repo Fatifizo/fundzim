@@ -51,3 +51,13 @@ func (s *Service) PaymentFactsInStatus(ctx context.Context, status string, befor
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Fact, error) { return scanFact(r) })
 }
+
+// OpenRefundExposure is the total of the campaign's refund requests in one currency that are not yet terminal
+// (requested, under review, on hold, approved or executing): money a payout must not take (Stage 11, EC-09). No
+// refund executes in Stage 8–11, so none of these amounts is yet reflected in the ledger.
+func (s *Service) OpenRefundExposure(ctx context.Context, campaignID, currency string) (int64, error) {
+	var n int64
+	err := s.Pool.QueryRow(ctx, `SELECT coalesce(sum(amount_minor), 0) FROM app.refund_requests WHERE campaign_id = $1 AND currency = $2
+		AND status IN ('REQUESTED','PENDING_APPROVAL','ON_HOLD','APPROVED','EXECUTING')`, campaignID, currency).Scan(&n)
+	return n, err
+}

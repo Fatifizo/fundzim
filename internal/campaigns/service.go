@@ -247,3 +247,14 @@ func highest(levels map[Subject]string) string {
 	}
 	return best
 }
+
+// CurrentBeneficiary returns the campaign's currently linked beneficiary (nil when the owner is the payee).
+func (s *Service) CurrentBeneficiary(ctx context.Context, campaignID string) (*string, error) {
+	var benef *string
+	err := s.Pool.QueryRow(ctx, `SELECT beneficiary_id::text FROM app.campaign_beneficiaries WHERE campaign_id = $1 AND unlinked_at IS NULL`,
+		campaignID).Scan(&benef)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return benef, err
+}

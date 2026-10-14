@@ -332,14 +332,27 @@ func (s *Service) hSources(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) hFixture(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Scenario string `json:"scenario"`
-		RunID    string `json:"run_id"`
+		Scenario    string `json:"scenario"`
+		RunID       string `json:"run_id"`
+		CampaignID  string `json:"campaign_id"`  // fund_campaign only
+		AmountMinor string `json:"amount_minor"` // fund_campaign only (digits)
 	}
 	if err := httpx.DecodeJSON(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	v, err := s.PostFixture(r.Context(), staff(r), in.Scenario, in.RunID)
+	var v FixtureRun
+	var err error
+	if in.Scenario == FixtureFundCampaign {
+		n, perr := strconv.ParseInt(in.AmountMinor, 10, 64)
+		if perr != nil || !amountRE.MatchString(in.AmountMinor) {
+			s.fail(w, r, invalid("amount_minor", "INVALID_FORMAT"))
+			return
+		}
+		v, err = s.FundCampaign(r.Context(), staff(r), in.CampaignID, n, in.RunID)
+	} else {
+		v, err = s.PostFixture(r.Context(), staff(r), in.Scenario, in.RunID)
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return

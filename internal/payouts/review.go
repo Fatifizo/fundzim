@@ -280,6 +280,9 @@ func (s *Service) SetSuspended(ctx context.Context, id, actorID, reason string, 
 		if err := s.event(ctx, tx, id, version, strings.ToUpper(to), from, to, reason, actorID, "STAFF"); err != nil {
 			return err
 		}
+		if err := s.invalidateApprovals(ctx, tx, id, "DESTINATION_"+to, "STAFF", actorID); err != nil {
+			return err
+		}
 		if err := audit.Record(ctx, tx, audit.Event{Stream: audit.Security, Action: "payout_destination." + strings.ToLower(to), TargetType: "payout_destination",
 			TargetID: id, Reason: reason}); err != nil {
 			return err
@@ -415,6 +418,9 @@ func (s *Service) Sweep(ctx context.Context, limit int) (int, error) {
 				return err
 			}
 			if err := s.event(ctx, tx, id, version, "EXPIRED", "VERIFIED", "EXPIRED", "VERIFICATION_EXPIRED", "", ""); err != nil {
+				return err
+			}
+			if err := s.invalidateApprovals(ctx, tx, id, "DESTINATION_VERIFICATION_EXPIRED", "SYSTEM", ""); err != nil {
 				return err
 			}
 			return s.emit(ctx, tx, "payouts.destination_expired", d, nil)

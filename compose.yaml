@@ -56,6 +56,7 @@ x-common-env: &common-env
   SECRETS_KV2_TOKEN: ${SECRETS_KV2_TOKEN:?run scripts/dev-env-init.sh}
   # Stage 10 (ADR-042): TEST_ONLY synthetic ledger fixtures (refused in production)
   LEDGER_SYNTHETIC_FIXTURES_ENABLED: ${LEDGER_SYNTHETIC_FIXTURES_ENABLED:-false}
+  PAYOUTS_EXECUTION_ENVIRONMENT: ${PAYOUTS_EXECUTION_ENVIRONMENT:-DISABLED}
 
 services:
   fundzim-postgres:

@@ -225,6 +225,7 @@ func NewVerificationModules(ctx context.Context, d VerificationDeps) (*Verificat
 	if err := newLedger(ctx, m, d); err != nil { // Stage 10 (ADR-042)
 		return fail(err)
 	}
+	newPayouts(m, d) // Stage 11 (ADR-043)
 	return m, nil
 }
 

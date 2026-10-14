@@ -97,6 +97,10 @@ tags:
   description: Provider detail, derived health, evidence log and provider controls (no control can enable production or change a payment).
 - name: Ledger (Stage 10)
   description: Restricted double-entry ledger (TEST ledger in Stage 10; production posting disabled). No public or free-form posting endpoint.
+- name: Payouts (Stage 11)
+  description: Withdrawal (payout) requests — owner side. TEST payouts through the simulator only (ADR-043).
+- name: Payout operations (Stage 11)
+  description: Staff payout operations, approvals, exceptions, reconciliation (ADR-043).
 - name: Webhooks
   description: 'Provider callbacks: signature-authenticated, CSRF/session-exempt, inbox + 2xx fast.'
 - name: Health
@@ -11510,1039 +11514,6 @@ paths:
       - CSRF_TOKEN_INVALID
       - DESTINATION_OVERRIDE_NOT_FOUND
       - MFA_REQUIRED
-      - PERMISSION_DENIED
-      - VALIDATION_FAILED
-  /campaigns/{campaign_id}/payout-eligibility:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Payout requests
-      operationId: getPayoutEligibility
-      summary: Non-binding eligibility preview
-      description: '**POR-01** · Auth: session · Authorization: Owner / ORG_ADMIN (`org.payout.request`).
-
-
-        Idempotency: n/a · Rate-limit class: `RL-USER-READ` · Audit: —'
-      security:
-      - session: []
-      parameters:
-      - name: campaign_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - name: currency
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Currency'
-        description: Allow-listed filter.
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PayoutEligibilityPreviewEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: POR-01
-      x-fundzim-auth: session
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-USER-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - CAMPAIGN_NOT_FOUND
-      - INVALID_FILTER
-      - PERMISSION_DENIED
-  /campaigns/{campaign_id}/payout-requests:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Payout requests
-      operationId: createPayoutRequest
-      summary: Request a payout (step-up)
-      description: '**POR-02** · Auth: session + step-up · Authorization: Owner or ORG_ADMIN with `org.payout.request` (EC-02); all request-time
-        checks (EC-01..EC-22).
-
-
-        Idempotency: required · Rate-limit class: `RL-SENSITIVE-USER` · Audit: payout.requested; payout.eligibility.evaluated; ledger.transaction.posted'
-      security:
-      - session: []
-        csrfToken: []
-      parameters:
-      - name: campaign_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PayoutRequestCreate'
-            examples:
-              PayoutRequestCreateUsd:
-                $ref: '#/components/examples/PayoutRequestCreateUsd'
-      responses:
-        '201':
-          description: 'Success. Idempotent replays return the stored response with `Idempotent-Replayed: true`.'
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PayoutRequestEnvelope'
-              examples:
-                PayoutRequestCreated:
-                  $ref: '#/components/examples/PayoutRequestCreated'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          description: 'Validation or business-rule failure. Codes: `CURRENCY_MISMATCH`, `INVALID_MONEY`, `PAYOUT_NOT_ELIGIBLE`, `VALIDATION_FAILED`'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                PayoutNotEligible:
-                  $ref: '#/components/examples/PayoutNotEligible'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: POR-02
-      x-fundzim-auth: session+step-up
-      x-fundzim-step-up: true
-      x-fundzim-idempotency: required
-      x-fundzim-rate-limit-class: RL-SENSITIVE-USER
-      x-fundzim-audit: payout.requested; payout.eligibility.evaluated; ledger.transaction.posted
-      x-fundzim-error-codes:
-      - ACCOUNT_RESTRICTED
-      - AUTHENTICATION_REQUIRED
-      - CAMPAIGN_NOT_FOUND
-      - CSRF_TOKEN_INVALID
-      - CURRENCY_MISMATCH
-      - IDEMPOTENCY_KEY_INVALID
-      - IDEMPOTENCY_KEY_REQUIRED
-      - IDEMPOTENCY_KEY_REUSED
-      - IDEMPOTENCY_REQUEST_IN_PROGRESS
-      - INVALID_MONEY
-      - PAYOUT_DESTINATION_NOT_FOUND
-      - PAYOUT_IN_FLIGHT_EXISTS
-      - PAYOUT_NOT_ELIGIBLE
-      - PERMISSION_DENIED
-      - STEP_UP_REQUIRED
-      - VALIDATION_FAILED
-    get:
-      tags:
-      - Payout requests
-      operationId: listCampaignPayoutRequests
-      summary: List campaign payout requests
-      description: '**POR-03** · Auth: session · Authorization: Owner / `org.finance.view`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-USER-READ` · Audit: —'
-      security:
-      - session: []
-      parameters:
-      - name: campaign_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      - name: status
-        in: query
-        required: false
-        schema:
-          type: string
-          description: Comma-separated allow-listed status values (OR).
-        description: Allow-listed filter.
-      - name: currency
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Currency'
-        description: Allow-listed filter.
-      - name: sort
-        in: query
-        required: false
-        description: Allow-listed sort key; `-` prefix = descending.
-        schema:
-          type: string
-          enum:
-          - -requested_at
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PayoutRequestPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: POR-03
-      x-fundzim-auth: session
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-USER-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - CAMPAIGN_NOT_FOUND
-      - INVALID_CURSOR
-      - INVALID_FILTER
-      - PERMISSION_DENIED
-  /payout-requests/{payout_request_id}:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Payout requests
-      operationId: getPayoutRequest
-      summary: Get payout request (owner view)
-      description: '**POR-04** · Auth: session · Authorization: Owner / `org.finance.view`; else 404.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-USER-READ` · Audit: —'
-      security:
-      - session: []
-      parameters:
-      - name: payout_request_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PayoutRequestEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: POR-04
-      x-fundzim-auth: session
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-USER-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - PAYOUT_NOT_FOUND
-  /payout-requests/{payout_request_id}/cancel:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Payout requests
-      operationId: cancelPayoutRequest
-      summary: Cancel before SUBMITTED (Y5)
-      description: '**POR-05** · Auth: session + step-up · Authorization: Owner / ORG_ADMIN. After SUBMITTED → 409 PAYOUT_ALREADY_SUBMITTED.
-
-
-        Idempotency: required · Rate-limit class: `RL-SENSITIVE-USER` · Audit: payout.state.changed; ledger.transaction.posted'
-      security:
-      - session: []
-        csrfToken: []
-      parameters:
-      - name: payout_request_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      responses:
-        '200':
-          description: 'Success. Idempotent replays return the stored response with `Idempotent-Replayed: true`.'
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PayoutRequestEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: POR-05
-      x-fundzim-auth: session+step-up
-      x-fundzim-step-up: true
-      x-fundzim-idempotency: required
-      x-fundzim-rate-limit-class: RL-SENSITIVE-USER
-      x-fundzim-audit: payout.state.changed; ledger.transaction.posted
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - IDEMPOTENCY_KEY_INVALID
-      - IDEMPOTENCY_KEY_REQUIRED
-      - IDEMPOTENCY_KEY_REUSED
-      - IDEMPOTENCY_REQUEST_IN_PROGRESS
-      - PAYOUT_ALREADY_SUBMITTED
-      - PAYOUT_INVALID_TRANSITION
-      - PAYOUT_NOT_FOUND
-      - PERMISSION_DENIED
-      - STEP_UP_REQUIRED
-  /admin/payout-requests:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Payout requests
-      operationId: adminListPayoutRequests
-      summary: Payout approval queue
-      description: '**POR-06** · Auth: staff + MFA · Authorization: `payout.view`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      - name: status
-        in: query
-        required: false
-        schema:
-          type: string
-          description: Comma-separated allow-listed status values (OR).
-        description: Allow-listed filter.
-      - name: approval_tier
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 64
-        description: Allow-listed filter.
-      - name: currency
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Currency'
-        description: Allow-listed filter.
-      - name: provider
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 64
-        description: Allow-listed filter.
-      - name: campaign_id
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Uuid'
-        description: Allow-listed filter.
-      - name: needs_reconciliation
-        in: query
-        required: false
-        schema:
-          type: boolean
-        description: Allow-listed filter.
-      - name: assigned_to
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Uuid'
-        description: Allow-listed filter.
-      - name: sort
-        in: query
-        required: false
-        description: Allow-listed sort key; `-` prefix = descending.
-        schema:
-          type: string
-          enum:
-          - requested_at
-          - -requested_at
-          - approval_expires_at
-          - unknown_since
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StaffPayoutRequestPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: POR-06
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: payout.view
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
-      - INVALID_FILTER
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-  /admin/payout-requests/{payout_request_id}:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Payout requests
-      operationId: adminGetPayoutRequest
-      summary: Get payout request (staff)
-      description: '**POR-07** · Auth: staff + MFA · Authorization: `payout.view`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - name: payout_request_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StaffPayoutRequestEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: POR-07
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: payout.view
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - MFA_REQUIRED
-      - PAYOUT_NOT_FOUND
-      - PERMISSION_DENIED
-  /admin/payout-requests/{payout_request_id}/approve:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Payout requests
-      operationId: approvePayoutRequest
-      summary: Approve payout (checker; step-up; SoD)
-      description: '**POR-08** · Auth: staff + MFA + step-up · Authorization: `payout.approve` (FINANCE only; COMPLIANCE never approves payouts,
-        I-20); approver ≠ requester/initiator/destination-changer; DUAL = two distinct FINANCE approvers; no declared conflict.
-
-
-        Idempotency: required · Rate-limit class: `RL-STAFF-WRITE` · Audit: payout.approved (J) / payout.approval.denied_self; payout.eligibility.rechecked'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - name: payout_request_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PayoutDecisionRequest'
-      responses:
-        '200':
-          description: 'Success. Idempotent replays return the stored response with `Idempotent-Replayed: true`.'
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StaffPayoutRequestEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: 'Authenticated but not permitted (incl. CSRF, MFA, step-up, SoD conflicts). Codes: `APPROVER_CONFLICT`, `CSRF_TOKEN_INVALID`,
-            `MFA_REQUIRED`, `PERMISSION_DENIED`, `STEP_UP_REQUIRED`'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                ApproverConflict:
-                  $ref: '#/components/examples/ApproverConflict'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: POR-08
-      x-fundzim-auth: staff+MFA+step-up
-      x-fundzim-permission: payout.approve
-      x-fundzim-step-up: true
-      x-fundzim-maker-checker: checker
-      x-fundzim-idempotency: required
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: payout.approved (J) / payout.approval.denied_self; payout.eligibility.rechecked
-      x-fundzim-error-codes:
-      - APPROVAL_ALREADY_RECORDED
-      - APPROVAL_EXPIRED
-      - APPROVER_CONFLICT
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - IDEMPOTENCY_KEY_INVALID
-      - IDEMPOTENCY_KEY_REQUIRED
-      - IDEMPOTENCY_KEY_REUSED
-      - IDEMPOTENCY_REQUEST_IN_PROGRESS
-      - JUSTIFICATION_REQUIRED
-      - MFA_REQUIRED
-      - PAYOUT_INVALID_TRANSITION
-      - PAYOUT_NOT_FOUND
-      - PERMISSION_DENIED
-      - STEP_UP_REQUIRED
-      - VALIDATION_FAILED
-      - VERSION_CONFLICT
-  /admin/payout-requests/{payout_request_id}/reject:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Payout requests
-      operationId: rejectPayoutRequest
-      summary: Reject payout (funds released)
-      description: '**POR-09** · Auth: staff + MFA + step-up · Authorization: `payout.reject`; ≠ requester.
-
-
-        Idempotency: required · Rate-limit class: `RL-STAFF-WRITE` · Audit: payout.rejected (J); ledger.transaction.posted'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - name: payout_request_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PayoutDecisionRequest'
-      responses:
-        '200':
-          description: 'Success. Idempotent replays return the stored response with `Idempotent-Replayed: true`.'
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StaffPayoutRequestEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: POR-09
-      x-fundzim-auth: staff+MFA+step-up
-      x-fundzim-permission: payout.reject
-      x-fundzim-step-up: true
-      x-fundzim-idempotency: required
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: payout.rejected (J); ledger.transaction.posted
-      x-fundzim-error-codes:
-      - APPROVER_CONFLICT
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - IDEMPOTENCY_KEY_INVALID
-      - IDEMPOTENCY_KEY_REQUIRED
-      - IDEMPOTENCY_KEY_REUSED
-      - IDEMPOTENCY_REQUEST_IN_PROGRESS
-      - JUSTIFICATION_REQUIRED
-      - MFA_REQUIRED
-      - PAYOUT_INVALID_TRANSITION
-      - PAYOUT_NOT_FOUND
-      - PERMISSION_DENIED
-      - STEP_UP_REQUIRED
-      - VALIDATION_FAILED
-  /admin/payout-requests/{payout_request_id}/cancel:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Payout requests
-      operationId: adminCancelPayoutRequest
-      summary: Staff cancel before SUBMITTED
-      description: '**POR-10** · Auth: staff + MFA + step-up · Authorization: `payout.cancel`.
-
-
-        Idempotency: required · Rate-limit class: `RL-STAFF-WRITE` · Audit: payout.state.changed (J)'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - name: payout_request_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/StaffActionRequest'
-      responses:
-        '200':
-          description: 'Success. Idempotent replays return the stored response with `Idempotent-Replayed: true`.'
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StaffPayoutRequestEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: POR-10
-      x-fundzim-auth: staff+MFA+step-up
-      x-fundzim-permission: payout.cancel
-      x-fundzim-step-up: true
-      x-fundzim-idempotency: required
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: payout.state.changed (J)
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - IDEMPOTENCY_KEY_INVALID
-      - IDEMPOTENCY_KEY_REQUIRED
-      - IDEMPOTENCY_KEY_REUSED
-      - IDEMPOTENCY_REQUEST_IN_PROGRESS
-      - MFA_REQUIRED
-      - PAYOUT_ALREADY_SUBMITTED
-      - PAYOUT_INVALID_TRANSITION
-      - PAYOUT_NOT_FOUND
-      - PERMISSION_DENIED
-      - STEP_UP_REQUIRED
-      - VALIDATION_FAILED
-  /admin/payout-requests/{payout_request_id}/eligibility-checks:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Payout requests
-      operationId: recheckPayoutEligibility
-      summary: Re-run eligibility (records a decision; no state change by itself)
-      description: '**POR-11** · Auth: staff + MFA · Authorization: `payout.view`.
-
-
-        Idempotency: optional · Rate-limit class: `RL-STAFF-WRITE` · Audit: payout.eligibility.rechecked'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - name: payout_request_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKeyOptional'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StaffPayoutRequestEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: POR-11
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: payout.view
-      x-fundzim-idempotency: optional
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: payout.eligibility.rechecked
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - MFA_REQUIRED
-      - PAYOUT_NOT_FOUND
-      - PERMISSION_DENIED
-  /payout-requests/{payout_request_id}/status:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Payout status
-      operationId: getPayoutStatus
-      summary: Payout status (owner polling)
-      description: '**PSS-01** · Auth: session · Authorization: As POR-04.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STATUS-POLL` · Audit: —'
-      security:
-      - session: []
-      parameters:
-      - name: payout_request_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PayoutStatusViewEnvelope'
-              examples:
-                PayoutStatusProcessing:
-                  $ref: '#/components/examples/PayoutStatusProcessing'
-                PayoutStatusConfirming:
-                  $ref: '#/components/examples/PayoutStatusConfirming'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: PSS-01
-      x-fundzim-auth: session
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STATUS-POLL
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - PAYOUT_NOT_FOUND
-  /payout-requests/{payout_request_id}/timeline:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Payout status
-      operationId: getPayoutTimeline
-      summary: Owner-safe payout timeline
-      description: '**PSS-02** · Auth: session · Authorization: As POR-04.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-USER-READ` · Audit: —'
-      security:
-      - session: []
-      parameters:
-      - name: payout_request_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PayoutTimelineItemPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: PSS-02
-      x-fundzim-auth: session
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-USER-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
-      - PAYOUT_NOT_FOUND
-  /admin/payout-requests/{payout_request_id}/events:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Payout status
-      operationId: adminListPayoutEvents
-      summary: Payout events, attempts (staff)
-      description: '**PSS-03** · Auth: staff + MFA · Authorization: `payout.view`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - name: payout_request_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PayoutEventPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: PSS-03
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: payout.view
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
-      - MFA_REQUIRED
-      - PAYOUT_NOT_FOUND
-      - PERMISSION_DENIED
-  /admin/payout-requests/{payout_request_id}/status-checks:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Payout status
-      operationId: requestPayoutStatusCheck
-      summary: Enqueue provider status query (never resubmits)
-      description: '**PSS-04** · Auth: staff + MFA · Authorization: `payout.status.query`.
-
-
-        Idempotency: optional · Rate-limit class: `RL-STAFF-WRITE` · Audit: payout.status_query.requested (new, J)'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - name: payout_request_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKeyOptional'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/StaffActionRequest'
-      responses:
-        '202':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AcceptedEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: PSS-04
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: payout.status.query
-      x-fundzim-idempotency: optional
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: payout.status_query.requested (new, J)
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - IDEMPOTENCY_KEY_INVALID
-      - IDEMPOTENCY_KEY_REUSED
-      - IDEMPOTENCY_REQUEST_IN_PROGRESS
-      - MFA_REQUIRED
-      - PAYOUT_INVALID_TRANSITION
-      - PAYOUT_NOT_FOUND
       - PERMISSION_DENIED
       - VALIDATION_FAILED
   /me/verification:
@@ -32829,6 +31800,1445 @@ paths:
       - PAYMENT_NOT_FOUND
       - SANDBOX_DISABLED
       - VALIDATION_FAILED
+  /campaigns/{campaign_id}/payout-eligibility:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payouts (Stage 11)
+      operationId: getPayoutEligibility
+      summary: Non-binding payout availability preview
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: personal account session · Authorization: owner / organisation (others → `404`). Owner
+        or any member of the owning organisation (others → 404). Optional destination_id/amount_minor run the request-time engine as a dry run. **Stage 11:
+        TEST payouts only** — executed by the sandbox SIMULATOR; real payout execution is DISABLED (`payouts.LiveExecutionEnabled` constant false, kill switch
+        `payouts.live_execution.enabled` off, PRODUCTION refused by configuration and database; ADR-043). Funds are synthetic TEST_ONLY ledger balances.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      - name: currency
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Currency'
+      - name: destination_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: amount_minor
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutAvailabilityS11Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - CAMPAIGN_NOT_FOUND
+  /campaigns/{campaign_id}/payout-requests:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payouts (Stage 11)
+      operationId: createPayoutRequest
+      summary: Request a payout (withdrawal)
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: personal account session · Authorization: owner / organisation (others → `404`). Owner
+        or ORG_ADMIN; fresh step-up. Runs request-time eligibility (22 checks), claims the single in-flight slot (one non-terminal payout per campaign and
+        currency), then reserves the funds in the ledger (PAYOUT_RESERVED: campaign_payable → campaign_payout_pending, row-locked). Refusals carry only a
+        coarse `reason_category`. **Stage 11: TEST payouts only** — executed by the sandbox SIMULATOR; real payout execution is DISABLED (`payouts.LiveExecutionEnabled`
+        constant false, kill switch `payouts.live_execution.enabled` off, PRODUCTION refused by configuration and database; ADR-043). Funds are synthetic
+        TEST_ONLY ledger balances.
+
+
+
+        Idempotency: required (Idempotency-Key; DB backstop UNIQUE (scope, key)) · Rate-limit: payouts.request.user · Audit: payout.requested, payout.eligibility.evaluated,
+        payout.reservation.created (or payout.request.refused) · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayoutRequestCreateS11'
+      responses:
+        '202':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutRequestOwnerS11Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: user
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required (Idempotency-Key; DB backstop UNIQUE (scope, key))
+      x-fundzim-error-codes:
+      - CAMPAIGN_NOT_FOUND
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - PAYOUTS_DISABLED
+      - PAYOUT_IN_PROGRESS
+      - PAYOUT_NOT_ELIGIBLE
+      - RATE_LIMITED
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+    get:
+      tags:
+      - Payouts (Stage 11)
+      operationId: listCampaignPayoutRequests
+      summary: Payout requests of a campaign
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: personal account session · Authorization: owner / organisation (others → `404`). Owner
+        or organisation member.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutRequestOwnerS11Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - CAMPAIGN_NOT_FOUND
+  /payout-requests:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payouts (Stage 11)
+      operationId: listMyPayoutRequests
+      summary: My payout requests
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: personal account session · Authorization: owner / organisation (others → `404`). Own
+        campaigns, organisations'' campaigns and own requests.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutRequestOwnerS11Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /payout-requests/{payout_request_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payouts (Stage 11)
+      operationId: getPayoutRequest
+      summary: One payout request (owner view)
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: personal account session · Authorization: owner / organisation (others → `404`). Others
+        → 404.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: payout_request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutRequestOwnerS11Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYOUT_REQUEST_NOT_FOUND
+  /payout-requests/{payout_request_id}/timeline:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payouts (Stage 11)
+      operationId: getPayoutRequestTimeline
+      summary: Status timeline (owner-safe)
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: personal account session · Authorization: owner / organisation (others → `404`). Applied
+        status changes only.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: payout_request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutTimelineItemS11Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYOUT_REQUEST_NOT_FOUND
+  /payout-requests/{payout_request_id}/cancel:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payouts (Stage 11)
+      operationId: cancelPayoutRequest
+      summary: Cancel before submission
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: personal account session · Authorization: owner / organisation (others → `404`). Owner
+        or ORG_ADMIN, fresh step-up; PENDING_REVIEW or APPROVED only (never after submission). The reservation is released (PAYOUT_RELEASED).
+
+
+
+        Idempotency: n/a · Rate-limit: payouts.request.user · Audit: payout.status_changed · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: payout_request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutRequestOwnerS11Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: user
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYOUT_REQUEST_NOT_FOUND
+      - PAYOUT_STATE
+      - RATE_LIMITED
+      - STEP_UP_REQUIRED
+  /admin/payout-requests:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminListPayoutRequests
+      summary: Payout requests
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.view` (non-staff → `404`). Newest first; keyset
+        pages.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/PayoutStatusS11'
+      - name: campaign_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: needs_reconciliation
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - 'true'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutRequestStaffS11Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/payout-requests/{payout_request_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminGetPayoutRequest
+      summary: Payout request detail
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.view` (non-staff → `404`). Approvals, provider
+        attempts, append-only events, eligibility decisions (22 checks, hashed), exceptions and the ledger journals by key.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payout_request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutDetailS11Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYOUT_REQUEST_NOT_FOUND
+  /admin/payout-requests/{payout_request_id}/events:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminPayoutRequestEvents
+      summary: Payout events
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.view` (non-staff → `404`). Append-only history,
+        applied and not applied.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payout_request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutEventS11Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYOUT_REQUEST_NOT_FOUND
+  /admin/payout-requests/{payout_request_id}/approve:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminPayoutRequestApprove
+      summary: Approve a payout (checker)
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.approve` + fresh step-up (non-staff → `404`). FINANCE
+        only; fresh step-up recorded; PENDING_REVIEW only; the current approval round. Refused (Go and database) for the requester, the campaign owner, anyone
+        linked to them (staff ↔ personal account links), members of the owning organisation, and whoever last changed or verified the destination. Enough
+        distinct approvals for the tier (SINGLE 1, DUAL 2) move it to APPROVED (Y6).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payout.approval.granted / payout.status_changed · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payout_request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayoutDecisionInputS11'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutRequestStaffS11Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - ALREADY_DECIDED
+      - PAYOUT_REQUEST_NOT_FOUND
+      - PAYOUT_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payout-requests/{payout_request_id}/reject:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminPayoutRequestReject
+      summary: Reject a payout (checker)
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.reject` + fresh step-up (non-staff → `404`). FINANCE
+        only; fresh step-up recorded; PENDING_REVIEW only; the current approval round. Refused (Go and database) for the requester, the campaign owner, anyone
+        linked to them (staff ↔ personal account links), members of the owning organisation, and whoever last changed or verified the destination. REJECTED
+        (Y4) and the reservation released.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payout.approval.granted / payout.status_changed · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payout_request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayoutDecisionInputS11'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutRequestStaffS11Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.reject
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - ALREADY_DECIDED
+      - PAYOUT_REQUEST_NOT_FOUND
+      - PAYOUT_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payout-requests/{payout_request_id}/cancel:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminPayoutRequestCancel
+      summary: Cancel before submission (staff)
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.operate` + fresh step-up (non-staff → `404`). PENDING_REVIEW
+        or APPROVED; reason required.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payout.status_changed · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payout_request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayoutReasonInputS11'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutRequestStaffS11Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYOUT_REQUEST_NOT_FOUND
+      - PAYOUT_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payout-requests/{payout_request_id}/eligibility-checks:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminPayoutRecheck
+      summary: Re-evaluate eligibility (RECHECK)
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.operate` + fresh step-up (non-staff → `404`). PENDING_REVIEW
+        only; records a RECHECK decision; may raise the tier to DUAL (never lowers it).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payout.eligibility.evaluated · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payout_request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutDecisionS11Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYOUT_REQUEST_NOT_FOUND
+      - PAYOUT_STATE
+      - STEP_UP_REQUIRED
+  /admin/payout-requests/{payout_request_id}/status-checks:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminPayoutStatusCheck
+      summary: Query the provider now
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.operate` + fresh step-up (non-staff → `404`). GET_STATUS
+        by OUR reference, applied through the state machine (source POLL). No manual success or failure override exists.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payout.status_changed · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payout_request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutRequestStaffS11Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYOUT_REQUEST_NOT_FOUND
+      - PAYOUT_STATE
+      - STEP_UP_REQUIRED
+  /admin/payouts/overview:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminPayoutsOverview
+      summary: Payout operations overview
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.view` (non-staff → `404`). Execution environment,
+        gates, counts, reserved totals.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutOverviewS11Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/payouts/reservations:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminPayoutReservations
+      summary: Reservations
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.view` (non-staff → `404`). Newest first.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - BLOCKED
+          - CONSUMED
+          - RELEASED
+          - EXPIRED
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutReservationS11Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/payouts/exceptions:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminPayoutExceptions
+      summary: Exception queue
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.view` (non-staff → `404`). Open first, by severity,
+        oldest first.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - INVESTIGATING
+          - RESOLVED
+      - name: severity
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - SEV1
+          - SEV2
+          - SEV3
+      - name: payout_request_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: include_resolved
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - 'true'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutExceptionS11Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/payouts/exceptions/{exception_id}/investigate:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminPayoutExceptionInvestigate
+      summary: Investigate an exception
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.operate` + fresh step-up (non-staff → `404`). OPEN
+        → INVESTIGATING (owner assigned) or → RESOLVED (code + note). Never moves money or changes the payout.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payout.exception.investigating · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: exception_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayoutExceptionStepS11'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutExceptionStepResultS11Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYOUT_EXCEPTION_NOT_FOUND
+      - PAYOUT_EXCEPTION_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payouts/exceptions/{exception_id}/resolve:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminPayoutExceptionResolve
+      summary: Resolve an exception
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.operate` + fresh step-up (non-staff → `404`). OPEN
+        → INVESTIGATING (owner assigned) or → RESOLVED (code + note). Never moves money or changes the payout.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payout.exception.resolved · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: exception_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayoutExceptionStepS11'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutExceptionStepResultS11Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYOUT_EXCEPTION_NOT_FOUND
+      - PAYOUT_EXCEPTION_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/payouts/reconciliation:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminPayoutReconciliation
+      summary: Payout reconciliation references
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.view` (non-staff → `404`). Immutable mismatches
+        found by runs. Settlement of disbursements against provider statements is NOT_PERFORMED.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutReconReferenceS11Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/payouts/reconciliation/run:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminPayoutReconcile
+      summary: Run payout reconciliation
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.operate` + fresh step-up (non-staff → `404`). Compares
+        requests, reservations, ledger journals (by key and amount) and the provider''s status for our reference.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: payout.reconciliation.run · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutReconRunS11Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.operate
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - STEP_UP_REQUIRED
+  /admin/payouts/providers:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminPayoutProviders
+      summary: Payout provider capabilities
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.view` (non-staff → `404`). Unverified values are
+        UNKNOWN.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutProviderCapabilityS11Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/payouts/sandbox/{payout_request_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminSandboxPayoutState
+      summary: Simulator-side payout state (DEVELOPMENT ONLY)
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.sandbox.control` (non-staff → `404`). Registered
+        only when the simulator runs (never in production).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payout_request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxPayoutStateS11Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.sandbox.control
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYOUT_REQUEST_NOT_FOUND
+  /admin/payouts/sandbox/{payout_request_id}/webhooks:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Payout operations (Stage 11)
+      operationId: adminSandboxPayoutWebhook
+      summary: Make the simulator send payout webhooks (DEVELOPMENT ONLY)
+      description: '**Stage 11 · IMPLEMENTED (TEST payouts)** · Auth: staff + MFA · Authorization: `payout.sandbox.control` (non-staff → `404`). Signed and
+        POSTed through the real ingestion endpoint (wrong keys and copies included).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: payout_request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SandboxPayoutWebhookS11'
+      responses:
+        '202':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxScheduledS11Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 11
+      x-fundzim-auth: staff
+      x-fundzim-permission: payout.sandbox.control
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - PAYOUT_REQUEST_NOT_FOUND
+      - VALIDATION_FAILED
 components:
   securitySchemes:
     session:
@@ -33205,93 +33615,6 @@ components:
           updated_at: '2026-10-08T07:33:40Z'
         meta:
           request_id: 01JAB7Q9X4M2T8K5V3N6P0R1SZ
-    PayoutRequestCreateUsd:
-      summary: Owner requests US$4,000.00 to the campaign's verified destination (step-up fresh; `Idempotency-Key` required).
-      value:
-        amount:
-          amount_minor: '400000'
-          currency: USD
-        destination_id: 01927f12-0a0b-7c0d-8e0f-101112131415
-        note: 'Hospital deposit invoice #2291'
-    PayoutRequestCreated:
-      summary: Funds reserved (payable → payout-pending); routed to review (pilot has no AUTO tier).
-      value:
-        data:
-          id: 01927f55-7e10-7c33-a1b2-c3d4e5f60718
-          campaign_id: 01927f3e-8b6a-7c41-9d2e-5f0a1b2c3d4e
-          amount:
-            amount_minor: '400000'
-            currency: USD
-            formatted: US$4,000.00
-          status: PENDING_REVIEW
-          display_status: UNDER_REVIEW
-          destination:
-            destination_id: 01927f12-0a0b-7c0d-8e0f-101112131415
-            destination_version: 3
-            network: ECOCASH
-            account_identifier_masked: '****4521'
-            account_name: R. Moyo
-          owner_cancellable: true
-          requested_at: '2026-10-08T09:00:00Z'
-          updated_at: '2026-10-08T09:00:00Z'
-        meta:
-          request_id: 01JAB7Q9X4M2T8K5V3N6P0R1SZ
-    PayoutNotEligible:
-      summary: Request-time eligibility failed; coarse categories only. No payout row created.
-      value:
-        error:
-          code: PAYOUT_NOT_ELIGIBLE
-          message: This payout can't be requested right now.
-          retryable: false
-          details:
-          - code: INSUFFICIENT_AVAILABLE_FUNDS
-            meta:
-              available:
-                amount_minor: '250000'
-                currency: USD
-                formatted: US$2,500.00
-          - code: DESTINATION_COOLING_OFF
-            meta:
-              available_after: '2026-10-10T08:00:00Z'
-        meta:
-          request_id: 01JAB7Q9X4M2T8K5V3N6P0R1SZ
-    PayoutStatusProcessing:
-      summary: Submitted and acknowledged by the provider.
-      value:
-        data:
-          payout_request_id: 01927f55-7e10-7c33-a1b2-c3d4e5f60718
-          status: PROCESSING
-          display_status: PROCESSING
-          is_final: false
-          owner_message: Processing with the payment provider.
-          provider_outcome_pending: true
-          updated_at: '2026-10-09T08:15:00Z'
-        meta:
-          request_id: 01JAB7Q9X4M2T8K5V3N6P0R1SZ
-    PayoutStatusConfirming:
-      summary: 'Outcome UNKNOWN: never resubmitted; resolved by status query, webhook or reconciliation.'
-      value:
-        data:
-          payout_request_id: 01927f55-7e10-7c33-a1b2-c3d4e5f60718
-          status: UNKNOWN
-          display_status: CONFIRMING
-          is_final: false
-          owner_message: Processing — we're confirming with the provider. You don't need to do anything.
-          provider_outcome_pending: true
-          updated_at: '2026-10-09T08:20:00Z'
-        meta:
-          request_id: 01JAB7Q9X4M2T8K5V3N6P0R1SZ
-    ApproverConflict:
-      summary: Checker is the maker (SoD).
-      value:
-        error:
-          code: APPROVER_CONFLICT
-          message: You can't approve this payout.
-          retryable: false
-          details:
-          - code: CONFLICT_MAKER_IS_CHECKER
-        meta:
-          request_id: 01JAB7Q9X4M2T8K5V3N6P0R1SZ
   schemas:
     Uuid:
       type: string
@@ -33593,21 +33916,6 @@ components:
       - REFUNDED
       - DISPUTED
       - CHARGED_BACK
-    PayoutStatus:
-      type: string
-      description: Payout request status (baseline §8, ADR-020).
-      enum:
-      - PAYOUT_REQUESTED
-      - PENDING_REVIEW
-      - APPROVED
-      - SUBMITTED
-      - PROCESSING
-      - UNKNOWN
-      - COMPLETED
-      - FAILED
-      - REJECTED
-      - CANCELLED
-      - REVERSED
     RefundRequestStatus:
       type: string
       description: Refund request status (baseline §8).
@@ -33784,23 +34092,6 @@ components:
       - CAMPAIGN_FRAUD
       - COMPLIANCE_ORDER
       - OTHER
-    PayoutNotEligibleCategory:
-      type: string
-      description: Owner-safe reason categories for PAYOUT_NOT_ELIGIBLE and eligibility previews (error-model.md §6). `PAYOUTS_PAUSED` is never
-        refined.
-      enum:
-      - CAMPAIGN_NOT_ELIGIBLE
-      - REQUESTER_NOT_AUTHORISED
-      - VERIFICATION_REQUIRED
-      - BENEFICIARY_NOT_VERIFIED
-      - DESTINATION_NOT_VERIFIED
-      - DESTINATION_COOLING_OFF
-      - CURRENCY_OR_RAIL_UNSUPPORTED
-      - INSUFFICIENT_AVAILABLE_FUNDS
-      - AMOUNT_OUT_OF_RANGE
-      - FUNDRAISING_AUTHORITY_INVALID
-      - PAYOUTS_PAUSED
-      - TEMPORARILY_UNAVAILABLE
     OtpSendRequest:
       type: object
       description: Request a one-time code. Response is identical whether or not the identifier is registered.
@@ -36284,339 +36575,6 @@ components:
       - destination_id
       - version
       additionalProperties: false
-    PayoutRequestCreate:
-      type: object
-      description: Owner payout request. Amount must be ≤ available in that currency; the destination is the campaign's verified destination (snapshotted).
-      properties:
-        amount:
-          $ref: '#/components/schemas/PositiveMoney'
-        destination_id:
-          $ref: '#/components/schemas/Uuid'
-        note:
-          type: string
-          maxLength: 500
-      required:
-      - amount
-      - destination_id
-      additionalProperties: false
-    PayoutRequest:
-      type: object
-      description: Owner view of a payout request. No eligibility check detail, no hold reasons, no approver identities.
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        campaign_id:
-          $ref: '#/components/schemas/Uuid'
-        amount:
-          $ref: '#/components/schemas/Money'
-        status:
-          $ref: '#/components/schemas/PayoutStatus'
-        display_status:
-          type: string
-          enum:
-          - REQUESTED
-          - UNDER_REVIEW
-          - APPROVED
-          - PROCESSING
-          - CONFIRMING
-          - PAID
-          - FAILED
-          - REJECTED
-          - CANCELLED
-          - RETURNED
-          description: Owner wording per payout-lifecycle.md §2.1; UNKNOWN → CONFIRMING.
-        destination:
-          $ref: '#/components/schemas/PayoutDestinationSnapshot'
-        owner_cancellable:
-          type: boolean
-          description: True only in PAYOUT_REQUESTED, PENDING_REVIEW, APPROVED.
-        rejection_category:
-          $ref: '#/components/schemas/PayoutNotEligibleCategory'
-        provider_fee:
-          $ref: '#/components/schemas/Money'
-        beneficiary_received:
-          $ref: '#/components/schemas/Money'
-        requested_at:
-          $ref: '#/components/schemas/Timestamp'
-        updated_at:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - id
-      - campaign_id
-      - amount
-      - status
-      - display_status
-      - destination
-      - owner_cancellable
-      - requested_at
-      - updated_at
-    PayoutDestinationSnapshot:
-      type: object
-      description: Destination snapshot bound to the payout at request time.
-      properties:
-        destination_id:
-          $ref: '#/components/schemas/Uuid'
-        destination_version:
-          type: integer
-        network:
-          type: string
-        account_identifier_masked:
-          type: string
-        account_name:
-          type: string
-      required:
-      - destination_id
-      - destination_version
-      - network
-      - account_identifier_masked
-      - account_name
-    PayoutStatusView:
-      type: object
-      description: Lightweight payout status for polling. No endpoint lets the owner change status after SUBMITTED.
-      properties:
-        payout_request_id:
-          $ref: '#/components/schemas/Uuid'
-        status:
-          $ref: '#/components/schemas/PayoutStatus'
-        display_status:
-          type: string
-        is_final:
-          type: boolean
-        owner_message:
-          type: string
-        provider_outcome_pending:
-          type: boolean
-          description: 'True in SUBMITTED/PROCESSING/UNKNOWN: FundZim is confirming with the provider; the payout is never resubmitted.'
-        updated_at:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - payout_request_id
-      - status
-      - display_status
-      - is_final
-      - owner_message
-      - updated_at
-    PayoutTimelineItem:
-      type: object
-      description: Owner-safe timeline entry.
-      properties:
-        display_status:
-          type: string
-        occurred_at:
-          $ref: '#/components/schemas/Timestamp'
-        note:
-          type: string
-      required:
-      - display_status
-      - occurred_at
-    PayoutEligibilityPreview:
-      type: object
-      description: Non-binding preview. Coarse categories only; `PAYOUTS_PAUSED` is never refined.
-      properties:
-        campaign_id:
-          $ref: '#/components/schemas/Uuid'
-        currency:
-          $ref: '#/components/schemas/Currency'
-        eligible:
-          type: boolean
-        available:
-          $ref: '#/components/schemas/Money'
-        blocking_categories:
-          type: array
-          items:
-            $ref: '#/components/schemas/PayoutNotEligibleCategory'
-        minimum:
-          $ref: '#/components/schemas/Money'
-        maximum:
-          oneOf:
-          - $ref: '#/components/schemas/Money'
-          - type: 'null'
-      required:
-      - campaign_id
-      - currency
-      - eligible
-      - available
-      - blocking_categories
-    StaffPayoutRequest:
-      type: object
-      description: Staff payout view with approval tier, approvals, eligibility decisions, and provider state.
-      properties:
-        payout:
-          $ref: '#/components/schemas/PayoutRequest'
-        approval_tier:
-          type: string
-          enum:
-          - AUTO
-          - SINGLE
-          - DUAL
-        approvals:
-          type: array
-          items:
-            $ref: '#/components/schemas/PayoutApproval'
-        approval_expires_at:
-          oneOf:
-          - $ref: '#/components/schemas/Timestamp'
-          - type: 'null'
-        eligibility_decisions:
-          type: array
-          items:
-            $ref: '#/components/schemas/EligibilityDecision'
-        provider:
-          type:
-          - string
-          - 'null'
-        provider_payout_ref:
-          type:
-          - string
-          - 'null'
-        unknown_since:
-          oneOf:
-          - $ref: '#/components/schemas/Timestamp'
-          - type: 'null'
-        needs_reconciliation:
-          type: boolean
-        requested_by:
-          $ref: '#/components/schemas/ActorRef'
-        active_holds:
-          type: array
-          items:
-            $ref: '#/components/schemas/HoldSummary'
-        audit:
-          $ref: '#/components/schemas/AuditMetadata'
-      required:
-      - payout
-      - approval_tier
-      - approvals
-      - approval_expires_at
-      - eligibility_decisions
-      - provider
-      - provider_payout_ref
-      - unknown_since
-      - needs_reconciliation
-      - requested_by
-      - active_holds
-      - audit
-    PayoutApproval:
-      type: object
-      description: Approval record.
-      properties:
-        approver:
-          $ref: '#/components/schemas/ActorRef'
-        decision:
-          type: string
-          enum:
-          - APPROVE
-          - REJECT
-        decided_at:
-          $ref: '#/components/schemas/Timestamp'
-        reason_code:
-          type: string
-      required:
-      - approver
-      - decision
-      - decided_at
-      - reason_code
-    PayoutDecisionRequest:
-      type: object
-      description: Approve/reject a payout (step-up; SoD enforced; binds to amount/currency/destination snapshot).
-      properties:
-        reason_code:
-          type: string
-        justification:
-          type: string
-          minLength: 10
-          maxLength: 2000
-        expected_amount:
-          $ref: '#/components/schemas/PositiveMoney'
-        expected_destination_version:
-          type: integer
-      required:
-      - reason_code
-      - justification
-      - expected_amount
-      - expected_destination_version
-      additionalProperties: false
-    EligibilityDecision:
-      type: object
-      description: Eligibility evaluation record (staff only).
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        phase:
-          type: string
-          enum:
-          - REQUEST
-          - PRE_SUBMIT
-          - MANUAL_RECHECK
-        evaluated_at:
-          $ref: '#/components/schemas/Timestamp'
-        policy_version:
-          type: integer
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/EligibilityCheckResult'
-      required:
-      - id
-      - phase
-      - evaluated_at
-      - policy_version
-      - results
-    EligibilityCheckResult:
-      type: object
-      description: One check result (EC-01..EC-22). STR-linked case references are omitted for actors without str.prepare.
-      properties:
-        check_id:
-          type: string
-          pattern: ^EC-[0-9]{2}$
-        result:
-          type: string
-          enum:
-          - PASS
-          - FAIL
-          - REVIEW
-          - DEFER
-          - NOT_APPLICABLE
-        detail:
-          type: string
-      required:
-      - check_id
-      - result
-    PayoutEvent:
-      type: object
-      description: Payout event (staff).
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        from_status:
-          oneOf:
-          - $ref: '#/components/schemas/PayoutStatus'
-          - type: 'null'
-        to_status:
-          $ref: '#/components/schemas/PayoutStatus'
-        source:
-          type: string
-          enum:
-          - OWNER
-          - STAFF
-          - SYSTEM
-          - SYNC
-          - WEBHOOK
-          - POLL
-          - RECON
-        actor:
-          oneOf:
-          - $ref: '#/components/schemas/ActorRef'
-          - type: 'null'
-        occurred_at:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - id
-      - from_status
-      - to_status
-      - source
-      - actor
-      - occurred_at
     DestinationOverrideCreate:
       type: object
       description: Staff destination override (maker) with user-request evidence.
@@ -39639,102 +39597,6 @@ components:
           $ref: '#/components/schemas/DestinationOverride'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
-    PayoutEligibilityPreviewEnvelope:
-      type: object
-      description: Standard envelope for `PayoutEligibilityPreview`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/PayoutEligibilityPreview'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    PayoutRequestEnvelope:
-      type: object
-      description: Standard envelope for `PayoutRequest`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/PayoutRequest'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    PayoutRequestPage:
-      type: object
-      description: Standard envelope (cursor page) for `PayoutRequest`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/PayoutRequest'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
-    StaffPayoutRequestPage:
-      type: object
-      description: Standard envelope (cursor page) for `StaffPayoutRequest`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/StaffPayoutRequest'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
-    StaffPayoutRequestEnvelope:
-      type: object
-      description: Standard envelope for `StaffPayoutRequest`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/StaffPayoutRequest'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    PayoutStatusViewEnvelope:
-      type: object
-      description: Standard envelope for `PayoutStatusView`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/PayoutStatusView'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    PayoutTimelineItemPage:
-      type: object
-      description: Standard envelope (cursor page) for `PayoutTimelineItem`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/PayoutTimelineItem'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
-    PayoutEventPage:
-      type: object
-      description: Standard envelope (cursor page) for `PayoutEvent`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/PayoutEvent'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
     KYCStatusEnvelope:
       type: object
       description: Standard envelope for `KYCStatus`.
@@ -48155,6 +48017,1350 @@ components:
               - string
               - 'null'
               description: Opaque keyset cursor; null when there are no more items.
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutStatusS11:
+      type: string
+      enum:
+      - PAYOUT_REQUESTED
+      - PENDING_REVIEW
+      - APPROVED
+      - SUBMITTED
+      - PROCESSING
+      - UNKNOWN
+      - COMPLETED
+      - FAILED
+      - REJECTED
+      - CANCELLED
+      - REVERSED
+      description: 'ADR-020 payout states (machine `payout`, DB-guarded; every change has an applied payout_events row). Brief names: REQUESTED/ELIGIBILITY_REVIEW
+        → PAYOUT_REQUESTED; RESERVED/PENDING_APPROVAL → PENDING_REVIEW; READY_FOR_SUBMISSION → APPROVED; SUCCEEDED → COMPLETED; RECONCILIATION_REQUIRED is the
+        `needs_reconciliation` flag. UNKNOWN is never resubmitted and never becomes FAILED by assumption.'
+    PayoutReservationS11:
+      type: object
+      description: Funds reserved in the ledger (journal payout:{id}:reserved) for one payout. BLOCKED while the provider outcome is UNKNOWN; never released
+        while UNKNOWN or in flight; CONSUMED only on authoritative completion.
+      properties:
+        id:
+          type: string
+          format: uuid
+        payout_request_id:
+          type: string
+          format: uuid
+        campaign_id:
+          type: string
+          format: uuid
+        currency:
+          $ref: '#/components/schemas/Currency'
+        amount_minor:
+          type: string
+          pattern: ^-?[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        account_scope:
+          type: string
+          description: liability:campaign_payable:{campaign_id}
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - BLOCKED
+          - CONSUMED
+          - RELEASED
+          - EXPIRED
+        ledger_reserve_transaction_id:
+          type: string
+          format: uuid
+        ledger_submit_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        ledger_release_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        ledger_consume_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - payout_request_id
+      - campaign_id
+      - currency
+      - amount_minor
+      - account_scope
+      - status
+      - ledger_reserve_transaction_id
+      - ledger_submit_transaction_id
+      - ledger_release_transaction_id
+      - ledger_consume_transaction_id
+      - expires_at
+      - created_at
+      - updated_at
+      additionalProperties: false
+    PayoutRequestOwnerS11:
+      type: object
+      description: 'The owner''s view: no approver identities, risk indicators or compliance detail (LR-008).'
+      properties:
+        id:
+          type: string
+          format: uuid
+        campaign_id:
+          type: string
+          format: uuid
+        currency:
+          $ref: '#/components/schemas/Currency'
+        amount_minor:
+          type: string
+          pattern: ^-?[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        purpose:
+          type:
+          - string
+          - 'null'
+        status:
+          type: string
+          enum:
+          - PAYOUT_REQUESTED
+          - PENDING_REVIEW
+          - APPROVED
+          - SUBMITTED
+          - PROCESSING
+          - UNKNOWN
+          - COMPLETED
+          - FAILED
+          - REJECTED
+          - CANCELLED
+          - REVERSED
+          description: 'ADR-020 payout states (machine `payout`, DB-guarded; every change has an applied payout_events row). Brief names: REQUESTED/ELIGIBILITY_REVIEW
+            → PAYOUT_REQUESTED; RESERVED/PENDING_APPROVAL → PENDING_REVIEW; READY_FOR_SUBMISSION → APPROVED; SUCCEEDED → COMPLETED; RECONCILIATION_REQUIRED
+            is the `needs_reconciliation` flag. UNKNOWN is never resubmitted and never becomes FAILED by assumption.'
+        status_label:
+          type: string
+        destination_masked:
+          type: string
+        destination_rail:
+          type: string
+        reason_category:
+          type:
+          - string
+          - 'null'
+        test_payout:
+          type: boolean
+          description: Always true in Stage 11 (simulator only).
+        funds_label:
+          type: string
+          enum:
+          - TEST_ONLY
+        requested_at:
+          $ref: '#/components/schemas/Timestamp'
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        can_cancel:
+          type: boolean
+        version:
+          type: integer
+      required:
+      - id
+      - campaign_id
+      - currency
+      - amount_minor
+      - purpose
+      - status
+      - status_label
+      - destination_masked
+      - destination_rail
+      - reason_category
+      - test_payout
+      - funds_label
+      - requested_at
+      - submitted_at
+      - completed_at
+      - can_cancel
+      - version
+      additionalProperties: false
+    PayoutRequestStaffS11:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        campaign_id:
+          type: string
+          format: uuid
+        owner_user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        owner_organisation_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        beneficiary_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        currency:
+          $ref: '#/components/schemas/Currency'
+        amount_minor:
+          type: string
+          pattern: ^-?[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        purpose:
+          type:
+          - string
+          - 'null'
+        requested_by:
+          type: string
+          format: uuid
+        requested_at:
+          $ref: '#/components/schemas/Timestamp'
+        status:
+          type: string
+          enum:
+          - PAYOUT_REQUESTED
+          - PENDING_REVIEW
+          - APPROVED
+          - SUBMITTED
+          - PROCESSING
+          - UNKNOWN
+          - COMPLETED
+          - FAILED
+          - REJECTED
+          - CANCELLED
+          - REVERSED
+          description: 'ADR-020 payout states (machine `payout`, DB-guarded; every change has an applied payout_events row). Brief names: REQUESTED/ELIGIBILITY_REVIEW
+            → PAYOUT_REQUESTED; RESERVED/PENDING_APPROVAL → PENDING_REVIEW; READY_FOR_SUBMISSION → APPROVED; SUCCEEDED → COMPLETED; RECONCILIATION_REQUIRED
+            is the `needs_reconciliation` flag. UNKNOWN is never resubmitted and never becomes FAILED by assumption.'
+        approval_policy:
+          type: string
+          enum:
+          - SINGLE
+          - DUAL
+        approval_round:
+          type: integer
+        execution_environment:
+          type: string
+          enum:
+          - LOCAL_SIMULATOR
+        test_payout:
+          type: boolean
+        ledger_environment:
+          type: string
+          enum:
+          - TEST
+        destination_id:
+          type: string
+          format: uuid
+        destination_version:
+          type: integer
+        destination_rail:
+          type: string
+        destination_masked:
+          type: string
+        destination_category:
+          type: string
+        provider_id:
+          type: string
+          format: uuid
+        provider_account_id:
+          type: string
+          format: uuid
+        capability_id:
+          type: string
+          format: uuid
+        provider_payout_ref:
+          type:
+          - string
+          - 'null'
+        provider_fee_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^-?[0-9]{1,18}$
+        reversed_amount_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^-?[0-9]{1,18}$
+        unknown_since:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        unknown_reason:
+          type:
+          - string
+          - 'null'
+        next_poll_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        poll_attempts:
+          type: integer
+        needs_reconciliation:
+          type: boolean
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        failure_code:
+          type:
+          - string
+          - 'null'
+        decision_reason_code:
+          type:
+          - string
+          - 'null'
+        correlation_id:
+          type:
+          - string
+          - 'null'
+        version:
+          type: integer
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+        reservation:
+          oneOf:
+          - $ref: '#/components/schemas/PayoutReservationS11'
+          - type: 'null'
+      required:
+      - id
+      - campaign_id
+      - owner_user_id
+      - owner_organisation_id
+      - beneficiary_id
+      - currency
+      - amount_minor
+      - purpose
+      - requested_by
+      - requested_at
+      - status
+      - approval_policy
+      - approval_round
+      - execution_environment
+      - test_payout
+      - ledger_environment
+      - destination_id
+      - destination_version
+      - destination_rail
+      - destination_masked
+      - destination_category
+      - provider_id
+      - provider_account_id
+      - capability_id
+      - provider_payout_ref
+      - provider_fee_minor
+      - reversed_amount_minor
+      - unknown_since
+      - unknown_reason
+      - next_poll_at
+      - poll_attempts
+      - needs_reconciliation
+      - submitted_at
+      - completed_at
+      - failure_code
+      - decision_reason_code
+      - correlation_id
+      - version
+      - created_at
+      - updated_at
+      - reservation
+      additionalProperties: false
+    PayoutCheckS11:
+      type: object
+      properties:
+        check_id:
+          type: string
+          pattern: ^EC-(0[1-9]|1[0-9]|2[0-2])$
+        result:
+          type: string
+          enum:
+          - PASS
+          - FAIL
+          - REVIEW
+          - DEFER
+          - NOT_APPLICABLE
+        detail_code:
+          type: string
+      required:
+      - check_id
+      - result
+      - detail_code
+      additionalProperties: false
+    PayoutDecisionS11:
+      type: object
+      description: All 22 checks EC-01..EC-22 (payout-eligibility-and-controls.md), stored as an append-only hashed decision record.
+      properties:
+        phase:
+          type: string
+          enum:
+          - REQUEST
+          - PRE_SUBMIT
+          - RECHECK
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayoutCheckS11'
+          minItems: 22
+          maxItems: 22
+        outcome:
+          type: string
+          enum:
+          - ELIGIBLE
+          - REVIEW
+          - DEFERRED
+          - REJECTED
+        approval_tier:
+          type: string
+          enum:
+          - SINGLE
+          - DUAL
+        reason_code:
+          type: string
+      required:
+      - phase
+      - results
+      - outcome
+      additionalProperties: false
+    PayoutAvailabilityS11:
+      type: object
+      description: Non-binding preview (nothing recorded). Amounts are synthetic TEST_ONLY ledger balances, never real or withdrawable funds; production availability
+        is BLOCKED (no settlement evidence). EC-13/EC-16 details are masked for the owner.
+      properties:
+        campaign_id:
+          type: string
+          format: uuid
+        currency:
+          $ref: '#/components/schemas/Currency'
+        environment:
+          type: string
+          enum:
+          - TEST
+          - PRODUCTION
+        funds_label:
+          type: string
+          enum:
+          - TEST_ONLY
+        settled_released_minor:
+          type: string
+          pattern: ^-?[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        refund_exposure_minor:
+          type: string
+          pattern: ^-?[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        reserved_minor:
+          type: string
+          pattern: ^-?[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        available_minor:
+          type: string
+          pattern: ^-?[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        payouts_enabled:
+          type: boolean
+        production_status:
+          type: string
+          enum:
+          - BLOCKED
+        blockers:
+          type: array
+          items:
+            type: string
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayoutCheckS11'
+      required:
+      - campaign_id
+      - currency
+      - environment
+      - funds_label
+      - settled_released_minor
+      - refund_exposure_minor
+      - reserved_minor
+      - available_minor
+      - payouts_enabled
+      - production_status
+      - blockers
+      additionalProperties: false
+    PayoutRequestCreateS11:
+      type: object
+      properties:
+        currency:
+          $ref: '#/components/schemas/Currency'
+        amount_minor:
+          type: string
+          pattern: ^[1-9][0-9]{0,15}$
+        destination_id:
+          type: string
+          format: uuid
+        purpose:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+      required:
+      - currency
+      - amount_minor
+      - destination_id
+      additionalProperties: false
+    PayoutDecisionInputS11:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 2000
+        conflict_attested:
+          type: boolean
+          const: true
+          description: The approver attests no declared conflict (operational-controls §2).
+      required:
+      - reason
+      - conflict_attested
+      additionalProperties: false
+    PayoutReasonInputS11:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 2000
+      required:
+      - reason
+      additionalProperties: false
+    PayoutTimelineItemS11:
+      type: object
+      properties:
+        at:
+          $ref: '#/components/schemas/Timestamp'
+        status:
+          type: string
+          enum:
+          - PAYOUT_REQUESTED
+          - PENDING_REVIEW
+          - APPROVED
+          - SUBMITTED
+          - PROCESSING
+          - UNKNOWN
+          - COMPLETED
+          - FAILED
+          - REJECTED
+          - CANCELLED
+          - REVERSED
+          description: 'ADR-020 payout states (machine `payout`, DB-guarded; every change has an applied payout_events row). Brief names: REQUESTED/ELIGIBILITY_REVIEW
+            → PAYOUT_REQUESTED; RESERVED/PENDING_APPROVAL → PENDING_REVIEW; READY_FOR_SUBMISSION → APPROVED; SUCCEEDED → COMPLETED; RECONCILIATION_REQUIRED
+            is the `needs_reconciliation` flag. UNKNOWN is never resubmitted and never becomes FAILED by assumption.'
+        label:
+          type: string
+      required:
+      - at
+      - status
+      - label
+      additionalProperties: false
+    PayoutJournalLinkS11:
+      type: object
+      properties:
+        idempotency_key:
+          type: string
+        transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      required:
+      - idempotency_key
+      - transaction_id
+      additionalProperties: false
+    PayoutExceptionS11:
+      type: object
+      description: Operations exception (detection fields immutable; one unresolved per type and payout; append-only resolution history). Resolving never moves
+        money.
+      properties:
+        id:
+          type: string
+          format: uuid
+        payout_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        campaign_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        exception_type:
+          type: string
+          enum:
+          - UNKNOWN_PROVIDER_OUTCOME
+          - DESTINATION_MISMATCH
+          - INSUFFICIENT_ELIGIBLE_FUNDS
+          - COMPLIANCE_HOLD
+          - APPROVAL_EXPIRED
+          - PROVIDER_UNAVAILABLE
+          - RECONCILIATION_MISMATCH
+          - DUPLICATE_SUBMISSION_ATTEMPT
+          - LEDGER_POSTING_FAILED
+          - LATE_COMPLETION_AFTER_FAILURE
+          - PAYOUT_RETURNED
+        severity:
+          type: string
+          enum:
+          - SEV1
+          - SEV2
+          - SEV3
+        source:
+          type: string
+          enum:
+          - ORCHESTRATION
+          - ELIGIBILITY
+          - WEBHOOK
+          - RECONCILIATION
+          - LEDGER
+        status:
+          type: string
+          enum:
+          - OPEN
+          - INVESTIGATING
+          - RESOLVED
+        owner_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        reconciliation_reference_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        evidence:
+          type: object
+          additionalProperties: true
+        resolution_code:
+          type:
+          - string
+          - 'null'
+        detected_at:
+          $ref: '#/components/schemas/Timestamp'
+        resolved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        age_seconds:
+          type: integer
+        history:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      required:
+      - id
+      - payout_request_id
+      - campaign_id
+      - exception_type
+      - severity
+      - source
+      - status
+      - owner_id
+      - reconciliation_reference_id
+      - evidence
+      - resolution_code
+      - detected_at
+      - resolved_at
+      - age_seconds
+      additionalProperties: false
+    PayoutDetailS11:
+      type: object
+      properties:
+        payout:
+          $ref: '#/components/schemas/PayoutRequestStaffS11'
+        approvals:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        attempts:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        events:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        eligibility_decisions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        exceptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayoutExceptionS11'
+        ledger_journals:
+          type: array
+          items:
+            $ref: '#/components/schemas/PayoutJournalLinkS11'
+      required:
+      - payout
+      - approvals
+      - attempts
+      - events
+      - eligibility_decisions
+      - exceptions
+      - ledger_journals
+      additionalProperties: false
+    PayoutOverviewS11:
+      type: object
+      properties:
+        execution_environment:
+          type: string
+          enum:
+          - DISABLED
+          - LOCAL_SIMULATOR
+        live_execution:
+          type: boolean
+          const: false
+        production_status:
+          type: string
+          enum:
+          - BLOCKED
+        ledger_environment:
+          type: string
+        by_status:
+          type: object
+          additionalProperties:
+            type: integer
+        open_exceptions_by_severity:
+          type: object
+          additionalProperties:
+            type: integer
+        active_reserved_minor_by_currency:
+          type: object
+          additionalProperties:
+            type: string
+        settlement_reconciliation:
+          type: string
+      required:
+      - execution_environment
+      - live_execution
+      - production_status
+      - ledger_environment
+      - by_status
+      - open_exceptions_by_severity
+      - active_reserved_minor_by_currency
+      - settlement_reconciliation
+      additionalProperties: false
+    PayoutReconReferenceS11:
+      type: object
+      description: Immutable mismatch detection.
+      properties:
+        id:
+          type: string
+          format: uuid
+        payout_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        mismatch_type:
+          type: string
+          enum:
+          - MISSING_PROVIDER_CONFIRMATION
+          - DUPLICATE_PAYOUT_REFERENCE
+          - AMOUNT_MISMATCH
+          - CURRENCY_MISMATCH
+          - UNKNOWN_OUTCOME
+          - RESERVATION_MISMATCH
+          - LEDGER_MISMATCH
+          - PROVIDER_STATUS_MISMATCH
+        expected_amount_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^-?[0-9]{1,18}$
+        actual_amount_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^-?[0-9]{1,18}$
+        currency:
+          type:
+          - string
+          - 'null'
+        provider_reference:
+          type:
+          - string
+          - 'null'
+        ledger_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        detail:
+          type: object
+          additionalProperties: true
+        detected_at:
+          $ref: '#/components/schemas/Timestamp'
+        detected_by_run:
+          type: string
+      required:
+      - id
+      - payout_request_id
+      - mismatch_type
+      - expected_amount_minor
+      - actual_amount_minor
+      - currency
+      - provider_reference
+      - ledger_transaction_id
+      - detail
+      - detected_at
+      - detected_by_run
+      additionalProperties: false
+    PayoutReconRunS11:
+      type: object
+      properties:
+        run_id:
+          type: string
+        checked:
+          type: integer
+        new_mismatches:
+          type: integer
+        by_type:
+          type: object
+          additionalProperties:
+            type: integer
+        settlement_reconciliation:
+          type: string
+      required:
+      - run_id
+      - checked
+      - new_mismatches
+      - by_type
+      - settlement_reconciliation
+      additionalProperties: false
+    PayoutProviderCapabilityS11:
+      type: object
+      description: Unverified values are UNKNOWN; the only payout capability is the simulator's.
+      properties:
+        capability_id:
+          type: string
+          format: uuid
+        provider_id:
+          type: string
+          format: uuid
+        provider_code:
+          type: string
+        is_sandbox:
+          type: boolean
+        capability_version:
+          type: integer
+        currency:
+          $ref: '#/components/schemas/Currency'
+        payout_rails:
+          type: array
+          items:
+            type: string
+        evidence_status:
+          type: string
+        routable:
+          type: boolean
+        status_api:
+          type: boolean
+        signed_webhooks:
+          type: boolean
+        payout_cancellation:
+          type: string
+        payout_limits:
+          type: string
+        settlement_requirements:
+          type: string
+        confirmation_status:
+          type: string
+      required:
+      - capability_id
+      - provider_id
+      - provider_code
+      - is_sandbox
+      - capability_version
+      - currency
+      - payout_rails
+      - evidence_status
+      - routable
+      - status_api
+      - signed_webhooks
+      - payout_cancellation
+      - payout_limits
+      - settlement_requirements
+      - confirmation_status
+      additionalProperties: false
+    PayoutExceptionStepS11:
+      type: object
+      properties:
+        note:
+          type: string
+          minLength: 5
+          maxLength: 2000
+        resolution_code:
+          type: string
+          enum:
+          - CONFIRMED_NO_ACTION
+          - CORRECTED_BY_ADJUSTMENT
+          - PROVIDER_CONFIRMED
+          - DUPLICATE_DETECTION
+          - ESCALATED_INCIDENT
+          - OTHER
+      required:
+      - note
+      additionalProperties: false
+    PayoutExceptionStepResultS11:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - INVESTIGATING
+          - RESOLVED
+      required:
+      - id
+      - status
+      additionalProperties: false
+    SandboxPayoutStateS11:
+      type: object
+      properties:
+        provider_payout_ref:
+          type: string
+        our_reference:
+          type: string
+          format: uuid
+        scenario:
+          type: string
+        raw_status:
+          type: string
+        amount_minor:
+          type: string
+          pattern: ^-?[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        currency:
+          $ref: '#/components/schemas/Currency'
+        rail:
+          type: string
+        simulated:
+          type: boolean
+          const: true
+      required:
+      - provider_payout_ref
+      - our_reference
+      - scenario
+      - raw_status
+      - amount_minor
+      - currency
+      - rail
+      - simulated
+      additionalProperties: false
+    SandboxPayoutWebhookS11:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+          - processing
+          - completed
+          - failed
+          - returned
+        delay_seconds:
+          type: integer
+          minimum: 0
+          maximum: 3600
+        copies:
+          type: integer
+          minimum: 0
+          maximum: 5
+        sign_with:
+          type: string
+          enum:
+          - current
+          - previous
+          - wrong
+          - none
+      required:
+      - status
+      additionalProperties: false
+    SandboxScheduledS11:
+      type: object
+      properties:
+        scheduled:
+          type: boolean
+        simulated:
+          type: boolean
+      required:
+      - scheduled
+      - simulated
+      additionalProperties: false
+    PayoutRequestOwnerS11Envelope:
+      type: object
+      description: Standard envelope for `PayoutRequestOwnerS11`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PayoutRequestOwnerS11'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutRequestStaffS11Envelope:
+      type: object
+      description: Standard envelope for `PayoutRequestStaffS11`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PayoutRequestStaffS11'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutAvailabilityS11Envelope:
+      type: object
+      description: Standard envelope for `PayoutAvailabilityS11`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PayoutAvailabilityS11'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutDetailS11Envelope:
+      type: object
+      description: Standard envelope for `PayoutDetailS11`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PayoutDetailS11'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutDecisionS11Envelope:
+      type: object
+      description: Standard envelope for `PayoutDecisionS11`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PayoutDecisionS11'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutOverviewS11Envelope:
+      type: object
+      description: Standard envelope for `PayoutOverviewS11`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PayoutOverviewS11'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutReconRunS11Envelope:
+      type: object
+      description: Standard envelope for `PayoutReconRunS11`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PayoutReconRunS11'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutExceptionStepResultS11Envelope:
+      type: object
+      description: Standard envelope for `PayoutExceptionStepResultS11`.
+      properties:
+        data:
+          $ref: '#/components/schemas/PayoutExceptionStepResultS11'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    SandboxPayoutStateS11Envelope:
+      type: object
+      description: Standard envelope for `SandboxPayoutStateS11`.
+      properties:
+        data:
+          $ref: '#/components/schemas/SandboxPayoutStateS11'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    SandboxScheduledS11Envelope:
+      type: object
+      description: Standard envelope for `SandboxScheduledS11`.
+      properties:
+        data:
+          $ref: '#/components/schemas/SandboxScheduledS11'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutRequestOwnerS11Page:
+      type: object
+      description: Page of `PayoutRequestOwnerS11` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PayoutRequestOwnerS11'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutRequestStaffS11Page:
+      type: object
+      description: Page of `PayoutRequestStaffS11` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PayoutRequestStaffS11'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutTimelineItemS11Page:
+      type: object
+      description: Page of `PayoutTimelineItemS11` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PayoutTimelineItemS11'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutReservationS11Page:
+      type: object
+      description: Page of `PayoutReservationS11` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PayoutReservationS11'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutExceptionS11Page:
+      type: object
+      description: Page of `PayoutExceptionS11` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PayoutExceptionS11'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutProviderCapabilityS11Page:
+      type: object
+      description: Page of `PayoutProviderCapabilityS11` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PayoutProviderCapabilityS11'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+            note:
+              type: string
+          required:
+          - items
+          - next_cursor
+          - note
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutReconReferenceS11Page:
+      type: object
+      description: Page of `PayoutReconReferenceS11` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PayoutReconReferenceS11'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+            settlement_reconciliation:
+              type: string
+          required:
+          - items
+          - next_cursor
+          - settlement_reconciliation
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    PayoutEventS11Page:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            next_cursor:
+              type:
+              - string
+              - 'null'
           required:
           - items
           - next_cursor

@@ -380,3 +380,34 @@ func (s *Service) MoneyLimits(ctx context.Context, key, currency string, at time
 		return m, err
 	})
 }
+
+// ValueLimit is an approved DURATION or COUNT limit in force (value in seconds or as a count).
+type ValueLimit struct {
+	ID        string
+	Key       string
+	LimitType string
+	ScopeType string
+	Value     int64
+}
+
+// ValueLimits returns every APPROVED limit of kind (DURATION | COUNT) in force at `at` for key, GLOBAL scope —
+// the highest approved version per limit type. Callers combine them (most restrictive); a missing limit is not
+// invented here.
+func (s *Service) ValueLimits(ctx context.Context, key, kind string, at time.Time) ([]ValueLimit, error) {
+	col := "value_count"
+	if kind == "DURATION" {
+		col = "value_seconds"
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT DISTINCT ON (limit_type) id, limit_key, limit_type, scope_type, `+col+` FROM risk.limits
+		WHERE status = 'APPROVED' AND value_kind = $2 AND limit_key = $1 AND scope_type = 'GLOBAL'
+		  AND effective_from <= $3 AND (effective_to IS NULL OR effective_to > $3)
+		ORDER BY limit_type, version DESC`, key, kind, at)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (ValueLimit, error) {
+		var v ValueLimit
+		err := r.Scan(&v.ID, &v.Key, &v.LimitType, &v.ScopeType, &v.Value)
+		return v, err
+	})
+}

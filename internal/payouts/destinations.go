@@ -24,7 +24,9 @@ import (
 
 	"github.com/Fatifizo/fundzim/internal/audit"
 	"github.com/Fatifizo/fundzim/internal/beneficiaries"
+	"github.com/Fatifizo/fundzim/internal/campaigns"
 	"github.com/Fatifizo/fundzim/internal/kyc"
+	"github.com/Fatifizo/fundzim/internal/ledger"
 	"github.com/Fatifizo/fundzim/internal/organisations"
 	"github.com/Fatifizo/fundzim/internal/platform/clock"
 	"github.com/Fatifizo/fundzim/internal/platform/crypto"
@@ -33,6 +35,8 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/httpx"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
 	"github.com/Fatifizo/fundzim/internal/platform/outbox"
+	"github.com/Fatifizo/fundzim/internal/psp"
+	"github.com/Fatifizo/fundzim/internal/risk"
 )
 
 // CoolingOff is the period after creation or any change during which a destination cannot be used for a
@@ -56,7 +60,8 @@ var (
 	bankCodeRe    = regexp.MustCompile(`^[A-Z0-9]{2,11}$`)
 )
 
-// Service is the payouts module (destinations only; app pool).
+// Service is the payouts module (app pool): payout destinations (Stage 5) and withdrawal (payout) requests,
+// reservations, approvals, orchestration, reconciliation and exceptions (Stage 11, ADR-043).
 type Service struct {
 	Pool   *pgxpool.Pool
 	KYC    *kyc.Service
@@ -66,6 +71,21 @@ type Service struct {
 	Keyed  *crypto.Keyed // app-pool blind-index key
 	Clock  clock.Clock
 	Logger *slog.Logger
+
+	// Stage 11 dependencies (nil in processes that only serve destinations)
+	Campaigns *campaigns.Service
+	Ledger    *ledger.Service // the ledger posts on its own pool (fundzim_ledger)
+	PSP       *psp.Service
+	Risk      *risk.Service
+	Refunds   RefundExposure
+	// ExecEnv is PAYOUTS_EXECUTION_ENVIRONMENT: DISABLED | LOCAL_SIMULATOR (PRODUCTION and PROVIDER_SANDBOX are
+	// refused by configuration in Stage 11).
+	ExecEnv string
+	// StepUpMaxAge bounds the freshness of the factor required for owner payout requests, cancellations and
+	// destination changes (staff approvals use the permission policy's step-up).
+	StepUpMaxAge time.Duration
+	// ReconGrace overrides DefaultReconGrace (tests).
+	ReconGrace time.Duration
 }
 
 func (s *Service) now() time.Time { return s.Clock.Now().UTC() }
@@ -104,13 +124,42 @@ type Destination struct {
 	CoolingOffUntil                 time.Time  `json:"cooling_off_until"`
 	LastReviewedAt                  *time.Time `json:"last_reviewed_at"`
 	ExpiresAt                       *time.Time `json:"expires_at"`
-	EligibleForPayout               bool       `json:"eligible_for_payout"`
+	EligibleForPayout               bool       `json:"eligible_for_payout"` // production payouts: always false (ADR-043)
+	Readiness                       Readiness  `json:"payout_readiness"`
 	CreatedAt                       time.Time  `json:"created_at"`
 	UpdatedAt                       time.Time  `json:"updated_at"`
 	Version                         int        `json:"version"`
 	ownerUser, ownerOrg, assignedTo *string
 	createdBy, lastChangedBy        string
 	detailsVersion                  int
+	verifiedBy                      *string
+}
+
+// Readiness keeps three facts apart (Stage 11 brief §11): documentary ownership verification, eligibility for a
+// (TEST) payout now, and confirmation by a payout provider — which no integrated provider can give
+// (PROVIDER_CONFIRMATION_REQUIRED), so it is always false.
+type Readiness struct {
+	OwnershipVerified bool   `json:"ownership_verified"`
+	PayoutEligible    bool   `json:"payout_eligible"`
+	ProviderConfirmed bool   `json:"provider_confirmed"`
+	Scope             string `json:"scope"`
+	Reason            string `json:"reason,omitempty"`
+}
+
+// annotate computes the destination's readiness at now.
+func (d *Destination) annotate(now time.Time) {
+	r := Readiness{OwnershipVerified: d.Checks.Ownership == "CONFIRMED", Scope: "TEST_PAYOUTS_ONLY"}
+	switch {
+	case d.Status != "VERIFIED" || d.Checks.Compliance != "APPROVED" || !r.OwnershipVerified:
+		r.Reason = "NOT_VERIFIED"
+	case d.ExpiresAt != nil && !d.ExpiresAt.After(now):
+		r.Reason = "VERIFICATION_EXPIRED"
+	case d.CoolingOffUntil.After(now):
+		r.Reason = "COOLING_OFF"
+	default:
+		r.PayoutEligible = true
+	}
+	d.Readiness = r
 }
 
 // Owner / Payee / Checks.
@@ -130,21 +179,21 @@ type Checks struct {
 
 const selectD = `SELECT id, owner_user_id, owner_organisation_id, created_by, payee_type, beneficiary_id, category, rail, currency, holder_name,
 	masked_suffix, status, ownership_status, compliance_status, verification_method, cooling_off_until, verified_at, expires_at, assigned_to,
-	last_changed_by, details_version, version, created_at, updated_at FROM app.payout_destinations`
+	last_changed_by, details_version, version, created_at, updated_at, verified_by FROM app.payout_destinations`
 
 func scanD(row pgx.Row) (Destination, error) {
 	var d Destination
 	var masked string
 	err := row.Scan(&d.ID, &d.ownerUser, &d.ownerOrg, &d.createdBy, &d.Payee.Type, &d.Payee.BeneficiaryID, &d.Category, &d.Rail, &d.Currency,
 		&d.HolderName, &masked, &d.Status, &d.Checks.Ownership, &d.Checks.Compliance, &d.VerificationMethod, &d.CoolingOffUntil, &d.LastReviewedAt,
-		&d.ExpiresAt, &d.assignedTo, &d.lastChangedBy, &d.detailsVersion, &d.Version, &d.CreatedAt, &d.UpdatedAt)
+		&d.ExpiresAt, &d.assignedTo, &d.lastChangedBy, &d.detailsVersion, &d.Version, &d.CreatedAt, &d.UpdatedAt, &d.verifiedBy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, ErrNotFound
 	}
 	d.MaskedIdentifier = "••••" + masked
 	d.ProviderName = rails[d.Rail].name
 	d.Checks.FormatValidated = true // a destination is only stored after its format check passed (FORMAT check row)
-	d.EligibleForPayout = false     // no payout processing exists in Stage 5
+	d.EligibleForPayout = false     // no production payout processing exists (Stage 11: TEST payouts only)
 	if d.ownerUser != nil {
 		d.Owner = Owner{"USER", *d.ownerUser}
 	} else if d.ownerOrg != nil {
@@ -163,7 +212,11 @@ func (s *Service) load(ctx context.Context, q interface {
 	if lock {
 		sql += ` FOR UPDATE`
 	}
-	return scanD(q.QueryRow(ctx, sql, id))
+	d, err := scanD(q.QueryRow(ctx, sql, id))
+	if err == nil {
+		d.annotate(s.now())
+	}
+	return d, err
 }
 
 func (s *Service) canEdit(ctx context.Context, d Destination, userID string) (bool, error) {
@@ -407,6 +460,7 @@ func (s *Service) List(ctx context.Context, actorID string) ([]Destination, erro
 		if err != nil {
 			return nil, err
 		}
+		d.annotate(s.now())
 		out = append(out, d)
 	}
 	return out, rows.Err()
@@ -481,6 +535,9 @@ func (s *Service) Change(ctx context.Context, actorID, id string, in Input, expe
 			return err
 		}
 		if err := s.event(ctx, tx, id, version, "DETAILS_CHANGED", d.Status, "UNVERIFIED", "", actorID, "USER"); err != nil {
+			return err
+		}
+		if err := s.invalidateApprovals(ctx, tx, id, "DESTINATION_DETAILS_CHANGED", "OWNER", actorID); err != nil {
 			return err
 		}
 		if err := audit.Record(ctx, tx, audit.Event{Stream: audit.Security, Action: "payout_destination.changed", TargetType: "payout_destination", TargetID: id}); err != nil {
@@ -608,6 +665,9 @@ func (s *Service) Retire(ctx context.Context, actorID, id string) error {
 			return errNotAllowed
 		}
 		if err := s.event(ctx, tx, id, version, "RETIRED", d.Status, "RETIRED", "", actorID, "USER"); err != nil {
+			return err
+		}
+		if err := s.invalidateApprovals(ctx, tx, id, "DESTINATION_RETIRED", "OWNER", actorID); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Event{Action: "payout_destination.retired", TargetType: "payout_destination", TargetID: id})

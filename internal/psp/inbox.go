@@ -428,8 +428,12 @@ func (s *Service) claim(ctx context.Context, inboxID string) (InboxEvent, bool, 
 			return s.MarkUnrecognised(ctx, tx, ev.ID, "UNMAPPED_EVENT_TYPE")
 		}
 		run = true
-		_, err = tx.Exec(ctx, `UPDATE app.provider_webhook_inbox SET status = 'DISPATCHED', dispatched_to = 'payments',
-			attempts = attempts + 1, next_attempt_at = NULL, version = version + 1 WHERE id = $1`, ev.ID)
+		to := "payments"
+		if ev.Class == "PAYOUT" {
+			to = "payouts"
+		}
+		_, err = tx.Exec(ctx, `UPDATE app.provider_webhook_inbox SET status = 'DISPATCHED', dispatched_to = $2,
+			attempts = attempts + 1, next_attempt_at = NULL, version = version + 1 WHERE id = $1`, ev.ID, to)
 		return err
 	})
 	return ev, run, err

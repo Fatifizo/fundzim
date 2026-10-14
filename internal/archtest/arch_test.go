@@ -35,7 +35,8 @@ var allowedImports = map[string][]string{
 	"kyc":           {"platform", "audit", "storage", "users", "organisations"},
 	"beneficiaries": {"platform", "audit", "users", "organisations", "kyc"},
 	"compliance":    {"platform", "audit", "users", "organisations", "kyc", "risk", "storage"},
-	"payouts":       {"platform", "audit", "users", "organisations", "kyc", "beneficiaries", "compliance", "risk", "storage"},
+	// Stage 11 (ADR-043): campaigns, ledger and psp as design-baseline §4 allows (payments never: baseline §3)
+	"payouts": {"platform", "audit", "users", "organisations", "kyc", "beneficiaries", "compliance", "risk", "storage", "campaigns", "ledger", "psp"},
 	// orchestration layer (no tables; like `admin`, composes public services) — Stage 5, ADR-035
 	"verification": {"platform", "audit", "users", "organisations", "kyc", "beneficiaries", "payouts", "storage", "risk", "compliance"},
 	// Stage 6 campaign engine (interface-contracts §1): core, media and updates packages
@@ -72,7 +73,10 @@ var ownedTables = map[string][]string{
 		"compliance.subject_restrictions"},
 	"beneficiaries": {"app.beneficiaries", "app.beneficiary_relationships", "app.beneficiary_events", "app.beneficiary_information_requests",
 		"app.beneficiary_verifications"},
-	"payouts":      {"app.payout_destinations", "app.payout_destination_checks", "app.payout_destination_events"},
+	"payouts": {"app.payout_destinations", "app.payout_destination_checks", "app.payout_destination_events",
+		// Stage 11 (ADR-043)
+		"app.payout_requests", "app.payout_reservations", "app.payout_approvals", "app.payout_attempts", "app.payout_events",
+		"app.payout_eligibility_decisions", "app.payout_exceptions", "app.payout_exception_events", "app.payout_reconciliation_references"},
 	"verification": {},
 	// Stage 6 (interface-contracts §1): core (lead), campaign_media (stream M), campaign updates (stream U)
 	"campaigns": {"app.campaign_categories", "app.campaign_policies", "app.campaigns", "app.campaign_goals", "app.campaign_versions",
@@ -82,7 +86,7 @@ var ownedTables = map[string][]string{
 	// Stage 8 (ADR-039)
 	"psp": {"app.payment_providers", "app.provider_capabilities", "app.provider_capabilities_current", "app.provider_accounts",
 		"app.provider_webhook_inbox", "app.provider_webhook_rejections", "app.provider_health_events", "app.sandbox_provider_payments",
-		"app.sandbox_scheduled_webhooks"},
+		"app.sandbox_scheduled_webhooks", "app.sandbox_provider_payouts"},
 	"payments": {"app.donation_intents", "app.payment_intents", "app.payment_attempts", "app.payment_transactions",
 		"app.payment_provider_references", "app.payment_sessions", "app.payment_events", "app.refund_requests",
 		"app.payment_reconciliation_references", "app.payment_status_rank", "app.payment_provider_evidence"},

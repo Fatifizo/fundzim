@@ -50,7 +50,7 @@ type itServer struct {
 
 // newITServer starts the public handler in-process. Loopback is a trusted proxy so each test browser can
 // present its own client IP (X-Forwarded-For) and per-IP limits do not interfere between tests.
-func newITServer(t *testing.T, mutate func(*config.Config)) *itServer {
+func newITServer(t *testing.T, mutate func(*config.Config), deps ...func(*app.Deps)) *itServer {
 	t.Helper()
 	need(t, "DATABASE_URL", "REDIS_URL")
 	cfg, err := config.FromEnv()
@@ -68,6 +68,9 @@ func newITServer(t *testing.T, mutate func(*config.Config)) *itServer {
 	d, err := app.NewDeps(context.Background(), cfg, logger)
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, f := range deps {
+		f(d)
 	}
 	s := httptest.NewServer(app.PublicHandler(d, app.NewRouter(d, d.Checker())))
 	t.Cleanup(func() { s.Close(); d.Close() })

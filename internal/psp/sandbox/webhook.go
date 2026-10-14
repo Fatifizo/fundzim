@@ -38,14 +38,18 @@ type Payload struct {
 	Data      PayloadData `json:"data"`
 }
 
-// PayloadData is the event's payment data. The payer is masked at the source.
+// PayloadData is the event's payment (or payout) data. The payer and the payout destination are masked at the
+// source.
 type PayloadData struct {
-	PaymentReference  string `json:"payment_reference"`
-	ProviderPaymentID string `json:"provider_payment_id"`
+	PaymentReference  string `json:"payment_reference,omitempty"`
+	ProviderPaymentID string `json:"provider_payment_id,omitempty"`
+	PayoutReference   string `json:"payout_reference,omitempty"`
+	ProviderPayoutID  string `json:"provider_payout_id,omitempty"`
 	Status            string `json:"status"`
 	AmountMinor       string `json:"amount_minor"`
 	Currency          string `json:"currency"`
 	PayerMasked       string `json:"payer_masked,omitempty"`
+	DestinationMasked string `json:"destination_masked,omitempty"`
 }
 
 // Sign returns the signature header value for body at time t with the given key slot.
@@ -117,12 +121,15 @@ func (a *Adapter) Parse(_ context.Context, in psp.Inbound) ([]psp.WebhookEvent, 
 	if !evtRE.MatchString(p.ID) || p.Type == "" || len(p.Type) > 64 || p.Data.Status == "" || len(p.Data.Status) > 40 {
 		return nil, psp.ErrMalformed
 	}
-	class := "OTHER"
-	if strings.HasPrefix(p.Type, "payment.") {
+	class, ourRef, provRef := "OTHER", p.Data.PaymentReference, p.Data.ProviderPaymentID
+	switch {
+	case strings.HasPrefix(p.Type, "payment."):
 		class = "PAYMENT"
+	case strings.HasPrefix(p.Type, "payout."):
+		class, ourRef, provRef = "PAYOUT", p.Data.PayoutReference, p.Data.ProviderPayoutID
 	}
-	ev := psp.WebhookEvent{ProviderEventID: p.ID, Class: class, TypeRaw: p.Type, ProviderReference: p.Data.ProviderPaymentID,
-		OurReference: p.Data.PaymentReference, RawStatus: p.Data.Status, Simulated: p.Simulated && !p.Livemode}
+	ev := psp.WebhookEvent{ProviderEventID: p.ID, Class: class, TypeRaw: p.Type, ProviderReference: provRef,
+		OurReference: ourRef, RawStatus: p.Data.Status, Simulated: p.Simulated && !p.Livemode}
 	if p.Created > 0 {
 		t := time.Unix(p.Created, 0).UTC()
 		ev.OccurredAt = &t
@@ -137,7 +144,9 @@ func (a *Adapter) Parse(_ context.Context, in psp.Inbound) ([]psp.WebhookEvent, 
 	// allow-listed, masked fields only
 	ev.Redacted = map[string]any{"id": p.ID, "type": p.Type, "created": p.Created, "livemode": p.Livemode, "simulated": p.Simulated,
 		"data": map[string]any{"payment_reference": p.Data.PaymentReference, "provider_payment_id": p.Data.ProviderPaymentID,
-			"status": p.Data.Status, "amount_minor": p.Data.AmountMinor, "currency": p.Data.Currency, "payer_masked": p.Data.PayerMasked}}
+			"payout_reference": p.Data.PayoutReference, "provider_payout_id": p.Data.ProviderPayoutID,
+			"status": p.Data.Status, "amount_minor": p.Data.AmountMinor, "currency": p.Data.Currency, "payer_masked": p.Data.PayerMasked,
+			"destination_masked": p.Data.DestinationMasked}}
 	return []psp.WebhookEvent{ev}, nil
 }
 
@@ -150,22 +159,27 @@ var statusRank = map[string]int{"pending": 1, "action_required": 2, "failed": 3,
 func (a *Adapter) DeliverDue(ctx context.Context, batch int) (int, error) {
 	type due struct {
 		ID, PaymentID, EventID, Type, Status, Currency, SignWith, Our, Ref string
+		Payout                                                             bool
 		Amount                                                             int64
 		Offset, Attempts                                                   int
 	}
 	var list []due
 	now := a.now()
 	err := db.WithTx(ctx, a.Pool, db.TxOptions{}, func(ctx context.Context, tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT w.id, w.sandbox_payment_id, w.provider_event_id, w.event_type, w.raw_status, w.currency, w.sign_with,
-			p.our_reference::text, p.provider_payment_ref, w.amount_minor, w.timestamp_offset_seconds, w.attempts
-			FROM app.sandbox_scheduled_webhooks w JOIN app.sandbox_provider_payments p ON p.id = w.sandbox_payment_id
+		rows, err := tx.Query(ctx, `SELECT w.id, coalesce(w.sandbox_payment_id, w.sandbox_payout_id), w.sandbox_payout_id IS NOT NULL,
+			w.provider_event_id, w.event_type, w.raw_status, w.currency, w.sign_with,
+			coalesce(p.our_reference, q.our_reference)::text, coalesce(p.provider_payment_ref, q.provider_payout_ref), w.amount_minor,
+			w.timestamp_offset_seconds, w.attempts
+			FROM app.sandbox_scheduled_webhooks w LEFT JOIN app.sandbox_provider_payments p ON p.id = w.sandbox_payment_id
+			LEFT JOIN app.sandbox_provider_payouts q ON q.id = w.sandbox_payout_id
 			WHERE w.delivered_at IS NULL AND w.due_at <= $1 ORDER BY w.due_at, w.id LIMIT $2 FOR UPDATE OF w SKIP LOCKED`, now, batch)
 		if err != nil {
 			return err
 		}
 		list, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (due, error) {
 			var d due
-			err := r.Scan(&d.ID, &d.PaymentID, &d.EventID, &d.Type, &d.Status, &d.Currency, &d.SignWith, &d.Our, &d.Ref, &d.Amount, &d.Offset, &d.Attempts)
+			err := r.Scan(&d.ID, &d.PaymentID, &d.Payout, &d.EventID, &d.Type, &d.Status, &d.Currency, &d.SignWith, &d.Our, &d.Ref, &d.Amount,
+				&d.Offset, &d.Attempts)
 			return d, err
 		})
 		if err != nil {
@@ -187,13 +201,20 @@ func (a *Adapter) DeliverDue(ctx context.Context, batch int) (int, error) {
 		// the simulated provider's own state moves when the event happens (never backwards; unmapped states
 		// such as "limbo" are taken as they come)
 		var cur string
-		_ = a.Pool.QueryRow(ctx, `SELECT raw_status FROM app.sandbox_provider_payments WHERE id = $1`, d.PaymentID).Scan(&cur)
-		if r, ok := statusRank[d.Status]; !ok || r > statusRank[cur] {
-			_, _ = a.Pool.Exec(ctx, `UPDATE app.sandbox_provider_payments SET raw_status = $2 WHERE id = $1`, d.PaymentID, d.Status)
+		if d.Payout {
+			_ = a.Pool.QueryRow(ctx, `SELECT raw_status FROM app.sandbox_provider_payouts WHERE id = $1`, d.PaymentID).Scan(&cur)
+			if r, ok := payoutStatusRank[d.Status]; !ok || r > payoutStatusRank[cur] {
+				_, _ = a.Pool.Exec(ctx, `UPDATE app.sandbox_provider_payouts SET raw_status = $2 WHERE id = $1`, d.PaymentID, d.Status)
+			}
+		} else {
+			_ = a.Pool.QueryRow(ctx, `SELECT raw_status FROM app.sandbox_provider_payments WHERE id = $1`, d.PaymentID).Scan(&cur)
+			if r, ok := statusRank[d.Status]; !ok || r > statusRank[cur] {
+				_, _ = a.Pool.Exec(ctx, `UPDATE app.sandbox_provider_payments SET raw_status = $2 WHERE id = $1`, d.PaymentID, d.Status)
+			}
 		}
 		code := 0
 		if d.SignWith != "none" {
-			code = a.post(ctx, d.EventID, d.Type, d.Status, d.Our, d.Ref, d.Amount, d.Currency, d.SignWith, d.Offset)
+			code = a.post(ctx, d.EventID, d.Type, d.Status, d.Our, d.Ref, d.Amount, d.Currency, d.SignWith, d.Offset, d.Payout)
 		}
 		if code == 0 && d.SignWith != "none" && d.Attempts < 5 {
 			continue // network failure: retried after the lease
@@ -208,10 +229,14 @@ func (a *Adapter) DeliverDue(ctx context.Context, batch int) (int, error) {
 }
 
 // post builds, signs and sends one simulated webhook; it returns the HTTP status (0 on a network error).
-func (a *Adapter) post(ctx context.Context, eventID, typ, status, our, ref string, amount int64, ccy, signWith string, offset int) int {
-	body, _ := json.Marshal(Payload{ID: eventID, Type: typ, Created: a.now().Unix(), Livemode: false, Simulated: true,
-		Data: PayloadData{PaymentReference: our, ProviderPaymentID: ref, Status: status, AmountMinor: strconv.FormatInt(amount, 10),
-			Currency: ccy, PayerMasked: "****1234"}})
+func (a *Adapter) post(ctx context.Context, eventID, typ, status, our, ref string, amount int64, ccy, signWith string, offset int, payout bool) int {
+	data := PayloadData{PaymentReference: our, ProviderPaymentID: ref, Status: status, AmountMinor: strconv.FormatInt(amount, 10),
+		Currency: ccy, PayerMasked: "****1234"}
+	if payout {
+		data = PayloadData{PayoutReference: our, ProviderPayoutID: ref, Status: status, AmountMinor: strconv.FormatInt(amount, 10),
+			Currency: ccy, DestinationMasked: "••••000"}
+	}
+	body, _ := json.Marshal(Payload{ID: eventID, Type: typ, Created: a.now().Unix(), Livemode: false, Simulated: true, Data: data})
 	at := a.now().Add(time.Duration(offset) * time.Second)
 	var secret []byte
 	kid := "current"

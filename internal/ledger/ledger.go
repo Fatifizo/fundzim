@@ -53,6 +53,7 @@ const (
 // Source systems.
 const (
 	SourcePayments       = "payments"
+	SourcePayouts        = "payouts" // Stage 11 (ADR-043): payout journals; SIMULATED evidence in a TEST ledger
 	SourceReconciliation = "reconciliation"
 	SourceStaff          = "staff"
 	SourceSynthetic      = "synthetic_fixture"
@@ -421,6 +422,11 @@ func (s *Service) validate(ctx context.Context, q rowQuerier, env string, p Post
 		// every payment that can exist in a TEST environment is a test payment, and test payments are never posted
 		// (ADR-042 §3; ck_ledger_transactions_no_payment_postings_in_test)
 		if env == EnvTest {
+			return Rule{}, ErrEnvironment
+		}
+	case SourcePayouts:
+		// TEST payouts are executed by the simulator only (ck_ledger_transactions_payouts_simulated_in_test)
+		if env == EnvTest && p.EvidenceClass != EvidenceSimulated {
 			return Rule{}, ErrEnvironment
 		}
 	case SourceReconciliation, SourceStaff:

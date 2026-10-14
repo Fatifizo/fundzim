@@ -41,6 +41,7 @@ type Policies struct {
 	PaymentsIntentCampaign   Policy // payments.intent.campaign — donation intents per campaign (Stage 8)
 	PaymentsAttemptUser      Policy // payments.attempt.user — payment attempts per donor (Stage 8)
 	PaymentsWebhookIP        Policy // payments.webhook.ip — webhook deliveries per client IP (Stage 8)
+	PayoutsRequestUser       Policy // payouts.request.user — withdrawal requests and cancellations per user (Stage 11)
 }
 
 // DefaultPolicies returns the Stage 4 starting values.
@@ -69,6 +70,7 @@ func DefaultPolicies() Policies {
 		PaymentsIntentCampaign:   Policy{Name: "payments.intent.campaign", Limit: 600, Window: time.Hour, Protective: true},
 		PaymentsAttemptUser:      Policy{Name: "payments.attempt.user", Limit: 30, Window: time.Hour, Protective: true},
 		PaymentsWebhookIP:        Policy{Name: "payments.webhook.ip", Limit: 600, Window: time.Minute, Protective: true},
+		PayoutsRequestUser:       Policy{Name: "payouts.request.user", Limit: 10, Window: time.Hour, Protective: true},
 	}
 }
 
@@ -78,7 +80,7 @@ func (ps Policies) All() []Policy {
 		ps.AuthPasswordResetAccount, ps.AuthVerifyResendAccount, ps.AuthMFAChallenge, ps.AuthOTPSendPhone,
 		ps.AuthOTPSendUser, ps.AuthOTPVerify, ps.AuthStepUp, ps.AuthTokenIP, ps.AuthVerifyResendIP, ps.PublicReportIP,
 		ps.PublicReportCampaign, ps.PublicEventIP, ps.PaymentsIntentUser, ps.PaymentsIntentCampaign, ps.PaymentsAttemptUser,
-		ps.PaymentsWebhookIP}
+		ps.PaymentsWebhookIP, ps.PayoutsRequestUser}
 }
 
 // Validate checks every policy.

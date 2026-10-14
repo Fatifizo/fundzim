@@ -443,8 +443,21 @@ func (s *Service) WithdrawBeneficiary(w http.ResponseWriter, r *http.Request) {
 
 // ---- payout destinations -------------------------------------------------------------------------------------
 
+// destinationStepUp: adding, changing or retiring a payout destination is a high-risk action (payout redirection,
+// Stage 11 brief §13): it needs a fresh factor, like staff payout approvals.
+func (s *Service) destinationStepUp(r *http.Request) error {
+	if !principal(r).StepUpFresh(s.Clock.Now(), s.StepUpMaxAge) {
+		return errs.New(errs.Forbidden, "STEP_UP_REQUIRED", "Confirm it's you to continue.")
+	}
+	return nil
+}
+
 // CreateDestination: POST /payout-destinations
 func (s *Service) CreateDestination(w http.ResponseWriter, r *http.Request) {
+	if err := s.destinationStepUp(r); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var in payouts.Input
 	if err := httpx.DecodeJSON(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -487,6 +500,10 @@ func (s *Service) GetDestination(w http.ResponseWriter, r *http.Request) {
 
 // ChangeDestination: PATCH /payout-destinations/{destination_id}
 func (s *Service) ChangeDestination(w http.ResponseWriter, r *http.Request) {
+	if err := s.destinationStepUp(r); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var in payouts.Input
 	if err := httpx.DecodeJSON(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -524,6 +541,10 @@ func (s *Service) RequestDestinationVerification(w http.ResponseWriter, r *http.
 
 // RetireDestination: DELETE /payout-destinations/{destination_id}
 func (s *Service) RetireDestination(w http.ResponseWriter, r *http.Request) {
+	if err := s.destinationStepUp(r); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if err := s.Payouts.Retire(r.Context(), principal(r).UserID, r.PathValue("destination_id")); err != nil {
 		s.fail(w, r, err)
 		return
