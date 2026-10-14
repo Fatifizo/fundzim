@@ -52,8 +52,9 @@ export default async function PayoutExceptionsPage() {
                 <When at={e.detected_at} />
               </td>
               <td className="space-y-2 p-3">
-                {e.status === "OPEN" ? <PayoutAction target={{ kind: "investigate", id: e.id }} /> : null}
-                {e.status !== "RESOLVED" ? <PayoutAction target={{ kind: "resolve", id: e.id }} /> : null}
+                {/* always mounted: the confirmation notice must survive the refresh that changes the status */}
+                <PayoutAction target={{ kind: "investigate", id: e.id }} available={e.status === "OPEN"} />
+                <PayoutAction target={{ kind: "resolve", id: e.id }} available={e.status !== "RESOLVED"} />
               </td>
             </tr>
           ))}

@@ -45,6 +45,16 @@ written to accept either process acting (they wait for states, not for which pro
   (request with password step-up → under review → cancel; another user cannot see it).
 - Real-stack Playwright: **49 passed**, including the new payout overview test in `e2e-real/staff-ledger.spec.ts`
   (COMPLIANCE sees LOCAL_SIMULATOR, production BLOCKED, settlement NOT_PERFORMED; a reviewer gets 403/404).
+- Flake fixes after the first CI run (mock E2E failed intermittently under `CI=1`): `signInStaff` waits for the MFA page to
+  hydrate before submitting (a pre-hydration click submitted the form natively); and the payout-exception and Stage 10
+  ledger action components (account freeze/unfreeze/close, period close, reconciliation investigate/resolve) now stay
+  mounted with their button hidden once the action no longer applies, so the confirmation notice survives the
+  `router.refresh()` that changes the record's status (previously it could unmount before being shown or announced, a
+  real accessibility defect). Verified with `CI=1 … --repeat-each=8` on the payout, withdrawal and ledger specs (96/96)
+  and the full mock suite (169 passed, 1 skipped). The payout exception step also asserts the persisted outcome.
+- The destructive migration round trip (down → up) failed in CI on the Stage 11 Down; fixed (the Down keeps the
+  sandbox capability v2 row that payment intents may reference, and re-adds the Stage 10 ledger source CHECKs `NOT VALID`)
+  and verified locally on a copy of the development database.
 
 ## 4. Performance (measured; nothing extrapolated)
 

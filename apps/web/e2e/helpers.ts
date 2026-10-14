@@ -78,6 +78,9 @@ export async function createStaff(page: Page, roles: string[], displayName = "Re
 /** Staff sign-in: password, then the authenticator code. */
 export async function signInStaff(page: Page, email: string, next = "/admin/verification") {
   await signIn(page, email, PASSWORD, `/login?next=${encodeURIComponent(next)}`);
+  // wait until the MFA page has loaded and hydrated: a click before hydration submits the form natively (GET)
+  await page.waitForURL(/\/login\/mfa/);
+  await page.waitForLoadState("networkidle");
   await page.getByLabel("Authentication code").fill(TOTP);
   await page.getByRole("button", { name: "Verify and sign in" }).click();
   await expect(page).toHaveURL(new RegExp(`${next.replace(/[/]/g, "\\/")}$`));

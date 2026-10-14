@@ -113,6 +113,8 @@ test("payouts: TEST banner, dual maker-checker approval with step-up, exceptions
   await inv.getByLabel("Note (staff only)").fill("Checking the simulator status for this payout.");
   await confirmIn(inv, "Confirm: Investigate");
   await expect(page.getByRole("status").filter({ hasText: "You are now investigating this exception." })).toBeVisible();
+  await expect(exRow.getByRole("button", { name: "Investigate" })).toHaveCount(0);
+  await expect(exRow.getByRole("button", { name: "Resolve" })).toBeVisible();
 
   // reservations and reconciliation
   await page.goto("/admin/finance/payouts/reservations");

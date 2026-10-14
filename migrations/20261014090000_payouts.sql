@@ -794,7 +794,8 @@ INSERT INTO app.provider_capabilities (id, provider_id, capability_version, meth
   documented_expiry_seconds, statement_format, evidence_status, evidence_source, recorded_by) VALUES
   (md5('provider_capability:sandbox:ECOCASH:USD:2')::uuid, md5('payment_provider:sandbox')::uuid, 2, 'ECOCASH', 'USD', 'USD', 'PSP_POOL',
    true, true, true, true, true, ARRAY['ECOCASH','ONEMONEY','BANK_TRANSFER'], true, true, false, NULL, 'API', 'VERIFIED',
-   'sandbox contract: docs/stage-8/provider-interface.md §6; payouts docs/stage-11/payout-simulator.md', '00000000-0000-0000-0000-000000000001');
+   'sandbox contract: docs/stage-8/provider-interface.md §6; payouts docs/stage-11/payout-simulator.md', '00000000-0000-0000-0000-000000000001')
+ON CONFLICT (id) DO NOTHING;
 
 -- Kill switch for real payout execution (off; payouts.LiveExecutionEnabled is a constant false).
 INSERT INTO app.feature_flags (id, key, description, flag_type, enabled, requires_approval, legal_ref) VALUES
@@ -1026,9 +1027,6 @@ ALTER TABLE app.feature_flag_changes ENABLE TRIGGER USER;
 ALTER TABLE app.feature_flags DISABLE TRIGGER USER;
 DELETE FROM app.feature_flags WHERE id = md5('feature_flag:payouts.live_execution.enabled')::uuid;
 ALTER TABLE app.feature_flags ENABLE TRIGGER USER;
-ALTER TABLE app.provider_capabilities DISABLE TRIGGER USER;
-DELETE FROM app.provider_capabilities WHERE id = md5('provider_capability:sandbox:ECOCASH:USD:2')::uuid;
-ALTER TABLE app.provider_capabilities ENABLE TRIGGER USER;
 ALTER TABLE app.sandbox_scheduled_webhooks DISABLE TRIGGER USER;
 DELETE FROM app.sandbox_scheduled_webhooks WHERE sandbox_payout_id IS NOT NULL;
 ALTER TABLE app.sandbox_scheduled_webhooks ENABLE TRIGGER USER;
@@ -1055,6 +1053,8 @@ DROP FUNCTION app.require_payout_event();
 DROP FUNCTION app.payout_requests_guard();
 DROP FUNCTION app.payout_policy_rank(text);
 DROP FUNCTION app.payout_status_rank(text);
+-- The sandbox payout capability (ECOCASH/USD v2) stays: payment intents created since may route through it (FK); the
+-- psp migration's Down removes the table. Up re-inserts it idempotently.
 ALTER TABLE app.status_transitions DISABLE TRIGGER USER;
 DELETE FROM app.status_transitions WHERE machine IN ('payout', 'payout_reservation', 'payout_exception');
 ALTER TABLE app.status_transitions ENABLE TRIGGER USER;
@@ -1062,11 +1062,12 @@ DROP INDEX app.uq_provider_capabilities_payout_key;
 ALTER TABLE app.payout_destinations DROP CONSTRAINT uq_payout_destinations_id_currency_rail;
 ALTER TABLE ledger.ledger_source_references DROP CONSTRAINT ck_ledger_source_references_source_system;
 ALTER TABLE ledger.ledger_source_references ADD CONSTRAINT ck_ledger_source_references_source_system
-  CHECK (source_system IN ('payments', 'reconciliation', 'staff', 'synthetic_fixture'));
+  CHECK (source_system IN ('payments', 'reconciliation', 'staff', 'synthetic_fixture')) NOT VALID;
 ALTER TABLE ledger.ledger_transactions DROP CONSTRAINT ck_ledger_transactions_payouts_simulated_in_test;
 ALTER TABLE ledger.ledger_transactions DROP CONSTRAINT ck_ledger_transactions_source_system;
+-- NOT VALID: payouts journals posted while this migration was applied are append-only and stay
 ALTER TABLE ledger.ledger_transactions ADD CONSTRAINT ck_ledger_transactions_source_system
-  CHECK (source_system IN ('payments', 'reconciliation', 'staff', 'synthetic_fixture'));
+  CHECK (source_system IN ('payments', 'reconciliation', 'staff', 'synthetic_fixture')) NOT VALID;
 CREATE OR REPLACE PROCEDURE app.apply_runtime_grants() LANGUAGE plpgsql AS $$
 DECLARE
   schemas  constant text[] := ARRAY['app','queue','ledger','audit','kyc','risk','compliance','recon'];

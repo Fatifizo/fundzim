@@ -110,13 +110,10 @@ export default async function LedgerOverviewPage() {
                   <When at={p.ends_at} />
                 </td>
                 <td className="space-y-2 p-3">
-                  {p.status === "OPEN" ? <LedgerAction target={{ kind: "period", id: p.id, action: "request-close" }} /> : null}
-                  {p.status === "CLOSING" ? (
-                    <>
-                      <LedgerAction target={{ kind: "period", id: p.id, action: "approve-close" }} />
-                      <LedgerAction target={{ kind: "period", id: p.id, action: "abort-close" }} />
-                    </>
-                  ) : null}
+                  {/* always mounted: the confirmation notice must survive the refresh that changes the status */}
+                  <LedgerAction target={{ kind: "period", id: p.id, action: "request-close" }} available={p.status === "OPEN"} />
+                  <LedgerAction target={{ kind: "period", id: p.id, action: "approve-close" }} available={p.status === "CLOSING"} />
+                  <LedgerAction target={{ kind: "period", id: p.id, action: "abort-close" }} available={p.status === "CLOSING"} />
                 </td>
               </tr>
             ))}

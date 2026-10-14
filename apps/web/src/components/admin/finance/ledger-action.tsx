@@ -59,7 +59,9 @@ function copyFor(t: LedgerActionTarget): Copy {
   }
 }
 
-export function LedgerAction({ target, api = ledgerApi }: { target: LedgerActionTarget; api?: LedgerApi }) {
+// available=false keeps the component mounted without its button, so a confirmation notice survives the refresh
+// that moves the record out of the state where this action applies
+export function LedgerAction({ target, available = true, api = ledgerApi }: { target: LedgerActionTarget; available?: boolean; api?: LedgerApi }) {
   const router = useRouter();
   const withStepUp = useStepUp();
   const copy = copyFor(target);
@@ -104,20 +106,23 @@ export function LedgerAction({ target, api = ledgerApi }: { target: LedgerAction
     }
   }
 
+  if (!available && !notice) return null;
   return (
     <div className="space-y-3">
       {notice ? <FormStatus ref={noticeRef} title={notice} /> : null}
-      <Button
-        variant="outline"
-        onClick={() => {
-          setNotice(null);
-          setError(null);
-          setOpen(true);
-        }}
-      >
-        {copy.button}
-      </Button>
-      {open ? (
+      {available ? (
+        <Button
+          variant="outline"
+          onClick={() => {
+            setNotice(null);
+            setError(null);
+            setOpen(true);
+          }}
+        >
+          {copy.button}
+        </Button>
+      ) : null}
+      {open && available ? (
         <ReasonDialog
           title={copy.title}
           description={copy.description}

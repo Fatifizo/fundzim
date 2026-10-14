@@ -51,7 +51,9 @@ const COPY: Record<PayoutActionTarget["kind"], Copy> = {
 
 const RESOLUTIONS = ["CONFIRMED_NO_ACTION", "CORRECTED_BY_ADJUSTMENT", "PROVIDER_CONFIRMED", "DUPLICATE_DETECTION", "ESCALATED_INCIDENT", "OTHER"];
 
-export function PayoutAction({ target, api = payoutsApi }: { target: PayoutActionTarget; api?: PayoutsApi }) {
+// available=false keeps the component mounted without its button, so a confirmation notice survives the refresh
+// that moves the record out of the state where this action applies
+export function PayoutAction({ target, available = true, api = payoutsApi }: { target: PayoutActionTarget; available?: boolean; api?: PayoutsApi }) {
   const router = useRouter();
   const withStepUp = useStepUp();
   const copy = COPY[target.kind];
@@ -114,20 +116,23 @@ export function PayoutAction({ target, api = payoutsApi }: { target: PayoutActio
     }
   }
 
+  if (!available && !notice) return null;
   return (
     <div className="space-y-3">
       {notice ? <FormStatus ref={noticeRef} title={notice} /> : null}
-      <Button
-        variant="outline"
-        onClick={() => {
-          setNotice(null);
-          setError(null);
-          setOpen(true);
-        }}
-      >
-        {copy.button}
-      </Button>
-      {open ? (
+      {available ? (
+        <Button
+          variant="outline"
+          onClick={() => {
+            setNotice(null);
+            setError(null);
+            setOpen(true);
+          }}
+        >
+          {copy.button}
+        </Button>
+      ) : null}
+      {open && available ? (
         <Dialog title={copy.title} description={copy.description} onClose={() => setOpen(false)}>
           <form noValidate onSubmit={submit} className="space-y-5">
             <FormError ref={errorRef} message={error} />

@@ -40,9 +40,10 @@ export default async function LedgerAccountPage({ params }: PageProps<"/admin/fi
           ]}
         />
         <div className="flex flex-wrap gap-3">
-          {a.status === "ACTIVE" ? <LedgerAction target={{ kind: "account", id: a.id, action: "freeze" }} /> : null}
-          {a.status === "FROZEN" ? <LedgerAction target={{ kind: "account", id: a.id, action: "unfreeze" }} /> : null}
-          {a.status !== "CLOSED" ? <LedgerAction target={{ kind: "account", id: a.id, action: "close" }} /> : null}
+          {/* always mounted: the confirmation notice must survive the refresh that changes the status */}
+          <LedgerAction target={{ kind: "account", id: a.id, action: "freeze" }} available={a.status === "ACTIVE"} />
+          <LedgerAction target={{ kind: "account", id: a.id, action: "unfreeze" }} available={a.status === "FROZEN"} />
+          <LedgerAction target={{ kind: "account", id: a.id, action: "close" }} available={a.status !== "CLOSED"} />
         </div>
       </Section>
       <Section id="activity-title" title="Activity">

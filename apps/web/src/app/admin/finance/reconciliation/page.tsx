@@ -62,8 +62,9 @@ export default async function LedgerReconciliationPage() {
                 </span>
               </td>
               <td className="space-y-2 p-3">
-                {e.status === "OPEN" ? <LedgerAction target={{ kind: "recon", id: e.id, action: "investigate" }} /> : null}
-                {e.status !== "RESOLVED" ? <LedgerAction target={{ kind: "recon", id: e.id, action: "resolve" }} /> : null}
+                {/* always mounted: the confirmation notice must survive the refresh that changes the status */}
+                <LedgerAction target={{ kind: "recon", id: e.id, action: "investigate" }} available={e.status === "OPEN"} />
+                <LedgerAction target={{ kind: "recon", id: e.id, action: "resolve" }} available={e.status !== "RESOLVED"} />
               </td>
             </tr>
           ))}
