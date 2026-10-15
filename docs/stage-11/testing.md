@@ -93,3 +93,11 @@ lookups (KI-S11-14). Reads are single-digit milliseconds. The reconciliation run
   skipped 3 (`TestDistributedLoginLimitAcrossReplicas`, `TestFrontendReachesBackend`,
   `TestRateLimitFallbackWhenValkeyContainerStopped` — pre-existing, none of them payout tests). Inspected through the
   GitHub API (jobs and check-run annotations) on 2026-10-14.
+- Run 38694630816 (`1ff6dba`, docs only): **Web end-to-end failed** (all other 7 jobs succeeded; integration again
+  146/0/3). The mock suite had no `github` reporter, so the failure was not visible without authenticated logs; it was
+  reproduced locally (`CI=1 npx playwright test --repeat-each=3`: 1 failure in 507) as an axe `document-title` violation
+  scanned right after a client-side navigation, before Next had applied the new page's streamed metadata
+  (`e2e/staff-payments.spec.ts`, Stage 8 spec). Fix: the shared axe helpers (`e2e/helpers.ts`,
+  `e2e-real/support/quality.ts`) wait for a non-empty `document.title` before scanning (the rule stays enabled; a page
+  without a title still fails), and the mock config now uses the `github` reporter as the real-stack config does.
+  Re-run locally: 507 passed, 3 skipped (the existing skip × 3).

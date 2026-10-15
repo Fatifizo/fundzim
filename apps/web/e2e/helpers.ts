@@ -33,6 +33,9 @@ export async function cspViolations(page: Page): Promise<string[]> {
 }
 
 export async function seriousAxeViolations(page: Page) {
+  // after a client-side navigation Next streams the new page's metadata: let the <title> settle before scanning. A page
+  // that never gets a title still fails (this wait times out), and axe's document-title rule stays enabled.
+  await page.waitForFunction(() => document.title.trim() !== "");
   const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
   return results.violations
     .filter((v) => v.impact === "serious" || v.impact === "critical")
