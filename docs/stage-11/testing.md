@@ -1,7 +1,6 @@
 # Stage 11 — Testing
 
-All results below were produced in this session on 2026-10-14 (local stack). Remote CI results are recorded in the
-completion report once the run has been inspected.
+All results below were produced in this session on 2026-10-14 (local stack). Remote CI results are in §5.
 
 ## 1. Unit tests
 
@@ -84,3 +83,13 @@ Notes: a request includes the 22-check gather (KYC, campaign, beneficiary, desti
 limits, integrity) and the ledger reservation; eligibility evaluation alone is p50 ≈ 125 ms, dominated by the number of
 lookups (KI-S11-14). Reads are single-digit milliseconds. The reconciliation run time grows with the number of payouts
 (it also queries the simulator for each submitted payout).
+
+## 5. Remote CI
+
+- Run 38533629949 (`9d677d2`): **failed** — Integration (146 passed, 0 failed; the destructive migration round trip
+  failed on the Stage 11 Down) and Web end-to-end (intermittent notice/sign-in flakes). Both fixed as described in §3.
+- Run 38568202988 (`2494c4b`): **all 8 jobs succeeded** (OpenAPI and SQL design drafts, container images, web, Go,
+  web end-to-end, integration, real-stack end-to-end, secret scanning). Integration annotation: passed 146, failed 0,
+  skipped 3 (`TestDistributedLoginLimitAcrossReplicas`, `TestFrontendReachesBackend`,
+  `TestRateLimitFallbackWhenValkeyContainerStopped` — pre-existing, none of them payout tests). Inspected through the
+  GitHub API (jobs and check-run annotations) on 2026-10-14.
