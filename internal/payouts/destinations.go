@@ -25,6 +25,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/audit"
 	"github.com/Fatifizo/fundzim/internal/beneficiaries"
 	"github.com/Fatifizo/fundzim/internal/campaigns"
+	"github.com/Fatifizo/fundzim/internal/fees"
 	"github.com/Fatifizo/fundzim/internal/kyc"
 	"github.com/Fatifizo/fundzim/internal/ledger"
 	"github.com/Fatifizo/fundzim/internal/organisations"
@@ -86,6 +87,14 @@ type Service struct {
 	StepUpMaxAge time.Duration
 	// ReconGrace overrides DefaultReconGrace (tests).
 	ReconGrace time.Duration
+	// Fees estimates payout fees at request time and assesses them on completion (Stage 12; nil: no fee records).
+	Fees PayoutFees
+}
+
+// PayoutFees is the fees module's payout integration (fees.Service).
+type PayoutFees interface {
+	EstimatePayoutFee(ctx context.Context, tx pgx.Tx, r fees.PayoutFeeRequest) (fees.PayoutFeeEstimate, error)
+	AssessPayoutFee(ctx context.Context, payoutID, campaignID, currency, providerID, rail, calcID string, amount int64) error
 }
 
 func (s *Service) now() time.Time { return s.Clock.Now().UTC() }

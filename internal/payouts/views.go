@@ -37,6 +37,11 @@ type OwnerView struct {
 	CompletedAt       *time.Time `json:"completed_at"`
 	CanCancel         bool       `json:"can_cancel"`
 	Version           int        `json:"version"`
+	// Stage 12: the payout fee estimate (nil amount: UNKNOWN — no provider fee evidence) and who bears it.
+	FeeEstimateMinor    *int64  `json:"fee_estimate_minor,string"`
+	FeeBasis            *string `json:"fee_basis"`
+	FeeResponsibility   *string `json:"fee_responsibility"`
+	BeneficiaryReceives *int64  `json:"beneficiary_receives_minor,string"`
 }
 
 var ownerLabels = map[string]string{StRequested: "Requested", StReview: "Under review", StApproved: "Approved", StSubmitted: "Processing",
@@ -49,7 +54,15 @@ func (p Payout) Owner() OwnerView {
 	v := OwnerView{ID: p.ID, CampaignID: p.CampaignID, Currency: p.Currency, AmountMinor: p.AmountMinor, Purpose: p.Purpose, Status: p.Status,
 		StatusLabel: ownerLabels[p.Status], DestinationMasked: p.DestinationMasked, DestinationRail: p.DestinationRail, TestPayout: p.TestPayout,
 		RequestedAt: p.RequestedAt, SubmittedAt: p.SubmittedAt, CompletedAt: p.CompletedAt, CanCancel: p.Status == StReview || p.Status == StApproved,
-		Version: p.Version, FundsLabel: "TEST_ONLY"}
+		Version: p.Version, FundsLabel: "TEST_ONLY", FeeEstimateMinor: p.FeeEstimateMinor, FeeBasis: p.FeeBasis, FeeResponsibility: p.FeeResponsibility}
+	switch {
+	case p.FeeResponsibility != nil && *p.FeeResponsibility == "ORGANISER_COVERED" && p.FeeEstimateMinor != nil:
+		r := p.AmountMinor - *p.FeeEstimateMinor
+		v.BeneficiaryReceives = &r
+	case p.FeeResponsibility != nil && *p.FeeResponsibility == "PLATFORM_ABSORBED":
+		r := p.AmountMinor
+		v.BeneficiaryReceives = &r
+	}
 	if p.Status == StRejected || p.Status == StCancelled || p.Status == StFailed {
 		c := "NOT_AVAILABLE"
 		switch {

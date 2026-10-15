@@ -432,6 +432,14 @@ Notes on ordering:
   the fee schedule version in force when they occurred.
 - **Acceptance criteria:** Fees reproducible from stored inputs; no float anywhere; disclosures match ledger.
 
+- **Stage 12 as delivered (2026-10-15, awaiting acceptance):** versioned fee policies with maker-checker, exact calculation
+  and rounding, provider fee evidence, quotes bound to donation intents, assessments, refund/chargeback fee adjustments,
+  payout fee estimates, TEST_ONLY fee journals, reconciliation, revenue reporting, staff and donor/organiser UIs
+  ([stage-12/implementation.md](stage-12/implementation.md), ADR-044). **Deviations:** TEST fees only — no fee model (PD-01),
+  tax position (LR-016/LR-045) or provider fee evidence exists; revenue recognition is the TEST-ledger capture-time credit
+  pending an accounting review; real test payments are assessed but never posted (ADR-042); donor-covered charges are not
+  passed to providers; `fees` imports `ledger` (ADR-044 amends the Stage 2 graph).
+
 ## Stage 13 — Trust, Fraud & Risk Engine
 
 - **Objective:** Detect and act on fraud and abuse across users, campaigns, donations and payouts.

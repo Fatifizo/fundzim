@@ -54,6 +54,7 @@ const (
 const (
 	SourcePayments       = "payments"
 	SourcePayouts        = "payouts" // Stage 11 (ADR-043): payout journals; SIMULATED evidence in a TEST ledger
+	SourceFees           = "fees"    // Stage 12 (ADR-044): fee journals of TEST fixtures and TEST payouts; SIMULATED in a TEST ledger
 	SourceReconciliation = "reconciliation"
 	SourceStaff          = "staff"
 	SourceSynthetic      = "synthetic_fixture"
@@ -192,8 +193,10 @@ type Posting struct {
 	Reason         string
 	Actor          Actor
 	CorrelationID  string
-	Metadata       map[string]string
-	Lines          []Line
+	// FeePolicyVersionID is the fee policy version behind the journal's fee lines (ledger_transactions.fee_schedule_version_id).
+	FeePolicyVersionID string
+	Metadata           map[string]string
+	Lines              []Line
 }
 
 // Errors (stable codes).
@@ -429,6 +432,11 @@ func (s *Service) validate(ctx context.Context, q rowQuerier, env string, p Post
 		if env == EnvTest && p.EvidenceClass != EvidenceSimulated {
 			return Rule{}, ErrEnvironment
 		}
+	case SourceFees:
+		// TEST fee journals come from synthetic fixtures and TEST payouts (ck_ledger_transactions_fees_simulated_in_test)
+		if env == EnvTest && p.EvidenceClass != EvidenceSimulated {
+			return Rule{}, ErrEnvironment
+		}
 	case SourceReconciliation, SourceStaff:
 	default:
 		return Rule{}, invalid("source_system", "INVALID_VALUE")
@@ -444,6 +452,9 @@ func (s *Service) validate(ctx context.Context, q rowQuerier, env string, p Post
 	}
 	if !uuidRE.MatchString(p.SourceID) {
 		return Rule{}, invalid("source_id", "INVALID_FORMAT")
+	}
+	if p.FeePolicyVersionID != "" && !uuidRE.MatchString(p.FeePolicyVersionID) {
+		return Rule{}, invalid("fee_policy_version_id", "INVALID_FORMAT")
 	}
 	if p.OccurredAt.IsZero() || p.OccurredAt.After(s.now().Add(15*time.Minute)) {
 		return Rule{}, invalid("occurred_at", "INVALID_VALUE")

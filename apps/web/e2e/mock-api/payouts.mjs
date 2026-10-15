@@ -38,6 +38,9 @@ export function createPayoutsMock({ send, err, stepUpTtlMs, users, getDestinatio
     destination_masked: p.destination_masked, destination_rail: p.destination_rail, reason_category: p.status === "CANCELLED" && p.cancelledByOwner ? "OWNER_CANCELLED" : null,
     test_payout: true, funds_label: "TEST_ONLY", requested_at: p.requested_at, submitted_at: null, completed_at: null,
     can_cancel: p.status === "PENDING_REVIEW" || p.status === "APPROVED", version: p.version,
+    // Stage 12: a synthetic 1 % organiser-borne payout fee estimate (the mock's own figure, not a provider rate)
+    fee_estimate_minor: String(BigInt(p.amount_minor) / 100n), fee_basis: "ESTIMATED", fee_responsibility: "ORGANISER_COVERED",
+    beneficiary_receives_minor: String(BigInt(p.amount_minor) - BigInt(p.amount_minor) / 100n),
   });
   const staffView = (p) => {
     const rest = { ...p };

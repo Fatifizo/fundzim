@@ -50,7 +50,9 @@ export function readOwnerPayout(v: unknown): OwnerPayout | null {
     destination_rail: str(v.destination_rail), reason_category: strOrNull(v.reason_category),
     // anything but an explicit false is a TEST payout; the label is never upgraded to real funds
     test_payout: v.test_payout !== false, funds_label: "TEST_ONLY", requested_at: strOrNull(v.requested_at), submitted_at: strOrNull(v.submitted_at),
-    completed_at: strOrNull(v.completed_at), can_cancel: v.can_cancel === true };
+    completed_at: strOrNull(v.completed_at), can_cancel: v.can_cancel === true, fee_estimate_minor: minorOrNull(v.fee_estimate_minor),
+    fee_basis: strOrNull(v.fee_basis), fee_responsibility: strOrNull(v.fee_responsibility),
+    beneficiary_receives_minor: minorOrNull(v.beneficiary_receives_minor) };
 }
 
 export function readStaffPayout(v: unknown): StaffPayout | null {

@@ -57,6 +57,7 @@ x-common-env: &common-env
   # Stage 10 (ADR-042): TEST_ONLY synthetic ledger fixtures (refused in production)
   LEDGER_SYNTHETIC_FIXTURES_ENABLED: ${LEDGER_SYNTHETIC_FIXTURES_ENABLED:-false}
   PAYOUTS_EXECUTION_ENVIRONMENT: ${PAYOUTS_EXECUTION_ENVIRONMENT:-DISABLED}
+  FEES_QUOTE_TTL: ${FEES_QUOTE_TTL:-15m}
 
 services:
   fundzim-postgres:

@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { AccountPage } from "@/components/account/account-shell";
 import { formatDateTime } from "@/components/account/format";
 import { LedgerAmount } from "@/components/admin/finance/common";
+import { PayoutFeeFacts } from "@/components/fees/common";
 import { TestFundsBanner } from "@/components/payouts/common";
 import { CancelWithdrawal } from "@/components/payouts/withdrawal-form";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +39,7 @@ export default async function WithdrawalPage({ params }: PageProps<"/dashboard/w
           To {p.destination_masked} · requested {formatDateTime(p.requested_at)}
           {p.purpose ? ` · ${p.purpose}` : ""}
         </p>
+        <PayoutFeeFacts currency={p.currency} fee={p.fee_estimate_minor} basis={p.fee_basis} responsibility={p.fee_responsibility} receives={p.beneficiary_receives_minor} />
         <p>
           <Link href={`/dashboard/campaigns/${encodeURIComponent(p.campaign_id)}/withdrawals`} className="text-brand-700 underline">
             Campaign withdrawals

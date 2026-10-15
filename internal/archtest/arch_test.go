@@ -36,7 +36,9 @@ var allowedImports = map[string][]string{
 	"beneficiaries": {"platform", "audit", "users", "organisations", "kyc"},
 	"compliance":    {"platform", "audit", "users", "organisations", "kyc", "risk", "storage"},
 	// Stage 11 (ADR-043): campaigns, ledger and psp as design-baseline §4 allows (payments never: baseline §3)
-	"payouts": {"platform", "audit", "users", "organisations", "kyc", "beneficiaries", "compliance", "risk", "storage", "campaigns", "ledger", "psp"},
+	"payouts": {"platform", "audit", "users", "organisations", "kyc", "beneficiaries", "compliance", "risk", "storage", "campaigns", "ledger", "psp",
+		"fees"}, // Stage 12 (ADR-044): payout fee estimates and assessments
+
 	// orchestration layer (no tables; like `admin`, composes public services) — Stage 5, ADR-035
 	"verification": {"platform", "audit", "users", "organisations", "kyc", "beneficiaries", "payouts", "storage", "risk", "compliance"},
 	// Stage 6 campaign engine (interface-contracts §1): core, media and updates packages
@@ -44,9 +46,12 @@ var allowedImports = map[string][]string{
 	// Stage 8 (ADR-039): provider layer and payments (baseline §3: psp imports platform and audit only; payments
 	// imports campaigns, risk and psp; compliance is reached through an interface implemented in internal/app)
 	"psp":      {"platform", "audit"},
-	"payments": {"platform", "audit", "campaigns", "risk", "psp"},
+	"payments": {"platform", "audit", "campaigns", "risk", "psp", "fees"}, // fees: Stage 12 quote binding (baseline §3 allows)
 	// Stage 10 (ADR-042): the ledger imports platform and audit only (payment facts arrive through an interface)
 	"ledger": {"platform", "audit"},
+	// Stage 12 (ADR-044 amends baseline §3): fees posts fee journals through the ledger's service; campaign facts,
+	// routing and linked identities arrive through interfaces implemented in internal/app
+	"fees": {"platform", "audit", "ledger"},
 }
 
 // ownedTables is design-baseline §5 (plus the Stage 4 additions recorded in docs/stage-4/implementation.md:
@@ -95,6 +100,10 @@ var ownedTables = map[string][]string{
 		"ledger.ledger_periods", "ledger.ledger_invariant_runs", "ledger.ledger_environment", "ledger.ledger_source_references",
 		"ledger.ledger_reconciliation_references", "ledger.v_trial_balance", "ledger.v_balances_current", "ledger.v_balance_drift",
 		"ledger.v_pool_integrity", "ledger.database_environment", "ledger.fold_deferred_balances"},
+	// Stage 12 (ADR-044)
+	"fees": {"app.fee_policies", "app.fee_policy_versions", "app.fee_provider_schedules", "app.fee_calculations", "app.fee_components",
+		"app.fee_quotes", "app.fee_assessments", "app.fee_adjustments", "app.fee_accounting_references", "app.fee_provider_reports",
+		"app.fee_reconciliation_runs", "app.fee_reconciliation_references", "app.fee_audit_events"},
 }
 
 // moduleOf maps a repository-relative directory to its module ("" = not a constrained module).

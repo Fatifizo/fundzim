@@ -45,6 +45,12 @@ export interface OwnerPayout {
   submitted_at: string | null;
   completed_at: string | null;
   can_cancel: boolean;
+  /** Stage 12: the payout fee estimate; null = UNKNOWN (no provider fee evidence), never zero. */
+  fee_estimate_minor: string | null;
+  fee_basis: string | null;
+  fee_responsibility: string | null;
+  /** What the beneficiary would receive; null = UNKNOWN. */
+  beneficiary_receives_minor: string | null;
 }
 
 export interface StaffPayout {

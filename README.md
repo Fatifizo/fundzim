@@ -11,6 +11,17 @@ providers.
 FundZim is **not** an investment, lending, equity or rewards platform, and it is not a wallet or a payment
 provider.
 
+> **Status: Stage 12 — Fees & platform revenue (complete; awaiting acceptance; TEST fees only).** Versioned fee policies
+> with maker-checker approval (terms frozen and hashed at submission; checker never the maker or a linked account), an
+> exact, deterministic calculation engine (integer minor units, basis points, one documented rounding per component,
+> largest-remainder splits), provider fee evidence (SYNTHETIC or UNVERIFIED only — no provider fee is known), fee quotes
+> bound to donation intents, fee assessments, refund and chargeback fee adjustments, payout fee estimates (never deducted
+> twice), TEST_ONLY fee journals through the ledger, fee reconciliation, per-currency revenue reporting, a staff fee
+> dashboard and donor/organiser disclosures. No fee is charged and no revenue is recognised: the fee model (PD-01), tax
+> (LR-016, LR-045) and an accounting review are open, and production is BLOCKED. Docs:
+> [docs/stage-12/implementation.md](docs/stage-12/implementation.md); ADR-044; handover
+> [STAGE-12-TO-STAGE-13.md](docs/stage-handover/STAGE-12-TO-STAGE-13.md).
+>
 > **Status: Stage 11 — Withdrawals & payouts (complete; awaiting acceptance; TEST payouts only).** Campaign owners can
 > request withdrawals of synthetic TEST_ONLY funds to a verified payout destination: a 22-check eligibility engine (recorded
 > and hashed), an atomic ledger reservation (one in-flight payout per campaign and currency), FINANCE maker-checker
@@ -258,7 +269,8 @@ Reset deletes the Postgres and Garage volumes (database, roles, objects). `.env`
 | [Stage 9 implementation](docs/stage-9/implementation.md) · [legal review](docs/stage-9/legal-review.md) · [provider confirmations](docs/stage-9/provider-confirmation-register.md) · [evaluation](docs/stage-9/provider-evaluation.md) · [selection](docs/stage-9/provider-selection.md) · [secret management](docs/stage-9/secret-management.md) · [payment security](docs/stage-9/payment-security.md) · [certification](docs/stage-9/sandbox-certification.md) · [known issues](docs/stage-9/known-issues.md) | Provider integration readiness (no provider selected) |
 | [Stage 10 implementation](docs/stage-10/implementation.md) · [ledger architecture](docs/stage-10/ledger-architecture.md) · [chart of accounts](docs/stage-10/chart-of-accounts.md) · [posting rules](docs/stage-10/posting-rules.md) · [reconciliation](docs/stage-10/reconciliation.md) · [security review](docs/stage-10/security-review.md) · [tests](docs/stage-10/financial-integrity-tests.md) · [performance](docs/stage-10/performance.md) · [known issues](docs/stage-10/known-issues.md) | Double-entry ledger (TEST ledger only) |
 | [Stage 11 implementation](docs/stage-11/implementation.md) · [architecture](docs/stage-11/payout-architecture.md) · [lifecycle](docs/stage-11/withdrawal-lifecycle.md) · [eligibility](docs/stage-11/eligibility-engine.md) · [available funds](docs/stage-11/available-funds.md) · [simulator](docs/stage-11/payout-simulator.md) · [security review](docs/stage-11/security-review.md) · [testing](docs/stage-11/testing.md) · [known issues](docs/stage-11/known-issues.md) | Withdrawals & payouts (TEST payouts only) |
-| [Stage handovers](docs/stage-handover/STAGE-11-TO-STAGE-12.md) | Stage 11 → 12 (fees & platform revenue); earlier handovers in the same folder |
+| [Stage 12 implementation](docs/stage-12/implementation.md) · [architecture](docs/stage-12/fee-architecture.md) · [policy model](docs/stage-12/fee-policy-model.md) · [calculation](docs/stage-12/fee-calculation.md) · [rounding](docs/stage-12/rounding.md) · [revenue accounting](docs/stage-12/revenue-accounting.md) · [security review](docs/stage-12/security-review.md) · [testing](docs/stage-12/testing.md) · [known issues](docs/stage-12/known-issues.md) | Fees & platform revenue (TEST fees only) |
+| [Stage handovers](docs/stage-handover/STAGE-12-TO-STAGE-13.md) | Stage 12 → 13 (trust, fraud & risk); earlier handovers in the same folder |
 
 ## Licence
 

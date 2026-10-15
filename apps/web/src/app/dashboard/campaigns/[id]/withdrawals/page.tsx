@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 
 import { AccountPage } from "@/components/account/account-shell";
 import { LedgerAmount } from "@/components/admin/finance/common";
+import { PolicyList } from "@/components/fees/common";
 import { OwnerPayoutList, TestFundsBanner } from "@/components/payouts/common";
 import { WithdrawalForm, type DestinationOption } from "@/components/payouts/withdrawal-form";
 import { requireUser, serverGetOptional, serverGetOr404 } from "@/lib/auth/session";
 import { isUuid } from "@/lib/campaigns/paths";
+import { readCampaignFees } from "@/lib/fees/normalise";
 import { readAvailability, readOwnerPayout, readPage, reasonMessage } from "@/lib/payouts/normalise";
 import type { PayoutDestination } from "@/lib/verification/types";
 
@@ -21,6 +23,7 @@ export default async function CampaignWithdrawalsPage({ params }: PageProps<"/da
   const a = readAvailability((await serverGetOr404<unknown>(`/api/v1/campaigns/${id}/payout-eligibility?currency=USD`, path)).data);
   const requests = readPage(await serverGetOptional<unknown>(`/api/v1/campaigns/${id}/payout-requests`, path, { items: [] }), readOwnerPayout);
   const destinations = await serverGetOptional<PayoutDestination[]>("/api/v1/payout-destinations", path, []);
+  const payoutFees = readCampaignFees(await serverGetOptional<unknown>(`/api/v1/campaigns/${id}/fees`, path, {})).policies.filter((p) => p.category === "PAYOUT_PROCESSING_FEE");
   const options: DestinationOption[] = (Array.isArray(destinations) ? destinations : [])
     .filter((d) => d.payout_readiness?.payout_eligible === true && d.currency === a.currency)
     .map((d) => ({ id: d.id, label: `${d.provider_name ?? d.rail} ${d.masked_identifier} (${d.holder_name})` }));
@@ -70,6 +73,14 @@ export default async function CampaignWithdrawalsPage({ params }: PageProps<"/da
         <h2 id="request" className="font-display text-2xl font-semibold text-ink-900">
           Request a test withdrawal
         </h2>
+        <div className="space-y-2">
+          <h3 className="font-semibold text-ink-900">Payout fees (TEST)</h3>
+          <p className="text-ink-700">
+            The provider&apos;s payout fee is estimated when you request a withdrawal and shown on the request; without provider fee evidence it is UNKNOWN.
+            A fee borne by the campaign is taken from the amount you request; nothing extra is reserved.
+          </p>
+          <PolicyList items={payoutFees} />
+        </div>
         <WithdrawalForm campaignId={id} currency={a.currency} availableMinor={a.available_minor} destinations={options} enabled={a.payouts_enabled} />
       </section>
       <section aria-labelledby="requests" className="space-y-3">

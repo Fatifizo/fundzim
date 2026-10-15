@@ -36,6 +36,14 @@ const ITEMS = [
   { href: "/admin/finance/payouts/reservations", label: "Payout reservations" },
   { href: "/admin/finance/payouts/exceptions", label: "Payout exceptions" },
   { href: "/admin/finance/payouts/reconciliation", label: "Payout reconciliation" },
+  { href: "/admin/finance/fees", label: "Fees", exact: true },
+  { href: "/admin/finance/fees/policies", label: "Fee policies" },
+  { href: "/admin/finance/fees/provider-schedules", label: "Provider fee evidence" },
+  { href: "/admin/finance/fees/quotes", label: "Fee quotes" },
+  { href: "/admin/finance/fees/assessments", label: "Fee assessments" },
+  { href: "/admin/finance/fees/adjustments", label: "Fee adjustments" },
+  { href: "/admin/finance/fees/reconciliation", label: "Fee reconciliation" },
+  { href: "/admin/finance/revenue", label: "Revenue (TEST)" },
   { href: "/admin/account/personal-link", label: "Personal account link" },
 ] as const;
 

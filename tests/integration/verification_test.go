@@ -38,6 +38,7 @@ type verifStaff struct {
 	compliance2           staffCred // second COMPLIANCE officer (maker-checker)
 	finance1, finance2    staffCred // Stage 8: FINANCE (payment.view/operate, refund.approve)
 	finance3, ledgerAdmin staffCred // Stage 10: FINANCE (ledger maker/checker over HTTP) and ADMIN (ledger.synthetic.post)
+	approver1, approver2  staffCred // Stage 12: BUSINESS_APPROVER (fee.config.approve, fee.adjust.approve)
 }
 
 var (
@@ -98,6 +99,8 @@ func staffFixture(t *testing.T, s *itServer) *verifStaff {
 		f.finance2 = inviteStaff(t, s, a, b, "Finance Officer Two", "FINANCE")
 		f.finance3 = inviteStaff(t, s, a, b, "Finance Officer Three", "FINANCE")
 		f.ledgerAdmin = inviteStaff(t, s, a, b, "Ledger Fixture Admin", "ADMIN")
+		f.approver1 = inviteStaff(t, s, a, b, "Business Approver One", "BUSINESS_APPROVER")
+		f.approver2 = inviteStaff(t, s, a, b, "Business Approver Two", "BUSINESS_APPROVER")
 		vStaff = f
 		ok = true
 	})
@@ -130,6 +133,8 @@ func staffFixture(t *testing.T, s *itServer) *verifStaff {
 var (
 	staffSessMu sync.Mutex
 	staffSess   = map[string]*browser{}
+	// staffStepUp is when each cached session last proved a fresh factor (login or step-up)
+	staffStepUp = map[string]time.Time{}
 )
 
 // staff returns a signed-in browser for c on server s. Sessions are reused across tests (the cookie jar is
@@ -140,11 +145,18 @@ func (s *itServer) staff(t *testing.T, c staffCred) *browser {
 	if prev, ok := staffSess[c.email]; ok {
 		b := &browser{t: t, s: s, c: prev.c, ip: prev.ip}
 		if b.do("GET", "/me", nil).Status == 200 {
+			// a reused session keeps its login-time step-up only for STEP_UP_MAX_AGE (10 min): refresh it well before, as a
+			// staff member would, so tests that expect a fresh factor do not depend on how long earlier tests ran
+			if time.Since(staffStepUp[c.email]) > 5*time.Minute {
+				b.expect(b.do("POST", "/auth/step-up/verify", map[string]string{"code": totpCode(t, c.secret)}), 200, "")
+				staffStepUp[c.email] = time.Now()
+			}
 			return b
 		}
 	}
 	b := s.freshStaff(t, c)
 	staffSess[c.email] = b
+	staffStepUp[c.email] = time.Now()
 	return b
 }
 

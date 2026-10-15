@@ -29,6 +29,7 @@
 | 9 | Zimbabwe payment provider integration readiness | see docs/stage-9 (provider integration and certification BLOCKED; no provider selected) | **NOT_RECORDED** | ADR-040 DECISION_DEFERRED; provider confirmations and legal items open; secret manager operation (Stage 18/20); see docs/stage-9/known-issues.md |
 | 10 | Immutable double-entry ledger, posting engine, reconciliation foundation | see docs/stage-10 (TEST ledger only; production posting BLOCKED) | **NOT_RECORDED** | Accounting review of the chart and rules (KI-S10-02); production ledger database, backups and DR (KI-S10-06); settlement reconciliation BLOCKED (KI-S10-04); LR-001/002/003/012/076; see docs/stage-10/known-issues.md |
 | 11 | Withdrawals & payouts | see docs/stage-11 (TEST payouts only; production payout execution BLOCKED) | **NOT_RECORDED** | No payout provider (ADR-040); settlement evidence (KI-S11-03); LR-020, LR-024, LR-030, LR-009 screening; hold registry; see docs/stage-11/known-issues.md |
+| 12 | Fees & platform revenue | see docs/stage-12 (TEST fees only; production fee charging and revenue recognition BLOCKED) | **NOT_RECORDED** | Fee model PD-01/LR-028; tax LR-016/LR-045/LR-059; accounting review (KI-S10-02); provider fee evidence (ADR-040, PCR-016); PD-20, PD-23; see docs/stage-12/known-issues.md |
 
 ## Effect of a missing acceptance
 

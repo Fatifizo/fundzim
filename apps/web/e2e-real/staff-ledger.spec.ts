@@ -84,3 +84,34 @@ test("payout operations overview: TEST payouts through the simulator only, produ
   expect((await reviewer.page.goto("/admin/finance/payouts"))?.status()).toBe(404);
   await reviewer.ctx.close();
 });
+
+test("fees: TEST fees only, production fee charging BLOCKED, per-currency revenue; no access without fee.view", async ({ browser }) => {
+  const staff = loadFixture().staff;
+  const S = (key: string) => {
+    const c = staff[key];
+    if (!c) throw new Error(`staff fixture ${key} missing`);
+    return c;
+  };
+  // COMPLIANCE holds fee.view (read only)
+  const { ctx, page } = await staffPage(browser, S("compliance"), "/admin/finance/fees");
+  const main = page.locator("main");
+  await expect(page.getByRole("heading", { level: 1, name: "Fees" })).toBeVisible();
+  await expect(main).toContainText("BLOCKED");
+  await expect(main).toContainText("TEST");
+  const api = await page.request.get("/api/v1/admin/fees/overview");
+  expect(api.status()).toBe(200);
+  const overview = (await api.json()).data;
+  expect(overview.fee_environment).toBe("TEST");
+  expect(overview.production_fees).toBe("BLOCKED");
+  await page.goto("/admin/finance/revenue");
+  await expect(page.getByRole("heading", { level: 1, name: "Revenue (TEST)" })).toBeVisible();
+  const rev = (await (await page.request.get("/api/v1/admin/finance/revenue")).json()).data;
+  expect(rev.fee_environment).toBe("TEST");
+  for (const c of rev.currencies) expect(c.cash_received).toBe("NOT_AVAILABLE");
+  await ctx.close();
+  // a reviewer without fee.view is refused by the API and the page does not exist for them
+  const reviewer = await staffPage(browser, S("reviewer"), "/admin");
+  expect((await reviewer.page.request.get("/api/v1/admin/fees/overview")).status()).toBe(403);
+  expect((await reviewer.page.goto("/admin/finance/fees"))?.status()).toBe(404);
+  await reviewer.ctx.close();
+});

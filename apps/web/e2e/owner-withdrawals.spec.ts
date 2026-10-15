@@ -65,6 +65,11 @@ test("owner: request a test withdrawal (step-up), see it under review, then canc
   await expect(page).toHaveURL(/\/dashboard\/withdrawals\/[0-9a-f-]{36}$/);
   await expect(main).toContainText("Status: Under review");
   await expect(main).toContainText("Production payouts: BLOCKED");
+  // Stage 12: the payout fee estimate, who bears it and what the beneficiary receives (mock: 1 %)
+  await expect(main).toContainText("Payout fee (estimate)");
+  await expect(main).toContainText("$1.25");
+  await expect(main).toContainText("Paid by the campaign");
+  await expect(main).toContainText("$124.25");
   expect(await axe(page)).toEqual([]);
 
   // cancel (step-up still fresh)

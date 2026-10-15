@@ -871,6 +871,14 @@ func (s *Service) syncLedger(ctx context.Context, id string) error {
 				return err
 			}
 		}
+		// Stage 12: assess the payout fee from its request-time estimate (idempotent; a platform-absorbed fee is
+		// posted as a PAYOUT_FEE expense journal, retried by the fees job if the ledger refuses it now)
+		if s.Fees != nil && p.FeeCalculationID != nil {
+			if err := s.Fees.AssessPayoutFee(ctx, p.ID, p.CampaignID, p.Currency, p.ProviderID, p.DestinationRail, *p.FeeCalculationID,
+				p.AmountMinor); err != nil {
+				return err
+			}
+		}
 		if p.Status == StReversed && p.ReversedAmountMinor != nil {
 			if j, ok, err := s.Ledger.JournalByKey(ctx, "payout:"+p.ID+":reversed"); err != nil {
 				return err

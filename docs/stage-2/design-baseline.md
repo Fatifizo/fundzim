@@ -71,7 +71,7 @@ test that enforces this table.
 | 2 | `users` | platform, audit |
 | 2 | `storage` | platform, audit |
 | 2 | `ledger` | platform, audit |
-| 2 | `fees` | platform, audit |
+| 2 | `fees` | platform, audit (Stage 12, ADR-044: also `ledger` — fee journals through the ledger's service, so `fees` sits at layer 3 in practice) |
 | 2 | `psp` | platform, audit |
 | 2 | `risk` | platform, audit |
 | 3 | `organisations` | platform, audit, users |

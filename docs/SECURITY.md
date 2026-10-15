@@ -539,6 +539,15 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 > repeated after one may have reached the provider; owner-facing refusals reveal no compliance or risk detail. Full review:
 > [stage-11/security-review.md](stage-11/security-review.md).
 
+## 21g. Fee security (Stage 12, summary)
+
+> **Stage 12 as built ([ADR-044](adr/ADR-044-fees-and-platform-revenue.md)):** TEST fees only (constant and CHECKs);
+> fee-policy and provider-evidence changes are maker-checker (`fee.config.request` → `fee.config.approve`, BUSINESS_APPROVER,
+> fresh step-up; the checker is never the maker or a linked account, in Go and the database); published terms are immutable
+> and hashed; clients can never supply a rate or a fee; quotes are owner-only, rate-limited and bound once; assessments,
+> adjustments and history are append-only; manual adjustments are maker-checker and never post; fee journals go only through
+> `ledger.Service`. Full review: [stage-12/security-review.md](stage-12/security-review.md).
+
 ## 21e. Ledger security (Stage 10, summary)
 
 > **Stage 10 as built ([ADR-042](adr/ADR-042-ledger-implementation.md)):** the ledger database is designated TEST

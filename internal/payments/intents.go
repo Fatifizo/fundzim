@@ -13,6 +13,7 @@ import (
 
 	"github.com/Fatifizo/fundzim/internal/audit"
 	"github.com/Fatifizo/fundzim/internal/campaigns"
+	"github.com/Fatifizo/fundzim/internal/fees"
 	"github.com/Fatifizo/fundzim/internal/platform/db"
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
 	"github.com/Fatifizo/fundzim/internal/platform/httpx"
@@ -30,13 +31,18 @@ const (
 
 // DonationIntent is the donor view of a donation intent.
 type DonationIntent struct {
-	ID          string `json:"id"`
-	CampaignID  string `json:"campaign_id"`
-	AmountMinor string `json:"amount_minor"`
-	Currency    string `json:"currency"`
-	Status      string `json:"status"`
-	IsAnonymous bool   `json:"is_anonymous"`
-	Simulated   bool   `json:"simulated"`
+	ID string `json:"id"`
+	// FeeQuoteID is the fee quote bound to the intent (Stage 12); FeeDonorChargeMinor the donor charge it implies
+	// (nil when it depends on an UNKNOWN provider fee). The payment amount stays the donation amount: passing a
+	// donor-covered charge to a provider needs provider confirmation that fee pass-through is permitted.
+	FeeQuoteID          *string `json:"fee_quote_id"`
+	FeeDonorChargeMinor *string `json:"fee_donor_charge_minor"`
+	CampaignID          string  `json:"campaign_id"`
+	AmountMinor         string  `json:"amount_minor"`
+	Currency            string  `json:"currency"`
+	Status              string  `json:"status"`
+	IsAnonymous         bool    `json:"is_anonymous"`
+	Simulated           bool    `json:"simulated"`
 	// ExecutionEnvironment and TestPayment make a test payment impossible to mistake for a real donation.
 	ExecutionEnvironment string           `json:"execution_environment"`
 	TestPayment          bool             `json:"test_payment"`
@@ -47,6 +53,8 @@ type DonationIntent struct {
 }
 
 type donationRow struct {
+	FeeQuoteID                                                      *string
+	FeeCharge                                                       *int64
 	ID, CampaignID, DonorID, Currency, Status, Correlation, IdemKey string
 	Amount                                                          int64
 	Anonymous, Simulated                                            bool
@@ -55,12 +63,13 @@ type donationRow struct {
 }
 
 const donationSelect = `SELECT id, campaign_id, donor_user_id, currency, status, correlation_id, idempotency_key::text, amount_minor,
-	is_anonymous, is_simulated, expires_at, created_at, updated_at, execution_environment FROM app.donation_intents`
+	is_anonymous, is_simulated, expires_at, created_at, updated_at, execution_environment, fee_quote_id::text, fee_donor_charge_minor
+	FROM app.donation_intents`
 
 func scanDonation(r pgx.Row) (donationRow, error) {
 	var d donationRow
 	err := r.Scan(&d.ID, &d.CampaignID, &d.DonorID, &d.Currency, &d.Status, &d.Correlation, &d.IdemKey, &d.Amount, &d.Anonymous,
-		&d.Simulated, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt, &d.ExecEnv)
+		&d.Simulated, &d.ExpiresAt, &d.CreatedAt, &d.UpdatedAt, &d.ExecEnv, &d.FeeQuoteID, &d.FeeCharge)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, ErrIntentNotFound
 	}
@@ -70,7 +79,22 @@ func scanDonation(r pgx.Row) (donationRow, error) {
 func (d donationRow) view() DonationIntent {
 	return DonationIntent{ID: d.ID, CampaignID: d.CampaignID, AmountMinor: strconv.FormatInt(d.Amount, 10), Currency: d.Currency,
 		Status: d.Status, IsAnonymous: d.Anonymous, Simulated: d.Simulated, ExecutionEnvironment: d.ExecEnv,
-		TestPayment: d.ExecEnv != psp.ExecProduction, ExpiresAt: d.ExpiresAt, CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt}
+		TestPayment: d.ExecEnv != psp.ExecProduction, ExpiresAt: d.ExpiresAt, CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt,
+		FeeQuoteID: d.FeeQuoteID, FeeDonorChargeMinor: minorP(d.FeeCharge)}
+}
+
+func minorP(v *int64) *string {
+	if v == nil {
+		return nil
+	}
+	s := strconv.FormatInt(*v, 10)
+	return &s
+}
+
+// FeeQuoter is the fees module's donation-intent integration (fees.Service).
+type FeeQuoter interface {
+	QuoteForIntent(ctx context.Context, tx pgx.Tx, userID, quoteID, campaignID, currency string, amount int64) (fees.IntentQuote, error)
+	MarkQuoteBound(ctx context.Context, tx pgx.Tx, quoteID, intentID, userID string) error
 }
 
 // CreateIntentInput is POST /donation-intents.
@@ -79,6 +103,8 @@ type CreateIntentInput struct {
 	AmountMinor string `json:"amount_minor"`
 	Currency    string `json:"currency"`
 	IsAnonymous bool   `json:"is_anonymous"`
+	// FeeQuoteID optionally binds the donor's fee quote (Stage 12); without it a quote is computed at creation.
+	FeeQuoteID *string `json:"fee_quote_id"`
 }
 
 var amountRE = regexp.MustCompile(`^[1-9][0-9]{0,17}$`)
@@ -160,16 +186,33 @@ func (s *Service) CreateIntent(ctx context.Context, donorID, idemKey, corr strin
 		Correlation: corrOr(corr), IdemKey: idemKey, Amount: amount, Anonymous: in.IsAnonymous, Simulated: s.Simulated(), ExecEnv: s.ExecEnv(),
 		ExpiresAt: now.Add(DonationIntentTTL), CreatedAt: now, UpdatedAt: now}
 	err = db.WithTx(ctx, s.Pool, db.TxOptions{}, func(ctx context.Context, tx pgx.Tx) error {
+		if s.Fees != nil {
+			quoteID := ""
+			if in.FeeQuoteID != nil {
+				quoteID = *in.FeeQuoteID
+			}
+			q, err := s.Fees.QuoteForIntent(ctx, tx, donorID, quoteID, d.CampaignID, d.Currency, d.Amount)
+			if err != nil {
+				return err
+			}
+			d.FeeQuoteID, d.FeeCharge = &q.QuoteID, q.DonorChargeMinor
+		}
 		tag, err := tx.Exec(ctx, `INSERT INTO app.donation_intents (id, campaign_id, donor_user_id, currency, amount_minor, is_anonymous,
-			is_simulated, status, expires_at, correlation_id, idempotency_key, execution_environment)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, 'OPEN', $8, $9, $10, $11)
+			is_simulated, status, expires_at, correlation_id, idempotency_key, execution_environment, fee_quote_id, fee_donor_charge_minor)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, 'OPEN', $8, $9, $10, $11, $12, $13)
 			ON CONFLICT (donor_user_id, idempotency_key) DO NOTHING`,
-			d.ID, d.CampaignID, donorID, d.Currency, d.Amount, d.Anonymous, d.Simulated, d.ExpiresAt, d.Correlation, idemKey, d.ExecEnv)
+			d.ID, d.CampaignID, donorID, d.Currency, d.Amount, d.Anonymous, d.Simulated, d.ExpiresAt, d.Correlation, idemKey, d.ExecEnv,
+			d.FeeQuoteID, d.FeeCharge)
 		if err != nil {
 			return err
 		}
 		if tag.RowsAffected() == 0 {
 			return errConcurrentReplay
+		}
+		if d.FeeQuoteID != nil {
+			if err := s.Fees.MarkQuoteBound(ctx, tx, *d.FeeQuoteID, d.ID, donorID); err != nil {
+				return err
+			}
 		}
 		if err := s.insertEvent(ctx, tx, eventRow{subject: "DONATION_INTENT", donationID: d.ID, to: DonationOpen, applied: true,
 			obs: Obs{Source: SrcDonor, ActorType: "DONOR", ActorID: donorID, Correlation: d.Correlation}}); err != nil {

@@ -85,12 +85,13 @@ func (s *Service) Post(ctx context.Context, tx pgx.Tx, p Posting) (Result, error
 	_, err = tx.Exec(ctx, `INSERT INTO ledger.ledger_transactions (id, posting_rule, posting_rule_version, environment, source_system,
 		source_event_id, evidence_class, metadata, idempotency_key, currency, description, source_type, source_id, provider_code,
 		provider_reference, occurred_at, accounting_period_id, reverses_transaction_id, adjustment_id, created_by_type, created_by_id,
-		reason, correlation_id)
+		reason, correlation_id, fee_schedule_version_id)
 		VALUES ($1, $2, $3, $4, $5, nullif($6, ''), $7, $8, $9, $10, $11, $12, $13, nullif($14, ''), nullif($15, ''), $16,
-		'00000000-0000-0000-0000-000000000000', nullif($17, '')::uuid, nullif($18, '')::uuid, $19, $20, nullif($21, ''), nullif($22, ''))`,
+		'00000000-0000-0000-0000-000000000000', nullif($17, '')::uuid, nullif($18, '')::uuid, $19, $20, nullif($21, ''), nullif($22, ''),
+		nullif($23, '')::uuid)`,
 		id, r.Code, r.Version, env, p.SourceSystem, p.SourceEventID, p.EvidenceClass, md, p.IdempotencyKey, p.Currency, p.Description,
 		p.SourceType, p.SourceID, p.ProviderCode, p.ProviderRef, p.OccurredAt.UTC(), p.Reverses, p.AdjustmentID, p.Actor.Type, p.Actor.ID,
-		p.Reason, p.CorrelationID)
+		p.Reason, p.CorrelationID, p.FeePolicyVersionID)
 	if err != nil {
 		if isUnique(err, "uq_ledger_transactions_idempotency_key") {
 			return Result{}, errRetry

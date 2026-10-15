@@ -34,6 +34,7 @@ func registerConsumers(ctx context.Context, d *WorkerDeps, reg *outbox.Registry)
 	registerCampaignMediaConsumers(reg, d.Verification)                           // Stage 6 stream M
 	registerPaymentConsumers(reg, d.Verification)                                 // Stage 8 (ADR-039)
 	registerLedgerConsumers(reg, d.Verification)                                  // Stage 10 (ADR-042)
+	registerFeeConsumers(reg, d.Verification)                                     // Stage 12 (ADR-044)
 	return nil
 }
 

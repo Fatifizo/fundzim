@@ -19,6 +19,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/beneficiaries"
 	"github.com/Fatifizo/fundzim/internal/campaigns"
 	"github.com/Fatifizo/fundzim/internal/compliance"
+	"github.com/Fatifizo/fundzim/internal/fees"
 	"github.com/Fatifizo/fundzim/internal/kyc"
 	"github.com/Fatifizo/fundzim/internal/ledger"
 	"github.com/Fatifizo/fundzim/internal/organisations"
@@ -88,6 +89,9 @@ type VerificationModules struct {
 	// Stage 10 ledger (internal/app/ledger.go, ADR-042): its own pool as fundzim_ledger
 	LedgerPool *pgxpool.Pool
 	Ledger     *ledger.Service
+
+	// Stage 12 fees (internal/app/fees.go, ADR-044)
+	Fees *fees.Service
 }
 
 // Close closes the restricted pools.
@@ -226,6 +230,7 @@ func NewVerificationModules(ctx context.Context, d VerificationDeps) (*Verificat
 		return fail(err)
 	}
 	newPayouts(m, d) // Stage 11 (ADR-043)
+	newFees(m, d)    // Stage 12 (ADR-044)
 	return m, nil
 }
 

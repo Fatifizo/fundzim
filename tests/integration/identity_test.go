@@ -258,8 +258,15 @@ func totpCode(t *testing.T, secret string) string {
 	totpMu.Lock()
 	defer totpMu.Unlock()
 	for {
-		cur := time.Now().Unix() / 30
-		for s := cur - 1; s <= cur+1; s++ {
+		now := time.Now().Unix()
+		cur := now / 30
+		first := cur - 1
+		if now%30 >= 25 {
+			// the previous step leaves the server's ±1 window when the clock enters the next step: a code for it
+			// could arrive 2 steps old (MFA_CODE_INVALID), so never hand it out this close to the boundary
+			first = cur
+		}
+		for s := first; s <= cur+1; s++ {
 			if s > lastStep[secret] {
 				lastStep[secret] = s
 				code, err := totp.GenerateCodeCustom(secret, time.Unix(s*30+1, 0), totp.ValidateOpts{Period: 30, Digits: otp.DigitsSix, Algorithm: otp.AlgorithmSHA1})

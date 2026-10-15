@@ -101,6 +101,10 @@ tags:
   description: Withdrawal (payout) requests — owner side. TEST payouts through the simulator only (ADR-043).
 - name: Payout operations (Stage 11)
   description: Staff payout operations, approvals, exceptions, reconciliation (ADR-043).
+- name: Fees (Stage 12)
+  description: Fee quotes, active policies and organiser fee disclosure. TEST fees only (ADR-044).
+- name: Fee administration (Stage 12)
+  description: Fee policies (maker-checker), provider fee evidence, assessments, adjustments, reconciliation, revenue (ADR-044).
 - name: Webhooks
   description: 'Provider callbacks: signature-authenticated, CSRF/session-exempt, inbox + 2xx fast.'
 - name: Health
@@ -16809,204 +16813,6 @@ paths:
       - USER_NOT_FOUND
       - VALIDATION_FAILED
       x-fundzim-status: IMPLEMENTED
-  /admin/fee-schedules:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Admin operations
-      operationId: listFeeSchedules
-      summary: Fee schedules (versions)
-      description: '**ADM-13** · Auth: staff + MFA · Authorization: `fee.config.request` or `ledger.view`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      - name: currency
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Currency'
-        description: Allow-listed filter.
-      - name: effective_at
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Timestamp'
-        description: Allow-listed filter.
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FeeSchedulePage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: ADM-13
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: fee.config.request
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - INVALID_FILTER
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-  /admin/fee-schedule-change-requests:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Admin operations
-      operationId: requestFeeChange
-      summary: Propose fee change (maker, future-dated)
-      description: '**ADM-14** · Auth: staff + MFA + step-up · Authorization: `fee.config.request`.
-
-
-        Idempotency: optional · Rate-limit class: `RL-STAFF-WRITE` · Audit: fee.config.change.requested (J)'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKeyOptional'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/FeeScheduleChangeCreate'
-      responses:
-        '201':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FeeScheduleChangeEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: ADM-14
-      x-fundzim-auth: staff+MFA+step-up
-      x-fundzim-permission: fee.config.request
-      x-fundzim-step-up: true
-      x-fundzim-maker-checker: maker
-      x-fundzim-idempotency: optional
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: fee.config.change.requested (J)
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - FEE_CHANGE_NOT_FUTURE_DATED
-      - JUSTIFICATION_REQUIRED
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-      - STEP_UP_REQUIRED
-      - VALIDATION_FAILED
-  /admin/fee-schedule-change-requests/{fee_change_id}/approve:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Admin operations
-      operationId: approveFeeChange
-      summary: Approve fee change (BUSINESS_APPROVER)
-      description: '**ADM-15** · Auth: staff + MFA + step-up · Authorization: `fee.config.approve` (BUSINESS_APPROVER, I-4); ≠ maker.
-
-
-        Idempotency: optional · Rate-limit class: `RL-STAFF-WRITE` · Audit: fee.config.change.approved (J)'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - name: fee_change_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKeyOptional'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/StaffActionRequest'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FeeScheduleChangeEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: ADM-15
-      x-fundzim-auth: staff+MFA+step-up
-      x-fundzim-permission: fee.config.approve
-      x-fundzim-step-up: true
-      x-fundzim-maker-checker: checker
-      x-fundzim-idempotency: optional
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: fee.config.change.approved (J)
-      x-fundzim-error-codes:
-      - APPROVAL_EXPIRED
-      - APPROVER_CONFLICT
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - FEE_CHANGE_NOT_FOUND
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-      - STEP_UP_REQUIRED
-      - VALIDATION_FAILED
   /admin/killswitches:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -33239,6 +33045,2196 @@ paths:
       x-fundzim-error-codes:
       - PAYOUT_REQUEST_NOT_FOUND
       - VALIDATION_FAILED
+  /fees/policies/active:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fees (Stage 12)
+      operationId: listActiveFeePolicies
+      summary: Fee policies in force (TEST)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: personal account session · Authorization: signed-in user (owner checks in the handler).
+        Versions in force now that are not scoped to one campaign. Rates are synthetic test configuration, never advertised as FundZim''s. **Stage 12: TEST
+        fees only** — synthetic configuration; production fee charging and revenue recognition are BLOCKED (`fees.ProductionFeesEnabled` constant false; every
+        fee row is TEST; ADR-044).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: currency
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Currency'
+      - name: transaction_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - DONATION
+          - PAYOUT
+          - REFUND
+          - CHARGEBACK
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeActivePolicyS12Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /fees/quotes:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fees (Stage 12)
+      operationId: createFeeQuote
+      summary: Quote the fees of a donation
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: personal account session · Authorization: signed-in user (owner checks in the handler).
+        Selects the policy versions and provider evidence in force, computes exactly (integer minor units, one rounding per component) and stores the calculation.
+        A quote is not a charge and not revenue; it expires (FEES_QUOTE_TTL) and is invalidated by any policy change in its currency. **Stage 12: TEST fees
+        only** — synthetic configuration; production fee charging and revenue recognition are BLOCKED (`fees.ProductionFeesEnabled` constant false; every
+        fee row is TEST; ADR-044).
+
+
+
+        Idempotency: required (scope fees.quotes.create) · Rate-limit: fees.quote.user · Audit: fee history QUOTE_CREATED (not the platform audit log: hot
+        path) · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeQuoteRequestS12'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeQuoteS12Envelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: required (scope fees.quotes.create)
+      x-fundzim-error-codes:
+      - CAMPAIGN_NOT_ACCEPTING_DONATIONS
+      - CAMPAIGN_NOT_FOUND
+      - CURRENCY_NOT_SUPPORTED
+      - FEE_EXCEEDS_AMOUNT
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - PAYMENT_METHOD_UNAVAILABLE
+      - RATE_LIMITED
+      - VALIDATION_FAILED
+  /fees/quotes/{quote_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fees (Stage 12)
+      operationId: getFeeQuote
+      summary: One fee quote
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: personal account session · Authorization: signed-in user (owner checks in the handler).
+        Its owner only (others → 404).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: quote_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeQuoteS12Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_NOT_FOUND
+  /campaigns/{campaign_id}/fees:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fees (Stage 12)
+      operationId: getCampaignFees
+      summary: Fee disclosure for a campaign (organiser)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: personal account session · Authorization: signed-in user (owner checks in the handler).
+        Owner or organisation member (others → 404): policies that would apply, assessed fees with their basis, adjustments, restrictions. **Stage 12: TEST
+        fees only** — synthetic configuration; production fee charging and revenue recognition are BLOCKED (`fees.ProductionFeesEnabled` constant false; every
+        fee row is TEST; ADR-044).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeCampaignFeesS12Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - CAMPAIGN_NOT_FOUND
+  /admin/fees/overview:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminFeesOverview
+      summary: Fee dashboard
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.view` (non-staff → `404`). Counts by status, latest reconciliation,
+        gates. **Stage 12: TEST fees only** — synthetic configuration; production fee charging and revenue recognition are BLOCKED (`fees.ProductionFeesEnabled`
+        constant false; every fee row is TEST; ADR-044).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeOverviewS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/fees/policies:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminListFeePolicies
+      summary: Fee policies
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.view` (non-staff → `404`). With all versions; newest
+        first.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: category
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - PLATFORM_FEE
+          - PAYMENT_PROCESSING_FEE
+          - PAYOUT_PROCESSING_FEE
+          - REFUND_FEE
+          - CHARGEBACK_FEE
+          - CURRENCY_CONVERSION_FEE
+          - OTHER_APPROVED_FEE
+          description: 'CURRENCY_CONVERSION_FEE (FundZim never converts currencies) and OTHER_APPROVED_FEE (no posting rule) cannot be created: FEE_CATEGORY_NOT_ENABLED.'
+      - name: currency
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Currency'
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - ACTIVE
+          - SUSPENDED
+          - RETIRED
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePolicyS12Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminCreateFeePolicy
+      summary: Create a fee policy scope (maker)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.config.request` + fresh step-up (non-staff → `404`).
+        The scope is immutable and unique.
+
+
+
+        Idempotency: required (scope fees.policies.create) · Rate-limit: RL-STAFF-WRITE · Audit: fee.policy.created · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeePolicyCreateS12'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePolicyS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.config.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required (scope fees.policies.create)
+      x-fundzim-error-codes:
+      - CURRENCY_NOT_SUPPORTED
+      - FEE_CATEGORY_NOT_ENABLED
+      - FEE_POLICY_CODE_TAKEN
+      - FEE_POLICY_CONFLICT
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/policies/{policy_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminGetFeePolicy
+      summary: One fee policy
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.view` (non-staff → `404`). With versions and the one
+        in force now.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: policy_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePolicyS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_NOT_FOUND
+  /admin/fees/policies/{policy_id}/versions:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminCreateFeePolicyVersion
+      summary: Draft a new version (maker)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.config.request` + fresh step-up (non-staff → `404`).
+        One draft or pending version per policy.
+
+
+
+        Idempotency: required (scope fees.policy_versions.create) · Rate-limit: RL-STAFF-WRITE · Audit: fee.policy_version.drafted · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: policy_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeVersionInputS12'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePolicyVersionS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.config.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required (scope fees.policy_versions.create)
+      x-fundzim-error-codes:
+      - FEE_NOT_FOUND
+      - FEE_POLICY_CONFLICT
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/policy-versions/{version_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminGetFeePolicyVersion
+      summary: One policy version
+      description: "**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.view` (non-staff → `404`). \n\n\nIdempotency: n/a · Rate-limit:\
+        \ RL-STAFF-READ · Audit: — · Cache-Control: no-store"
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePolicyVersionS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_NOT_FOUND
+    put:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminUpdateFeePolicyDraft
+      summary: Edit a draft (its author)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.config.request` + fresh step-up (non-staff → `404`).
+        DRAFT only.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee history DRAFT_EDITED · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeVersionInputS12'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePolicyVersionS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.config.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_DRAFT_NOT_YOURS
+      - FEE_POLICY_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/policy-versions/{version_id}/events:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminFeePolicyVersionEvents
+      summary: Version history
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.view` (non-staff → `404`). Append-only.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeEventS12Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/fees/policy-versions/{version_id}/submit:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminFeePolicyVersionSubmit
+      summary: Submit for approval
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.config.request` + fresh step-up (non-staff → `404`).
+        DRAFT → PENDING_APPROVAL; terms frozen and hashed; never retroactive.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee.policy_version.submitted · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePolicyVersionS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.config.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_NOT_FOUND
+      - FEE_POLICY_RETROACTIVE
+      - FEE_POLICY_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/policy-versions/{version_id}/approve:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminFeePolicyVersionApprove
+      summary: Approve (checker)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.config.approve` + fresh step-up (non-staff → `404`).
+        PENDING_APPROVAL → APPROVED. Never the maker or anyone linked to them (Go and database); optional terms_hash binding.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee.policy_version.approved · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeDecisionS12'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePolicyVersionS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.config.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_NOT_FOUND
+      - FEE_POLICY_STATE
+      - FEE_TERMS_CHANGED
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/policy-versions/{version_id}/reject:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminFeePolicyVersionReject
+      summary: Reject (checker)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.config.approve` + fresh step-up (non-staff → `404`).
+        PENDING_APPROVAL → REJECTED (terminal).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee.policy_version.rejected · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeDecisionS12'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePolicyVersionS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.config.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_NOT_FOUND
+      - FEE_POLICY_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/policy-versions/{version_id}/activate:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminFeePolicyVersionActivate
+      summary: Activate
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.config.request` + fresh step-up (non-staff → `404`).
+        APPROVED → ACTIVE from effective_from; invalidates ACTIVE quotes in the currency.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee.policy_version.activated · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePolicyVersionS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.config.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_NOT_FOUND
+      - FEE_POLICY_CONFLICT
+      - FEE_POLICY_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/policy-versions/{version_id}/suspend:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminFeePolicyVersionSuspend
+      summary: Suspend
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.config.request` + fresh step-up (non-staff → `404`).
+        ACTIVE → SUSPENDED (reason); invalidates ACTIVE quotes.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee.policy_version.suspended · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeReasonS12'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePolicyVersionS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.config.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_NOT_FOUND
+      - FEE_POLICY_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/policy-versions/{version_id}/reactivate:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminFeePolicyVersionReactivate
+      summary: Reactivate (checker)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.config.approve` + fresh step-up (non-staff → `404`).
+        SUSPENDED → ACTIVE; not by the suspender or anyone linked.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee.policy_version.reactivated · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeReasonS12'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePolicyVersionS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.config.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_NOT_FOUND
+      - FEE_POLICY_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/policy-versions/{version_id}/retire:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminFeePolicyVersionRetire
+      summary: Retire
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.config.request` + fresh step-up (non-staff → `404`).
+        DRAFT/APPROVED/ACTIVE/SUSPENDED → RETIRED (final).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee.policy_version.retired · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeReasonS12'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeePolicyVersionS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.config.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_NOT_FOUND
+      - FEE_POLICY_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/provider-schedules:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminListFeeProviderSchedules
+      summary: Provider fee evidence
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.view` (non-staff → `404`). SYNTHETIC or UNVERIFIED only.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeProviderScheduleS12Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminCreateFeeProviderSchedule
+      summary: Record provider fee evidence (maker)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.config.request` + fresh step-up (non-staff → `404`).
+        PENDING_APPROVAL until a checker activates it. VERIFIED is refused; SYNTHETIC only for the sandbox simulator.
+
+
+
+        Idempotency: required (scope fees.provider_schedules.create) · Rate-limit: RL-STAFF-WRITE · Audit: fee.provider_schedule.recorded · Cache-Control:
+        no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeProviderScheduleCreateS12'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeProviderScheduleS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.config.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required (scope fees.provider_schedules.create)
+      x-fundzim-error-codes:
+      - CURRENCY_NOT_SUPPORTED
+      - PROVIDER_FEE_SYNTHETIC_REAL_PROVIDER
+      - PROVIDER_FEE_VERIFICATION_UNAVAILABLE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/provider-schedules/{schedule_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminGetFeeProviderSchedule
+      summary: One provider fee schedule
+      description: "**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.view` (non-staff → `404`). \n\n\nIdempotency: n/a · Rate-limit:\
+        \ RL-STAFF-READ · Audit: — · Cache-Control: no-store"
+      security:
+      - staffSession: []
+      parameters:
+      - name: schedule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeProviderScheduleS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_NOT_FOUND
+  /admin/fees/provider-schedules/{schedule_id}/approve:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminApproveFeeProviderSchedule
+      summary: Activate provider fee evidence (checker)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.config.approve` + fresh step-up (non-staff → `404`).
+        Never its recorder or anyone linked.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee.provider_schedule.activated · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: schedule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeProviderScheduleS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.config.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_POLICY_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+  /admin/fees/provider-schedules/{schedule_id}/retire:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminRetireFeeProviderSchedule
+      summary: Retire provider fee evidence
+      description: "**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.config.request` + fresh step-up (non-staff → `404`).\
+        \ \n\n\nIdempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee.provider_schedule.retired · Cache-Control: no-store"
+      security:
+      - staffSession: []
+      parameters:
+      - name: schedule_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeReasonS12'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeProviderScheduleS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.config.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_POLICY_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/quotes:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminListFeeQuotes
+      summary: Fee quotes
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.view` (non-staff → `404`). Newest first.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - BOUND
+          - EXPIRED
+          - INVALIDATED
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeQuoteS12Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/fees/quotes/{quote_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminGetFeeQuote
+      summary: One fee quote
+      description: "**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.view` (non-staff → `404`). \n\n\nIdempotency: n/a · Rate-limit:\
+        \ RL-STAFF-READ · Audit: — · Cache-Control: no-store"
+      security:
+      - staffSession: []
+      parameters:
+      - name: quote_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeQuoteS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_NOT_FOUND
+  /admin/fees/assessments:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminListFeeAssessments
+      summary: Fee assessments
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.view` (non-staff → `404`). Newest first.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: campaign_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: source_type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - DONATION_PAYMENT
+          - SYNTHETIC_DONATION
+          - PAYOUT
+      - name: category
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - PLATFORM_FEE
+          - PAYMENT_PROCESSING_FEE
+          - PAYOUT_PROCESSING_FEE
+          - REFUND_FEE
+          - CHARGEBACK_FEE
+          - CURRENCY_CONVERSION_FEE
+          - OTHER_APPROVED_FEE
+          description: 'CURRENCY_CONVERSION_FEE (FundZim never converts currencies) and OTHER_APPROVED_FEE (no posting rule) cannot be created: FEE_CATEGORY_NOT_ENABLED.'
+      - name: currency
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Currency'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeAssessmentS12Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/fees/assessments/{assessment_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminGetFeeAssessment
+      summary: Assessment detail
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.view` (non-staff → `404`). With ledger journals, adjustments
+        and history.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: assessment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeAssessmentDetailS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_NOT_FOUND
+  /admin/fees/assessments/{assessment_id}/adjustments:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminRequestFeeAdjustment
+      summary: Request a manual fee adjustment (maker)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.adjust.request` + fresh step-up (non-staff → `404`).
+        PROVIDER_CORRECTION, POLICY_CORRECTION or ACCOUNTING_ADJUSTMENT; never posts (a ledger correction is a Stage 10 adjustment).
+
+
+
+        Idempotency: required (scope fees.adjustments.create) · Rate-limit: RL-STAFF-WRITE · Audit: fee.adjustment.requested · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: assessment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeManualAdjustmentS12'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeAdjustmentS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.adjust.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required (scope fees.adjustments.create)
+      x-fundzim-error-codes:
+      - FEE_ADJUSTMENT_EXCEEDS_ASSESSMENT
+      - FEE_AMOUNT_UNKNOWN
+      - FEE_NOT_FOUND
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/adjustments:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminListFeeAdjustments
+      summary: Fee adjustments
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.view` (non-staff → `404`). Newest first.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: assessment_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - APPLIED
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+      - name: reason
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: campaign_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeAdjustmentS12Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/fees/adjustments/{adjustment_id}/approve:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminFeeAdjustmentApprove
+      summary: Approve a manual adjustment (checker)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.adjust.approve` + fresh step-up (non-staff → `404`).
+        Never the requester or anyone linked; the net fee never goes below zero (Go and database).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee.adjustment.approved · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: adjustment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeReasonS12'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeAdjustmentS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.adjust.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_ADJUSTMENT_EXCEEDS_ASSESSMENT
+      - FEE_ADJUSTMENT_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/adjustments/{adjustment_id}/reject:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminFeeAdjustmentReject
+      summary: Reject a manual adjustment (checker)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.adjust.approve` + fresh step-up (non-staff → `404`).
+        Never the requester or anyone linked; the net fee never goes below zero (Go and database).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee.adjustment.rejected · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: adjustment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeReasonS12'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeAdjustmentS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.adjust.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_ADJUSTMENT_EXCEEDS_ASSESSMENT
+      - FEE_ADJUSTMENT_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/reconciliation:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminFeeReconciliation
+      summary: Fee reconciliation items
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.view` (non-staff → `404`). OPEN first. Settlement against
+        provider statements is NOT_PERFORMED.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - RESOLVED
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeReconItemS12Page'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/fees/reconciliation/run:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminRunFeeReconciliation
+      summary: Run fee reconciliation
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.adjust.request` + fresh step-up (non-staff → `404`).
+        Recomputes calculations, compares assessments with journals and provider reports; detections are idempotent.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee history · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeReconRunS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.adjust.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - STEP_UP_REQUIRED
+  /admin/fees/reconciliation/{item_id}/resolve:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminResolveFeeReconciliation
+      summary: Resolve a reconciliation item
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.adjust.request` + fresh step-up (non-staff → `404`).
+        Records a note; never changes a fee, an assessment or the ledger.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee.reconciliation.resolved · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeReconResolveS12'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeReconItemS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.adjust.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_RECONCILIATION_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/fees/fixtures:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminRunFeeFixture
+      summary: Run a TEST_ONLY fee accounting fixture (DEVELOPMENT ONLY)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.fixtures` (non-staff → `404`). Synthetic donation (capture
+        with the platform-fee line, provider fee, settlement, release), refund, chargeback or provider-reported fee, posted through the ledger with source_system
+        fees and SIMULATED evidence. TEST ledger and LEDGER_SYNTHETIC_FIXTURES_ENABLED only; never a donation.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: fee.fixture.run · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeeFixtureRequestS12'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeFixtureResultS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.fixtures
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - FEE_FIXTURES_DISABLED
+      - FEE_FIXTURE_DONATION_NOT_FOUND
+      - FEE_NO_PLATFORM_FEE
+      - FEE_PROVIDER_FEE_UNKNOWN
+      - LEDGER_INSUFFICIENT_FUNDS
+      - VALIDATION_FAILED
+  /admin/finance/revenue:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Fee administration (Stage 12)
+      operationId: adminRevenueReport
+      summary: Fee and revenue report (TEST)
+      description: '**Stage 12 · IMPLEMENTED (TEST fees)** · Auth: staff + MFA · Authorization: `fee.view` (non-staff → `404`). Per currency and month; quoted,
+        assessed, refunded, recognised (TEST ledger) and provider-fee figures kept apart; no cross-currency total. **Stage 12: TEST fees only** — synthetic
+        configuration; production fee charging and revenue recognition are BLOCKED (`fees.ProductionFeesEnabled` constant false; every fee row is TEST; ADR-044).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeRevenueReportS12Envelope'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 12
+      x-fundzim-auth: staff
+      x-fundzim-permission: fee.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - VALIDATION_FAILED
 components:
   securitySchemes:
     session:
@@ -38064,84 +40060,6 @@ components:
       - evidence_record_ids
       - justification
       additionalProperties: false
-    FeeSchedule:
-      type: object
-      description: Fee schedule version (basis points, never floats).
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        version:
-          type: integer
-        currency:
-          $ref: '#/components/schemas/Currency'
-        platform_fee_basis_points:
-          type: integer
-        fixed_fee:
-          $ref: '#/components/schemas/Money'
-        effective_from:
-          $ref: '#/components/schemas/Timestamp'
-        effective_to:
-          oneOf:
-          - $ref: '#/components/schemas/Timestamp'
-          - type: 'null'
-      required:
-      - id
-      - version
-      - currency
-      - platform_fee_basis_points
-      - effective_from
-      - effective_to
-    FeeScheduleChangeCreate:
-      type: object
-      description: Propose a future-dated fee change.
-      properties:
-        currency:
-          $ref: '#/components/schemas/Currency'
-        platform_fee_basis_points:
-          type: integer
-          minimum: 0
-          maximum: 10000
-        fixed_fee:
-          $ref: '#/components/schemas/Money'
-        effective_from:
-          $ref: '#/components/schemas/Timestamp'
-        justification:
-          type: string
-          minLength: 10
-          maxLength: 2000
-      required:
-      - currency
-      - platform_fee_basis_points
-      - effective_from
-      - justification
-      additionalProperties: false
-    FeeScheduleChange:
-      type: object
-      description: Fee change request.
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        status:
-          type: string
-          enum:
-          - PENDING_APPROVAL
-          - APPROVED
-          - REJECTED
-          - EXPIRED
-        requested_by:
-          $ref: '#/components/schemas/ActorRef'
-        decided_by:
-          oneOf:
-          - $ref: '#/components/schemas/ActorRef'
-          - type: 'null'
-        effective_from:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - id
-      - status
-      - requested_by
-      - decided_by
-      - effective_from
     KillSwitch:
       type: object
       description: Kill switch state (a feature flag; data, not deploys).
@@ -39958,30 +41876,6 @@ components:
             $ref: '#/components/schemas/StaffMember'
         meta:
           $ref: '#/components/schemas/PageMeta'
-    FeeSchedulePage:
-      type: object
-      description: Standard envelope (cursor page) for `FeeSchedule`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/FeeSchedule'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
-    FeeScheduleChangeEnvelope:
-      type: object
-      description: Standard envelope for `FeeScheduleChange`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/FeeScheduleChange'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
     KillSwitchPage:
       type: object
       description: Standard envelope (cursor page) for `KillSwitch`.
@@ -45790,6 +47684,19 @@ components:
         test_payment:
           type: boolean
           description: 'True unless PRODUCTION: a test payment never counts as a donation (Stage 9).'
+        fee_quote_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The fee quote bound to the intent (Stage 12).
+        fee_donor_charge_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: 'The donor charge the quote implies (null when it depends on an UNKNOWN provider fee). The payment amount stays the donation amount: passing
+            a donor-covered charge to a provider needs provider confirmation.'
       required:
       - id
       - campaign_id
@@ -45803,6 +47710,8 @@ components:
       - updated_at
       - execution_environment
       - test_payment
+      - fee_quote_id
+      - fee_donor_charge_minor
       additionalProperties: false
     DonationIntentCreateS8:
       type: object
@@ -45815,6 +47724,13 @@ components:
           description: 'Must be usable (verified minor units: ZWG refused, LR-043) and the campaign''s goal currency.'
         is_anonymous:
           type: boolean
+        fee_quote_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'Optional: bind this fee quote (Stage 12). It must be ACTIVE, yours, unexpired and match the campaign, amount, currency and the policies
+            in force (else FEE_QUOTE_STALE / FEE_QUOTE_EXPIRED / FEE_QUOTE_ALREADY_USED). Without it a quote is computed at creation.'
       required:
       - campaign_id
       - amount_minor
@@ -48218,6 +50134,35 @@ components:
           type: boolean
         version:
           type: integer
+        fee_estimate_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Payout fee estimated at request time (Stage 12); null = UNKNOWN.
+        fee_basis:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ESTIMATED
+          - UNKNOWN
+          - null
+        fee_responsibility:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ORGANISER_COVERED
+          - PLATFORM_ABSORBED
+          - null
+          description: 'null: no policy decides it.'
+        beneficiary_receives_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Amount − organiser-borne fee; the reservation is always the requested amount (no double deduction).
       required:
       - id
       - campaign_id
@@ -48236,6 +50181,10 @@ components:
       - completed_at
       - can_cancel
       - version
+      - fee_estimate_minor
+      - fee_basis
+      - fee_responsibility
+      - beneficiary_receives_minor
       additionalProperties: false
     PayoutRequestStaffS11:
       type: object
@@ -48394,6 +50343,34 @@ components:
           oneOf:
           - $ref: '#/components/schemas/PayoutReservationS11'
           - type: 'null'
+        fee_estimate_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Payout fee estimated at request time (Stage 12); null = UNKNOWN.
+        fee_basis:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ESTIMATED
+          - UNKNOWN
+          - null
+        fee_responsibility:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ORGANISER_COVERED
+          - PLATFORM_ABSORBED
+          - null
+          description: 'null: no policy decides it.'
+        fee_calculation_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
       required:
       - id
       - campaign_id
@@ -48436,6 +50413,10 @@ components:
       - created_at
       - updated_at
       - reservation
+      - fee_estimate_minor
+      - fee_basis
+      - fee_responsibility
+      - fee_calculation_id
       additionalProperties: false
     PayoutCheckS11:
       type: object
@@ -49400,4 +51381,2479 @@ components:
       required:
       - data
       - meta
+      additionalProperties: false
+    FeeTierS12:
+      type: object
+      description: 'A TIERED band: the first band whose up_to_minor ≥ the amount applies to the whole amount; only the last band is open-ended (null).'
+      properties:
+        up_to_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        rate_bps:
+          type: integer
+          minimum: 0
+          maximum: 10000
+        fixed_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+      required:
+      - up_to_minor
+      - rate_bps
+      - fixed_minor
+      additionalProperties: false
+    FeeTermsS12:
+      type: object
+      description: Fee terms. Rates are integer basis points; one rounding per component (rounding_mode), then the minimum, then the maximum (ADR-044 §6).
+      properties:
+        model:
+          type: string
+          enum:
+          - ZERO_FEE
+          - PERCENTAGE
+          - FIXED
+          - PERCENTAGE_PLUS_FIXED
+          - TIERED
+          - CAPPED
+          - MINIMUM_FEE
+          - PROVIDER_PASS_THROUGH
+        rate_bps:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 10000
+        fixed_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        min_fee_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        max_fee_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        tiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeTierS12'
+        rounding_mode:
+          type: string
+      required:
+      - model
+      - rate_bps
+      - fixed_minor
+      - min_fee_minor
+      - max_fee_minor
+      - tiers
+      - rounding_mode
+      additionalProperties: false
+    FeePolicyVersionS12:
+      type: object
+      description: A policy version. Terms are editable only in DRAFT; from submission they are immutable (terms_hash) and the approval binds to them. Maker
+        (fee.config.request) ≠ checker (fee.config.approve), linked accounts included (Go and database).
+      properties:
+        id:
+          type: string
+          format: uuid
+        policy_id:
+          type: string
+          format: uuid
+        category:
+          type: string
+          enum:
+          - PLATFORM_FEE
+          - PAYMENT_PROCESSING_FEE
+          - PAYOUT_PROCESSING_FEE
+          - REFUND_FEE
+          - CHARGEBACK_FEE
+          - CURRENCY_CONVERSION_FEE
+          - OTHER_APPROVED_FEE
+          description: 'CURRENCY_CONVERSION_FEE (FundZim never converts currencies) and OTHER_APPROVED_FEE (no posting rule) cannot be created: FEE_CATEGORY_NOT_ENABLED.'
+        version_no:
+          type: integer
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+          - ACTIVE
+          - SUSPENDED
+          - RETIRED
+        terms:
+          $ref: '#/components/schemas/FeeTermsS12'
+        responsibility:
+          type: string
+          enum:
+          - PLATFORM_ABSORBED
+          - DONOR_COVERED
+          - ORGANISER_COVERED
+          - SHARED
+        donor_share_bps:
+          type:
+          - integer
+          - 'null'
+        refund_treatment:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PROPORTIONAL
+          - PROPORTIONAL_EXCEPT_FIXED
+          - NON_REFUNDABLE
+          - null
+        effective_from:
+          $ref: '#/components/schemas/Timestamp'
+        effective_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        algorithm_version:
+          type: string
+        terms_hash:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9a-f]{64}$
+        fee_environment:
+          type: string
+          enum:
+          - TEST
+        created_by:
+          type: string
+          format: uuid
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        approved_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        approval_reason:
+          type:
+          - string
+          - 'null'
+        rejected_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        rejected_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+        activated_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        activated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        suspended_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        suspended_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        suspension_reason:
+          type:
+          - string
+          - 'null'
+        reactivated_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        retired_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        retirement_reason:
+          type:
+          - string
+          - 'null'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - policy_id
+      - category
+      - version_no
+      - status
+      - terms
+      - responsibility
+      - donor_share_bps
+      - refund_treatment
+      - effective_from
+      - effective_to
+      - algorithm_version
+      - terms_hash
+      - fee_environment
+      - created_by
+      - submitted_by
+      - submitted_at
+      - approved_by
+      - approved_at
+      - approval_reason
+      - rejected_by
+      - rejected_at
+      - rejection_reason
+      - activated_by
+      - activated_at
+      - suspended_by
+      - suspended_at
+      - suspension_reason
+      - reactivated_by
+      - retired_by
+      - retired_at
+      - retirement_reason
+      - created_at
+      - updated_at
+      additionalProperties: false
+    FeePolicyS12:
+      type: object
+      description: 'A fee policy: an immutable, unique scope (no two policies share one). Precedence: campaign 16 > campaign category 8 > provider 4 > method
+        2.'
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum:
+          - PLATFORM_FEE
+          - PAYMENT_PROCESSING_FEE
+          - PAYOUT_PROCESSING_FEE
+          - REFUND_FEE
+          - CHARGEBACK_FEE
+          - CURRENCY_CONVERSION_FEE
+          - OTHER_APPROVED_FEE
+          description: 'CURRENCY_CONVERSION_FEE (FundZim never converts currencies) and OTHER_APPROVED_FEE (no posting rule) cannot be created: FEE_CATEGORY_NOT_ENABLED.'
+        transaction_type:
+          type: string
+          enum:
+          - DONATION
+          - PAYOUT
+          - REFUND
+          - CHARGEBACK
+        currency:
+          $ref: '#/components/schemas/Currency'
+        payment_method:
+          type:
+          - string
+          - 'null'
+        provider_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        campaign_category:
+          type:
+          - string
+          - 'null'
+        campaign_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        specificity:
+          type: integer
+        fee_environment:
+          type: string
+          enum:
+          - TEST
+        created_by:
+          type: string
+          format: uuid
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeePolicyVersionS12'
+        active_version_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      required:
+      - id
+      - code
+      - name
+      - description
+      - category
+      - transaction_type
+      - currency
+      - payment_method
+      - provider_id
+      - campaign_category
+      - campaign_id
+      - specificity
+      - fee_environment
+      - created_by
+      - created_at
+      - versions
+      - active_version_id
+      additionalProperties: false
+    FeePolicyCreateS12:
+      type: object
+      properties:
+        code:
+          type: string
+          pattern: ^[a-z][a-z0-9_.]{2,63}$
+        name:
+          type: string
+          minLength: 3
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 2000
+        category:
+          type: string
+          enum:
+          - PLATFORM_FEE
+          - PAYMENT_PROCESSING_FEE
+          - PAYOUT_PROCESSING_FEE
+          - REFUND_FEE
+          - CHARGEBACK_FEE
+          - CURRENCY_CONVERSION_FEE
+          - OTHER_APPROVED_FEE
+          description: 'CURRENCY_CONVERSION_FEE (FundZim never converts currencies) and OTHER_APPROVED_FEE (no posting rule) cannot be created: FEE_CATEGORY_NOT_ENABLED.'
+        transaction_type:
+          type: string
+          enum:
+          - DONATION
+          - PAYOUT
+          - REFUND
+          - CHARGEBACK
+          - ''
+        currency:
+          $ref: '#/components/schemas/Currency'
+        payment_method:
+          type:
+          - string
+          - 'null'
+        provider_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        campaign_category:
+          type:
+          - string
+          - 'null'
+        campaign_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      required:
+      - code
+      - name
+      - category
+      - currency
+      additionalProperties: false
+    FeeVersionInputS12:
+      type: object
+      description: 'PLATFORM_FEE: never PROVIDER_PASS_THROUGH or PLATFORM_ABSORBED (waive with ZERO_FEE), refund_treatment required. Provider-cost categories:
+        PROVIDER_PASS_THROUGH only (the amount comes from provider evidence); payout, refund and chargeback fees are ORGANISER_COVERED or PLATFORM_ABSORBED.'
+      properties:
+        model:
+          type: string
+          enum:
+          - ZERO_FEE
+          - PERCENTAGE
+          - FIXED
+          - PERCENTAGE_PLUS_FIXED
+          - TIERED
+          - CAPPED
+          - MINIMUM_FEE
+          - PROVIDER_PASS_THROUGH
+        rate_bps:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 10000
+        fixed_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        min_fee_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        max_fee_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        tiers:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/FeeTierS12'
+        rounding_mode:
+          type: string
+          enum:
+          - HALF_UP
+          - HALF_EVEN
+          - FLOOR
+          - CEILING
+        responsibility:
+          type: string
+          enum:
+          - PLATFORM_ABSORBED
+          - DONOR_COVERED
+          - ORGANISER_COVERED
+          - SHARED
+        donor_share_bps:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
+          maximum: 9999
+        refund_treatment:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PROPORTIONAL
+          - PROPORTIONAL_EXCEPT_FIXED
+          - NON_REFUNDABLE
+          - null
+        effective_from:
+          $ref: '#/components/schemas/Timestamp'
+        effective_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+      required:
+      - model
+      - rounding_mode
+      - responsibility
+      - effective_from
+      additionalProperties: false
+    FeeDecisionS12:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 2000
+        terms_hash:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9a-f]{64}$
+          description: When given, must equal the version's terms hash.
+      required:
+      - reason
+      additionalProperties: false
+    FeeReasonS12:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 2000
+      required:
+      - reason
+      additionalProperties: false
+    FeeActivePolicyS12:
+      type: object
+      description: 'A version in force. TEST: synthetic configuration, not FundZim''s commercial rates.'
+      properties:
+        version_id:
+          type: string
+          format: uuid
+        policy_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          type: string
+          enum:
+          - PLATFORM_FEE
+          - PAYMENT_PROCESSING_FEE
+          - PAYOUT_PROCESSING_FEE
+          - REFUND_FEE
+          - CHARGEBACK_FEE
+          - CURRENCY_CONVERSION_FEE
+          - OTHER_APPROVED_FEE
+          description: 'CURRENCY_CONVERSION_FEE (FundZim never converts currencies) and OTHER_APPROVED_FEE (no posting rule) cannot be created: FEE_CATEGORY_NOT_ENABLED.'
+        transaction_type:
+          type: string
+          enum:
+          - DONATION
+          - PAYOUT
+          - REFUND
+          - CHARGEBACK
+        currency:
+          $ref: '#/components/schemas/Currency'
+        scope:
+          type: string
+        terms:
+          $ref: '#/components/schemas/FeeTermsS12'
+        responsibility:
+          type: string
+          enum:
+          - PLATFORM_ABSORBED
+          - DONOR_COVERED
+          - ORGANISER_COVERED
+          - SHARED
+        donor_share_bps:
+          type:
+          - integer
+          - 'null'
+        refund_treatment:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PROPORTIONAL
+          - PROPORTIONAL_EXCEPT_FIXED
+          - NON_REFUNDABLE
+          - null
+        effective_from:
+          $ref: '#/components/schemas/Timestamp'
+        fee_environment:
+          type: string
+          enum:
+          - TEST
+        label:
+          type: string
+      required:
+      - version_id
+      - policy_id
+      - name
+      - category
+      - transaction_type
+      - currency
+      - scope
+      - terms
+      - responsibility
+      - donor_share_bps
+      - refund_treatment
+      - effective_from
+      - fee_environment
+      - label
+      additionalProperties: false
+    FeeProviderScheduleS12:
+      type: object
+      description: 'Provider fee evidence. VERIFIED is refused (no provider is selected, ADR-040); SYNTHETIC is for the sandbox simulator only. rounding_known=false:
+        the provider''s rounding is UNKNOWN and estimates use HALF_UP (labelled).'
+      properties:
+        id:
+          type: string
+          format: uuid
+        provider_id:
+          type: string
+          format: uuid
+        provider_is_sandbox:
+          type: boolean
+        contract_reference:
+          type: string
+        schedule_version:
+          type: string
+        currency:
+          $ref: '#/components/schemas/Currency'
+        payment_method:
+          type:
+          - string
+          - 'null'
+        fee_type:
+          type: string
+          enum:
+          - TRANSACTION
+          - SETTLEMENT
+          - REFUND
+          - CHARGEBACK
+          - PAYOUT
+        terms:
+          $ref: '#/components/schemas/FeeTermsS12'
+        rounding_known:
+          type: boolean
+        effective_from:
+          $ref: '#/components/schemas/Timestamp'
+        effective_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        evidence_source:
+          type: string
+        evidence_reference:
+          type:
+          - string
+          - 'null'
+        confirmation_status:
+          type: string
+          enum:
+          - SYNTHETIC
+          - UNVERIFIED
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+        fee_environment:
+          type: string
+          enum:
+          - TEST
+        created_by:
+          type: string
+          format: uuid
+        approved_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        retired_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - provider_id
+      - provider_is_sandbox
+      - contract_reference
+      - schedule_version
+      - currency
+      - payment_method
+      - fee_type
+      - terms
+      - rounding_known
+      - effective_from
+      - effective_to
+      - evidence_source
+      - evidence_reference
+      - confirmation_status
+      - status
+      - fee_environment
+      - created_by
+      - approved_by
+      - approved_at
+      - retired_by
+      - retired_at
+      - created_at
+      additionalProperties: false
+    FeeProviderScheduleCreateS12:
+      type: object
+      properties:
+        provider_id:
+          type: string
+          format: uuid
+        contract_reference:
+          type: string
+          minLength: 3
+          maxLength: 200
+        schedule_version:
+          type: string
+          minLength: 1
+          maxLength: 64
+        currency:
+          $ref: '#/components/schemas/Currency'
+        payment_method:
+          type:
+          - string
+          - 'null'
+        fee_type:
+          type: string
+          enum:
+          - TRANSACTION
+          - SETTLEMENT
+          - REFUND
+          - CHARGEBACK
+          - PAYOUT
+        model:
+          type: string
+          enum:
+          - PERCENTAGE
+          - FIXED
+          - PERCENTAGE_PLUS_FIXED
+          - TIERED
+          - CAPPED
+          - MINIMUM_FEE
+        rate_bps:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          maximum: 10000
+        fixed_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        min_fee_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        max_fee_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        tiers:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/FeeTierS12'
+        rounding_mode:
+          type:
+          - string
+          - 'null'
+          enum:
+          - HALF_UP
+          - HALF_EVEN
+          - FLOOR
+          - CEILING
+          - null
+        effective_from:
+          $ref: '#/components/schemas/Timestamp'
+        effective_to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        evidence_source:
+          type: string
+          minLength: 3
+          maxLength: 200
+        evidence_reference:
+          type:
+          - string
+          - 'null'
+        confirmation_status:
+          type: string
+          enum:
+          - SYNTHETIC
+          - UNVERIFIED
+          - VERIFIED
+      required:
+      - provider_id
+      - contract_reference
+      - schedule_version
+      - currency
+      - fee_type
+      - model
+      - effective_from
+      - evidence_source
+      - confirmation_status
+      additionalProperties: false
+    FeeQuoteRequestS12:
+      type: object
+      description: 'Clients never send a rate or a fee: any other field is refused (VALIDATION_FAILED).'
+      properties:
+        campaign_id:
+          type: string
+          format: uuid
+        amount_minor:
+          type: string
+          pattern: ^[1-9][0-9]{0,17}$
+        currency:
+          $ref: '#/components/schemas/Currency'
+        payment_method:
+          type:
+          - string
+          - 'null'
+      required:
+      - campaign_id
+      - amount_minor
+      - currency
+      additionalProperties: false
+    FeeQuoteComponentS12:
+      type: object
+      properties:
+        category:
+          type: string
+          enum:
+          - PLATFORM_FEE
+          - PAYMENT_PROCESSING_FEE
+          - PAYOUT_PROCESSING_FEE
+          - REFUND_FEE
+          - CHARGEBACK_FEE
+          - CURRENCY_CONVERSION_FEE
+          - OTHER_APPROVED_FEE
+          description: 'CURRENCY_CONVERSION_FEE (FundZim never converts currencies) and OTHER_APPROVED_FEE (no posting rule) cannot be created: FEE_CATEGORY_NOT_ENABLED.'
+        basis:
+          type: string
+          enum:
+          - QUOTED
+          - ESTIMATED
+          - PROVIDER_REPORTED
+          - PROVIDER_CONFIRMED
+          - RECONCILED
+          - UNKNOWN
+          - NOT_CONFIGURED
+        amount_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        responsibility:
+          type: string
+        donor_part_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        organiser_part_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        platform_part_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        rounding_mode:
+          type: string
+        policy_version_id:
+          type: string
+        provider_schedule_id:
+          type: string
+        note:
+          type: string
+      required:
+      - category
+      - basis
+      - amount_minor
+      - responsibility
+      - donor_part_minor
+      - organiser_part_minor
+      - platform_part_minor
+      - rounding_mode
+      - policy_version_id
+      - provider_schedule_id
+      - note
+      additionalProperties: false
+    FeeQuoteS12:
+      type: object
+      description: A fee quote is not a charge and not revenue. donor_charge = campaign_allocation + platform_net + provider_fee whenever all are known; an
+        UNKNOWN provider fee makes the provider-dependent totals null, never 0.
+      properties:
+        id:
+          type: string
+          format: uuid
+        campaign_id:
+          type: string
+          format: uuid
+        transaction_type:
+          type: string
+          enum:
+          - DONATION
+        currency:
+          $ref: '#/components/schemas/Currency'
+        amount_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        payment_method:
+          type:
+          - string
+          - 'null'
+        platform_fee_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        platform_fee_basis:
+          type: string
+          enum:
+          - QUOTED
+          - NOT_CONFIGURED
+        provider_fee_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        provider_fee_basis:
+          type: string
+          enum:
+          - ESTIMATED
+          - UNKNOWN
+        donor_charge_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        campaign_allocation_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        platform_net_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeQuoteComponentS12'
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - BOUND
+          - EXPIRED
+          - INVALIDATED
+        expires_at:
+          $ref: '#/components/schemas/Timestamp'
+        donation_intent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        calculation_id:
+          type: string
+          format: uuid
+        algorithm_version:
+          type: string
+        system_generated:
+          type: boolean
+        fee_environment:
+          type: string
+          enum:
+          - TEST
+        label:
+          type: string
+        notice:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - campaign_id
+      - transaction_type
+      - currency
+      - amount_minor
+      - payment_method
+      - platform_fee_minor
+      - platform_fee_basis
+      - provider_fee_minor
+      - provider_fee_basis
+      - donor_charge_minor
+      - campaign_allocation_minor
+      - platform_net_minor
+      - components
+      - status
+      - expires_at
+      - donation_intent_id
+      - calculation_id
+      - algorithm_version
+      - system_generated
+      - fee_environment
+      - label
+      - notice
+      - created_at
+      additionalProperties: false
+    FeeAssessmentS12:
+      type: object
+      description: A calculated obligation under the version used — not cash, not revenue, not settlement. One per (source, category). Test payments are never
+        posted.
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_type:
+          type: string
+          enum:
+          - DONATION_PAYMENT
+          - SYNTHETIC_DONATION
+          - PAYOUT
+        source_id:
+          type: string
+          format: uuid
+        category:
+          type: string
+          enum:
+          - PLATFORM_FEE
+          - PAYMENT_PROCESSING_FEE
+          - PAYOUT_PROCESSING_FEE
+          - REFUND_FEE
+          - CHARGEBACK_FEE
+          - CURRENCY_CONVERSION_FEE
+          - OTHER_APPROVED_FEE
+          description: 'CURRENCY_CONVERSION_FEE (FundZim never converts currencies) and OTHER_APPROVED_FEE (no posting rule) cannot be created: FEE_CATEGORY_NOT_ENABLED.'
+        campaign_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        currency:
+          $ref: '#/components/schemas/Currency'
+        basis_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        fee_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        basis:
+          type: string
+          enum:
+          - QUOTED
+          - ESTIMATED
+          - PROVIDER_REPORTED
+          - PROVIDER_CONFIRMED
+          - RECONCILED
+          - UNKNOWN
+          - NOT_CONFIGURED
+        responsibility:
+          type:
+          - string
+          - 'null'
+        donor_part_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        organiser_part_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        platform_part_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        policy_version_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        provider_schedule_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        calculation_id:
+          type: string
+          format: uuid
+        quote_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        payment_method:
+          type:
+          - string
+          - 'null'
+        provider_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        accounting_status:
+          type: string
+          enum:
+          - NOT_POSTED_TEST_PAYMENT
+          - PENDING_POSTING
+          - POSTED
+          - NOT_APPLICABLE
+        test_payment:
+          type: boolean
+        synthetic:
+          type: boolean
+        fee_environment:
+          type: string
+          enum:
+          - TEST
+        assessed_at:
+          $ref: '#/components/schemas/Timestamp'
+        net_fee_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        label:
+          type: string
+      required:
+      - id
+      - source_type
+      - source_id
+      - category
+      - campaign_id
+      - currency
+      - basis_minor
+      - fee_minor
+      - basis
+      - responsibility
+      - donor_part_minor
+      - organiser_part_minor
+      - platform_part_minor
+      - policy_version_id
+      - provider_schedule_id
+      - calculation_id
+      - quote_id
+      - payment_method
+      - provider_id
+      - accounting_status
+      - test_payment
+      - synthetic
+      - fee_environment
+      - assessed_at
+      - net_fee_minor
+      - label
+      additionalProperties: false
+    FeeAccountingRefS12:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        assessment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        adjustment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        ledger_transaction_id:
+          type: string
+          format: uuid
+        journal_key:
+          type: string
+        posting_rule:
+          type: string
+        purpose:
+          type: string
+        currency:
+          $ref: '#/components/schemas/Currency'
+        fee_amount_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        policy_version_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        recorded_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - assessment_id
+      - adjustment_id
+      - ledger_transaction_id
+      - journal_key
+      - posting_rule
+      - purpose
+      - currency
+      - fee_amount_minor
+      - policy_version_id
+      - recorded_at
+      additionalProperties: false
+    FeeEventS12:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        aggregate_type:
+          type: string
+        aggregate_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+        actor_type:
+          type: string
+          enum:
+          - USER
+          - STAFF
+          - SYSTEM
+        actor_id:
+          type: string
+        detail:
+          type: object
+        occurred_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - aggregate_type
+      - aggregate_id
+      - event_type
+      - actor_type
+      - actor_id
+      - detail
+      - occurred_at
+      additionalProperties: false
+    FeeAdjustmentS12:
+      type: object
+      description: Immutable correction. REFUND/CHARGEBACK are computed from the version's refund treatment (SYSTEM); every other reason is maker-checker and
+        never posts.
+      properties:
+        id:
+          type: string
+          format: uuid
+        assessment_id:
+          type: string
+          format: uuid
+        currency:
+          $ref: '#/components/schemas/Currency'
+        reason:
+          type: string
+          enum:
+          - REFUND
+          - CHARGEBACK
+          - PROVIDER_CORRECTION
+          - POLICY_CORRECTION
+          - ACCOUNTING_ADJUSTMENT
+        direction:
+          type: string
+          enum:
+          - DECREASE
+          - INCREASE
+        amount_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        source_type:
+          type: string
+        source_id:
+          type: string
+          format: uuid
+        basis_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units; null = UNKNOWN (never 0).
+        calculation:
+          type: object
+        note:
+          type: string
+        status:
+          type: string
+          enum:
+          - APPLIED
+          - PENDING_APPROVAL
+          - APPROVED
+          - REJECTED
+        actor_type:
+          type: string
+          enum:
+          - SYSTEM
+          - STAFF
+        requested_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        decided_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        decision_reason:
+          type:
+          - string
+          - 'null'
+        accounting_status:
+          type: string
+          enum:
+          - NOT_POSTED
+          - POSTED
+          - NOT_APPLICABLE
+        ledger_adjustment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        fee_environment:
+          type: string
+          enum:
+          - TEST
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - assessment_id
+      - currency
+      - reason
+      - direction
+      - amount_minor
+      - source_type
+      - source_id
+      - basis_minor
+      - calculation
+      - note
+      - status
+      - actor_type
+      - requested_by
+      - decided_by
+      - decided_at
+      - decision_reason
+      - accounting_status
+      - ledger_adjustment_id
+      - fee_environment
+      - created_at
+      additionalProperties: false
+    FeeAssessmentDetailS12:
+      type: object
+      properties:
+        assessment:
+          $ref: '#/components/schemas/FeeAssessmentS12'
+        journals:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeAccountingRefS12'
+        adjustments:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeAdjustmentS12'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeEventS12'
+      required:
+      - assessment
+      - journals
+      - adjustments
+      - events
+      additionalProperties: false
+    FeeManualAdjustmentS12:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum:
+          - PROVIDER_CORRECTION
+          - POLICY_CORRECTION
+          - ACCOUNTING_ADJUSTMENT
+        direction:
+          type: string
+          enum:
+          - DECREASE
+          - INCREASE
+        amount_minor:
+          type: string
+          pattern: ^[1-9][0-9]{0,17}$
+        note:
+          type: string
+          minLength: 5
+          maxLength: 2000
+        ledger_adjustment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      required:
+      - reason
+      - direction
+      - amount_minor
+      - note
+      additionalProperties: false
+    FeeReconItemS12:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        run_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+          - MISSING_FEE
+          - DUPLICATE_FEE
+          - AMOUNT_MISMATCH
+          - CURRENCY_MISMATCH
+          - POLICY_MISMATCH
+          - ROUNDING_MISMATCH
+          - UNRECONCILED_PROVIDER_FEE
+          - MISSING_POSTING
+        severity:
+          type: string
+          enum:
+          - SEV1
+          - SEV2
+          - SEV3
+        assessment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        adjustment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        ledger_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        currency:
+          type:
+          - string
+          - 'null'
+        expected:
+          type: object
+        observed:
+          type: object
+        detail:
+          type: string
+        status:
+          type: string
+          enum:
+          - OPEN
+          - RESOLVED
+        detected_at:
+          $ref: '#/components/schemas/Timestamp'
+        resolved_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        resolved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        resolution_note:
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - run_id
+      - kind
+      - severity
+      - assessment_id
+      - adjustment_id
+      - ledger_transaction_id
+      - currency
+      - expected
+      - observed
+      - detail
+      - status
+      - detected_at
+      - resolved_by
+      - resolved_at
+      - resolution_note
+      additionalProperties: false
+    FeeReconRunS12:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        triggered_by:
+          type: string
+        started_at:
+          $ref: '#/components/schemas/Timestamp'
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        checked:
+          type: integer
+        matched:
+          type: integer
+        mismatches:
+          type: integer
+        settlement_reconciliation:
+          type: string
+          enum:
+          - NOT_PERFORMED
+      required:
+      - id
+      - triggered_by
+      - started_at
+      - finished_at
+      - checked
+      - matched
+      - mismatches
+      - settlement_reconciliation
+      additionalProperties: false
+    FeeCurrencyRevenueS12:
+      type: object
+      description: 'One currency''s figures. Quoted ≠ assessed ≠ recognised ≠ cash: recognised revenue is TEST ledger revenue from synthetic fixtures only.'
+      properties:
+        currency:
+          $ref: '#/components/schemas/Currency'
+        quoted_platform_fees_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        quotes:
+          type: integer
+        assessed_platform_fees_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        platform_fee_assessments:
+          type: integer
+        assessed_on_test_payments_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        assessed_on_synthetic_donations_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        refunded_platform_fees_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        chargeback_reversed_platform_fees_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        manual_adjustments_net_minor:
+          type: string
+          pattern: ^-?[0-9]{1,18}$
+          description: Signed integer minor units (net figures).
+        provider_fees_estimated_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        provider_fees_unknown:
+          type: integer
+        payout_fees_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        chargeback_fee_exposure_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        recognised_revenue_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        revenue_reversals_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        provider_fee_expense_minor:
+          type: string
+          pattern: ^-?[0-9]{1,18}$
+          description: Signed integer minor units (net figures).
+        net_revenue_minor:
+          type: string
+          pattern: ^-?[0-9]{1,18}$
+          description: Signed integer minor units (net figures).
+        cash_received:
+          type: string
+          enum:
+          - NOT_AVAILABLE
+      required:
+      - currency
+      - quoted_platform_fees_minor
+      - quotes
+      - assessed_platform_fees_minor
+      - platform_fee_assessments
+      - assessed_on_test_payments_minor
+      - assessed_on_synthetic_donations_minor
+      - refunded_platform_fees_minor
+      - chargeback_reversed_platform_fees_minor
+      - manual_adjustments_net_minor
+      - provider_fees_estimated_minor
+      - provider_fees_unknown
+      - payout_fees_minor
+      - chargeback_fee_exposure_minor
+      - recognised_revenue_minor
+      - revenue_reversals_minor
+      - provider_fee_expense_minor
+      - net_revenue_minor
+      - cash_received
+      additionalProperties: false
+    FeePeriodRevenueS12:
+      type: object
+      properties:
+        currency:
+          $ref: '#/components/schemas/Currency'
+        month:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}$
+        recognised_revenue_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        revenue_reversals_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        provider_fee_expense_minor:
+          type: string
+          pattern: ^-?[0-9]{1,18}$
+          description: Signed integer minor units (net figures).
+        journals:
+          type: integer
+      required:
+      - currency
+      - month
+      - recognised_revenue_minor
+      - revenue_reversals_minor
+      - provider_fee_expense_minor
+      - journals
+      additionalProperties: false
+    FeeGroupRevenueS12:
+      type: object
+      properties:
+        currency:
+          $ref: '#/components/schemas/Currency'
+        key:
+          type: string
+        assessed_platform_fees_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+          description: Integer minor units as a digit string (never a float).
+        assessments:
+          type: integer
+      required:
+      - currency
+      - key
+      - assessed_platform_fees_minor
+      - assessments
+      additionalProperties: false
+    FeeRevenueReportS12:
+      type: object
+      description: Restricted report. Currencies are never combined (no approved FX policy); every figure is TEST and synthetic.
+      properties:
+        fee_environment:
+          type: string
+          enum:
+          - TEST
+        label:
+          type: string
+        from:
+          $ref: '#/components/schemas/Timestamp'
+        to:
+          $ref: '#/components/schemas/Timestamp'
+        currencies:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeCurrencyRevenueS12'
+        by_period:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeePeriodRevenueS12'
+        by_payment_method:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeGroupRevenueS12'
+        by_provider:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeGroupRevenueS12'
+        notes:
+          type: array
+          items:
+            type: string
+      required:
+      - fee_environment
+      - label
+      - from
+      - to
+      - currencies
+      - by_period
+      - by_payment_method
+      - by_provider
+      - notes
+      additionalProperties: false
+    FeeOverviewS12:
+      type: object
+      properties:
+        fee_environment:
+          type: string
+          enum:
+          - TEST
+        production_fees:
+          type: string
+          enum:
+          - BLOCKED
+        label:
+          type: string
+        policy_versions_by_status:
+          type: object
+          additionalProperties:
+            type: integer
+        provider_schedules_by_status:
+          type: object
+          additionalProperties:
+            type: integer
+        active_quotes:
+          type: integer
+        assessments:
+          type: integer
+        pending_adjustments:
+          type: integer
+        open_reconciliation_items:
+          type: integer
+        latest_reconciliation:
+          oneOf:
+          - $ref: '#/components/schemas/FeeReconRunS12'
+          - type: 'null'
+        notes:
+          type: array
+          items:
+            type: string
+      required:
+      - fee_environment
+      - production_fees
+      - label
+      - policy_versions_by_status
+      - provider_schedules_by_status
+      - active_quotes
+      - assessments
+      - pending_adjustments
+      - open_reconciliation_items
+      - latest_reconciliation
+      - notes
+      additionalProperties: false
+    FeeCampaignFeesS12:
+      type: object
+      description: The organiser's fee disclosure for one campaign (owner or organisation member; others → 404).
+      properties:
+        campaign_id:
+          type: string
+          format: uuid
+        fee_environment:
+          type: string
+          enum:
+          - TEST
+        label:
+          type: string
+        policies:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeActivePolicyS12'
+        assessments:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/FeeOrganiserAssessmentS12'
+        adjustments:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/FeeOrganiserAdjustmentS12'
+        restrictions:
+          type: array
+          items:
+            type: string
+      required:
+      - campaign_id
+      - fee_environment
+      - label
+      - policies
+      - assessments
+      - adjustments
+      - restrictions
+      additionalProperties: false
+    FeeFixtureRequestS12:
+      type: object
+      properties:
+        scenario:
+          type: string
+          enum:
+          - donation
+          - refund
+          - chargeback
+          - provider_fee_report
+        run_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        campaign_id:
+          type: string
+          format: uuid
+        amount_minor:
+          type: string
+        currency:
+          $ref: '#/components/schemas/Currency'
+        payment_method:
+          type:
+          - string
+          - 'null'
+        settle:
+          type: boolean
+        donation_id:
+          type: string
+          format: uuid
+        reported_fee_minor:
+          type: string
+        reversal_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      required:
+      - scenario
+      additionalProperties: false
+    FeeFixtureJournalS12:
+      type: object
+      properties:
+        key:
+          type: string
+        rule:
+          type: string
+        transaction_id:
+          type: string
+          format: uuid
+      required:
+      - key
+      - rule
+      - transaction_id
+      additionalProperties: false
+    FeeFixtureResultS12:
+      type: object
+      properties:
+        scenario:
+          type: string
+        run_id:
+          type: string
+          format: uuid
+        synthetic_donation_id:
+          type: string
+          format: uuid
+        label:
+          type: string
+          enum:
+          - TEST_ONLY
+        journals:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/FeeFixtureJournalS12'
+        assessments:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/FeeAssessmentS12'
+        adjustments:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/FeeAdjustmentS12'
+        breakdown:
+          type: object
+        exposure:
+          type: object
+      required:
+      - scenario
+      - run_id
+      - synthetic_donation_id
+      - label
+      - journals
+      - assessments
+      - adjustments
+      additionalProperties: false
+    FeePolicyS12Envelope:
+      type: object
+      description: Standard envelope for `FeePolicyS12`.
+      properties:
+        data:
+          $ref: '#/components/schemas/FeePolicyS12'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeePolicyVersionS12Envelope:
+      type: object
+      description: Standard envelope for `FeePolicyVersionS12`.
+      properties:
+        data:
+          $ref: '#/components/schemas/FeePolicyVersionS12'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeProviderScheduleS12Envelope:
+      type: object
+      description: Standard envelope for `FeeProviderScheduleS12`.
+      properties:
+        data:
+          $ref: '#/components/schemas/FeeProviderScheduleS12'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeQuoteS12Envelope:
+      type: object
+      description: Standard envelope for `FeeQuoteS12`.
+      properties:
+        data:
+          $ref: '#/components/schemas/FeeQuoteS12'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeAssessmentDetailS12Envelope:
+      type: object
+      description: Standard envelope for `FeeAssessmentDetailS12`.
+      properties:
+        data:
+          $ref: '#/components/schemas/FeeAssessmentDetailS12'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeAdjustmentS12Envelope:
+      type: object
+      description: Standard envelope for `FeeAdjustmentS12`.
+      properties:
+        data:
+          $ref: '#/components/schemas/FeeAdjustmentS12'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeReconItemS12Envelope:
+      type: object
+      description: Standard envelope for `FeeReconItemS12`.
+      properties:
+        data:
+          $ref: '#/components/schemas/FeeReconItemS12'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeReconRunS12Envelope:
+      type: object
+      description: Standard envelope for `FeeReconRunS12`.
+      properties:
+        data:
+          $ref: '#/components/schemas/FeeReconRunS12'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeRevenueReportS12Envelope:
+      type: object
+      description: Standard envelope for `FeeRevenueReportS12`.
+      properties:
+        data:
+          $ref: '#/components/schemas/FeeRevenueReportS12'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeOverviewS12Envelope:
+      type: object
+      description: Standard envelope for `FeeOverviewS12`.
+      properties:
+        data:
+          $ref: '#/components/schemas/FeeOverviewS12'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeCampaignFeesS12Envelope:
+      type: object
+      description: Standard envelope for `FeeCampaignFeesS12`.
+      properties:
+        data:
+          $ref: '#/components/schemas/FeeCampaignFeesS12'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeFixtureResultS12Envelope:
+      type: object
+      description: Standard envelope for `FeeFixtureResultS12`.
+      properties:
+        data:
+          $ref: '#/components/schemas/FeeFixtureResultS12'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeePolicyS12Page:
+      type: object
+      description: Page of `FeePolicyS12` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/FeePolicyS12'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeProviderScheduleS12Page:
+      type: object
+      description: Page of `FeeProviderScheduleS12` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/FeeProviderScheduleS12'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeQuoteS12Page:
+      type: object
+      description: Page of `FeeQuoteS12` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/FeeQuoteS12'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeAssessmentS12Page:
+      type: object
+      description: Page of `FeeAssessmentS12` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/FeeAssessmentS12'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeAdjustmentS12Page:
+      type: object
+      description: Page of `FeeAdjustmentS12` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/FeeAdjustmentS12'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeEventS12Page:
+      type: object
+      description: Page of `FeeEventS12` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/FeeEventS12'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeActivePolicyS12Page:
+      type: object
+      description: Page of `FeeActivePolicyS12` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/FeeActivePolicyS12'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+            fee_environment:
+              type: string
+              enum:
+              - TEST
+            label:
+              type: string
+          required:
+          - items
+          - next_cursor
+          - fee_environment
+          - label
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeReconItemS12Page:
+      type: object
+      description: Page of `FeeReconItemS12` (`{items, next_cursor}`).
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/FeeReconItemS12'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+            latest_run:
+              oneOf:
+              - $ref: '#/components/schemas/FeeReconRunS12'
+              - type: 'null'
+            settlement_reconciliation:
+              type: string
+              enum:
+              - NOT_PERFORMED
+          required:
+          - items
+          - next_cursor
+          - latest_run
+          - settlement_reconciliation
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    FeeReconResolveS12:
+      type: object
+      properties:
+        note:
+          type: string
+          minLength: 5
+          maxLength: 2000
+      required:
+      - note
+      additionalProperties: false
+    FeeOrganiserAssessmentS12:
+      type: object
+      description: 'An assessed fee as the campaign''s organiser sees it: no payment, quote, calculation or policy references.'
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_type:
+          type: string
+        category:
+          type: string
+        currency:
+          $ref: '#/components/schemas/Currency'
+        basis_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+        fee_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+        basis:
+          type: string
+        responsibility:
+          type:
+          - string
+          - 'null'
+        donor_part_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+        organiser_part_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+        platform_part_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+        net_fee_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+        accounting_status:
+          type: string
+        test_payment:
+          type: boolean
+        synthetic:
+          type: boolean
+        fee_environment:
+          type: string
+          enum:
+          - TEST
+        assessed_at:
+          $ref: '#/components/schemas/Timestamp'
+        label:
+          type: string
+      required:
+      - id
+      - source_type
+      - category
+      - currency
+      - basis_minor
+      - fee_minor
+      - basis
+      - responsibility
+      - donor_part_minor
+      - organiser_part_minor
+      - platform_part_minor
+      - net_fee_minor
+      - accounting_status
+      - test_payment
+      - synthetic
+      - fee_environment
+      - assessed_at
+      - label
+      additionalProperties: false
+    FeeOrganiserAdjustmentS12:
+      type: object
+      description: 'A decided fee adjustment as the organiser sees it: no staff identities, notes or decision reasons; pending and rejected requests are not
+        shown.'
+      properties:
+        id:
+          type: string
+          format: uuid
+        assessment_id:
+          type: string
+          format: uuid
+        currency:
+          $ref: '#/components/schemas/Currency'
+        reason:
+          type: string
+        direction:
+          type: string
+          enum:
+          - DECREASE
+          - INCREASE
+        amount_minor:
+          type: string
+          pattern: ^[0-9]{1,18}$
+        basis_minor:
+          type:
+          - string
+          - 'null'
+          pattern: ^[0-9]{1,18}$
+        status:
+          type: string
+          enum:
+          - APPLIED
+          - APPROVED
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - assessment_id
+      - currency
+      - reason
+      - direction
+      - amount_minor
+      - basis_minor
+      - status
+      - created_at
       additionalProperties: false

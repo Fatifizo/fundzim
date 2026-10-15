@@ -7,6 +7,7 @@ const TABS = [
   { sub: "/beneficiaries", label: "Beneficiary" },
   { sub: "/updates", label: "Updates" },
   { sub: "/withdrawals", label: "Withdrawals" },
+  { sub: "/fees", label: "Fees" },
   { sub: "/settings", label: "Settings" },
 ] as const;
 

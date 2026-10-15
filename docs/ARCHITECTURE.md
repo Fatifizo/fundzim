@@ -23,8 +23,11 @@
 > recorded NOT_ELIGIBLE, never posted) — [stage-10/ledger-architecture.md](stage-10/ledger-architecture.md).
 > **Stage 11 (ADR-043):** withdrawal (payout) requests, eligibility, ledger reservations, maker-checker approvals and
 > orchestration exist for **TEST payouts through the simulator only** ([stage-11/payout-architecture.md](stage-11/payout-architecture.md)).
+> **Stage 12 (ADR-044):** fee policies (maker-checker), exact fee calculation, quotes, assessments, adjustments, fee
+> reconciliation and revenue reporting exist for **TEST fees only** ([stage-12/fee-architecture.md](stage-12/fee-architecture.md));
+> `fees` posts its TEST_ONLY journals through `ledger.Service` (it may import `ledger`).
 > **Not yet built:** real provider integrations (payments and payouts run only through the sandbox simulator), production ledger
-> posting, real payout execution, fees, refund execution, disputes, settlement reconciliation, identity /
+> posting, real payout execution, real fee charging and revenue recognition, refund execution, disputes, settlement reconciliation, identity /
 > screening / account-lookup provider integrations, tracing export. Details:
 > [stage-7/implementation.md](stage-7/implementation.md), [stage-6/implementation.md](stage-6/implementation.md),
 > [stage-5/implementation.md](stage-5/implementation.md) (Stage 4: [stage-4/implementation.md](stage-4/implementation.md);
@@ -206,7 +209,8 @@ Some dependency directions are deliberately **forbidden**:
   provider interface package.
 - No module other than `kyc` imports KYC types that contain identity data. Other modules see only
   `kyc.Level` and verification status.
-- `fees` never touches the ledger. The caller (payments/payouts) posts the computed amounts.
+- `fees` never writes ledger tables. Stage 12 (ADR-044, amending this rule): it posts fee journals only through
+  `ledger.Service` (its own `fundzim_ledger` pool), for TEST_ONLY fixtures and TEST payouts, with `source_system = 'fees'`.
 
 ### 4.3 Trust boundaries
 

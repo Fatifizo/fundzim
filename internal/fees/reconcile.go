@@ -1,0 +1,446 @@
+package fees
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"github.com/jackc/pgx/v5"
+
+	"github.com/Fatifizo/fundzim/internal/audit"
+	"github.com/Fatifizo/fundzim/internal/ledger"
+	"github.com/Fatifizo/fundzim/internal/platform/ids"
+)
+
+// Fee reconciliation (ADR-044; brief §41). For each assessment it compares: the stored calculation recomputed from
+// its canonical inputs (determinism/rounding), the assessed amount against its calculation component, the ledger
+// journals that carry it (amount, currency, policy version, duplicates), its expected postings, the provider's
+// reported fee, and whether every assessable component of a source was assessed. Settlement evidence does not exist
+// (PCR-007): provider fees can be reported (TEST fixture) but never RECONCILED against a statement in Stage 12.
+
+// Mismatch kinds.
+const (
+	RecMissingFee       = "MISSING_FEE"
+	RecDuplicateFee     = "DUPLICATE_FEE"
+	RecAmountMismatch   = "AMOUNT_MISMATCH"
+	RecCurrencyMismatch = "CURRENCY_MISMATCH"
+	RecPolicyMismatch   = "POLICY_MISMATCH"
+	RecRoundingMismatch = "ROUNDING_MISMATCH"
+	RecUnreconciledFee  = "UNRECONCILED_PROVIDER_FEE"
+	RecMissingPosting   = "MISSING_POSTING"
+	DefaultReconGrace   = 15 * time.Minute
+	reconScanLimit      = 5000
+	recStatusOpen       = "OPEN"
+	recStatusResolved   = "RESOLVED"
+)
+
+// ReconRun is the result of one reconciliation run.
+type ReconRun struct {
+	ID                       string     `json:"id"`
+	TriggeredBy              string     `json:"triggered_by"`
+	StartedAt                time.Time  `json:"started_at"`
+	FinishedAt               *time.Time `json:"finished_at"`
+	Checked                  int        `json:"checked"`
+	Matched                  int        `json:"matched"`
+	Mismatches               int        `json:"mismatches"`
+	SettlementReconciliation string     `json:"settlement_reconciliation"`
+}
+
+// ReconItem is a detected mismatch.
+type ReconItem struct {
+	ID                  string          `json:"id"`
+	RunID               string          `json:"run_id"`
+	Kind                string          `json:"kind"`
+	Severity            string          `json:"severity"`
+	AssessmentID        *string         `json:"assessment_id"`
+	AdjustmentID        *string         `json:"adjustment_id"`
+	LedgerTransactionID *string         `json:"ledger_transaction_id"`
+	Currency            *string         `json:"currency"`
+	Expected            json.RawMessage `json:"expected"`
+	Observed            json.RawMessage `json:"observed"`
+	Detail              string          `json:"detail"`
+	Status              string          `json:"status"`
+	DetectedAt          time.Time       `json:"detected_at"`
+	ResolvedBy          *string         `json:"resolved_by"`
+	ResolvedAt          *time.Time      `json:"resolved_at"`
+	ResolutionNote      *string         `json:"resolution_note"`
+}
+
+type finding struct {
+	kind, severity, detail string
+	assessmentID, txID     string
+	currency               string
+	expected, observed     map[string]any
+}
+
+func (s *Service) grace() time.Duration {
+	if s.ReconGrace > 0 {
+		return s.ReconGrace
+	}
+	return DefaultReconGrace
+}
+
+// Reconcile runs fee reconciliation. Detections are idempotent: an OPEN item with the same kind and subject is not
+// duplicated.
+func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRun, error) {
+	now := s.now()
+	run := ReconRun{ID: ids.New(), TriggeredBy: triggeredBy, StartedAt: now, SettlementReconciliation: "NOT_PERFORMED"}
+	if _, err := s.Pool.Exec(ctx, `INSERT INTO app.fee_reconciliation_runs (id, triggered_by, started_at) VALUES ($1, $2, $3)`,
+		run.ID, triggeredBy, now); err != nil {
+		return run, err
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT `+assessmentCols+` FROM app.fee_assessments a ORDER BY a.assessed_at DESC LIMIT $1`, reconScanLimit)
+	if err != nil {
+		return run, err
+	}
+	var list []Assessment
+	for rows.Next() {
+		a, err := scanAssessment(rows)
+		if err != nil {
+			rows.Close()
+			return run, err
+		}
+		list = append(list, a)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return run, err
+	}
+	var findings []finding
+	sources := map[string][]Assessment{}
+	for _, a := range list {
+		run.Checked++
+		fs, err := s.checkAssessment(ctx, a, now)
+		if err != nil {
+			return run, err
+		}
+		if len(fs) == 0 {
+			run.Matched++
+		}
+		findings = append(findings, fs...)
+		sources[a.SourceType+":"+a.SourceID+":"+a.CalculationID] = append(sources[a.SourceType+":"+a.SourceID+":"+a.CalculationID], a)
+	}
+	// MISSING_FEE: an assessable component of a calculation behind a source has no assessment
+	for _, group := range sources {
+		cs, err := components(ctx, s.Pool, group[0].CalculationID)
+		if err != nil {
+			return run, err
+		}
+		have := map[string]bool{}
+		for _, a := range group {
+			have[a.Category] = true
+		}
+		for _, c := range cs {
+			if c.Basis != BasisNotConfigured && !have[c.Category] {
+				findings = append(findings, finding{kind: RecMissingFee, severity: "SEV2", assessmentID: group[0].ID, currency: group[0].Currency,
+					detail:   "the calculation has a " + c.Category + " component but no assessment exists for it",
+					expected: map[string]any{"category": c.Category, "amount_minor": amtP(c.Amount)}, observed: map[string]any{"assessment": nil}})
+			}
+		}
+	}
+	for _, f := range findings {
+		inserted, err := s.recordFinding(ctx, run.ID, f, now)
+		if err != nil {
+			return run, err
+		}
+		if inserted {
+			run.Mismatches++
+		}
+	}
+	fin := s.now()
+	run.FinishedAt = &fin
+	_, err = s.Pool.Exec(ctx, `UPDATE app.fee_reconciliation_runs SET finished_at = $2, checked = $3, matched = $4, mismatches = $5 WHERE id = $1`,
+		run.ID, fin, run.Checked, run.Matched, run.Mismatches)
+	return run, err
+}
+
+func (s *Service) checkAssessment(ctx context.Context, a Assessment, now time.Time) ([]finding, error) {
+	var out []finding
+	add := func(kind, sev, detail, txID string, exp, obs map[string]any) {
+		out = append(out, finding{kind: kind, severity: sev, detail: detail, assessmentID: a.ID, txID: txID, currency: a.Currency,
+			expected: exp, observed: obs})
+	}
+	// 1. determinism: recompute the calculation from its canonical inputs
+	var inputsRaw, resultRaw []byte
+	var calcCcy string
+	if err := s.Pool.QueryRow(ctx, `SELECT inputs, result, currency FROM app.fee_calculations WHERE id = $1`, a.CalculationID).
+		Scan(&inputsRaw, &resultRaw, &calcCcy); err != nil {
+		return nil, err
+	}
+	var in Inputs
+	if err := json.Unmarshal(inputsRaw, &in); err != nil {
+		return nil, err
+	}
+	re, err := Compute(in)
+	var stored ResultDoc
+	_ = json.Unmarshal(resultRaw, &stored)
+	if err != nil {
+		add(RecRoundingMismatch, "SEV2", "the stored calculation cannot be recomputed: "+err.Error(), "", nil, nil)
+	} else if !sameJSON(re.ResultJSON, resultRaw) {
+		add(RecRoundingMismatch, "SEV2", "recomputing the stored inputs gives a different result", "",
+			map[string]any{"result": json.RawMessage(re.ResultJSON)}, map[string]any{"result": json.RawMessage(resultRaw)})
+	}
+	if calcCcy != a.Currency {
+		add(RecCurrencyMismatch, "SEV1", "the assessment's currency differs from its calculation's", "", map[string]any{"currency": calcCcy},
+			map[string]any{"currency": a.Currency})
+	}
+	// 2. the assessed amount equals its calculation component
+	for _, c := range stored.Components {
+		if c.Category == a.Category && !eqStrP(c.Amount, a.FeeMinor) {
+			add(RecAmountMismatch, "SEV1", "the assessed fee differs from its calculation", "", map[string]any{"fee_minor": c.Amount},
+				map[string]any{"fee_minor": a.FeeMinor})
+		}
+	}
+	// 3. postings
+	refs, err := s.accountingRefs(ctx, a.ID)
+	if err != nil {
+		return nil, err
+	}
+	purposes := map[string]int{}
+	for _, r := range refs {
+		own := r.AssessmentID != nil // the assessment's own journal (adjustments may have many: one per refund)
+		if own {
+			purposes[r.Purpose]++
+		}
+		if own && purposes[r.Purpose] == 2 {
+			add(RecDuplicateFee, "SEV1", "more than one "+r.Purpose+" journal carries this fee", r.LedgerTransactionID,
+				map[string]any{"journals": 1}, map[string]any{"journals": purposes[r.Purpose]})
+		}
+		if s.Ledger == nil {
+			continue
+		}
+		j, ok, err := s.Ledger.JournalAmountsByKey(ctx, r.JournalKey)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			add(RecMissingPosting, "SEV1", "the referenced ledger journal does not exist", r.LedgerTransactionID, map[string]any{"journal_key": r.JournalKey}, nil)
+			continue
+		}
+		if j.Currency != a.Currency {
+			add(RecCurrencyMismatch, "SEV1", "the fee journal's currency differs from the assessment's", j.TransactionID,
+				map[string]any{"currency": a.Currency}, map[string]any{"currency": j.Currency})
+		}
+		if a.PolicyVersionID != nil && (j.FeePolicyVersionID == nil || *j.FeePolicyVersionID != *a.PolicyVersionID) && r.Purpose != "PROVIDER_FEE" {
+			add(RecPolicyMismatch, "SEV1", "the journal does not reference the assessment's policy version", j.TransactionID,
+				map[string]any{"policy_version_id": a.PolicyVersionID}, map[string]any{"policy_version_id": j.FeePolicyVersionID})
+		}
+		if got, want := postedFee(j, r.Purpose), r.FeeAmountMinor; got != want {
+			add(RecAmountMismatch, "SEV1", "the journal's fee lines differ from the recorded fee", j.TransactionID,
+				map[string]any{"fee_minor": amt(want)}, map[string]any{"fee_minor": amt(got)})
+		}
+		if own && r.Purpose == "CAPTURE" && a.fee != nil && r.FeeAmountMinor != *a.fee {
+			add(RecAmountMismatch, "SEV1", "the posted fee differs from the assessed fee", j.TransactionID,
+				map[string]any{"fee_minor": a.FeeMinor}, map[string]any{"fee_minor": amt(r.FeeAmountMinor)})
+		}
+	}
+	if a.AccountingStatus == AcctPending && now.Sub(a.AssessedAt) > s.grace() {
+		add(RecMissingPosting, "SEV2", "the fee is still PENDING_POSTING after the grace period", "", map[string]any{"accounting_status": AcctPosted},
+			map[string]any{"accounting_status": a.AccountingStatus})
+	}
+	// 4. provider-reported fees
+	if a.Category != CatPlatform {
+		reps, err := s.providerReports(ctx, a.ID)
+		if err != nil {
+			return nil, err
+		}
+		switch {
+		case len(reps) == 0 && now.Sub(a.AssessedAt) > s.grace():
+			add(RecUnreconciledFee, "SEV3", "no provider-reported or provider-confirmed fee exists for this "+a.Basis+" fee (no provider evidence source in Stage 12)",
+				"", map[string]any{"basis": BasisProviderConfirmed}, map[string]any{"basis": a.Basis})
+		case len(reps) > 0 && (a.fee == nil || reps[0] != *a.fee):
+			add(RecAmountMismatch, "SEV2", "the provider-reported fee differs from the estimate", "", map[string]any{"fee_minor": a.FeeMinor},
+				map[string]any{"reported_fee_minor": amt(reps[0])})
+		}
+	}
+	return out, nil
+}
+
+// postedFee is the fee amount a journal carries for a purpose.
+func postedFee(j ledger.JournalAmounts, purpose string) int64 {
+	switch purpose {
+	case "CAPTURE":
+		return j.Amount(ledger.ClassPlatformFees, ledger.Credit)
+	case "REFUND", "CHARGEBACK":
+		return j.Amount(ledger.ClassPlatformFees, ledger.Debit)
+	case "PROVIDER_FEE":
+		return j.Amount(ledger.ClassPSPClearing, ledger.Credit)
+	case "PAYOUT_FEE":
+		return j.Amount(ledger.ClassPSPProcessingFees, ledger.Debit)
+	case "CHARGEBACK_FEE":
+		return j.Amount(ledger.ClassPSPSettled, ledger.Credit)
+	}
+	return 0
+}
+
+func sameJSON(a, b []byte) bool {
+	var x, y any
+	if json.Unmarshal(a, &x) != nil || json.Unmarshal(b, &y) != nil {
+		return bytes.Equal(a, b)
+	}
+	xa, _ := json.Marshal(x)
+	ya, _ := json.Marshal(y)
+	return bytes.Equal(xa, ya)
+}
+
+func eqStrP(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
+// AccountingRef is a fee ↔ journal link.
+type AccountingRef struct {
+	ID                  string    `json:"id"`
+	AssessmentID        *string   `json:"assessment_id"`
+	AdjustmentID        *string   `json:"adjustment_id"`
+	LedgerTransactionID string    `json:"ledger_transaction_id"`
+	JournalKey          string    `json:"journal_key"`
+	PostingRule         string    `json:"posting_rule"`
+	Purpose             string    `json:"purpose"`
+	Currency            string    `json:"currency"`
+	FeeAmountMinor      int64     `json:"-"`
+	FeeAmount           string    `json:"fee_amount_minor"`
+	PolicyVersionID     *string   `json:"policy_version_id"`
+	RecordedAt          time.Time `json:"recorded_at"`
+}
+
+func (s *Service) accountingRefs(ctx context.Context, assessmentID string) ([]AccountingRef, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT id, assessment_id::text, adjustment_id::text, ledger_transaction_id, journal_key, posting_rule, purpose,
+		currency, fee_amount_minor, policy_version_id::text, recorded_at FROM app.fee_accounting_references
+		WHERE assessment_id = $1 OR adjustment_id IN (SELECT id FROM app.fee_adjustments WHERE assessment_id = $1) ORDER BY recorded_at, id`, assessmentID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (AccountingRef, error) {
+		var x AccountingRef
+		err := r.Scan(&x.ID, &x.AssessmentID, &x.AdjustmentID, &x.LedgerTransactionID, &x.JournalKey, &x.PostingRule, &x.Purpose, &x.Currency,
+			&x.FeeAmountMinor, &x.PolicyVersionID, &x.RecordedAt)
+		x.FeeAmount = amt(x.FeeAmountMinor)
+		return x, err
+	})
+}
+
+// AccountingRefs returns the journals behind an assessment and its adjustments (staff detail).
+func (s *Service) AccountingRefs(ctx context.Context, assessmentID string) ([]AccountingRef, error) {
+	if !ids.Valid(assessmentID) {
+		return nil, ErrNotFound
+	}
+	return s.accountingRefs(ctx, assessmentID)
+}
+
+func (s *Service) providerReports(ctx context.Context, assessmentID string) ([]int64, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT reported_fee_minor FROM app.fee_provider_reports WHERE assessment_id = $1 ORDER BY reported_at DESC`, assessmentID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[int64])
+}
+
+func (s *Service) recordFinding(ctx context.Context, runID string, f finding, now time.Time) (bool, error) {
+	exp, _ := json.Marshal(nonNil(f.expected))
+	obs, _ := json.Marshal(nonNil(f.observed))
+	key := f.kind + ":" + f.assessmentID + ":" + f.txID
+	var id string
+	err := s.Pool.QueryRow(ctx, `INSERT INTO app.fee_reconciliation_references (id, run_id, kind, severity, assessment_id, ledger_transaction_id, currency,
+		expected, observed, detail, dedupe_key, status, detected_at)
+		VALUES ($1, $2, $3, $4, nullif($5, '')::uuid, nullif($6, '')::uuid, nullif($7, ''), $8, $9, $10, $11, 'OPEN', $12)
+		ON CONFLICT (dedupe_key) WHERE status = 'OPEN' DO NOTHING RETURNING id`,
+		ids.New(), runID, f.kind, f.severity, f.assessmentID, f.txID, f.currency, exp, obs, f.detail, key, now).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func nonNil(m map[string]any) map[string]any {
+	if m == nil {
+		return map[string]any{}
+	}
+	return m
+}
+
+const reconCols = `id, run_id, kind, severity, assessment_id::text, adjustment_id::text, ledger_transaction_id::text, currency, expected, observed,
+	detail, status, detected_at, resolved_by::text, resolved_at, resolution_note`
+
+func scanRecon(r pgx.Row) (ReconItem, error) {
+	var x ReconItem
+	err := r.Scan(&x.ID, &x.RunID, &x.Kind, &x.Severity, &x.AssessmentID, &x.AdjustmentID, &x.LedgerTransactionID, &x.Currency, &x.Expected,
+		&x.Observed, &x.Detail, &x.Status, &x.DetectedAt, &x.ResolvedBy, &x.ResolvedAt, &x.ResolutionNote)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return x, ErrNotFound
+	}
+	return x, err
+}
+
+// ReconItems lists reconciliation items (OPEN first, newest first).
+func (s *Service) ReconItems(ctx context.Context, status string, limit int) ([]ReconItem, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT `+reconCols+` FROM app.fee_reconciliation_references WHERE ($1 = '' OR status = $1)
+		ORDER BY (status = 'OPEN') DESC, detected_at DESC, id DESC LIMIT $2`, status, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []ReconItem{}
+	for rows.Next() {
+		x, err := scanRecon(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
+// LatestRun returns the latest reconciliation run (nil: none).
+func (s *Service) LatestRun(ctx context.Context) (*ReconRun, error) {
+	var r ReconRun
+	err := s.Pool.QueryRow(ctx, `SELECT id, triggered_by, started_at, finished_at, checked, matched, mismatches FROM app.fee_reconciliation_runs
+		ORDER BY started_at DESC LIMIT 1`).Scan(&r.ID, &r.TriggeredBy, &r.StartedAt, &r.FinishedAt, &r.Checked, &r.Matched, &r.Mismatches)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	r.SettlementReconciliation = "NOT_PERFORMED"
+	return &r, err
+}
+
+// ResolveRecon records a resolution note (fee.adjust.request). It never changes a fee, an assessment or the ledger.
+func (s *Service) ResolveRecon(ctx context.Context, staffID, id, note string) (ReconItem, error) {
+	note = strings.TrimSpace(note)
+	if n := utf8.RuneCountInString(note); n < 5 || n > 2000 {
+		return ReconItem{}, validation("note", "INVALID_LENGTH")
+	}
+	if !ids.Valid(id) {
+		return ReconItem{}, ErrNotFound
+	}
+	now := s.now()
+	err := s.tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE app.fee_reconciliation_references SET status = 'RESOLVED', resolved_by = $2, resolved_at = $3, resolution_note = $4
+			WHERE id = $1 AND status = 'OPEN'`, id, staffID, now, note)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			if _, err := scanRecon(tx.QueryRow(ctx, `SELECT `+reconCols+` FROM app.fee_reconciliation_references WHERE id = $1`, id)); err != nil {
+				return err
+			}
+			return ErrReconState
+		}
+		if err := event(ctx, tx, "fee_reconciliation", id, "RECONCILIATION_RESOLVED", staff(staffID), map[string]any{"note": note}, now); err != nil {
+			return err
+		}
+		return audit.Record(ctx, tx, audit.Event{Action: "fee.reconciliation.resolved", TargetType: "fee_reconciliation", TargetID: id})
+	})
+	if err != nil {
+		return ReconItem{}, err
+	}
+	return scanRecon(s.Pool.QueryRow(ctx, `SELECT `+reconCols+` FROM app.fee_reconciliation_references WHERE id = $1`, id))
+}

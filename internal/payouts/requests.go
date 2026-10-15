@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/Fatifizo/fundzim/internal/audit"
+	"github.com/Fatifizo/fundzim/internal/fees"
 	"github.com/Fatifizo/fundzim/internal/ledger"
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
 	"github.com/Fatifizo/fundzim/internal/platform/httpx"
@@ -133,7 +134,13 @@ type Payout struct {
 	CreatedAt            time.Time    `json:"created_at"`
 	UpdatedAt            time.Time    `json:"updated_at"`
 	Reservation          *Reservation `json:"reservation"`
-	idemScope, idemKey   string
+	// Stage 12 (ADR-044 §13): the payout fee estimated at request time. The reservation is the requested amount:
+	// an organiser-borne fee is carved out of it, a platform-absorbed fee is an expense.
+	FeeCalculationID   *string `json:"fee_calculation_id"`
+	FeeEstimateMinor   *int64  `json:"fee_estimate_minor,string"`
+	FeeBasis           *string `json:"fee_basis"`
+	FeeResponsibility  *string `json:"fee_responsibility"`
+	idemScope, idemKey string
 }
 
 // Reservation is a payout's reservation of funds.
@@ -161,7 +168,8 @@ const payoutCols = `p.id, p.campaign_id, p.owner_user_id, p.owner_organisation_i
 	p.unknown_reason, p.next_poll_at, p.poll_attempts, p.needs_reconciliation, p.submitted_at, p.completed_at, p.failure_code,
 	p.decision_reason_code, p.correlation_id, p.version, p.created_at, p.updated_at, p.idempotency_scope, p.idempotency_key,
 	r.id, r.status, r.amount_minor, r.account_scope, r.ledger_reserve_txn_id, r.ledger_submit_txn_id, r.ledger_release_txn_id,
-	r.ledger_consume_txn_id, r.expires_at, r.created_at, r.updated_at`
+	r.ledger_consume_txn_id, r.expires_at, r.created_at, r.updated_at, p.fee_calculation_id::text, p.fee_estimate_minor, p.fee_basis,
+	p.fee_responsibility`
 
 const payoutFrom = ` FROM app.payout_requests p LEFT JOIN app.payout_reservations r ON r.payout_request_id = p.id`
 
@@ -177,7 +185,8 @@ func scanPayout(row pgx.Row) (Payout, error) {
 		&p.ProviderID, &p.ProviderAccountID, &p.CapabilityID, &p.ProviderPayoutRef, &p.ProviderFeeMinor, &p.ReversedAmountMinor,
 		&p.UnknownSince, &p.UnknownReason, &p.NextPollAt, &p.PollAttempts, &p.NeedsReconciliation, &p.SubmittedAt, &p.CompletedAt,
 		&p.FailureCode, &p.DecisionReasonCode, &p.CorrelationID, &p.Version, &p.CreatedAt, &p.UpdatedAt, &p.idemScope, &p.idemKey,
-		&rid, &rst, &ramt, &rscope, &rres, &rsub, &rrel, &rcon, &rexp, &rc, &ru)
+		&rid, &rst, &ramt, &rscope, &rres, &rsub, &rrel, &rcon, &rexp, &rc, &ru, &p.FeeCalculationID, &p.FeeEstimateMinor, &p.FeeBasis,
+		&p.FeeResponsibility)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, ErrPayoutNotFound
 	}
@@ -416,15 +425,26 @@ func (s *Service) RequestPayout(ctx context.Context, actorID string, stepUpFresh
 	hash := sha256.Sum256([]byte(strings.Join([]string{d.ID, strconv.Itoa(d.detailsVersion), d.Rail, d.Currency, d.MaskedIdentifier, d.HolderName}, "|")))
 	env := f.LedgerEnvironment
 	err = s.tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		var fee fees.PayoutFeeEstimate
+		if s.Fees != nil {
+			var err error
+			if fee, err = s.Fees.EstimatePayoutFee(ctx, tx, fees.PayoutFeeRequest{CampaignID: campaignID, CampaignCategory: acc.Category,
+				Currency: in.Currency, Rail: d.Rail, ProviderID: route.Provider.ID, AmountMinor: amount}); err != nil {
+				return err // FEE_EXCEEDS_AMOUNT: a known organiser-borne fee would leave nothing for the beneficiary
+			}
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO app.payout_requests (id, campaign_id, owner_user_id, owner_organisation_id, beneficiary_id, currency,
 			amount_minor, purpose, requested_by, requested_at, status, status_rank, approval_policy, policy_version, execution_environment,
 			test_payout, ledger_environment, destination_id, destination_version, destination_hash, destination_rail, destination_masked,
 			destination_category, provider_id, provider_is_sandbox, provider_account_id, capability_id, capability_routable,
-			capability_payout_api, idempotency_scope, idempotency_key, correlation_id)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'PAYOUT_REQUESTED',0,$11,$12,$13,true,$14,$15,$16,$17,$18,$19,$20,$21,true,$22,$23,true,true,$24,$25,$26)`,
+			capability_payout_api, idempotency_scope, idempotency_key, correlation_id, fee_calculation_id, fee_estimate_minor, fee_basis,
+			fee_responsibility)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'PAYOUT_REQUESTED',0,$11,$12,$13,true,$14,$15,$16,$17,$18,$19,$20,$21,true,$22,$23,true,true,$24,$25,$26,
+			        nullif($27, '')::uuid, $28, nullif($29, ''), $30)`,
 			id, campaignID, acc.OwnerUserID, acc.OwnerOrgID, f.BeneficiaryID, in.Currency, amount, purpose, actorID, s.now(), dec.ApprovalTier,
 			EngineVersion, s.ExecEnv, env, d.ID, d.detailsVersion, hash[:], d.Rail, d.MaskedIdentifier, d.Category, route.Provider.ID,
-			route.Account.ID, route.Capability.ID, scope, idemKey, nilIfEmpty(httpx.RequestID(ctx))); err != nil {
+			route.Account.ID, route.Capability.ID, scope, idemKey, nilIfEmpty(httpx.RequestID(ctx)), fee.CalculationID, fee.EstimateMinor,
+			fee.Basis, fee.Responsibility); err != nil {
 			return err
 		}
 		did, err := s.writeDecision(ctx, tx, id, sub, actorID, f, dec)

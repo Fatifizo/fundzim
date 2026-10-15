@@ -143,7 +143,9 @@ type Deps struct {
 	Limiter      ratelimit.Limiter
 	Keyed        *crypto.Keyed // payer instrument fingerprints (HMAC); never the raw value
 	Ledger       LedgerPoster  // nil in Stage 8 runtime
-	Registerer   prometheus.Registerer
+	// Fees binds a fee quote to every donation intent (Stage 12, ADR-044 §9); nil: intents carry no quote.
+	Fees       FeeQuoter
+	Registerer prometheus.Registerer
 	// PublicSiteURL builds the donor return URL given to providers (redirect flows).
 	PublicSiteURL string
 }

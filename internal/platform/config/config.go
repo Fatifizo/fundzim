@@ -63,6 +63,14 @@ type Config struct {
 	Secrets      Secrets
 	Ledger       Ledger
 	Payouts      Payouts
+	Fees         Fees
+}
+
+// Fees configures the Stage 12 fee module (ADR-044). Production fee charging is not configurable: it is the code
+// constant fees.ProductionFeesEnabled = false. No fee rate is configuration here: rates live in approved policy versions.
+type Fees struct {
+	// QuoteTTL (FEES_QUOTE_TTL, 1m–60m, default 15m) is how long a fee quote stays valid.
+	QuoteTTL time.Duration
 }
 
 // Payouts configures withdrawals and payouts (Stage 11, ADR-043). Real payout execution is not configurable: it is
@@ -538,6 +546,8 @@ func Load(get LookupFunc) (Config, error) {
 	default:
 		l.fail("PAYOUTS_EXECUTION_ENVIRONMENT must be DISABLED or LOCAL_SIMULATOR")
 	}
+
+	c.Fees = Fees{QuoteTTL: l.duration("FEES_QUOTE_TTL", 15*time.Minute, time.Minute, time.Hour)}
 
 	if len(l.problems) > 0 {
 		sort.Strings(l.problems)
