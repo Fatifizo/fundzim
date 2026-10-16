@@ -11,6 +11,7 @@ Stage 14 tree). Remote CI is reported in the completion report.
 | Web unit (vitest) | `npm test` | all files passed (incl. `operations-components.test.tsx`, 18 tests) |
 | Web lint / typecheck / build | `npm run lint`, `npm run typecheck`, Playwright's production build | clean |
 | E2E (mock API, desktop + Pixel 7, axe) | `npx playwright test` | 189 passed, 1 skipped (pre-existing) |
+| E2E real stack (compose, no mocks) | `flock … npm run test:e2e:real` | 50 passed (after pointing `staff-ledger.spec.ts`'s sign-in landing from `/admin` to `/admin/operations`: `/admin` now redirects to the command center — found by CI run 38900783145) |
 | OpenAPI | Redocly 2.54.3 lint | valid; 2 pre-existing warnings |
 | Migrations | down ×2 / up ×2 on the development database | both Stage 14 migrations round-trip |
 | Flake investigation (KI-S13-20) | `TestPublicExperienceEndpoints -count=3` | 3/3 passed; also passed in the full run |

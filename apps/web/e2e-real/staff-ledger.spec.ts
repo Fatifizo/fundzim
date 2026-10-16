@@ -19,7 +19,7 @@ test("synthetic fixture posted by an ADMIN appears balanced and TEST_ONLY in the
     if (!c) throw new Error(`staff fixture ${key} missing`);
     return c;
   };
-  const admin = await staffPage(browser, S("moderator"), "/admin");
+  const admin = await staffPage(browser, S("moderator"), "/admin/operations");
   const csrf = (await admin.ctx.cookies()).find((k) => k.name === "fz_csrf")?.value ?? "";
   const res = await admin.page.request.post("/api/v1/admin/ledger/synthetic-fixtures", {
     data: { scenario: "donations" },
@@ -54,7 +54,7 @@ test("synthetic fixture posted by an ADMIN appears balanced and TEST_ONLY in the
   await ctx.close();
 
   // a REVIEWER (no ledger.view) does not find the finance pages
-  const reviewer = await staffPage(browser, S("reviewer"), "/admin");
+  const reviewer = await staffPage(browser, S("reviewer"), "/admin/operations");
   const r = await reviewer.page.goto("/admin/finance/ledger");
   expect(r?.status()).toBe(404);
   await reviewer.ctx.close();
@@ -79,7 +79,7 @@ test("payout operations overview: TEST payouts through the simulator only, produ
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await ctx.close();
   // the API itself: a reviewer without payout.view is refused
-  const reviewer = await staffPage(browser, S("reviewer"), "/admin");
+  const reviewer = await staffPage(browser, S("reviewer"), "/admin/operations");
   expect((await reviewer.page.request.get("/api/v1/admin/payouts/overview")).status()).toBe(403);
   expect((await reviewer.page.goto("/admin/finance/payouts"))?.status()).toBe(404);
   await reviewer.ctx.close();
@@ -110,7 +110,7 @@ test("fees: TEST fees only, production fee charging BLOCKED, per-currency revenu
   for (const c of rev.currencies) expect(c.cash_received).toBe("NOT_AVAILABLE");
   await ctx.close();
   // a reviewer without fee.view is refused by the API and the page does not exist for them
-  const reviewer = await staffPage(browser, S("reviewer"), "/admin");
+  const reviewer = await staffPage(browser, S("reviewer"), "/admin/operations");
   expect((await reviewer.page.request.get("/api/v1/admin/fees/overview")).status()).toBe(403);
   expect((await reviewer.page.goto("/admin/finance/fees"))?.status()).toBe(404);
   await reviewer.ctx.close();
