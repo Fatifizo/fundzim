@@ -11,6 +11,16 @@ providers.
 FundZim is **not** an investment, lending, equity or rewards platform, and it is not a wallet or a payment
 provider.
 
+> **Status: Stage 13 — Trust, fraud & risk engine (complete; awaiting acceptance; TEST data only).** Normalised risk
+> signals from domain events, an explainable configurable rule engine (declarative JSON rules, maker-checker versions,
+> deterministic 0–100 scores with stored explanations — a score is never proof of fraud), risk cases with assignment,
+> immutable hashed evidence, maker-checker decisions and escalation to compliance, a central hold registry enforced at
+> campaign publication, donations and payouts (automation limited to temporary payout-protective holds), a provider-neutral
+> sanctions-screening foundation with a TEST simulator (no provider is selected; production screening BLOCKED; a timeout or
+> error never clears anyone), monitoring events, risk reconciliation and a staff risk operations portal. Docs:
+> [docs/stage-13/implementation.md](docs/stage-13/implementation.md); ADR-045; handover
+> [STAGE-13-TO-STAGE-14.md](docs/stage-handover/STAGE-13-TO-STAGE-14.md).
+>
 > **Status: Stage 12 — Fees & platform revenue (complete; awaiting acceptance; TEST fees only).** Versioned fee policies
 > with maker-checker approval (terms frozen and hashed at submission; checker never the maker or a linked account), an
 > exact, deterministic calculation engine (integer minor units, basis points, one documented rounding per component,
@@ -270,7 +280,8 @@ Reset deletes the Postgres and Garage volumes (database, roles, objects). `.env`
 | [Stage 10 implementation](docs/stage-10/implementation.md) · [ledger architecture](docs/stage-10/ledger-architecture.md) · [chart of accounts](docs/stage-10/chart-of-accounts.md) · [posting rules](docs/stage-10/posting-rules.md) · [reconciliation](docs/stage-10/reconciliation.md) · [security review](docs/stage-10/security-review.md) · [tests](docs/stage-10/financial-integrity-tests.md) · [performance](docs/stage-10/performance.md) · [known issues](docs/stage-10/known-issues.md) | Double-entry ledger (TEST ledger only) |
 | [Stage 11 implementation](docs/stage-11/implementation.md) · [architecture](docs/stage-11/payout-architecture.md) · [lifecycle](docs/stage-11/withdrawal-lifecycle.md) · [eligibility](docs/stage-11/eligibility-engine.md) · [available funds](docs/stage-11/available-funds.md) · [simulator](docs/stage-11/payout-simulator.md) · [security review](docs/stage-11/security-review.md) · [testing](docs/stage-11/testing.md) · [known issues](docs/stage-11/known-issues.md) | Withdrawals & payouts (TEST payouts only) |
 | [Stage 12 implementation](docs/stage-12/implementation.md) · [architecture](docs/stage-12/fee-architecture.md) · [policy model](docs/stage-12/fee-policy-model.md) · [calculation](docs/stage-12/fee-calculation.md) · [rounding](docs/stage-12/rounding.md) · [revenue accounting](docs/stage-12/revenue-accounting.md) · [security review](docs/stage-12/security-review.md) · [testing](docs/stage-12/testing.md) · [known issues](docs/stage-12/known-issues.md) | Fees & platform revenue (TEST fees only) |
-| [Stage handovers](docs/stage-handover/STAGE-12-TO-STAGE-13.md) | Stage 12 → 13 (trust, fraud & risk); earlier handovers in the same folder |
+| [Stage 13 implementation](docs/stage-13/implementation.md) · [architecture](docs/stage-13/risk-architecture.md) · [signals](docs/stage-13/risk-signals.md) · [scoring](docs/stage-13/risk-scoring.md) · [rules](docs/stage-13/risk-rules.md) · [cases](docs/stage-13/case-management.md) · [holds](docs/stage-13/compliance-holds.md) · [screening](docs/stage-13/screening.md) · [security review](docs/stage-13/security-review.md) · [testing](docs/stage-13/testing.md) · [known issues](docs/stage-13/known-issues.md) | Trust, fraud & risk engine (TEST data; screening BLOCKED) |
+| [Stage handovers](docs/stage-handover/STAGE-13-TO-STAGE-14.md) | Stage 13 → 14 (administration & operations portal); earlier handovers in the same folder |
 
 ## Licence
 

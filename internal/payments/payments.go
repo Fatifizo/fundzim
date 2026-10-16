@@ -110,6 +110,14 @@ type DonorRestrictions interface {
 	Restricted(ctx context.Context, userID string) (bool, error)
 }
 
+// Holds reads the risk hold registry (risk.Service; Stage 13, ADR-045 §7).
+type Holds interface {
+	DonationHolds(ctx context.Context, campaignID, donorUserID string) ([]risk.Hold, error)
+}
+
+// ErrDonationsOnHold: a risk hold (campaign or donation hold) stops new donations. No detail is exposed.
+var ErrDonationsOnHold = errs.New(errs.Conflict, "DONATIONS_ON_HOLD", "Donations to this campaign are temporarily unavailable while it is reviewed.")
+
 // Limits reads approved money limits (risk.limits).
 type Limits interface {
 	MoneyLimits(ctx context.Context, key, currency string, at time.Time) ([]risk.MoneyLimit, error)
@@ -140,9 +148,11 @@ type Deps struct {
 	Campaigns    Campaigns
 	Restrictions DonorRestrictions
 	Limits       Limits
-	Limiter      ratelimit.Limiter
-	Keyed        *crypto.Keyed // payer instrument fingerprints (HMAC); never the raw value
-	Ledger       LedgerPoster  // nil in Stage 8 runtime
+	// Holds enforces risk holds at intent and attempt creation (nil: no hold registry wired — tests only).
+	Holds   Holds
+	Limiter ratelimit.Limiter
+	Keyed   *crypto.Keyed // payer instrument fingerprints (HMAC); never the raw value
+	Ledger  LedgerPoster  // nil in Stage 8 runtime
 	// Fees binds a fee quote to every donation intent (Stage 12, ADR-044 §9); nil: intents carry no quote.
 	Fees       FeeQuoter
 	Registerer prometheus.Registerer

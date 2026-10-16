@@ -22,6 +22,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/db"
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
 	"github.com/Fatifizo/fundzim/internal/platform/ratelimit"
+	"github.com/Fatifizo/fundzim/internal/risk"
 )
 
 // Statuses (ADR-036 §1). Brief names: PENDING_REVIEW = SUBMITTED, PUBLISHED = ACTIVE.
@@ -118,12 +119,22 @@ type Deps struct {
 	// StaffCan reports whether an active staff account holds a permission (assignee eligibility); nil refuses
 	// assigning anyone but the caller.
 	StaffCan func(ctx context.Context, staffID, permission string) (bool, error)
-	Limiter  ratelimit.Limiter // public reports and analytics events (Stage 7)
-	AEAD     *crypto.AEAD      // report contact emails (app field key)
-	Keyed    *crypto.Keyed     // report reporter keys and contact blind index (app blind-index key)
-	Clock    clock.Clock
-	Logger   *slog.Logger
+	// Holds reads the risk hold registry at publication (Stage 13, ADR-045 §7); nil: no registry wired (tests only).
+	Holds   PublicationHolds
+	Limiter ratelimit.Limiter // public reports and analytics events (Stage 7)
+	AEAD    *crypto.AEAD      // report contact emails (app field key)
+	Keyed   *crypto.Keyed     // report reporter keys and contact blind index (app blind-index key)
+	Clock   clock.Clock
+	Logger  *slog.Logger
 }
+
+// PublicationHolds is the risk module's hold registry as campaigns needs it.
+type PublicationHolds interface {
+	PublicationHolds(ctx context.Context, campaignID, ownerUserID, ownerOrgID string) ([]risk.Hold, error)
+}
+
+// ErrOnHold: an enforced risk hold (campaign or account review) stops publication. No detail is exposed.
+var ErrOnHold = errs.New(errs.Conflict, "CAMPAIGN_ON_HOLD", "This campaign cannot be published while a review is in progress.")
 
 // Service is the campaigns module.
 type Service struct {

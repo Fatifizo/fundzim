@@ -22,6 +22,8 @@ const (
 	EvRiskEscalationRecommended = "risk.escalation_recommended"
 	EvCampaignReviewEscalated   = "campaigns.review_escalated"
 	EvCampaignReportEscalated   = "campaigns.report_escalated" // Stage 7: a public report escalated by staff (ADR-038 §3)
+	// Stage 13 (ADR-045 §6): a risk case handed to compliance; only compliance may restrict the subject
+	EvRiskCaseEscalated = "risk.case_escalated"
 	// ConsumerOpenCase is the consumer name (dedupe key in compliance.compliance_case_triggers). Never rename.
 	ConsumerOpenCase = "compliance.open_case"
 )
@@ -57,6 +59,8 @@ type escalationPayload struct {
 	OwnerUserID         string `json:"owner_user_id"`
 	OwnerOrganisationID string `json:"owner_organisation_id"`
 	ReviewID            string `json:"review_id"`
+	// risk.case_escalated
+	Priority string `json:"priority"`
 }
 
 func partyType(t string) (string, bool) {
@@ -133,6 +137,25 @@ func TriggerFromEvent(eventType string, raw json.RawMessage) (Trigger, error) {
 			Links: []LinkInput{subject, {SubjectType: "RISK_DECISION", SubjectID: p.DecisionID, Role: "RELATED_OBJECT"},
 				{SubjectType: "RISK_ASSESSMENT", SubjectID: p.AssessmentID, Role: "RELATED_OBJECT"}},
 			Anchors: []LinkInput{subject}}, nil
+	case EvRiskCaseEscalated:
+		if !ids.Valid(p.CaseID) || !ids.Valid(p.SubjectID) {
+			return bad("case_id and subject_id are required")
+		}
+		obj := LinkInput{SubjectType: "RISK_CASE", SubjectID: p.CaseID, Role: "RELATED_OBJECT"}
+		links := []LinkInput{obj}
+		st := strings.ToUpper(strings.TrimSpace(p.SubjectType))
+		switch {
+		case PartyTypes[st]:
+			links = append([]LinkInput{{SubjectType: st, SubjectID: p.SubjectID, Role: "PRIMARY_SUBJECT"}}, links...)
+		case st == "PAYOUT":
+			links = append(links, LinkInput{SubjectType: st, SubjectID: p.SubjectID, Role: "RELATED_OBJECT"})
+		}
+		sev := map[string]string{"P1": "S1", "P2": "S2"}[strings.ToUpper(p.Priority)]
+		if sev == "" {
+			sev = "S3"
+		}
+		return Trigger{CaseType: "RISK_REVIEW", Severity: sev, Source: "RISK_ENGINE", ReasonCode: reasonOr("RISK_CASE_ESCALATED"),
+			Links: links, Anchors: []LinkInput{obj, links[0]}}, nil
 	case EvCampaignReviewEscalated, EvCampaignReportEscalated:
 		// the campaign is the primary subject (a restriction applies to it); the owner is a related subject
 		if !ids.Valid(p.CampaignID) || (eventType == EvCampaignReviewEscalated && !ids.Valid(p.ReviewID)) {
@@ -170,7 +193,8 @@ type Consumer struct {
 // case of the same subject, once per event.
 func (s *Service) Consumers() []Consumer {
 	var out []Consumer
-	for _, ev := range []string{EvKYCCaseEscalated, EvBeneficiaryEscalated, EvRiskEscalationRecommended, EvCampaignReviewEscalated, EvCampaignReportEscalated} {
+	for _, ev := range []string{EvKYCCaseEscalated, EvBeneficiaryEscalated, EvRiskEscalationRecommended, EvCampaignReviewEscalated, EvCampaignReportEscalated,
+		EvRiskCaseEscalated} {
 		out = append(out, Consumer{Name: ConsumerOpenCase, EventType: ev, Handle: s.HandleEscalation})
 	}
 	return out

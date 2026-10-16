@@ -64,6 +64,14 @@ type Config struct {
 	Ledger       Ledger
 	Payouts      Payouts
 	Fees         Fees
+	Risk         Risk
+}
+
+// Risk configures the Stage 13 risk module (ADR-045). Production screening is not configurable: it is the code constant
+// risk.ScreeningProductionEnabled = false (no screening provider is selected).
+type Risk struct {
+	// ScreeningSandboxEnabled (RISK_SCREENING_SANDBOX_ENABLED) runs the TEST screening simulator; refused in production.
+	ScreeningSandboxEnabled bool
 }
 
 // Fees configures the Stage 12 fee module (ADR-044). Production fee charging is not configurable: it is the code
@@ -548,6 +556,11 @@ func Load(get LookupFunc) (Config, error) {
 	}
 
 	c.Fees = Fees{QuoteTTL: l.duration("FEES_QUOTE_TTL", 15*time.Minute, time.Minute, time.Hour)}
+
+	c.Risk = Risk{ScreeningSandboxEnabled: l.boolean("RISK_SCREENING_SANDBOX_ENABLED", false)}
+	if c.Risk.ScreeningSandboxEnabled && env == EnvProduction {
+		l.fail("RISK_SCREENING_SANDBOX_ENABLED is refused in production (the screening simulator is TEST_ONLY, ADR-045)")
+	}
 
 	if len(l.problems) > 0 {
 		sort.Strings(l.problems)

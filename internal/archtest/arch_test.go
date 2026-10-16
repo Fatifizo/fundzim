@@ -72,7 +72,12 @@ var ownedTables = map[string][]string{
 		"kyc.profile_events", "kyc.information_requests", "kyc.review_notes", "kyc.organisation_persons", "kyc.beneficial_owners",
 		"kyc.representative_authorities", "kyc.consents", "kyc.v_consents_current", "kyc.kyc_documents", "kyc.kyc_checks", "kyc.kyb_checks",
 		"kyc.kyc_decisions", "kyc.verification_policies", "kyc.age_attestations"},
-	"risk": {"risk.limits", "risk.limit_change_requests", "risk.risk_signals", "risk.risk_assessments", "risk.risk_decisions"},
+	"risk": {"risk.limits", "risk.limit_change_requests", "risk.risk_signals", "risk.risk_assessments", "risk.risk_decisions",
+		// Stage 13 (ADR-045)
+		"risk.risk_events", "risk.risk_rules", "risk.risk_rule_versions", "risk.risk_evaluations", "risk.risk_subject_profiles",
+		"risk.risk_evaluation_actions", "risk.risk_signal_reviews", "risk.risk_cases", "risk.risk_case_assignments", "risk.risk_case_evidence",
+		"risk.risk_case_access_log", "risk.risk_holds", "risk.risk_screening_requests", "risk.risk_screening_results", "risk.sandbox_screenings",
+		"risk.risk_monitoring_events"},
 	"compliance": {"compliance.compliance_cases", "compliance.compliance_case_events", "compliance.compliance_case_links",
 		"compliance.compliance_case_notes", "compliance.compliance_case_triggers", "compliance.case_number_seq",
 		"compliance.subject_restrictions"},

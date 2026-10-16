@@ -15,6 +15,26 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
+**Stage 13 — Trust, fraud & risk engine (complete; awaiting acceptance; TEST data only).** Stages 1–13 are complete but
+their acceptance has not been recorded (never mark a stage accepted yourself); Stage 9 is PARTIAL. What Stage 13 built:
+`docs/stage-13/implementation.md` (prerequisites, architecture, signals, scoring, rules, decisions, campaign/payment/payout
+risk, screening, case management, holds, privacy, security review, testing, known issues; ADR-045); Stage 14 starts from
+`docs/stage-handover/STAGE-13-TO-STAGE-14.md`. Binding Stage 13 rules: **a risk score is a prioritisation aid, never proof of
+fraud** — no code, UI, event, outcome or explanation may declare fraud (CHECKs); rules are declarative JSON (closed grammar,
+bounded; never code), immutable after submission (hashed) and maker-checker (checker ≠ maker/submitter or a linked account,
+Go and database), and **none is seeded**; automated enforcement is limited to cases, monitoring events and temporary
+(≤ 7 days) WITHDRAWAL_HOLD / PAYOUT_DESTINATION_HOLD holds — never bans, confiscation, restrictions, reports, campaign
+termination, screening clearance or hold release; legal restrictions come only from compliance (escalation
+`risk.case_escalated`); `risk.risk_holds` is the single hold registry, enforced at publication, donation intents/attempts,
+payout eligibility EC-12 (request and pre-submit) and payout approval — a registry error fails closed; releases and
+disruptive-hold activation are maker-checker with step-up and nobody releases a hold on themselves; evidence is immutable and
+SHA-256 hashed over canonical JSON; **no screening provider is selected**: `risk.ScreeningProductionEnabled = false`,
+provider `sandbox` and environment TEST by CHECK, synthetic references only, the simulator is refused in production
+(`RISK_SCREENING_SANDBOX_ENABLED`), NO_MATCH_REPORTED is never CLEARED, and a pending/failed/timed-out screening never clears
+anyone; risk data holds ids, codes and amounts only (no IP, no device fingerprint; sign-ins carry a keyed per-user UA
+hash); no retention period or regulatory deadline is invented (LR-012, LR-074). Risk integration tests (`TestRisk*`) share
+the development database: activate only rules that match the test's own reason code and retire them at the end.
+
 **Stage 12 — Fees & platform revenue (complete; awaiting acceptance; TEST fees only).** Stages 1–12 are complete but their
 acceptance has not been recorded (`docs/governance/stage-acceptance-register.md` — never mark a stage accepted yourself);
 Stage 9 is PARTIAL. What Stage 12 built: `docs/stage-12/implementation.md` (prerequisites, fee architecture, policy model,
@@ -108,7 +128,7 @@ errors are always `no-store`; a handler's `Cache-Control` must not be overwritte
 wait through `RetryAfter()`; campaign-family APIs use `{campaign_id}`, 428/412 for `If-Match` and
 `{items, next_cursor}` lists (ADR-038 §7); a public report never changes a campaign's status; analytics are
 first-party aggregate counters only. The real-stack Playwright suite (`apps/web/e2e-real`), the Go integration tests
-(including `TestPayments*`, `TestLedger*`, `TestPayout*` and `TestFee*`) and container rebuilds share the development database: run them under
+(including `TestPayments*`, `TestLedger*`, `TestPayout*`, `TestFee*` and `TestRisk*`) and container rebuilds share the development database: run them under
 `flock /tmp/claude-1000/fundzim-stack.lock`. Never report CI as green without seeing the run. Gate on
 `kyc.Service.Level`, enforce compliance restrictions through `compliance.Service.Restrictions`, and check
 self-review with `kyc.Service.ActorIdentities` / `app.actor_identities()` (linked staff accounts). A
@@ -123,7 +143,7 @@ STOPS.
 |---|---|
 | `apps/web/` | Next.js 16 (App Router, TypeScript, Tailwind v4). **Presentation only.** Has its own `AGENTS.md` — read it: this Next.js version differs from older training data; consult `apps/web/node_modules/next/dist/docs/` before writing Next.js code. |
 | `apps/api/` | Go entrypoints: `cmd/api` (HTTP API), `cmd/worker` (River jobs, outbox relay/delivery), `cmd/fundzimctl` (config check, migrations, `bootstrap-admins`, healthcheck). |
-| `internal/` | Go code: `app/` (composition root), `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, crypto, authz, clock, ratelimit, idempotency, outbox, jobs, version) and domain modules `users`, `auth`, `organisations`, `audit`, `notifications`, `storage` (documents: quarantine, ClamAV scanning, SSE-C, download tickets), `kyc` (KYC/KYB cases, identities, review engine, verification policy — `fundzim_kyc` pool only), `beneficiaries`, `payouts` (payout destinations; Stage 11: withdrawal requests, eligibility engine, reservations, approvals, orchestration, reconciliation — TEST payouts only), `fees` (Stage 12: fee policies, provider fee evidence, pure calculation engine, quotes, assessments, adjustments, TEST fee journals through the ledger service, reconciliation, revenue reporting — TEST fees only), `risk` (signals, versioned model, routing decisions), `compliance` (compliance cases and the subject-restriction projection — `fundzim_compliance` pool only), `verification` (HTTP orchestration; owns no tables) and `campaigns` (core: lifecycle, eligibility, review, publication, public read/search; subpackages `campaigns/media` — image upload, scan, re-encode, serving — and `campaigns/updates` — owner updates and moderation; no financial state), `ledger` (Stage 10: double-entry ledger, posting engine, adjustments, periods, integrity, reconciliation — `fundzim_ledger` pool only), `psp` (Stage 8: provider registry, routing, webhook inbox, health, sandbox simulator in `psp/sandbox`; Stage 9:
+| `internal/` | Go code: `app/` (composition root), `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, crypto, authz, clock, ratelimit, idempotency, outbox, jobs, version) and domain modules `users`, `auth`, `organisations`, `audit`, `notifications`, `storage` (documents: quarantine, ClamAV scanning, SSE-C, download tickets), `kyc` (KYC/KYB cases, identities, review engine, verification policy — `fundzim_kyc` pool only), `beneficiaries`, `payouts` (payout destinations; Stage 11: withdrawal requests, eligibility engine, reservations, approvals, orchestration, reconciliation — TEST payouts only), `fees` (Stage 12: fee policies, provider fee evidence, pure calculation engine, quotes, assessments, adjustments, TEST fee journals through the ledger service, reconciliation, revenue reporting — TEST fees only), `risk` (signals, versioned model v1, routing decisions; Stage 13: configurable explainable rule engine, risk cases with immutable evidence, the central hold registry, TEST screening foundation and simulator, monitoring, reconciliation), `compliance` (compliance cases and the subject-restriction projection — `fundzim_compliance` pool only), `verification` (HTTP orchestration; owns no tables) and `campaigns` (core: lifecycle, eligibility, review, publication, public read/search; subpackages `campaigns/media` — image upload, scan, re-encode, serving — and `campaigns/updates` — owner updates and moderation; no financial state), `ledger` (Stage 10: double-entry ledger, posting engine, adjustments, periods, integrity, reconciliation — `fundzim_ledger` pool only), `psp` (Stage 8: provider registry, routing, webhook inbox, health, sandbox simulator in `psp/sandbox`; Stage 9:
 execution environments, startup gate, error categories, derived health, adapter conformance suite in `psp/psptest`) and `payments` (Stage 8: donation intents, payments, state machine, refund requests, reconciliation references; no balances or postings). `archtest/` enforces the module import graph and table ownership — register every new module there. One Go module (`github.com/Fatifizo/fundzim`) rooted at repo root. |
 | `migrations/` | Executable goose SQL migrations, embedded and run by `fundzimctl migrate` as `fundzim_migrator` (`docs/development/migrations.md`). |
 | `docs/` | Specifications. `docs/adr/` holds Architecture Decision Records. |

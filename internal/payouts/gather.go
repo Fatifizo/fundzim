@@ -10,6 +10,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/ledger"
 	"github.com/Fatifizo/fundzim/internal/platform/money"
 	"github.com/Fatifizo/fundzim/internal/psp"
+	"github.com/Fatifizo/fundzim/internal/risk"
 )
 
 // RefundExposure reads the open refund exposure of a campaign (implemented over payments in internal/app: payouts
@@ -221,6 +222,9 @@ func (s *Service) gather(ctx context.Context, phase string, sub subject) (Facts,
 	if err := s.indicators(ctx, &f, sub, d, derr == nil, now); err != nil {
 		return f, acc, nil, err
 	}
+	if err := s.riskFacts(ctx, &f, sub, acc); err != nil {
+		return f, acc, nil, err
+	}
 
 	// ledger integrity (EC-19)
 	if f.LedgerIntegrityOK, err = s.Ledger.IntegrityConfirmed(ctx); err != nil {
@@ -249,6 +253,45 @@ func (s *Service) gather(ctx context.Context, phase string, sub subject) (Facts,
 		f.AcknowledgedReviews = codes
 	}
 	return f, acc, route, nil
+}
+
+// riskFacts reads the risk module's hold registry, screening status and classification (Stage 13; fail closed: an
+// error stops the evaluation).
+func (s *Service) riskFacts(ctx context.Context, f *Facts, sub subject, acc campaigns.Access) error {
+	f.RiskHolds = []string{}
+	if s.Risk == nil {
+		return nil
+	}
+	owner, org, benef := "", "", ""
+	if acc.OwnerUserID != nil {
+		owner = *acc.OwnerUserID
+	}
+	if acc.OwnerOrgID != nil {
+		org = *acc.OwnerOrgID
+	}
+	if f.BeneficiaryID != nil {
+		benef = *f.BeneficiaryID
+	}
+	hs, err := s.Risk.WithdrawalHolds(ctx, risk.WithdrawalScope{CampaignID: sub.CampaignID, OwnerUserID: owner, OwnerOrgID: org,
+		DestinationID: sub.DestinationID, BeneficiaryID: benef})
+	if err != nil {
+		return err
+	}
+	f.RiskHolds = risk.HoldTypes(hs)
+	if f.ScreeningStatus, err = s.Risk.MostSignificantScreening(ctx, risk.HoldSubject{Type: "USER", ID: owner},
+		risk.HoldSubject{Type: "ORGANISATION", ID: org}, risk.HoldSubject{Type: "BENEFICIARY", ID: benef}); err != nil {
+		return err
+	}
+	class, err := s.Risk.HighestClassification(ctx, risk.HoldSubject{Type: "USER", ID: owner}, risk.HoldSubject{Type: "ORGANISATION", ID: org},
+		risk.HoldSubject{Type: "CAMPAIGN", ID: sub.CampaignID}, risk.HoldSubject{Type: "PAYOUT_DESTINATION", ID: sub.DestinationID},
+		risk.HoldSubject{Type: "USER", ID: sub.RequesterID})
+	if err != nil {
+		return err
+	}
+	if class == risk.ClassHigh || class == risk.ClassCritical {
+		f.Indicators = append(f.Indicators, "RISK_CLASSIFICATION_"+class)
+	}
+	return nil
 }
 
 // indicators computes the minimal Stage 11 risk rules (EC-16). A rule whose threshold is not configured is itself

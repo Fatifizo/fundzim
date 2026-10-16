@@ -3,8 +3,10 @@ package campaigns
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -110,7 +112,9 @@ func (s *Service) Create(ctx context.Context, userID string, in CreateInput) (st
 				Metadata: map[string]any{"to_status": StatusDraft, "category": in.Category}}); err != nil {
 				return err
 			}
-			return s.emit(ctx, tx, &c, "campaigns.created", map[string]any{"to_status": StatusDraft})
+			// title_hash: a hash of the normalised (public) title, for duplicate-campaign risk rules (Stage 13)
+			th := sha256.Sum256([]byte(strings.ToLower(strings.Join(strings.Fields(title), " "))))
+			return s.emit(ctx, tx, &c, "campaigns.created", map[string]any{"to_status": StatusDraft, "title_hash": hex.EncodeToString(th[:])})
 		})
 		var pg *pgconn.PgError
 		if errors.As(err, &pg) && pg.Code == "23505" && pg.ConstraintName == "uq_campaigns_public_code" {
@@ -584,6 +588,22 @@ func (s *Service) OwnerTransition(ctx context.Context, userID, id, action, reaso
 func (s *Service) publish(ctx context.Context, tx pgx.Tx, c *campaignRow, a actor, refused **Result) error {
 	if c.Status != StatusApproved {
 		return ErrInvalidStatus
+	}
+	if s.Holds != nil {
+		owner, org := "", ""
+		if c.OwnerUserID != nil {
+			owner = *c.OwnerUserID
+		}
+		if c.OwnerOrgID != nil {
+			org = *c.OwnerOrgID
+		}
+		hs, err := s.Holds.PublicationHolds(ctx, c.ID, owner, org)
+		if err != nil {
+			return err
+		}
+		if len(hs) > 0 {
+			return ErrOnHold
+		}
 	}
 	ev, err := s.Evaluate(ctx, tx, ActPublish, "", *c)
 	if err != nil {

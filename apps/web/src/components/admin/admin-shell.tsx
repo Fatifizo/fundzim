@@ -44,6 +44,14 @@ const ITEMS = [
   { href: "/admin/finance/fees/adjustments", label: "Fee adjustments" },
   { href: "/admin/finance/fees/reconciliation", label: "Fee reconciliation" },
   { href: "/admin/finance/revenue", label: "Revenue (TEST)" },
+  { href: "/admin/risk", label: "Risk", exact: true },
+  { href: "/admin/risk/signals", label: "Risk signals" },
+  { href: "/admin/risk/evaluations", label: "Risk evaluations" },
+  { href: "/admin/risk/rules", label: "Risk rules" },
+  { href: "/admin/risk/cases", label: "Risk cases" },
+  { href: "/admin/risk/holds", label: "Risk holds" },
+  { href: "/admin/risk/screening", label: "Screening (TEST)" },
+  { href: "/admin/risk/monitoring", label: "Risk monitoring" },
   { href: "/admin/account/personal-link", label: "Personal account link" },
 ] as const;
 

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strings"
@@ -30,6 +31,10 @@ const (
 	EvEmailChangeRequested       = "identity.email_change_requested"
 	EvStaffInvited               = "identity.staff_invited"
 	EvAccountSuspended           = "identity.account_suspended"
+	// Stage 13 (ADR-045): a successful sign-in, for session risk signals. Payload: user_id and ua_hash — a keyed hash of
+	// the user agent salted per user (it can only show "a new browser for this account", never link accounts); no IP
+	// address, no device fingerprint.
+	EvSignedIn = "identity.signed_in"
 	// Stage 6 (ADR-037): facts the kyc module re-evaluates BASIC_VERIFIED on, and the registration attestation
 	// (auth cannot import kyc; a kyc consumer records it). Payloads carry user_id only.
 	EvEmailVerified           = "identity.email_verified"
@@ -546,8 +551,15 @@ func (s *Service) completeLogin(w http.ResponseWriter, r *http.Request, acct use
 		if err != nil {
 			return err
 		}
-		return audit.Record(ctx, tx, audit.Event{Stream: audit.Security, Action: "auth.login.succeeded", ActorType: actorType(acct.Kind),
-			ActorID: acct.ID, TargetType: "session", TargetID: sid, Metadata: map[string]any{"method": method, "mfa": mfaAt != nil}})
+		if err := audit.Record(ctx, tx, audit.Event{Stream: audit.Security, Action: "auth.login.succeeded", ActorType: actorType(acct.Kind),
+			ActorID: acct.ID, TargetType: "session", TargetID: sid, Metadata: map[string]any{"method": method, "mfa": mfaAt != nil}}); err != nil {
+			return err
+		}
+		payload := map[string]any{"user_id": acct.ID}
+		if s.Keyed != nil {
+			payload["ua_hash"] = hex.EncodeToString(s.Keyed.Sum("risk_user_agent", acct.ID, r.UserAgent()))[:32]
+		}
+		return s.emit(ctx, tx, EvSignedIn, acct.ID, payload)
 	})
 	if err != nil {
 		httpx.WriteError(w, r, s.Logger, err)

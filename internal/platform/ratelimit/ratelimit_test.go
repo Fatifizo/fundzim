@@ -63,7 +63,7 @@ func TestDefaultPolicyValues(t *testing.T) {
 		"public.report.ip": {5, time.Hour}, "public.report.campaign": {50, time.Hour}, "public.event.ip": {120, time.Minute},
 		"payments.intent.user": {20, time.Hour}, "payments.intent.campaign": {600, time.Hour}, "payments.attempt.user": {30, time.Hour},
 		"payments.webhook.ip": {600, time.Minute}, "payouts.request.user": {10, time.Hour},
-		"fees.quote.user": {60, time.Hour},
+		"fees.quote.user": {60, time.Hour}, "risk.screening_webhook.ip": {300, time.Minute},
 	}
 	seen := map[string]bool{}
 	for _, p := range ps.All() {

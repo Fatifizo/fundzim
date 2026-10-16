@@ -86,7 +86,7 @@ var (
 	// party subjects (PRIMARY_SUBJECT / RELATED_SUBJECT) and related objects (RELATED_OBJECT)
 	PartyTypes  = map[string]bool{"USER": true, "ORGANISATION": true, "BENEFICIARY": true, "PAYOUT_DESTINATION": true, "CAMPAIGN": true}
 	ObjectTypes = map[string]bool{"KYC_CASE": true, "KYB_CASE": true, "RISK_DECISION": true, "RISK_ASSESSMENT": true, "PAYMENT": true,
-		"PAYOUT": true, "CAMPAIGN_REVIEW": true}
+		"PAYOUT": true, "CAMPAIGN_REVIEW": true, "RISK_CASE": true}
 )
 
 // Confidentiality levels.

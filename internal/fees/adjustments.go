@@ -12,6 +12,7 @@ import (
 
 	"github.com/Fatifizo/fundzim/internal/audit"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
+	"github.com/Fatifizo/fundzim/internal/platform/outbox"
 )
 
 // Fee adjustments (ADR-044 §12). Corrections are new immutable rows; an assessment is never edited. REFUND and
@@ -161,6 +162,12 @@ func (s *Service) RequestAdjustment(ctx context.Context, staffID, assessmentID s
 		}
 		if err := event(ctx, tx, "fee_adjustment", id, "ADJUSTMENT_REQUESTED", staff(staffID), map[string]any{"assessment_id": assessmentID,
 			"reason": in.Reason, "direction": in.Direction, "amount_minor": amt(amount)}, now); err != nil {
+			return err
+		}
+		// risk signal source (Stage 13, KI-S12-17): who asked for which adjustment — ids, codes and amounts only
+		if _, err := outbox.Write(ctx, tx, outbox.Event{AggregateType: "fee_adjustment", AggregateID: id, EventType: EvAdjustmentRequested,
+			Payload: map[string]any{"adjustment_id": id, "assessment_id": assessmentID, "actor_id": staffID, "reason_code": in.Reason,
+				"direction": in.Direction, "amount_minor": amt(amount), "currency": a.Currency}, CorrelationID: correlation(ctx), OccurredAt: now}); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Event{Action: "fee.adjustment.requested", TargetType: "fee_adjustment", TargetID: id,

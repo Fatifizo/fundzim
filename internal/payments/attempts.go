@@ -193,6 +193,9 @@ func (s *Service) CreateAttempt(ctx context.Context, donorID, donationID, idemKe
 	if err != nil {
 		return PaymentAttempt{}, err
 	}
+	if err := s.checkHolds(ctx, d.CampaignID, donorID); err != nil {
+		return PaymentAttempt{}, err
+	}
 	if err := s.checkCurrency(ctx, target, d.Currency); err != nil {
 		return PaymentAttempt{}, err
 	}

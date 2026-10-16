@@ -28,9 +28,12 @@ const (
 	subjectKYCCase              = "KYC_CASE"
 )
 
-// ConsumedEvents lists every event type the risk consumer subscribes to.
+// ConsumedEvents lists every event type the risk consumer subscribes to (Stage 5, then Stage 13).
 var ConsumedEvents = []string{EvStorageObjectScanned, EvKYCCaseRejected, EvKYCDuplicateIdentity, EvBeneficiaryRejected,
-	EvBeneficiaryEscalated, EvPayoutDestinationChanged, EvPayoutDestinationRejected}
+	EvBeneficiaryEscalated, EvPayoutDestinationChanged, EvPayoutDestinationRejected,
+	EvCampaignCreated, EvCampaignReportEscal, EvCampaignReviewEscal, EvDonationIntentCreated, EvPaymentStatusChanged, EvPaymentContradiction,
+	EvPayoutRequested, EvPayoutStatusChanged, EvMFAChanged, EvPasswordChanged, EvPasswordResetRequested, EvAccountSuspended, EvSignedIn,
+	EvRestrictionApplied, EvFeePolicyChanged, EvFeeAdjustmentRequested}
 
 // ErrInvalidPayload marks an event whose payload cannot yield a signal (missing or malformed ids/codes).
 var ErrInvalidPayload = errors.New("risk: invalid event payload")
@@ -96,6 +99,9 @@ func shortCode(s string) string {
 // no risk fact (e.g. a CLEAN scan result) or when the payload lacks what the signal needs: the latter returns
 // ErrInvalidPayload so the caller can log it (retrying cannot fix a payload).
 func SignalFromEvent(d outbox.Delivery) (sig Signal, ok bool, err error) {
+	if s, ok, handled, err := signalFromV2Event(d); handled {
+		return s, ok, err
+	}
 	var p payload
 	if err := json.Unmarshal(d.Payload, &p); err != nil {
 		return Signal{}, false, fmt.Errorf("%w: %v", ErrInvalidPayload, err)

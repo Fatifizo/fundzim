@@ -41,6 +41,15 @@ type Service struct {
 	Pool   *pgxpool.Pool // app pool (fundzim_app in the API, fundzim_worker in the worker)
 	Clock  clock.Clock
 	Logger *slog.Logger
+	// Identities resolves linked staff/personal accounts (kyc.Service.ActorIdentities, wired in internal/app); nil: the
+	// actor alone (the database guards still check app.actor_identities).
+	Identities Identities
+	// Staff checks an assignee's permission (auth.Service.StaffHasPermission; nil: self-assignment only).
+	Staff StaffChecker
+	// Screening is the screening provider (the TEST sandbox simulator only; nil: screening unavailable).
+	Screening ScreeningProvider
+	// ScreeningKey signs simulator callbacks (derived from the platform key; empty: callbacks refused).
+	ScreeningKey []byte
 }
 
 // New returns the risk service.
@@ -65,6 +74,41 @@ type Signal struct {
 	SourceEventType string         `json:"source_event_type"`
 	ObservedAt      time.Time      `json:"observed_at"`
 	Facts           map[string]any `json:"facts"`
+	// Stage 13 (ADR-045 §1): normalised attributes. Empty values default from the signal catalogue.
+	Category      string `json:"category"`
+	Severity      string `json:"severity"`
+	Confidence    int    `json:"confidence"`
+	Kind          string `json:"kind"`
+	CorrelationID string `json:"correlation_id,omitempty"`
+	EvidenceRef   string `json:"evidence_ref,omitempty"`
+	DerivedBy     string `json:"derived_by_rule_version_id,omitempty"`
+}
+
+// normalise fills a signal's catalogue attributes; an unknown signal type is refused.
+func (sig *Signal) normalise() error {
+	meta := SignalMetaOf(sig.Type)
+	if !meta.Known {
+		return fmt.Errorf("%w: unknown signal type %q", ErrInvalidPayload, sig.Type)
+	}
+	if sig.Category == "" {
+		sig.Category = meta.Category
+	}
+	if sig.Severity == "" {
+		sig.Severity = meta.Severity
+	}
+	if sig.Confidence <= 0 || sig.Confidence > 100 {
+		sig.Confidence = meta.Confidence
+	}
+	if sig.Kind == "" {
+		sig.Kind = KindObserved
+	}
+	if (sig.Kind == KindDerived) != (sig.DerivedBy != "") {
+		return fmt.Errorf("%w: a derived signal names its rule version", ErrInvalidPayload)
+	}
+	if len(sig.CorrelationID) > 128 {
+		sig.CorrelationID = ""
+	}
+	return nil
 }
 
 // Decision is a routing decision.
@@ -165,6 +209,13 @@ type Outcome struct {
 	Rating       string
 	Score        int
 	EventID      string // risk.escalation_recommended outbox id when ESCALATE
+	// Stage 13 engine (empty when no ACTIVE rule applies to the subject type)
+	EvaluationID      string
+	Score2            int
+	Classification    string
+	RecommendedAction string
+	CaseID            string
+	HoldID            string
 }
 
 // RecordSignal records one signal and, if it is new, reassesses its subject and records the decision, all in
@@ -173,38 +224,51 @@ func (s *Service) RecordSignal(ctx context.Context, sig Signal) (Outcome, error)
 	if err := validateSignal(sig); err != nil {
 		return Outcome{}, err
 	}
+	if err := sig.normalise(); err != nil {
+		return Outcome{}, err
+	}
 	var out Outcome
 	err := db.WithTx(ctx, s.Pool, db.TxOptions{}, func(ctx context.Context, tx pgx.Tx) error {
 		out = Outcome{}
-		// one assessment at a time per subject, so concurrent signals never compute from a stale count
-		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('risk:' || $1 || ':' || $2, 0))`,
-			sig.SubjectType, sig.SubjectID); err != nil {
-			return err
-		}
-		facts, err := json.Marshal(nonNil(sig.Facts))
-		if err != nil {
-			return err
-		}
-		sigID := ids.New()
-		tag, err := tx.Exec(ctx, `INSERT INTO risk.risk_signals (id, signal_type, subject_type, subject_id, source_module, source_event_id,
-			source_event_type, observed_at, facts, recorded_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			ON CONFLICT (source_event_id, signal_type) DO NOTHING`,
-			sigID, sig.Type, sig.SubjectType, sig.SubjectID, sig.SourceModule, sig.SourceEventID, sig.SourceEventType, sig.ObservedAt.UTC(),
-			facts, s.Clock.Now())
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			out.Duplicate = true
-			return nil
-		}
-		out.SignalID = sigID
-		if !assessable[sig.SubjectType] {
-			return nil
-		}
-		return s.assess(ctx, tx, sig.SubjectType, sig.SubjectID, sigID, &out)
+		return s.recordSignalTx(ctx, tx, sig, &out)
 	})
 	return out, err
+}
+
+// recordSignalTx records a validated, normalised signal in tx (see RecordSignal).
+func (s *Service) recordSignalTx(ctx context.Context, tx pgx.Tx, sig Signal, out *Outcome) error {
+	// one assessment at a time per subject, so concurrent signals never compute from a stale count
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('risk:' || $1 || ':' || $2, 0))`,
+		sig.SubjectType, sig.SubjectID); err != nil {
+		return err
+	}
+	facts, err := json.Marshal(nonNil(sig.Facts))
+	if err != nil {
+		return err
+	}
+	sigID := ids.New()
+	tag, err := tx.Exec(ctx, `INSERT INTO risk.risk_signals (id, signal_type, subject_type, subject_id, source_module, source_event_id,
+		source_event_type, observed_at, facts, recorded_at, category, severity, confidence, kind, correlation_id, evidence_ref,
+		derived_by_rule_version_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, nullif($15, ''), nullif($16, ''),
+		nullif($17, '')::uuid)
+		ON CONFLICT (source_event_id, signal_type) DO NOTHING`,
+		sigID, sig.Type, sig.SubjectType, sig.SubjectID, sig.SourceModule, sig.SourceEventID, sig.SourceEventType, sig.ObservedAt.UTC(),
+		facts, s.Clock.Now(), sig.Category, sig.Severity, sig.Confidence, sig.Kind, sig.CorrelationID, sig.EvidenceRef, sig.DerivedBy)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		out.Duplicate = true
+		return nil
+	}
+	out.SignalID = sigID
+	if assessable[sig.SubjectType] && SignalMetaOf(sig.Type).modelV1 {
+		if err := s.assess(ctx, tx, sig.SubjectType, sig.SubjectID, sigID, out); err != nil {
+			return err
+		}
+	}
+	// Stage 13: the configurable engine evaluates the subject against its ACTIVE rule versions (same transaction)
+	return s.evaluateSignal(ctx, tx, sig, sigID, out)
 }
 
 func (s *Service) assess(ctx context.Context, tx pgx.Tx, subjectType, subjectID, triggerSignalID string, out *Outcome) error {

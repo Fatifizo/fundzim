@@ -92,6 +92,8 @@ type VerificationModules struct {
 
 	// Stage 12 fees (internal/app/fees.go, ADR-044)
 	Fees *fees.Service
+	// Stage 13 risk screening simulator (internal/app/risk.go, ADR-045); nil unless RISK_SCREENING_SANDBOX_ENABLED
+	RiskSandbox *risk.SandboxScreening
 }
 
 // Close closes the restricted pools.
@@ -231,6 +233,7 @@ func NewVerificationModules(ctx context.Context, d VerificationDeps) (*Verificat
 	}
 	newPayouts(m, d) // Stage 11 (ADR-043)
 	newFees(m, d)    // Stage 12 (ADR-044)
+	newRisk(m, d)    // Stage 13 (ADR-045)
 	return m, nil
 }
 

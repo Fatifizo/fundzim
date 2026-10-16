@@ -16,6 +16,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/audit"
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
+	"github.com/Fatifizo/fundzim/internal/platform/outbox"
 )
 
 // Fee policies (ADR-044 §3–§5). A policy is an immutable scope; its versions carry the terms. Terms are editable
@@ -671,6 +672,9 @@ func (s *Service) Submit(ctx context.Context, staffID, versionID string) (Versio
 		if err := event(ctx, tx, "fee_policy_version", versionID, "VERSION_SUBMITTED", staff(staffID), map[string]any{"terms_hash": hexs(h[:])}, now); err != nil {
 			return err
 		}
+		if err := versionChanged(ctx, tx, versionID, staffID, "SUBMITTED", now); err != nil {
+			return err
+		}
 		return audit.Record(ctx, tx, audit.Event{Action: "fee.policy_version.submitted", TargetType: "fee_policy_version", TargetID: versionID})
 	})
 	if err != nil {
@@ -733,6 +737,9 @@ func (s *Service) decide(ctx context.Context, staffID string, stepUpAt time.Time
 			ev, action = "VERSION_REJECTED", "fee.policy_version.rejected"
 		}
 		if err := event(ctx, tx, "fee_policy_version", versionID, ev, staff(staffID), map[string]any{"reason": r}, now); err != nil {
+			return err
+		}
+		if err := versionChanged(ctx, tx, versionID, staffID, strings.TrimPrefix(ev, "VERSION_"), now); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Event{Action: action, TargetType: "fee_policy_version", TargetID: versionID, Reason: r})
@@ -849,6 +856,9 @@ func (s *Service) lifecycle(ctx context.Context, staffID string, stepUpAt time.T
 			map[string]any{"reason": r, "quotes_invalidated": n}, now); err != nil {
 			return err
 		}
+		if err := versionChanged(ctx, tx, versionID, staffID, pastTense[action], now); err != nil {
+			return err
+		}
 		return audit.Record(ctx, tx, audit.Event{Action: "fee.policy_version." + strings.ToLower(pastTense[action]), TargetType: "fee_policy_version",
 			TargetID: versionID, Reason: r, Metadata: map[string]any{"quotes_invalidated": n}})
 	})
@@ -856,6 +866,18 @@ func (s *Service) lifecycle(ctx context.Context, staffID string, stepUpAt time.T
 		return Version{}, err
 	}
 	return s.Version(ctx, versionID)
+}
+
+// Fee events for the risk module (Stage 13, KI-S12-17): ids and codes only.
+const (
+	EvPolicyVersionChanged = "fees.policy_version_changed"
+	EvAdjustmentRequested  = "fees.adjustment_requested"
+)
+
+func versionChanged(ctx context.Context, tx pgx.Tx, versionID, staffID, action string, now time.Time) error {
+	_, err := outbox.Write(ctx, tx, outbox.Event{AggregateType: "fee_policy_version", AggregateID: versionID, EventType: EvPolicyVersionChanged,
+		Payload: map[string]any{"version_id": versionID, "actor_id": staffID, "action": action}, CorrelationID: correlation(ctx), OccurredAt: now})
+	return err
 }
 
 // invalidateQuotes marks the ACTIVE quotes in a currency INVALIDATED (a policy they depend on may have changed).

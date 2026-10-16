@@ -43,6 +43,7 @@ type Policies struct {
 	PaymentsWebhookIP        Policy // payments.webhook.ip — webhook deliveries per client IP (Stage 8)
 	PayoutsRequestUser       Policy // payouts.request.user — withdrawal requests and cancellations per user (Stage 11)
 	FeesQuoteUser            Policy // fees.quote.user — fee quotes per user (Stage 12)
+	ScreeningWebhookIP       Policy // risk.screening_webhook.ip — screening callbacks per client IP (Stage 13)
 }
 
 // DefaultPolicies returns the Stage 4 starting values.
@@ -73,6 +74,7 @@ func DefaultPolicies() Policies {
 		PaymentsWebhookIP:        Policy{Name: "payments.webhook.ip", Limit: 600, Window: time.Minute, Protective: true},
 		PayoutsRequestUser:       Policy{Name: "payouts.request.user", Limit: 10, Window: time.Hour, Protective: true},
 		FeesQuoteUser:            Policy{Name: "fees.quote.user", Limit: 60, Window: time.Hour, Protective: true},
+		ScreeningWebhookIP:       Policy{Name: "risk.screening_webhook.ip", Limit: 300, Window: time.Minute, Protective: true},
 	}
 }
 
@@ -82,7 +84,7 @@ func (ps Policies) All() []Policy {
 		ps.AuthPasswordResetAccount, ps.AuthVerifyResendAccount, ps.AuthMFAChallenge, ps.AuthOTPSendPhone,
 		ps.AuthOTPSendUser, ps.AuthOTPVerify, ps.AuthStepUp, ps.AuthTokenIP, ps.AuthVerifyResendIP, ps.PublicReportIP,
 		ps.PublicReportCampaign, ps.PublicEventIP, ps.PaymentsIntentUser, ps.PaymentsIntentCampaign, ps.PaymentsAttemptUser,
-		ps.PaymentsWebhookIP, ps.PayoutsRequestUser, ps.FeesQuoteUser}
+		ps.PaymentsWebhookIP, ps.PayoutsRequestUser, ps.FeesQuoteUser, ps.ScreeningWebhookIP}
 }
 
 // Validate checks every policy.

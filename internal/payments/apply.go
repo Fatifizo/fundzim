@@ -241,9 +241,19 @@ func (s *Service) transition(ctx context.Context, tx pgx.Tx, p *payRow, o Obs) (
 	p.Status, p.UnknownSince, p.UnknownReason, p.NextPollAt, p.PollHorizonAt, p.FailureCode = to, set.unknownSince, set.unknownReason,
 		set.nextPoll, set.horizon, set.failure
 	p.Version++
+	payload := map[string]any{"payment_id": p.ID, "donation_intent_id": p.DonationIntentID, "from": from, "to": to, "source": o.Source,
+		"simulated": p.Simulated, "execution_environment": p.ExecEnv, "test_payment": p.ExecEnv != psp.ExecProduction}
+	if to == psp.StatusFailed {
+		// risk signals (Stage 13): who tried to pay which campaign — ids only
+		var donor, campaign string
+		if err := tx.QueryRow(ctx, `SELECT donor_user_id::text, campaign_id::text FROM app.donation_intents WHERE id = $1`, p.DonationIntentID).
+			Scan(&donor, &campaign); err != nil {
+			return Outcome{}, err
+		}
+		payload["donor_user_id"], payload["campaign_id"] = donor, campaign
+	}
 	if _, err := outbox.Write(ctx, tx, outbox.Event{AggregateType: "payment", AggregateID: p.ID, EventType: "payments.payment_status_changed",
-		Payload: map[string]any{"payment_id": p.ID, "donation_intent_id": p.DonationIntentID, "from": from, "to": to, "source": o.Source,
-			"simulated": p.Simulated, "execution_environment": p.ExecEnv, "test_payment": p.ExecEnv != psp.ExecProduction},
+		Payload:       payload,
 		CorrelationID: o.Correlation, OccurredAt: now}); err != nil {
 		return Outcome{}, err
 	}

@@ -456,6 +456,16 @@ Notes on ordering:
 - **Acceptance criteria:** High-risk payouts are held automatically; every automated action is explainable and
   audited.
 
+- **Stage 13 as delivered (2026-10-15, awaiting acceptance):** normalised signals, an explainable configurable rule engine
+  with maker-checker versions, evaluations with stored explanations, risk cases with immutable evidence and escalation to
+  compliance, a central hold registry enforced at publication, donations and payouts (payout eligibility v2), a
+  provider-neutral screening foundation with a TEST simulator, monitoring, reconciliation, reporting and a staff portal
+  ([stage-13/implementation.md](stage-13/implementation.md), ADR-045). **Deviations:** no screening provider (production
+  screening BLOCKED; synthetic references only; screening tables in `risk`, not `compliance`); no rule is seeded (high-risk
+  payouts are held automatically only once approved rules ask for it); no device/IP signals (no privacy basis; a keyed
+  per-user user-agent hash only); no card-testing defences (no provider signals); no suspicious-transaction report
+  workflow (LR-008 open: escalation ends in a compliance case).
+
 ## Stage 14 — Administration & Operations Portal
 
 - **Objective:** Staff tooling for review, support, compliance, finance and administration.

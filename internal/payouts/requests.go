@@ -76,6 +76,7 @@ var (
 	ErrPayoutNotFound    = errs.New(errs.NotFound, "PAYOUT_REQUEST_NOT_FOUND", "No such payout request.")
 	ErrNotEligible       = errs.New(errs.Unprocessable, "PAYOUT_NOT_ELIGIBLE", "A payout cannot be requested right now.")
 	ErrInProgress        = errs.New(errs.Conflict, "PAYOUT_IN_PROGRESS", "Another payout for this campaign and currency is in progress.")
+	ErrRiskHold          = errs.New(errs.Conflict, "PAYOUT_RISK_HOLD", "An active risk hold covers this payout; it cannot be approved until the hold is released.")
 	ErrPayoutState       = errs.New(errs.Conflict, "PAYOUT_STATE", "This action is not allowed in the payout's current status.")
 	ErrIdempotencyReused = errs.New(errs.Conflict, "IDEMPOTENCY_KEY_REUSED", "This Idempotency-Key was used for a different payout request.")
 	ErrStepUp            = errs.New(errs.Forbidden, "STEP_UP_REQUIRED", "Confirm it's you to continue.")
@@ -285,7 +286,8 @@ func (s *Service) move(ctx context.Context, tx pgx.Tx, p *Payout, to string, e e
 		return err
 	}
 	if _, err := outbox.Write(ctx, tx, outbox.Event{AggregateType: "payout_request", AggregateID: p.ID, EventType: "payouts.status_changed",
-		Payload:       map[string]any{"payout_request_id": p.ID, "campaign_id": p.CampaignID, "from": p.Status, "to": to, "test_payout": p.TestPayout},
+		Payload: map[string]any{"payout_request_id": p.ID, "campaign_id": p.CampaignID, "from": p.Status, "to": to, "test_payout": p.TestPayout,
+			"requested_by": p.RequestedBy},
 		CorrelationID: httpx.RequestID(ctx), OccurredAt: s.now()}); err != nil {
 		return err
 	}
@@ -466,7 +468,7 @@ func (s *Service) RequestPayout(ctx context.Context, actorID string, stepUpFresh
 		}
 		_, err = outbox.Write(ctx, tx, outbox.Event{AggregateType: "payout_request", AggregateID: id, EventType: "payouts.requested",
 			Payload: map[string]any{"payout_request_id": id, "campaign_id": campaignID, "currency": in.Currency, "amount_minor": in.AmountMinor,
-				"test_payout": true}, CorrelationID: httpx.RequestID(ctx), OccurredAt: s.now()})
+				"test_payout": true, "requested_by": actorID, "destination_id": in.DestinationID}, CorrelationID: httpx.RequestID(ctx), OccurredAt: s.now()})
 		return err
 	})
 	if err != nil {

@@ -61,6 +61,7 @@ func NewRouter(d *Deps, checker *health.Checker) *httpx.Router {
 		registerLedgerRoutes(r, d.Verification, d.Idempotency, d.Logger)             // Stage 10 (ADR-042)
 		registerPayoutRoutes(r, d.Verification, d.Idempotency, d.Limiter, d.Logger)  // Stage 11 (ADR-043)
 		registerFeeRoutes(r, d.Verification, d.Idempotency, d.Limiter, d.Logger)     // Stage 12 (ADR-044)
+		registerRiskRoutes(r, d.Verification, d.Idempotency, d.Limiter, d.Logger)    // Stage 13 (ADR-045)
 	}
 	return r
 }

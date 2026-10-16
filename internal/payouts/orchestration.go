@@ -15,6 +15,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/httpx"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
 	"github.com/Fatifizo/fundzim/internal/psp"
+	"github.com/Fatifizo/fundzim/internal/risk"
 )
 
 // Orchestration (payout-lifecycle.md §3–§5; ADR-043 §6): approvals → pre-submission re-check → SUBMITTED (journal
@@ -98,6 +99,24 @@ func (s *Service) decide(ctx context.Context, staffID string, stepUpAt time.Time
 				} else if role != "" {
 					return ErrSelfApproval // a member of the owning organisation never approves its payout
 				}
+			}
+		}
+		if decision == "APPROVE" && s.Risk != nil {
+			// a payout under an enforced risk hold is never approved (Stage 13; the hold is released by its own maker-checker)
+			owner, org := "", ""
+			if p.OwnerUserID != nil {
+				owner = *p.OwnerUserID
+			}
+			if p.OwnerOrganisationID != nil {
+				org = *p.OwnerOrganisationID
+			}
+			hs, err := s.Risk.WithdrawalHolds(ctx, risk.WithdrawalScope{CampaignID: p.CampaignID, OwnerUserID: owner, OwnerOrgID: org,
+				DestinationID: p.DestinationID})
+			if err != nil {
+				return err
+			}
+			if len(hs) > 0 {
+				return ErrRiskHold
 			}
 		}
 		if _, err := tx.Exec(ctx, `SAVEPOINT approve`); err != nil {
@@ -330,7 +349,7 @@ func (s *Service) SubmitApproved(ctx context.Context, id string) (bool, error) {
 			}
 			return s.move(ctx, tx, &cur, StReview, event{Type: "APPROVALS_INVALIDATED", Code: "Y7", DecisionID: did, Reason: "EC-22"},
 				`approval_round = approval_round + 1`)
-		case failed["EC-01"] || failed["EC-12"] || failed["EC-13"]:
+		case failed["EC-01"] || failed["EC-12"] || failed["EC-13"] || failed["EC-15"]:
 			if err := s.openException(ctx, tx, "COMPLIANCE_HOLD", "SEV2", "ELIGIBILITY", &cur, "", map[string]any{"decision_id": did}, ""); err != nil {
 				return err
 			}

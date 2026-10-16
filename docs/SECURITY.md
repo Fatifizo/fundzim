@@ -539,6 +539,18 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 > repeated after one may have reached the provider; owner-facing refusals reveal no compliance or risk detail. Full review:
 > [stage-11/security-review.md](stage-11/security-review.md).
 
+## 21h. Risk security (Stage 13, summary)
+
+> **Stage 13 as built ([ADR-045](adr/ADR-045-risk-engine-cases-holds-screening.md)):** risk routes are staff-only
+> (`risk.operations.view` to read; separate maker and checker permissions for rules, holds, cases and screening; every
+> mutation needs step-up); rule versions, holds, case decisions and screening reviews are maker-checker with linked-identity
+> separation of duties in Go and the database; nobody works or releases a record about themselves; rules are declarative
+> (no code) and immutable after submission (hashed, bound at approval); evaluations, evidence (SHA-256 over canonical JSON),
+> reviews and histories are append-only; automated enforcement is limited to ≤ 7-day payout-protective holds with a case;
+> screening callbacks are HMAC-verified with a replay window and rate limit; risk data holds ids and codes only (keyed
+> per-user user-agent hash; no IP or device fingerprint); owners never see scores or holds. Full review:
+> [stage-13/security-review.md](stage-13/security-review.md).
+
 ## 21g. Fee security (Stage 12, summary)
 
 > **Stage 12 as built ([ADR-044](adr/ADR-044-fees-and-platform-revenue.md)):** TEST fees only (constant and CHECKs);

@@ -14,7 +14,9 @@ import (
 // (app.payout_eligibility_decisions; the database re-validates the result set and outcome).
 
 // EngineVersion identifies this engine's rules in every decision record.
-const EngineVersion = "payout-eligibility-v1"
+// v2 (Stage 13): EC-12 reads the risk hold registry, EC-15 the (TEST) screening status, EC-16 the risk engine's
+// classification.
+const EngineVersion = "payout-eligibility-v2"
 
 // Check results.
 const (
@@ -122,8 +124,12 @@ type Facts struct {
 	RejectingApprovals  int      `json:"rejecting_approvals"`
 	AcknowledgedReviews []string `json:"acknowledged_reviews,omitempty"` // review codes the approvers saw (PRE_SUBMIT)
 
-	// risk indicators (EC-16; Stage 13 replaces with a scored model behind the same interface)
+	// risk indicators (EC-16): the Stage 11 rules plus the risk engine's classification (Stage 13)
 	Indicators []string `json:"risk_indicators"`
+	// RiskHolds are the types of the enforced risk holds on the campaign, owner, destination or beneficiary (EC-12)
+	RiskHolds []string `json:"risk_holds"`
+	// ScreeningStatus is the most significant TEST screening status of the owner and beneficiary (EC-15)
+	ScreeningStatus string `json:"screening_status,omitempty"`
 	// first payout of an organisation campaign (always DUAL)
 	FirstOrgPayout bool `json:"first_organisation_payout"`
 }
@@ -321,9 +327,11 @@ func Evaluate(f Facts) Decision {
 	} else {
 		add("EC-11", Pass, "")
 	}
-	// EC-12 blocking holds: frozen/suspended campaign, frozen ledger account, suspended destination. No hold
-	// registry exists yet (risk.holds is not built: KI-S11); campaign and account states are the holds we have.
+	// EC-12 blocking holds: frozen/suspended campaign, frozen ledger account, suspended destination, and (Stage 13) any
+	// enforced hold in the risk hold registry. The detail never names the hold (owners see a coarse category).
 	switch {
+	case len(f.RiskHolds) > 0:
+		add("EC-12", Fail, "RISK_HOLD")
 	case f.CampaignStatus == "SUSPENDED" || f.CampaignStatus == "FROZEN":
 		add("EC-12", Fail, "CAMPAIGN_HOLD")
 	case f.PayableAccountStatus == "FROZEN" || f.PayableAccountStatus == "CLOSED":
@@ -345,12 +353,22 @@ func Evaluate(f Facts) Decision {
 	add("EC-14", NA, "NO_DISPUTE_SOURCE")
 	// EC-15 sanctions/PEP screening: no screening provider (KI-S5-04). A TEST payout records NOT_APPLICABLE; any
 	// other payout fails (production payouts are impossible in Stage 11 anyway).
-	if f.TestMode {
-		add("EC-15", NA, "SCREENING_PROVIDER_NOT_SELECTED_TEST_PAYOUT")
-	} else {
+	// Stage 13: the TEST screening foundation exists; an open potential match routes to review and an analyst-confirmed
+	// (TEST) match blocks until compliance decides. Nothing here is a screening of a real person.
+	switch {
+	case !f.TestMode:
 		add("EC-15", Fail, "SCREENING_PROVIDER_NOT_SELECTED")
+	case f.ScreeningStatus == "CONFIRMED_MATCH":
+		add("EC-15", Fail, "SCREENING_MATCH_UNDER_COMPLIANCE_REVIEW")
+	case f.ScreeningStatus == "POTENTIAL_MATCH" || f.ScreeningStatus == "REVIEW_REQUIRED":
+		add("EC-15", Review, "SCREENING_REVIEW_PENDING")
+	case f.ScreeningStatus == "PENDING" || f.ScreeningStatus == "ERROR":
+		// a requested screening without a result is never treated as clear (fail closed)
+		add("EC-15", Review, "SCREENING_RESULT_UNAVAILABLE")
+	default:
+		add("EC-15", NA, "SCREENING_PROVIDER_NOT_SELECTED_TEST_PAYOUT")
 	}
-	// EC-16 risk indicators (minimal rules; Stage 13 replaces them)
+	// EC-16 risk indicators (Stage 11 rules plus a HIGH/CRITICAL risk classification): review, never an outright refusal
 	if len(f.Indicators) > 0 {
 		add("EC-16", Review, "RISK_INDICATORS")
 	} else {

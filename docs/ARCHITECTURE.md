@@ -26,9 +26,13 @@
 > **Stage 12 (ADR-044):** fee policies (maker-checker), exact fee calculation, quotes, assessments, adjustments, fee
 > reconciliation and revenue reporting exist for **TEST fees only** ([stage-12/fee-architecture.md](stage-12/fee-architecture.md));
 > `fees` posts its TEST_ONLY journals through `ledger.Service` (it may import `ledger`).
+> **Stage 13 (ADR-045):** `risk` adds a configurable, explainable rule engine on the Stage 5 signal store, risk cases with
+> immutable evidence, the central hold registry (enforced by campaigns, payments and payouts through `risk`'s public
+> service) and a TEST-only screening foundation ([stage-13/risk-architecture.md](stage-13/risk-architecture.md)); `risk`
+> stays a leaf module (platform, audit).
 > **Not yet built:** real provider integrations (payments and payouts run only through the sandbox simulator), production ledger
 > posting, real payout execution, real fee charging and revenue recognition, refund execution, disputes, settlement reconciliation, identity /
-> screening / account-lookup provider integrations, tracing export. Details:
+> screening (foundation and TEST simulator only) / account-lookup provider integrations, tracing export. Details:
 > [stage-7/implementation.md](stage-7/implementation.md), [stage-6/implementation.md](stage-6/implementation.md),
 > [stage-5/implementation.md](stage-5/implementation.md) (Stage 4: [stage-4/implementation.md](stage-4/implementation.md);
 > Stage 3: [stage-3/implementation.md](stage-3/implementation.md)).

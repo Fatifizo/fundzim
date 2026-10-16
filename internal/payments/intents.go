@@ -157,6 +157,9 @@ func (s *Service) CreateIntent(ctx context.Context, donorID, idemKey, corr strin
 	if err != nil {
 		return DonationIntent{}, err
 	}
+	if err := s.checkHolds(ctx, in.CampaignID, donorID); err != nil {
+		return DonationIntent{}, err
+	}
 	if err := s.checkCurrency(ctx, target, in.Currency); err != nil {
 		return DonationIntent{}, err
 	}
@@ -220,7 +223,8 @@ func (s *Service) CreateIntent(ctx context.Context, donorID, idemKey, corr strin
 		}
 		if _, err := outbox.Write(ctx, tx, outbox.Event{AggregateType: "donation_intent", AggregateID: d.ID,
 			EventType: "payments.donation_intent_created", Payload: map[string]any{"donation_intent_id": d.ID, "campaign_id": d.CampaignID,
-				"simulated": d.Simulated, "execution_environment": d.ExecEnv}, CorrelationID: d.Correlation, OccurredAt: now}); err != nil {
+				"donor_user_id": d.DonorID, "amount_minor": strconv.FormatInt(d.Amount, 10), "currency": d.Currency, "simulated": d.Simulated,
+				"execution_environment": d.ExecEnv}, CorrelationID: d.Correlation, OccurredAt: now}); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Event{Action: "payments.donation_intent.created", ActorType: "user", ActorID: donorID,
@@ -418,6 +422,21 @@ func (s *Service) CancelIntent(ctx context.Context, donorID, id string) (Donatio
 }
 
 // blockingAttempt refuses a new attempt or a cancellation while a payment is unknown, live or succeeded.
+// checkHolds refuses a donation while a risk hold covers the campaign or the donor (Stage 13).
+func (s *Service) checkHolds(ctx context.Context, campaignID, donorID string) error {
+	if s.Holds == nil {
+		return nil
+	}
+	hs, err := s.Holds.DonationHolds(ctx, campaignID, donorID)
+	if err != nil {
+		return err
+	}
+	if len(hs) > 0 {
+		return ErrDonationsOnHold
+	}
+	return nil
+}
+
 func (s *Service) blockingAttempt(ctx context.Context, tx pgx.Tx, donationID string) error {
 	rows, err := tx.Query(ctx, `SELECT status FROM app.payment_intents WHERE donation_intent_id = $1`, donationID)
 	if err != nil {
