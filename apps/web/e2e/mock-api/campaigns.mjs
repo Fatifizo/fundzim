@@ -35,7 +35,7 @@ const CURRENCIES = [
 ];
 
 /** Stage 6 permissions per role (contract §8 + the Stage 4 seed). KYC_REVIEWER has none of these. */
-const ROLE_PERMISSIONS = {
+export const ROLE_PERMISSIONS = {
   REVIEWER: ["campaign.view", "campaign.review", "campaign.decide", "campaign.suspend", "campaign.unsuspend", "campaign.publish"],
   COMPLIANCE: ["campaign.view", "campaign.review", "campaign.decide", "campaign.decide.high", "campaign.suspend", "campaign.unsuspend", "campaign.publish", "campaign.feature"],
   ADMIN: ["campaign.view", "content.moderate", "campaign.category.manage", "campaign.feature"],

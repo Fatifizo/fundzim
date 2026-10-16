@@ -11,7 +11,7 @@ const MALWARE_MARKER = "FUNDZIM-MOCK-MALWARE-MARKER";
 const TICKET_TTL_MS = 60_000;
 
 /** Mirrors contract §7.1 (+ Stage 4 seed). SUPPORT/ADMIN/SUPER_ADMIN hold none of these. */
-const ROLE_PERMISSIONS = {
+export const ROLE_PERMISSIONS = {
   KYC_REVIEWER: ["kyc.case.review", "kyc.document.view", "kyc.decision.record", "beneficiary.verification.decide", "org.verification.decide", "payout_destination.verify", "risk.view"],
   COMPLIANCE: ["kyc.document.view", "kyc.identity_number.reveal", "kyc.decision.record", "payout_destination.verify", "risk.view", "compliance.case.view", "case.manage", "case.create"],
 };

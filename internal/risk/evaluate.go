@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -32,32 +33,73 @@ const (
 
 var priorityRank = map[string]int{"P1": 1, "P2": 2, "P3": 3, "P4": 4}
 
-// activeRules loads the ACTIVE rule versions that apply to a subject type.
-func activeRules(ctx context.Context, q pgx.Tx, subjectType string) ([]RuleInput, error) {
+// ruleFailure is an ACTIVE rule version the engine cannot run (fault isolation, KI-S13-11).
+type ruleFailure struct {
+	VersionID, Code, Detail string
+}
+
+// activeRules loads the ACTIVE rule versions that apply to a subject type. A version the engine cannot run (an
+// unparseable definition, another engine version) is returned as a failure instead of failing the whole evaluation:
+// the other rules still run and the failure is recorded and surfaced (ADR-046 §8).
+func activeRules(ctx context.Context, q pgx.Tx, subjectType string) ([]RuleInput, []ruleFailure, error) {
 	rows, err := q.Query(ctx, `SELECT v.id, r.code, r.name, v.definition, v.contribution, v.severity, v.recommended_action,
-		coalesce(v.hold_type, ''), coalesce(v.hold_duration_seconds, 0), v.case_priority
+		coalesce(v.hold_type, ''), coalesce(v.hold_duration_seconds, 0), v.case_priority, v.engine_version
 		FROM risk.risk_rule_versions v JOIN risk.risk_rules r ON r.id = v.rule_id
 		WHERE v.status = 'ACTIVE' AND r.subject_type = $1 ORDER BY r.code`, subjectType)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer rows.Close()
 	var out []RuleInput
+	var failed []ruleFailure
 	for rows.Next() {
 		var r RuleInput
 		var raw []byte
 		var secs int
-		if err := rows.Scan(&r.VersionID, &r.RuleCode, &r.RuleName, &raw, &r.Contribution, &r.Severity, &r.Action, &r.HoldType, &secs, &r.Priority); err != nil {
-			return nil, err
+		var engine string
+		if err := rows.Scan(&r.VersionID, &r.RuleCode, &r.RuleName, &raw, &r.Contribution, &r.Severity, &r.Action, &r.HoldType, &secs, &r.Priority,
+			&engine); err != nil {
+			return nil, nil, err
+		}
+		if engine != EngineVersion {
+			failed = append(failed, ruleFailure{r.VersionID, "ENGINE_VERSION_MISMATCH", "rule engine " + engine + ", running " + EngineVersion})
+			continue
 		}
 		d, err := ParseDefinition(raw, func(s string) bool { return SignalMetaOf(s).Known })
 		if err != nil {
-			return nil, err // an active definition always validated at submission; a failure here is a rule engine error
+			failed = append(failed, ruleFailure{r.VersionID, "UNPARSEABLE_DEFINITION", truncate(err.Error(), 500)})
+			continue
 		}
 		r.Definition, r.HoldDuration = d, time.Duration(secs)*time.Second
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	return out, failed, rows.Err()
+}
+
+// runnable drops rules whose evaluation panics (defence in depth: definitions are validated, so this should never
+// happen), recording each as a failure.
+func runnable(at time.Time, sigs []SignalFact, st State, rules []RuleInput, bands Bands) ([]RuleInput, []ruleFailure) {
+	var ok []RuleInput
+	var failed []ruleFailure
+	for _, r := range rules {
+		func() {
+			defer func() {
+				if p := recover(); p != nil {
+					failed = append(failed, ruleFailure{r.VersionID, "EVALUATION_PANIC", truncate(fmt.Sprint(p), 500)})
+				}
+			}()
+			_ = EvaluateRules(at, sigs, st, []RuleInput{r}, bands)
+			ok = append(ok, r)
+		}()
+	}
+	return ok, failed
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
 }
 
 func subjectSignals(ctx context.Context, q pgx.Tx, subjectType, subjectID string, since time.Time) ([]SignalFact, error) {
@@ -123,8 +165,8 @@ func bandsAt(ctx context.Context, tx pgx.Tx, at time.Time) (Bands, error) {
 
 // evaluateSignal runs the engine for the signal's subject (no ACTIVE rule for the subject type: nothing to do).
 func (s *Service) evaluateSignal(ctx context.Context, tx pgx.Tx, sig Signal, sigID string, out *Outcome) error {
-	rules, err := activeRules(ctx, tx, sig.SubjectType)
-	if err != nil || len(rules) == 0 {
+	rules, failed, err := activeRules(ctx, tx, sig.SubjectType)
+	if err != nil || (len(rules) == 0 && len(failed) == 0) {
 		return err
 	}
 	now := s.Clock.Now().UTC()
@@ -140,7 +182,13 @@ func (s *Service) evaluateSignal(ctx context.Context, tx pgx.Tx, sig Signal, sig
 	if err != nil {
 		return err
 	}
+	rules, panicked := runnable(now, sigs, st, rules, bands)
+	failed = append(failed, panicked...)
 	ev := EvaluateRules(now, sigs, st, rules, bands)
+	failedIDs := make([]string, 0, len(failed))
+	for _, f := range failed {
+		failedIDs = append(failedIDs, f.VersionID)
+	}
 	results, _ := json.Marshal(ev.Outcomes)
 	expl, _ := json.Marshal(ev.Factors)
 	versionIDs := make([]string, 0, len(rules))
@@ -149,21 +197,26 @@ func (s *Service) evaluateSignal(ctx context.Context, tx pgx.Tx, sig Signal, sig
 	}
 	evalID := ids.New()
 	tag, err := tx.Exec(ctx, `INSERT INTO risk.risk_evaluations (id, subject_type, subject_id, trigger_signal_id, engine_version, rule_version_ids,
-		results, score, classification, band_source, confidence, recommended_action, explanation, inputs_hash, evaluated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		results, score, classification, band_source, confidence, recommended_action, explanation, inputs_hash, evaluated_at, degraded,
+		failed_rule_version_ids)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 		ON CONFLICT ON CONSTRAINT uq_risk_evaluations_trigger DO NOTHING`,
 		evalID, sig.SubjectType, sig.SubjectID, sigID, EngineVersion, versionIDs, results, ev.Score, ev.Classification, ev.BandSource,
-		ev.Confidence, ev.RecommendedAction, expl, ev.InputsHash[:], now)
+		ev.Confidence, ev.RecommendedAction, expl, ev.InputsHash[:], now, len(failed) > 0, failedIDs)
 	if err != nil || tag.RowsAffected() == 0 {
 		return err
 	}
 	out.EvaluationID, out.Score2, out.Classification, out.RecommendedAction = evalID, ev.Score, ev.Classification, ev.RecommendedAction
+	out.Degraded = len(failed) > 0
 	if _, err := tx.Exec(ctx, `INSERT INTO risk.risk_subject_profiles (subject_type, subject_id, latest_evaluation_id, score, classification,
-		evaluated_at) VALUES ($1, $2, $3, $4, $5, $6)
+		evaluated_at, degraded) VALUES ($1, $2, $3, $4, $5, $6, $7)
 		ON CONFLICT (subject_type, subject_id) DO UPDATE SET latest_evaluation_id = EXCLUDED.latest_evaluation_id, score = EXCLUDED.score,
-		  classification = EXCLUDED.classification, evaluated_at = EXCLUDED.evaluated_at, updated_at = now()
+		  classification = EXCLUDED.classification, evaluated_at = EXCLUDED.evaluated_at, degraded = EXCLUDED.degraded, updated_at = now()
 		WHERE risk.risk_subject_profiles.evaluated_at <= EXCLUDED.evaluated_at`,
-		sig.SubjectType, sig.SubjectID, evalID, ev.Score, ev.Classification, now); err != nil {
+		sig.SubjectType, sig.SubjectID, evalID, ev.Score, ev.Classification, now, len(failed) > 0); err != nil {
+		return err
+	}
+	if err := s.recordRuleFailures(ctx, tx, sig, sigID, evalID, failed, now); err != nil {
 		return err
 	}
 	if err := s.applyActions(ctx, tx, sig, evalID, ev, now, out); err != nil {
@@ -174,6 +227,24 @@ func (s *Service) evaluateSignal(ctx context.Context, tx pgx.Tx, sig Signal, sig
 			"classification": ev.Classification, "recommended_action": ev.RecommendedAction, "case_id": out.CaseID, "hold_id": out.HoldID},
 		CorrelationID: sig.CorrelationID, OccurredAt: now})
 	return err
+}
+
+// recordRuleFailures stores each failed rule version for this signal and raises one monitoring event per failing version
+// and day (an operations exception, ADR-046 §8). Recording never stops: the signal and the other rules are kept.
+func (s *Service) recordRuleFailures(ctx context.Context, tx pgx.Tx, sig Signal, sigID, evalID string, failed []ruleFailure, now time.Time) error {
+	for _, f := range failed {
+		if _, err := tx.Exec(ctx, `INSERT INTO risk.risk_rule_failures (id, rule_version_id, signal_id, evaluation_id, subject_type, subject_id,
+			error_code, detail, occurred_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT ON CONSTRAINT uq_risk_rule_failures DO NOTHING`,
+			ids.New(), f.VersionID, sigID, evalID, sig.SubjectType, sig.SubjectID, f.Code, f.Detail, now); err != nil {
+			return err
+		}
+		if err := s.monitor(ctx, tx, "RULE_EVALUATION_FAILED", SevHigh, "", "", f.VersionID+":"+now.Format("2006-01-02"),
+			map[string]any{"rule_version_id": f.VersionID, "error_code": f.Code, "subject_type": sig.SubjectType,
+				"detail": "A rule version could not be evaluated; evaluations of this subject type are degraded until it is retired or fixed."}, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // applyActions performs the automated actions an evaluation is authorised to take (ADR-045 §5): never a ban, a

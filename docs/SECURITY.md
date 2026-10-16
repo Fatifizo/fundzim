@@ -539,6 +539,18 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 > repeated after one may have reached the provider; owner-facing refusals reveal no compliance or risk detail. Full review:
 > [stage-11/security-review.md](stage-11/security-review.md).
 
+## 21i. Operations portal security (Stage 14, summary)
+
+> **Stage 14 as built ([ADR-046](adr/ADR-046-operations-portal.md)):** every operations route is a staff permission route
+> (non-staff → 404; mutations need step-up); the UI's permission awareness is presentation only. The portal is a read model
+> plus its own records: it never decides another module's approval, never resolves a domain exception
+> (`OPS_EXCEPTION_DOMAIN_OPEN`), never writes another module's or the ledger's tables (archtest). No superuser exists; role
+> changes and access-review revocations are dual-controlled role requests; nobody decides their own access (linked
+> identities, database guards). Session revocation ends another staff member's sessions immediately (audited). Support roles
+> get no KYC, bank, ledger, risk-evidence or compliance-note access. Audit records are append-only; exports are bounded
+> (≤ 31 days, ≤ 5,000 rows), step-up, audited before delivery and formula-neutralised. Search is exact-id only and audited
+> by kind and count. Full review: [stage-14/security-review.md](stage-14/security-review.md).
+
 ## 21h. Risk security (Stage 13, summary)
 
 > **Stage 13 as built ([ADR-045](adr/ADR-045-risk-engine-cases-holds-screening.md)):** risk routes are staff-only

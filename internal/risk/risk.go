@@ -216,6 +216,8 @@ type Outcome struct {
 	RecommendedAction string
 	CaseID            string
 	HoldID            string
+	// Degraded: at least one ACTIVE rule version could not be evaluated (recorded in risk_rule_failures)
+	Degraded bool
 }
 
 // RecordSignal records one signal and, if it is new, reassesses its subject and records the decision, all in

@@ -385,3 +385,78 @@ func LinkStaffPersonal(ctx context.Context, tx pgx.Tx, staffID, personalID strin
 	}
 	return nil
 }
+
+// StaffAccount is a staff directory row (no email, phone or personal data beyond the display name).
+type StaffAccount struct {
+	ID             string     `json:"id"`
+	DisplayName    string     `json:"display_name"`
+	Status         string     `json:"status"`
+	PersonalLinked bool       `json:"personal_account_linked"`
+	SuspendedAt    *time.Time `json:"suspended_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
+// ListStaff returns staff accounts (optionally one status, optionally matching a name fragment or an exact id),
+// newest first, bounded.
+func ListStaff(ctx context.Context, q Querier, status, query string, limit int) ([]StaffAccount, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 200
+	}
+	query = strings.TrimSpace(query)
+	like := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(query)
+	rows, err := q.Query(ctx, `SELECT u.id, coalesce(p.display_name, ''), u.status, u.staff_personal_user_id IS NOT NULL, u.suspended_at, u.created_at
+		FROM app.users u LEFT JOIN app.user_profiles p ON p.user_id = u.id
+		WHERE u.account_kind = 'STAFF' AND NOT u.is_system AND ($1 = '' OR u.status = $1)
+		  AND ($2 = '' OR u.id::text = $2 OR p.display_name ILIKE '%' || $3 || '%')
+		ORDER BY u.created_at DESC LIMIT $4`, status, query, like, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []StaffAccount{}
+	for rows.Next() {
+		var a StaffAccount
+		if err := rows.Scan(&a.ID, &a.DisplayName, &a.Status, &a.PersonalLinked, &a.SuspendedAt, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// StaffCounts counts staff accounts by status (system actor excluded).
+func StaffCounts(ctx context.Context, q Querier) (map[string]int64, error) {
+	rows, err := q.Query(ctx, `SELECT status, count(*) FROM app.users WHERE account_kind = 'STAFF' AND NOT is_system GROUP BY status`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int64{}
+	for rows.Next() {
+		var st string
+		var n int64
+		if err := rows.Scan(&st, &n); err != nil {
+			return nil, err
+		}
+		out[st] = n
+	}
+	return out, rows.Err()
+}
+
+// ActiveStaffIDs lists active staff account ids (system actor excluded).
+func ActiveStaffIDs(ctx context.Context, q Querier) ([]string, error) {
+	rows, err := q.Query(ctx, `SELECT id::text FROM app.users WHERE account_kind = 'STAFF' AND NOT is_system AND status = 'ACTIVE'`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}

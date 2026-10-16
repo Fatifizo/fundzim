@@ -11,13 +11,14 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import http from "node:http";
 
-import { createCampaignsMock } from "./campaigns.mjs";
-import { createLedgerMock } from "./ledger.mjs";
-import { createFeesMock } from "./fees.mjs";
-import { createPayoutsMock } from "./payouts.mjs";
-import { createPaymentsMock } from "./payments.mjs";
-import { createRiskMock } from "./risk.mjs";
-import { createVerificationMock } from "./verification.mjs";
+import { createCampaignsMock, ROLE_PERMISSIONS as CAMPAIGN_PERMS } from "./campaigns.mjs";
+import { createLedgerMock, ROLE_PERMISSIONS as LEDGER_PERMS } from "./ledger.mjs";
+import { createFeesMock, ROLE_PERMISSIONS as FEE_PERMS } from "./fees.mjs";
+import { createOperationsMock, ROLE_PERMISSIONS as OPS_PERMS } from "./operations.mjs";
+import { createPayoutsMock, ROLE_PERMISSIONS as PAYOUT_PERMS } from "./payouts.mjs";
+import { createPaymentsMock, ROLE_PERMISSIONS as PAYMENT_PERMS } from "./payments.mjs";
+import { createRiskMock, ROLE_PERMISSIONS as RISK_PERMS } from "./risk.mjs";
+import { createVerificationMock, ROLE_PERMISSIONS as VERIFICATION_PERMS } from "./verification.mjs";
 
 /** Widely published documentation example (base32), not a credential. */
 const EXAMPLE_TOTP_BASE32 = "JBSWY3DP" + "EHPK3PXP";
@@ -76,9 +77,19 @@ addUser({ email: "unverified@example.test", display_name: "Farai New", email_ver
 
 const ME_FIELDS = ["id", "account_kind", "email", "email_verified", "display_name", "phone_masked", "phone_verified", "mfa_enabled", "created_at"];
 
+// effective staff permissions: the union of every module mock's role mapping (Stage 14 shell navigation and actions)
+const PERMISSION_MAPS = [CAMPAIGN_PERMS, LEDGER_PERMS, FEE_PERMS, OPS_PERMS, PAYOUT_PERMS, PAYMENT_PERMS, RISK_PERMS, VERIFICATION_PERMS];
+function permissionsOf(user) {
+  if (user?.account_kind !== "STAFF") return new Set();
+  return new Set((user.roles ?? []).flatMap((r) => PERMISSION_MAPS.flatMap((m) => m[r] ?? [])));
+}
+
 function me(user) {
   const out = Object.fromEntries(ME_FIELDS.map((key) => [key, user[key]]));
-  if (user.account_kind === "STAFF") out.roles = user.roles ?? [];
+  if (user.account_kind === "STAFF") {
+    out.roles = user.roles ?? [];
+    out.permissions = [...permissionsOf(user)].sort();
+  }
   return out;
 }
 
@@ -150,6 +161,8 @@ const ledger = createLedgerMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS });
 const payouts = createPayoutsMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS, users, getDestination: (id) => verification.getDestination(id) });
 const fees = createFeesMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS, users });
 const risk = createRiskMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS });
+const operations = createOperationsMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS, permissionsOf,
+  staffUsers: () => [...users.values()].filter((u) => u.account_kind === "STAFF") });
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://mock");
@@ -191,6 +204,7 @@ const server = http.createServer(async (req, res) => {
     if (await payouts.control(path, controlBody, res)) return;
     if (await fees.control(path, controlBody, res)) return;
     if (await risk.control(path, controlBody, res)) return;
+    if (await operations.control(path, controlBody, res)) return;
   }
   if (path === "/api/v1/health") return send(res, 200, { status: "ok" });
   if (path === "/api/v1/version") return send(res, 200, { name: "fundzim-api", version: "mock", build: "mock", commit: "mock" });
@@ -379,6 +393,7 @@ const server = http.createServer(async (req, res) => {
       if (await payouts.handle({ req, res, method, path, url, user, session, body })) return;
       if (await fees.handle({ req, res, method, path, url, user, session, body })) return;
       if (await risk.handle({ req, res, method, path, url, user, session, body })) return;
+      if (await operations.handle({ req, res, method, path, url, user, session, body })) return;
       if (await campaigns.handle({ req, res, method, path, url, user, session, body, raw })) return;
       if (await verification.handle({ req, res, method, path, url, user, session, sessionToken, body, raw })) return;
       return err(res, 404, "ROUTE_NOT_FOUND");

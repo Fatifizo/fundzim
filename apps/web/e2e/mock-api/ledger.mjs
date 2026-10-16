@@ -3,7 +3,7 @@
 // actions; maker ≠ checker; a journal is reversed at most once. There is no free-form posting endpoint. NOT a reference.
 import { randomUUID } from "node:crypto";
 
-const ROLE_PERMISSIONS = {
+export const ROLE_PERMISSIONS = {
   FINANCE: ["ledger.view", "ledger.account.manage", "ledger.period.close", "ledger.adjustment.create", "ledger.adjustment.approve", "ledger.reconciliation.operate"],
   COMPLIANCE: ["ledger.view"],
 };

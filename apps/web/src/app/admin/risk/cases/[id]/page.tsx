@@ -12,6 +12,9 @@ import { isUuid } from "@/lib/campaigns/paths";
 import { humanise } from "@/lib/payments/labels";
 import { canEscalate, canPropose, caseIsOpen, caseTransitions, holdActions, short } from "@/lib/risk/labels";
 import { readCaseDetail } from "@/lib/risk/normalise";
+import { NoPermission } from "@/components/admin/operations/ops";
+import { can } from "@/lib/operations/navigation";
+import { RISK_FORM_PERMISSION, mayRisk } from "@/lib/risk/permissions";
 
 export const metadata: Metadata = { title: "Risk case", robots: { index: false, follow: false, nocache: true } };
 
@@ -21,7 +24,7 @@ const HOLD_ACTIONS = ["activate", "revoke", "review", "request-release", "approv
 export default async function RiskCasePage({ params }: PageProps<"/admin/risk/cases/[id]">) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
-  await requireStaff();
+  const me = await requireStaff();
   const d = readCaseDetail((await serverGetOr404<unknown>(`/api/v1/admin/risk/cases/${id}`, `${RISK_BASE}/cases/${id}`)).data);
   if (!d) notFound();
   const c = d.case;
@@ -39,13 +42,13 @@ export default async function RiskCasePage({ params }: PageProps<"/admin/risk/ca
       </section>
       <Section id="actions" title="Actions">
         <div className="flex flex-wrap gap-3">
-          <RiskAction target={{ kind: "case-assign", id: c.id }} available={open} />
-          <RiskAction target={{ kind: "case-transition", id: c.id, options: caseTransitions(c.status) }} available={caseTransitions(c.status).length > 0} />
-          <RiskAction target={{ kind: "case-escalate", id: c.id }} available={canEscalate(c.status)} />
-          <RiskAction target={{ kind: "case-propose", id: c.id }} available={canPropose(c.status)} />
-          <RiskAction target={{ kind: "case-approve", id: c.id }} available={c.status === "DECISION_PENDING"} />
-          <RiskAction target={{ kind: "case-return", id: c.id }} available={c.status === "DECISION_PENDING"} />
-          <RiskAction target={{ kind: "case-reopen", id: c.id }} available={!open} />
+          <RiskAction target={{ kind: "case-assign", id: c.id }} available={(open) && mayRisk(me.permissions, "case-assign")} />
+          <RiskAction target={{ kind: "case-transition", id: c.id, options: caseTransitions(c.status) }} available={(caseTransitions(c.status).length > 0) && mayRisk(me.permissions, "case-transition")} />
+          <RiskAction target={{ kind: "case-escalate", id: c.id }} available={(canEscalate(c.status)) && mayRisk(me.permissions, "case-escalate")} />
+          <RiskAction target={{ kind: "case-propose", id: c.id }} available={(canPropose(c.status)) && mayRisk(me.permissions, "case-propose")} />
+          <RiskAction target={{ kind: "case-approve", id: c.id }} available={(c.status === "DECISION_PENDING") && mayRisk(me.permissions, "case-approve")} />
+          <RiskAction target={{ kind: "case-return", id: c.id }} available={(c.status === "DECISION_PENDING") && mayRisk(me.permissions, "case-return")} />
+          <RiskAction target={{ kind: "case-reopen", id: c.id }} available={(!open) && mayRisk(me.permissions, "case-reopen")} />
         </div>
       </Section>
       <Section id="evidence" title="Evidence" description="Evidence is immutable and content-hashed. A correction is a new record that supersedes the original.">
@@ -54,14 +57,14 @@ export default async function RiskCasePage({ params }: PageProps<"/admin/risk/ca
           caption="Case evidence"
           actions={(e) =>
             e.evidence_type === "SIGNAL" && e.reference_id ? (
-              <RiskAction target={{ kind: "case-review-signal", id: c.id, signalId: e.reference_id }} available={c.status !== "CLOSED" && !reviewed.has(e.reference_id)} />
+              <RiskAction target={{ kind: "case-review-signal", id: c.id, signalId: e.reference_id }} available={(c.status !== "CLOSED" && !reviewed.has(e.reference_id)) && mayRisk(me.permissions, "case-review-signal")} />
             ) : null
           }
         />
       </Section>
       {c.status !== "CLOSED" ? (
         <Section id="add-evidence" title="Add a note or evidence reference">
-          <EvidenceForm caseId={c.id} existing={d.evidence.filter((e) => !e.superseded_by).map((e) => ({ id: e.id, label: `${humanise(e.evidence_type)} ${short(e.id)}` }))} />
+          {can(me.permissions, RISK_FORM_PERMISSION.evidence) ? <EvidenceForm caseId={c.id} existing={d.evidence.filter((e) => !e.superseded_by).map((e) => ({ id: e.id, label: `${humanise(e.evidence_type)} ${short(e.id)}` }))} /> : <NoPermission action="Adding evidence" permission={RISK_FORM_PERMISSION.evidence} />}
         </Section>
       ) : null}
       <Section id="reviews" title="Signal reviews">
@@ -88,7 +91,7 @@ export default async function RiskCasePage({ params }: PageProps<"/admin/risk/ca
         <HoldsTable
           items={d.holds}
           caption="Case holds"
-          actions={(h) => HOLD_ACTIONS.map((a) => <RiskAction key={a} target={{ kind: `hold-${a}`, id: h.id }} available={holdActions(h.status).includes(a)} />)}
+          actions={(h) => HOLD_ACTIONS.map((a) => <RiskAction key={a} target={{ kind: `hold-${a}`, id: h.id }} available={holdActions(h.status).includes(a) && mayRisk(me.permissions, `hold-${a}`)} />)}
         />
       </Section>
       <Section id="assignments" title="Assignments">

@@ -5,7 +5,7 @@
 // only coarse reason categories. Nothing here moves money or marks a payout paid. NOT a reference implementation.
 import { randomUUID } from "node:crypto";
 
-const ROLE_PERMISSIONS = {
+export const ROLE_PERMISSIONS = {
   FINANCE: ["payout.view", "payout.approve", "payout.reject", "payout.operate"],
   COMPLIANCE: ["payout.view"],
 };

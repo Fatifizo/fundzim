@@ -6,7 +6,7 @@
 // is never executed (`execution: "DISABLED"`). There is no endpoint that sets a payment's status. NOT a reference.
 import { randomUUID } from "node:crypto";
 
-const ROLE_PERMISSIONS = {
+export const ROLE_PERMISSIONS = {
   FINANCE: ["payment.view", "payment.operate", "refund.approve"],
   COMPLIANCE: ["payment.view", "refund.request"],
   SUPPORT: ["payment.view", "refund.request"],

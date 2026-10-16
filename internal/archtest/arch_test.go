@@ -32,6 +32,7 @@ var allowedImports = map[string][]string{
 	"auth":          {"platform", "audit", "users", "notifications"},
 	"storage":       {"platform", "audit"},
 	"risk":          {"platform", "audit"},
+	"operations":    {"platform", "audit"}, // Stage 14 (ADR-046): orchestration over module snapshots wired in internal/app
 	"kyc":           {"platform", "audit", "storage", "users", "organisations"},
 	"beneficiaries": {"platform", "audit", "users", "organisations", "kyc"},
 	"compliance":    {"platform", "audit", "users", "organisations", "kyc", "risk", "storage"},
@@ -77,7 +78,9 @@ var ownedTables = map[string][]string{
 		"risk.risk_events", "risk.risk_rules", "risk.risk_rule_versions", "risk.risk_evaluations", "risk.risk_subject_profiles",
 		"risk.risk_evaluation_actions", "risk.risk_signal_reviews", "risk.risk_cases", "risk.risk_case_assignments", "risk.risk_case_evidence",
 		"risk.risk_case_access_log", "risk.risk_holds", "risk.risk_screening_requests", "risk.risk_screening_results", "risk.sandbox_screenings",
-		"risk.risk_monitoring_events"},
+		"risk.risk_monitoring_events",
+		// Stage 14 (ADR-046 §8)
+		"risk.risk_rule_failures"},
 	"compliance": {"compliance.compliance_cases", "compliance.compliance_case_events", "compliance.compliance_case_links",
 		"compliance.compliance_case_notes", "compliance.compliance_case_triggers", "compliance.case_number_seq",
 		"compliance.subject_restrictions"},
@@ -105,6 +108,9 @@ var ownedTables = map[string][]string{
 		"ledger.ledger_periods", "ledger.ledger_invariant_runs", "ledger.ledger_environment", "ledger.ledger_source_references",
 		"ledger.ledger_reconciliation_references", "ledger.v_trial_balance", "ledger.v_balances_current", "ledger.v_balance_drift",
 		"ledger.v_pool_integrity", "ledger.database_environment", "ledger.fold_deferred_balances"},
+	// Stage 14 (ADR-046)
+	"operations": {"app.ops_support_cases", "app.ops_support_events", "app.ops_incidents", "app.ops_incident_events", "app.ops_exception_assignments",
+		"app.ops_exception_events", "app.ops_access_reviews", "app.ops_access_review_items", "app.ops_sla_targets"},
 	// Stage 12 (ADR-044)
 	"fees": {"app.fee_policies", "app.fee_policy_versions", "app.fee_provider_schedules", "app.fee_calculations", "app.fee_components",
 		"app.fee_quotes", "app.fee_assessments", "app.fee_adjustments", "app.fee_accounting_references", "app.fee_provider_reports",

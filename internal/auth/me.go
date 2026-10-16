@@ -20,16 +20,19 @@ import (
 // Me is the self view (interface-contracts §4.2). It never includes credentials, token hashes, MFA secrets
 // or full phone numbers.
 type Me struct {
-	ID            string    `json:"id"`
-	AccountKind   string    `json:"account_kind"`
-	Email         string    `json:"email"`
-	EmailVerified bool      `json:"email_verified"`
-	DisplayName   string    `json:"display_name"`
-	PhoneMasked   *string   `json:"phone_masked"`
-	PhoneVerified bool      `json:"phone_verified"`
-	MFAEnabled    bool      `json:"mfa_enabled"`
-	Roles         []string  `json:"roles,omitempty"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID            string   `json:"id"`
+	AccountKind   string   `json:"account_kind"`
+	Email         string   `json:"email"`
+	EmailVerified bool     `json:"email_verified"`
+	DisplayName   string   `json:"display_name"`
+	PhoneMasked   *string  `json:"phone_masked"`
+	PhoneVerified bool     `json:"phone_verified"`
+	MFAEnabled    bool     `json:"mfa_enabled"`
+	Roles         []string `json:"roles,omitempty"`
+	// Permissions are a staff account's effective permissions (Stage 14): the UI uses them to show only what the caller
+	// may do; every route still enforces its own policy.
+	Permissions []string  `json:"permissions,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 func (s *Service) loadMe(ctx context.Context, userID string) (Me, error) {
@@ -61,6 +64,9 @@ func (s *Service) loadMe(ctx context.Context, userID string) (Me, error) {
 				return Me{}, err
 			}
 			me.Roles = append(me.Roles, c)
+		}
+		if me.Permissions, err = s.EffectivePermissions(ctx, userID); err != nil {
+			return Me{}, err
 		}
 	}
 	return me, nil

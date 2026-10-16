@@ -6,12 +6,15 @@ import { ReconRunPanel } from "@/components/admin/risk/risk-forms";
 import { MonitoringTable, RISK_BASE, RiskBanner } from "@/components/admin/risk/risk";
 import { requireStaff, serverGetOptional, serverGetOr404 } from "@/lib/auth/session";
 import { readMonitoring, readQuality, readRiskPage } from "@/lib/risk/normalise";
+import { NoPermission } from "@/components/admin/operations/ops";
+import { can } from "@/lib/operations/navigation";
+import { RISK_FORM_PERMISSION } from "@/lib/risk/permissions";
 
 export const metadata: Metadata = { title: "Risk monitoring", robots: { index: false, follow: false, nocache: true } };
 
 /** Monitoring events, rule quality counts and reconciliation (`risk.operations.view`; running needs `risk.case.work`). */
 export default async function RiskMonitoringPage() {
-  await requireStaff();
+  const me = await requireStaff();
   const path = `${RISK_BASE}/monitoring`;
   const events = readRiskPage((await serverGetOr404<unknown>("/api/v1/admin/risk/monitoring?limit=100", path)).data, readMonitoring);
   const q = readQuality(await serverGetOptional<unknown>("/api/v1/admin/risk/quality?days=30", path, null));
@@ -41,7 +44,7 @@ export default async function RiskMonitoringPage() {
         )}
       </Section>
       <Section id="reconciliation" title="Risk reconciliation" description="Read-only consistency checks. Findings become monitoring events; nothing is changed.">
-        <ReconRunPanel />
+        {can(me.permissions, RISK_FORM_PERMISSION.reconciliation) ? <ReconRunPanel /> : <NoPermission action="Running risk reconciliation" permission={RISK_FORM_PERMISSION.reconciliation} />}
       </Section>
     </AccountPage>
   );

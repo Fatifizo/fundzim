@@ -415,3 +415,58 @@ func (s *Service) MostSignificantScreening(ctx context.Context, subjects ...Hold
 	}
 	return best, nil
 }
+
+// DegradedEvaluation reports whether any subject's latest evaluation is degraded (a rule version could not be
+// evaluated). Financial consumers treat it as "no complete risk decision" and route to human review (fail closed).
+func (s *Service) DegradedEvaluation(ctx context.Context, subjects ...HoldSubject) (bool, error) {
+	var st, sid []string
+	for _, x := range subjects {
+		if x.Type != "" && ids.Valid(x.ID) {
+			st, sid = append(st, x.Type), append(sid, x.ID)
+		}
+	}
+	if len(st) == 0 {
+		return false, nil
+	}
+	var degraded bool
+	err := s.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM risk.risk_subject_profiles WHERE degraded AND (subject_type, subject_id) IN
+		(SELECT t, i::uuid FROM unnest($1::text[], $2::text[]) AS u(t, i)))`, st, sid).Scan(&degraded)
+	return degraded, err
+}
+
+// RuleFailure is a recorded rule evaluation failure (operations exception source).
+type RuleFailure struct {
+	RuleVersionID string    `json:"rule_version_id"`
+	RuleCode      string    `json:"rule_code"`
+	ErrorCode     string    `json:"error_code"`
+	Detail        string    `json:"detail"`
+	SubjectType   string    `json:"subject_type"`
+	Failures      int64     `json:"failures"`
+	FirstAt       time.Time `json:"first_at"`
+	LastAt        time.Time `json:"last_at"`
+	StillActive   bool      `json:"still_active"`
+}
+
+// RuleFailures lists failing rule versions (grouped), newest first.
+func (s *Service) RuleFailures(ctx context.Context, limit int) ([]RuleFailure, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 100
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT f.rule_version_id::text, r.code, f.error_code, max(f.detail), f.subject_type, count(*), min(f.occurred_at),
+		max(f.occurred_at), bool_or(v.status = 'ACTIVE')
+		FROM risk.risk_rule_failures f JOIN risk.risk_rule_versions v ON v.id = f.rule_version_id JOIN risk.risk_rules r ON r.id = v.rule_id
+		GROUP BY f.rule_version_id, r.code, f.error_code, f.subject_type ORDER BY max(f.occurred_at) DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []RuleFailure{}
+	for rows.Next() {
+		var f RuleFailure
+		if err := rows.Scan(&f.RuleVersionID, &f.RuleCode, &f.ErrorCode, &f.Detail, &f.SubjectType, &f.Failures, &f.FirstAt, &f.LastAt, &f.StillActive); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}

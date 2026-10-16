@@ -11,6 +11,18 @@ providers.
 FundZim is **not** an investment, lending, equity or rewards platform, and it is not a wallet or a payment
 provider.
 
+> **Status: Stage 14 — Administration & operations portal (complete; awaiting acceptance; TEST data only).** A unified,
+> permission-aware staff shell (navigation, search, task indicator and actions follow the caller's effective permissions;
+> every API route still enforces its own), an operations command center whose metrics come from each module's own
+> records with a documented source and nature (TEST/SIMULATED labelled; disabled capabilities BLOCKED; an unreadable module
+> shown as unavailable, never zero), an approval center that routes every decision to the owning module, an exception
+> center with triage (resolution stays with the module), platform health and alerts measured on request, operational
+> incidents, support cases, a staff directory with session revocation and dual-controlled access reviews, an audit center
+> with bounded audited exports, operational reports and maker-checker internal SLA targets (none configured). Risk rule
+> fault isolation (KI-S13-11) and permission-aware risk actions (KI-S13-21) fixed. Docs:
+> [docs/stage-14/implementation.md](docs/stage-14/implementation.md); ADR-046; handover
+> [STAGE-14-TO-STAGE-15.md](docs/stage-handover/STAGE-14-TO-STAGE-15.md).
+>
 > **Status: Stage 13 — Trust, fraud & risk engine (complete; awaiting acceptance; TEST data only).** Normalised risk
 > signals from domain events, an explainable configurable rule engine (declarative JSON rules, maker-checker versions,
 > deterministic 0–100 scores with stored explanations — a score is never proof of fraud), risk cases with assignment,
@@ -281,7 +293,8 @@ Reset deletes the Postgres and Garage volumes (database, roles, objects). `.env`
 | [Stage 11 implementation](docs/stage-11/implementation.md) · [architecture](docs/stage-11/payout-architecture.md) · [lifecycle](docs/stage-11/withdrawal-lifecycle.md) · [eligibility](docs/stage-11/eligibility-engine.md) · [available funds](docs/stage-11/available-funds.md) · [simulator](docs/stage-11/payout-simulator.md) · [security review](docs/stage-11/security-review.md) · [testing](docs/stage-11/testing.md) · [known issues](docs/stage-11/known-issues.md) | Withdrawals & payouts (TEST payouts only) |
 | [Stage 12 implementation](docs/stage-12/implementation.md) · [architecture](docs/stage-12/fee-architecture.md) · [policy model](docs/stage-12/fee-policy-model.md) · [calculation](docs/stage-12/fee-calculation.md) · [rounding](docs/stage-12/rounding.md) · [revenue accounting](docs/stage-12/revenue-accounting.md) · [security review](docs/stage-12/security-review.md) · [testing](docs/stage-12/testing.md) · [known issues](docs/stage-12/known-issues.md) | Fees & platform revenue (TEST fees only) |
 | [Stage 13 implementation](docs/stage-13/implementation.md) · [architecture](docs/stage-13/risk-architecture.md) · [signals](docs/stage-13/risk-signals.md) · [scoring](docs/stage-13/risk-scoring.md) · [rules](docs/stage-13/risk-rules.md) · [cases](docs/stage-13/case-management.md) · [holds](docs/stage-13/compliance-holds.md) · [screening](docs/stage-13/screening.md) · [security review](docs/stage-13/security-review.md) · [testing](docs/stage-13/testing.md) · [known issues](docs/stage-13/known-issues.md) | Trust, fraud & risk engine (TEST data; screening BLOCKED) |
-| [Stage handovers](docs/stage-handover/STAGE-13-TO-STAGE-14.md) | Stage 13 → 14 (administration & operations portal); earlier handovers in the same folder |
+| [Stage 14 implementation](docs/stage-14/implementation.md) · [architecture](docs/stage-14/operations-architecture.md) · [command center](docs/stage-14/command-center.md) · [staff](docs/stage-14/staff-management.md) · [approvals](docs/stage-14/approval-center.md) · [support](docs/stage-14/support-operations.md) · [exceptions](docs/stage-14/exception-management.md) · [health](docs/stage-14/platform-health.md) · [incidents](docs/stage-14/incident-management.md) · [audit](docs/stage-14/audit-center.md) · [reporting](docs/stage-14/reporting.md) · [security review](docs/stage-14/security-review.md) · [testing](docs/stage-14/testing.md) · [known issues](docs/stage-14/known-issues.md) | Stage 14 administration & operations portal (ADR-046) |
+| [Stage handovers](docs/stage-handover/STAGE-14-TO-STAGE-15.md) | Stage 14 → 15 (notifications & communications); earlier handovers in the same folder |
 
 ## Licence
 

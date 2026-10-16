@@ -30,6 +30,12 @@
 > immutable evidence, the central hold registry (enforced by campaigns, payments and payouts through `risk`'s public
 > service) and a TEST-only screening foundation ([stage-13/risk-architecture.md](stage-13/risk-architecture.md)); `risk`
 > stays a leaf module (platform, audit).
+> **Stage 14 (ADR-046):** `operations` (imports platform, audit) aggregates per-module `OpsSnapshot`s — each built by the
+> owning module from its own tables, shared types in `platform/opsview` — into the command center, approval center,
+> exception center, health, alerts, reports and search, and owns only its operational records (`app.ops_*`: support cases,
+> incidents, exception triage, access reviews, internal SLA targets). Decisions and exception resolution stay with the owning
+> modules; staff directory and session revocation are `auth` services; audit search/export is in `audit`
+> ([stage-14/operations-architecture.md](stage-14/operations-architecture.md)).
 > **Not yet built:** real provider integrations (payments and payouts run only through the sandbox simulator), production ledger
 > posting, real payout execution, real fee charging and revenue recognition, refund execution, disputes, settlement reconciliation, identity /
 > screening (foundation and TEST simulator only) / account-lookup provider integrations, tracing export. Details:

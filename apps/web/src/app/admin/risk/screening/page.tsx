@@ -9,6 +9,9 @@ import { buildQuery, pick } from "@/lib/payments/labels";
 import { screeningStatusLabel } from "@/lib/risk/labels";
 import { readCapabilities, readRiskPage, readScreening } from "@/lib/risk/normalise";
 import { SCREENING_STATUSES } from "@/lib/risk/types";
+import { NoPermission } from "@/components/admin/operations/ops";
+import { can } from "@/lib/operations/navigation";
+import { RISK_FORM_PERMISSION } from "@/lib/risk/permissions";
 
 export const metadata: Metadata = { title: "Screening (TEST)", robots: { index: false, follow: false, nocache: true } };
 
@@ -16,7 +19,7 @@ const BASE = `${RISK_BASE}/screening`;
 
 /** The provider-neutral screening foundation (`risk.operations.view`): TEST simulator only, synthetic references. */
 export default async function RiskScreeningPage({ searchParams }: PageProps<"/admin/risk/screening">) {
-  await requireStaff();
+  const me = await requireStaff();
   const p = await searchParams;
   const status = pick(p.status, SCREENING_STATUSES);
   const page = readRiskPage((await serverGetOr404<unknown>(`/api/v1/admin/risk/screening${buildQuery({ status })}`, BASE)).data, readScreening);
@@ -37,7 +40,7 @@ export default async function RiskScreeningPage({ searchParams }: PageProps<"/ad
       <FilterForm action={BASE} label="Filter screening requests" fields={[{ name: "status", label: "Status", value: status, options: SCREENING_STATUSES.map((s) => ({ value: s, label: screeningStatusLabel(s) })) }]} />
       <ScreeningsTable items={page.items} caption="Screening requests" />
       <Section id="request" title="Request a TEST screening" description="Only a synthetic reference is sent to the simulator: no name, date of birth or document.">
-        <ScreeningRequestForm />
+        {can(me.permissions, RISK_FORM_PERMISSION.screening) ? <ScreeningRequestForm /> : <NoPermission action="Requesting a TEST screening" permission={RISK_FORM_PERMISSION.screening} />}
       </Section>
     </AccountPage>
   );

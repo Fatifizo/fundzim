@@ -15,6 +15,25 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
+**Stage 14 — Administration & operations portal (complete; awaiting acceptance; TEST data only).** Stages 1–14 are complete
+but their acceptance has not been recorded (never mark a stage accepted yourself); Stage 9 is PARTIAL. What Stage 14 built:
+`docs/stage-14/implementation.md` (prerequisites, operations architecture, command center, staff management, approval center,
+module operations, support, exceptions, health, incidents, audit center, reporting, security review, testing, known issues;
+ADR-046); Stage 15 starts from `docs/stage-handover/STAGE-14-TO-STAGE-15.md`. Binding Stage 14 rules: `internal/operations`
+imports platform and audit only and owns only `app.ops_*`; module data reaches it only through each module's own
+`OpsSnapshot`/`OpsSearch` (built from that module's tables; shared types in `platform/opsview`) — never add cross-module SQL
+to operations; **the portal is not an authority**: approvals link to the owning module's route (which re-checks everything),
+exception resolution stays with the module (`OPS_EXCEPTION_DOMAIN_OPEN`), it never changes a domain status column, never
+writes ledger tables and never releases a reservation, hold or restriction; every metric names its source, permission and
+nature (REAL, SIMULATED, TEST_ONLY, UNKNOWN, NOT_AVAILABLE, BLOCKED) — a disabled capability is BLOCKED/NOT_CONFIGURED, never
+HEALTHY, and a failed source is UNAVAILABLE, never 0; the UI's permission awareness (`permissions` on `/me` and the session)
+is presentation only — every route keeps its policy; no superuser and no override permission; role changes and
+access-review revocations are dual-controlled requests and nobody decides their own access; support roles get no KYC, bank,
+ledger, risk-evidence or compliance-note access; audit records are never edited, exports are bounded, step-up and audited
+before delivery; no internal SLA target is configured or invented (maker-checker `ops.sla.request` → `ops.sla.approve`);
+no external notification is sent (Stage 15). Operations integration tests (`TestOperations*`) share the development
+database: use the test's own records and leave fixture roles unchanged (reject any revocation request a test files).
+
 **Stage 13 — Trust, fraud & risk engine (complete; awaiting acceptance; TEST data only).** Stages 1–13 are complete but
 their acceptance has not been recorded (never mark a stage accepted yourself); Stage 9 is PARTIAL. What Stage 13 built:
 `docs/stage-13/implementation.md` (prerequisites, architecture, signals, scoring, rules, decisions, campaign/payment/payout
@@ -128,7 +147,7 @@ errors are always `no-store`; a handler's `Cache-Control` must not be overwritte
 wait through `RetryAfter()`; campaign-family APIs use `{campaign_id}`, 428/412 for `If-Match` and
 `{items, next_cursor}` lists (ADR-038 §7); a public report never changes a campaign's status; analytics are
 first-party aggregate counters only. The real-stack Playwright suite (`apps/web/e2e-real`), the Go integration tests
-(including `TestPayments*`, `TestLedger*`, `TestPayout*`, `TestFee*` and `TestRisk*`) and container rebuilds share the development database: run them under
+(including `TestPayments*`, `TestLedger*`, `TestPayout*`, `TestFee*`, `TestRisk*` and `TestOperations*`) and container rebuilds share the development database: run them under
 `flock /tmp/claude-1000/fundzim-stack.lock`. Never report CI as green without seeing the run. Gate on
 `kyc.Service.Level`, enforce compliance restrictions through `compliance.Service.Restrictions`, and check
 self-review with `kyc.Service.ActorIdentities` / `app.actor_identities()` (linked staff accounts). A
@@ -143,7 +162,7 @@ STOPS.
 |---|---|
 | `apps/web/` | Next.js 16 (App Router, TypeScript, Tailwind v4). **Presentation only.** Has its own `AGENTS.md` — read it: this Next.js version differs from older training data; consult `apps/web/node_modules/next/dist/docs/` before writing Next.js code. |
 | `apps/api/` | Go entrypoints: `cmd/api` (HTTP API), `cmd/worker` (River jobs, outbox relay/delivery), `cmd/fundzimctl` (config check, migrations, `bootstrap-admins`, healthcheck). |
-| `internal/` | Go code: `app/` (composition root), `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, crypto, authz, clock, ratelimit, idempotency, outbox, jobs, version) and domain modules `users`, `auth`, `organisations`, `audit`, `notifications`, `storage` (documents: quarantine, ClamAV scanning, SSE-C, download tickets), `kyc` (KYC/KYB cases, identities, review engine, verification policy — `fundzim_kyc` pool only), `beneficiaries`, `payouts` (payout destinations; Stage 11: withdrawal requests, eligibility engine, reservations, approvals, orchestration, reconciliation — TEST payouts only), `fees` (Stage 12: fee policies, provider fee evidence, pure calculation engine, quotes, assessments, adjustments, TEST fee journals through the ledger service, reconciliation, revenue reporting — TEST fees only), `risk` (signals, versioned model v1, routing decisions; Stage 13: configurable explainable rule engine, risk cases with immutable evidence, the central hold registry, TEST screening foundation and simulator, monitoring, reconciliation), `compliance` (compliance cases and the subject-restriction projection — `fundzim_compliance` pool only), `verification` (HTTP orchestration; owns no tables) and `campaigns` (core: lifecycle, eligibility, review, publication, public read/search; subpackages `campaigns/media` — image upload, scan, re-encode, serving — and `campaigns/updates` — owner updates and moderation; no financial state), `ledger` (Stage 10: double-entry ledger, posting engine, adjustments, periods, integrity, reconciliation — `fundzim_ledger` pool only), `psp` (Stage 8: provider registry, routing, webhook inbox, health, sandbox simulator in `psp/sandbox`; Stage 9:
+| `internal/` | Go code: `app/` (composition root), `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, crypto, authz, clock, ratelimit, idempotency, outbox, jobs, version) and domain modules `users`, `auth`, `organisations`, `audit`, `notifications`, `storage` (documents: quarantine, ClamAV scanning, SSE-C, download tickets), `kyc` (KYC/KYB cases, identities, review engine, verification policy — `fundzim_kyc` pool only), `beneficiaries`, `payouts` (payout destinations; Stage 11: withdrawal requests, eligibility engine, reservations, approvals, orchestration, reconciliation — TEST payouts only), `fees` (Stage 12: fee policies, provider fee evidence, pure calculation engine, quotes, assessments, adjustments, TEST fee journals through the ledger service, reconciliation, revenue reporting — TEST fees only), `risk` (signals, versioned model v1, routing decisions; Stage 13: configurable explainable rule engine, risk cases with immutable evidence, the central hold registry, TEST screening foundation and simulator, monitoring, reconciliation), `compliance` (compliance cases and the subject-restriction projection — `fundzim_compliance` pool only), `operations` (Stage 14: operations portal read models over per-module `OpsSnapshot`s, support cases, incidents, exception triage, access reviews, internal SLA targets — `app.ops_*` only), `verification` (HTTP orchestration; owns no tables) and `campaigns` (core: lifecycle, eligibility, review, publication, public read/search; subpackages `campaigns/media` — image upload, scan, re-encode, serving — and `campaigns/updates` — owner updates and moderation; no financial state), `ledger` (Stage 10: double-entry ledger, posting engine, adjustments, periods, integrity, reconciliation — `fundzim_ledger` pool only), `psp` (Stage 8: provider registry, routing, webhook inbox, health, sandbox simulator in `psp/sandbox`; Stage 9:
 execution environments, startup gate, error categories, derived health, adapter conformance suite in `psp/psptest`) and `payments` (Stage 8: donation intents, payments, state machine, refund requests, reconciliation references; no balances or postings). `archtest/` enforces the module import graph and table ownership — register every new module there. One Go module (`github.com/Fatifizo/fundzim`) rooted at repo root. |
 | `migrations/` | Executable goose SQL migrations, embedded and run by `fundzimctl migrate` as `fundzim_migrator` (`docs/development/migrations.md`). |
 | `docs/` | Specifications. `docs/adr/` holds Architecture Decision Records. |

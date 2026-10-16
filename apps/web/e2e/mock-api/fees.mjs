@@ -5,7 +5,7 @@
 // The arithmetic here is only good enough for the UI tests. NOT a reference implementation.
 import { randomUUID } from "node:crypto";
 
-const ROLE_PERMISSIONS = {
+export const ROLE_PERMISSIONS = {
   FINANCE: ["fee.view", "fee.config.request", "fee.adjust.request"],
   BUSINESS_APPROVER: ["fee.view", "fee.config.approve", "fee.adjust.approve"],
   COMPLIANCE: ["fee.view"],

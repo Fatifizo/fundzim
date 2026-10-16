@@ -13,6 +13,8 @@ export interface Me {
   mfa_enabled: boolean;
   /** Staff only. */
   roles?: string[];
+  /** Staff only (Stage 14): effective permissions, for showing only what the caller may do. Never authorization. */
+  permissions?: string[];
   created_at: string;
 }
 

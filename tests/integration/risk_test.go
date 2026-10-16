@@ -814,12 +814,16 @@ func TestRiskSignalSources(t *testing.T) {
 	}
 }
 
-// TestRiskRuleEngineErrorIsAtomic (failure injection): an ACTIVE rule the engine cannot run (as after a corrupted row or an
-// engine mismatch — created here with SQL, bypassing the API's validation) makes signal recording fail as a whole: nothing
-// partial is stored, the outbox consumer would retry, and reconciliation reports the rule. Retiring it restores recording.
-// The rule targets AUTHENTICATION_SESSION, which no other test or event uses.
-func TestRiskRuleEngineErrorIsAtomic(t *testing.T) {
+// TestRiskRuleFaultIsolation (failure injection, KI-S13-11): an ACTIVE rule the engine cannot run (as after a corrupted
+// row or an engine mismatch — created here with SQL, bypassing the API's validation) no longer blocks signal recording.
+// The signal is stored, the independent rule still runs, the failure is recorded and monitored, the evaluation and the
+// subject's profile are marked degraded (payouts treat that as REVIEW), and reconciliation reports the rule. Retiring it
+// restores complete evaluations. The rules target AUTHENTICATION_SESSION, which no other test or event uses.
+func TestRiskRuleFaultIsolation(t *testing.T) {
 	r := newRiskIT(t)
+	ua := strings.Repeat("ab", 16)
+	_, good := r.rule(t, "AUTHENTICATION_SESSION", "SESSION_RISK", map[string]any{"when": map[string]any{"fact_compare": map[string]any{
+		"signal_types": []string{"SIGNED_IN"}, "fact": "ua_hash", "window_seconds": 3600, "op": "=", "value": ua}}}, 40, "REVIEW_REQUIRED", nil, "P3")
 	ruleID, vid := ids.New(), ids.New()
 	code := itCode("IT_BROKEN")
 	migratorExec(t, `INSERT INTO risk.risk_rules (id, code, name, subject_type, category, created_by) VALUES ($1, $2, 'IT broken rule',
@@ -841,20 +845,56 @@ func TestRiskRuleEngineErrorIsAtomic(t *testing.T) {
 		}
 	}
 	t.Cleanup(retire)
-	subject, src := ids.New(), ids.New()
-	sig := risk.Signal{Type: risk.SigSignedIn, SubjectType: "AUTHENTICATION_SESSION", SubjectID: subject, SourceModule: "identity",
-		SourceEventID: src, SourceEventType: "identity.signed_in", ObservedAt: time.Now().UTC(), Facts: map[string]any{}}
-	if _, err := r.rs.RecordSignal(ctx(t), sig); err == nil {
-		t.Fatal("a signal was recorded although an active rule cannot run")
+	subject := ids.New()
+	signal := func() (risk.Outcome, string) {
+		src := ids.New()
+		out, err := r.rs.RecordSignal(ctx(t), risk.Signal{Type: risk.SigSignedIn, SubjectType: "AUTHENTICATION_SESSION", SubjectID: subject,
+			SourceModule: "identity", SourceEventID: src, SourceEventType: "identity.signed_in", ObservedAt: time.Now().UTC(), Facts: map[string]any{"ua_hash": ua}})
+		if err != nil {
+			t.Fatalf("signal recording blocked by a broken rule: %v", err)
+		}
+		return out, src
 	}
-	if n := r.count(t, `SELECT count(*) FROM risk.risk_signals WHERE source_event_id = $1`, src); n != 0 {
-		t.Fatalf("partial write: %d signals stored", n)
+	out, src := signal()
+	if r.count(t, `SELECT count(*) FROM risk.risk_signals WHERE source_event_id = $1`, src) != 1 {
+		t.Fatal("trusted event not persisted")
+	}
+	if !out.Degraded || out.EvaluationID == "" || out.CaseID == "" || out.Score2 != 40 {
+		t.Fatalf("independent rule not evaluated or failure not flagged: %+v", out)
+	}
+	if n := r.count(t, `SELECT count(*) FROM risk.risk_evaluations WHERE id = $1 AND degraded AND $2::uuid = ANY (failed_rule_version_ids)
+		AND $3::uuid = ANY (rule_version_ids)`, out.EvaluationID, vid, good); n != 1 {
+		t.Fatal("evaluation does not record the failed and the evaluated rule versions")
+	}
+	if n := r.count(t, `SELECT count(*) FROM risk.risk_rule_failures WHERE rule_version_id = $1 AND error_code = 'UNPARSEABLE_DEFINITION'
+		AND evaluation_id = $2`, vid, out.EvaluationID); n != 1 {
+		t.Fatal("rule failure not recorded")
+	}
+	if n := r.count(t, `SELECT count(*) FROM risk.risk_monitoring_events WHERE event_type = 'RULE_EVALUATION_FAILED' AND detail->>'rule_version_id' = $1`, vid); n != 1 {
+		t.Fatal("rule failure not surfaced as a monitoring event")
+	}
+	if n := r.count(t, `SELECT count(*) FROM risk.risk_rule_versions WHERE id = $1 AND status = 'ACTIVE'`, vid); n != 1 {
+		t.Fatal("the affected rule version was not preserved")
+	}
+	if degraded, err := r.rs.DegradedEvaluation(ctx(t), risk.HoldSubject{Type: "AUTHENTICATION_SESSION", ID: subject}); err != nil || !degraded {
+		t.Fatalf("degraded evaluation not reported to financial consumers: %v %v", degraded, err)
+	}
+	fs, err := r.rs.RuleFailures(ctx(t), 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, f := range fs {
+		found = found || (f.RuleVersionID == vid && f.StillActive)
+	}
+	if !found {
+		t.Fatalf("rule failure missing from the operations list: %+v", fs)
 	}
 	rep, err := r.rs.Reconcile(ctx(t), "failure-injection")
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := false
+	found = false
 	for _, c := range rep.Checks {
 		found = found || (c.Code == "RULE_DEFINITIONS" && c.Status == "FINDINGS")
 	}
@@ -862,7 +902,10 @@ func TestRiskRuleEngineErrorIsAtomic(t *testing.T) {
 		t.Fatalf("unparseable rule not reported: %+v", rep.Checks)
 	}
 	retire()
-	if out, err := r.rs.RecordSignal(ctx(t), sig); err != nil || out.Duplicate {
-		t.Fatalf("redelivery after the fix: %+v %v", out, err)
+	if out2, _ := signal(); out2.Degraded {
+		t.Fatalf("evaluation still degraded after the broken rule was retired: %+v", out2)
+	}
+	if degraded, _ := r.rs.DegradedEvaluation(ctx(t), risk.HoldSubject{Type: "AUTHENTICATION_SESSION", ID: subject}); degraded {
+		t.Fatal("profile still degraded after a complete evaluation")
 	}
 }

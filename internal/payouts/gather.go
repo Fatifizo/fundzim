@@ -291,6 +291,16 @@ func (s *Service) riskFacts(ctx context.Context, f *Facts, sub subject, acc camp
 	if class == risk.ClassHigh || class == risk.ClassCritical {
 		f.Indicators = append(f.Indicators, "RISK_CLASSIFICATION_"+class)
 	}
+	// a degraded latest evaluation (a rule version could not run) is not a complete risk decision: review (fail closed)
+	degraded, err := s.Risk.DegradedEvaluation(ctx, risk.HoldSubject{Type: "USER", ID: owner}, risk.HoldSubject{Type: "ORGANISATION", ID: org},
+		risk.HoldSubject{Type: "CAMPAIGN", ID: sub.CampaignID}, risk.HoldSubject{Type: "PAYOUT_DESTINATION", ID: sub.DestinationID},
+		risk.HoldSubject{Type: "USER", ID: sub.RequesterID})
+	if err != nil {
+		return err
+	}
+	if degraded {
+		f.Indicators = append(f.Indicators, "RISK_EVALUATION_INCOMPLETE")
+	}
 	return nil
 }
 

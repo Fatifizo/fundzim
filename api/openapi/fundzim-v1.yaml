@@ -107,6 +107,8 @@ tags:
   description: Fee policies (maker-checker), provider fee evidence, assessments, adjustments, reconciliation, revenue (ADR-044).
 - name: Risk operations (Stage 13)
   description: Risk signals, the explainable rule engine (maker-checker rules), cases, the hold registry, TEST screening and monitoring (ADR-045). A score is never proof of fraud.
+- name: Operations (Stage 14)
+  description: Command center, approval and exception centers, support, incidents, staff access governance, audit center, health, reports and search (ADR-046). The portal orchestrates; decisions stay with the owning modules.
 - name: Webhooks
   description: 'Provider callbacks: signature-authenticated, CSRF/session-exempt, inbox + 2xx fast.'
 - name: Health
@@ -15688,69 +15690,60 @@ paths:
     - $ref: '#/components/parameters/RequestId'
     get:
       tags:
-      - Admin operations
-      operationId: listStaff
-      summary: List staff accounts and roles
-      description: '**Deferred.** Not implemented in Stage 4. (`POST /admin/staff` is implemented.)
+      - Operations (Stage 14)
+      operationId: adminListStaff
+      summary: Staff directory
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `staff.view` (non-staff → `404`). Display name, roles, status, MFA, last
+        activity — no email or phone.
 
 
-        **ADM-07** · Auth: staff + MFA · Authorization: `role.view`.
 
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
       security:
       - staffSession: []
       parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      - name: role
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 64
-        description: Allow-listed filter.
       - name: status
         in: query
         required: false
         schema:
           type: string
-          description: Comma-separated allow-listed status values (OR).
-        description: Allow-listed filter.
+          enum:
+          - ACTIVE
+          - SUSPENDED
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+        description: name fragment or id
       responses:
         '200':
           description: Success.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StaffMemberPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                $ref: '#/components/schemas/OpsStaffMemberS14Page'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: ADM-07
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: role.view
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: staff.view
+      x-fundzim-step-up: false
       x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
-      - INVALID_FILTER
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-      x-fundzim-status: DEFERRED
-      x-fundzim-status-note: Not implemented in Stage 4. (`POST /admin/staff` is implemented.)
     post:
       tags:
       - Admin operations
@@ -16942,64 +16935,64 @@ paths:
       - VALIDATION_FAILED
     get:
       tags:
-      - Reports
-      operationId: listReports
-      summary: My report jobs
-      description: '**RPT-02** · Auth: staff + MFA · Authorization: `report.generate`; own jobs.
+      - Operations (Stage 14)
+      operationId: adminOpsReports
+      summary: Operational reports
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.dashboard.view` (non-staff → `404`). Each report documents source,
+        range, filters, environment, freshness and limitations. **Stage 14: TEST environment** — the portal orchestrates; decisions stay with the owning modules
+        (ADR-046).
 
 
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
       security:
       - staffSession: []
       parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      - name: status
+      - name: key
         in: query
         required: false
         schema:
           type: string
-          description: Comma-separated allow-listed status values (OR).
-        description: Allow-listed filter.
-      - name: report_type
+      - name: from
         in: query
         required: false
         schema:
-          type: string
-          maxLength: 64
-        description: Allow-listed filter.
+          $ref: '#/components/schemas/Timestamp'
+      - name: to
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Timestamp'
       responses:
         '200':
           description: Success.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReportJobPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                $ref: '#/components/schemas/OpsReportS14Page'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '500':
           $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: RPT-02
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: report.generate
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.dashboard.view
+      x-fundzim-step-up: false
       x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
-      - INVALID_FILTER
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
   /admin/reports/{report_id}:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -17864,105 +17857,102 @@ paths:
     - $ref: '#/components/parameters/RequestId'
     get:
       tags:
-      - Audit access (staff)
-      operationId: queryAuditEvents
-      summary: Query audit events (scoped by role)
-      description: '**AUD-01** · Auth: staff + MFA · Authorization: `audit.read` (COMPLIANCE broad; FINANCE financial domains; SUPER_ADMIN role/admin
-        domains).
+      - Operations (Stage 14)
+      operationId: adminAuditEvents
+      summary: Search the audit log
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `audit.read` (non-staff → `404`). Newest first by sequence; the query is
+        itself audited.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: audit.queried (new; security chain)'
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: audit.queried (security) · Cache-Control: no-store'
       security:
       - staffSession: []
       parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      - name: action
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 64
-        description: Allow-listed filter.
-      - name: actor_id
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Uuid'
-        description: Allow-listed filter.
-      - name: target_type
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 64
-        description: Allow-listed filter.
-      - name: target_id
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 64
-        description: Allow-listed filter.
       - name: from
         in: query
         required: false
         schema:
           $ref: '#/components/schemas/Timestamp'
-        description: Allow-listed filter.
       - name: to
         in: query
         required: false
         schema:
           $ref: '#/components/schemas/Timestamp'
-        description: Allow-listed filter.
+      - name: action
+        in: query
+        required: false
+        schema:
+          type: string
+        description: exact, or a prefix ending in '.'
+      - name: actor_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: target_type
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: target_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: correlation_id
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: request_id
+        in: query
+        required: false
+        schema:
+          type: string
       - name: outcome
         in: query
         required: false
         schema:
           type: string
-          maxLength: 64
-        description: Allow-listed filter.
-      - name: sort
-        in: query
-        required: false
-        description: Allow-listed sort key; `-` prefix = descending.
-        schema:
-          type: string
           enum:
-          - -occurred_at
+          - success
+          - denied
+          - failed
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Success.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuditEventPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                $ref: '#/components/schemas/OpsAuditEventS14Page'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '500':
           $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: AUD-01
-      x-fundzim-auth: staff+MFA
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
       x-fundzim-permission: audit.read
+      x-fundzim-step-up: false
       x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: audit.queried (new; security chain)
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
-      - INVALID_FILTER
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
   /admin/audit/events/{event_id}:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -18021,75 +18011,102 @@ paths:
     - $ref: '#/components/parameters/RequestId'
     get:
       tags:
-      - Audit access (staff)
-      operationId: querySecurityAuditEvents
-      summary: Query security audit chain
-      description: '**AUD-03** · Auth: staff + MFA · Authorization: `security_audit.read` (SECURITY_ADMIN, SUPER_ADMIN; I-23).
+      - Operations (Stage 14)
+      operationId: adminAuditSecurityEvents
+      summary: Search the security audit log
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `security_audit.read` (non-staff → `404`). Newest first by sequence; the
+        query is itself audited.
 
 
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: audit.queried (new; security chain)'
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: audit.queried (security) · Cache-Control: no-store'
       security:
       - staffSession: []
       parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      - name: action
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 64
-        description: Allow-listed filter.
-      - name: actor_id
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Uuid'
-        description: Allow-listed filter.
       - name: from
         in: query
         required: false
         schema:
           $ref: '#/components/schemas/Timestamp'
-        description: Allow-listed filter.
       - name: to
         in: query
         required: false
         schema:
           $ref: '#/components/schemas/Timestamp'
-        description: Allow-listed filter.
+      - name: action
+        in: query
+        required: false
+        schema:
+          type: string
+        description: exact, or a prefix ending in '.'
+      - name: actor_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: target_type
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: target_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: correlation_id
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: request_id
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: outcome
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - success
+          - denied
+          - failed
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
       responses:
         '200':
           description: Success.
           headers:
             X-Request-ID:
               $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuditEventPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                $ref: '#/components/schemas/OpsAuditEventS14Page'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '500':
           $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: AUD-03
-      x-fundzim-auth: staff+MFA
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
       x-fundzim-permission: security_audit.read
+      x-fundzim-step-up: false
       x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: audit.queried (new; security chain)
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
-      - INVALID_FILTER
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
   /admin/audit/chain-verifications:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -38046,6 +38063,1982 @@ paths:
       - SCREENING_REFERENCE_UNKNOWN
       - SCREENING_UNAVAILABLE
       - RATE_LIMITED
+  /admin/operations/overview:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsOverview
+      summary: Operations command center
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.dashboard.view` (non-staff → `404`). Metrics the caller may see (each
+        with its source and nature), module read status, alerts and tasks. **Stage 14: TEST environment** — the portal orchestrates; decisions stay with the
+        owning modules (ADR-046).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsOverviewS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.dashboard.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/operations/metrics:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsMetrics
+      summary: Operational metrics
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.dashboard.view` (non-staff → `404`). The command center''s metrics
+        as a flat list.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsMetricS14Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.dashboard.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/operations/tasks:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsTasks
+      summary: My task indicators
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.dashboard.view` (non-staff → `404`). In-app indicators only (no email,
+        SMS or WhatsApp).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsTasksS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.dashboard.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/operations/health:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsHealth
+      summary: Platform health
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.dashboard.view` (non-staff → `404`). Probes, outbox backlog and job
+        queue measured now; application errors NOT_AVAILABLE.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsHealthS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.dashboard.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/operations/alerts:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsAlerts
+      summary: Operational alerts
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.dashboard.view` (non-staff → `404`). Derived now from health and
+        module snapshots (engineering-default thresholds).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsAlertS14Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.dashboard.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/operations/search:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsSearch
+      summary: Global operations search
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.dashboard.view` (non-staff → `404`). Identifiers and campaign titles;
+        per-module permissions; bounded; audited.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: ops.search.performed · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 3
+          maxLength: 100
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSearchS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.dashboard.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - VALIDATION_FAILED
+  /admin/operations/exceptions:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsExceptions
+      summary: Exception center
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.dashboard.view` (non-staff → `404`). Open exceptions from every module
+        the caller may see, with triage state.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: module
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: severity
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - SEV1
+          - SEV2
+          - SEV3
+          - SEV4
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+        description: triage status or UNTRIAGED
+      - name: assigned_to
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - me
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsExceptionS14Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.dashboard.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/operations/exceptions/{module}/{ref}/history:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsExceptionHistory
+      summary: Exception triage history
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.dashboard.view` (non-staff → `404`). Append-only. Needs ops.exception.work
+        and the permission the owning module requires to see the exception (stored on the triage record); no step-up for reading. Not triaged yet: an empty
+        list.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: module
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z_]{1,40}$
+        description: Owning module.
+      - name: ref
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The exception id as listed (URL-encoded).
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsHistoryS14Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.dashboard.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/operations/exceptions/{module}/{ref}/triage:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsExceptionTriage
+      summary: Triage an exception
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.exception.work` + fresh step-up (non-staff → `404`). Assign, acknowledge,
+        investigate, wait on a third party, finish triage; never resolves the domain record.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ops.exception.triaged · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: module
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z_]{1,40}$
+        description: Owning module.
+      - name: ref
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The exception id as listed (URL-encoded).
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsTriageS14'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsExceptionS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.exception.work
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - OPS_EXCEPTION_DOMAIN_OPEN
+      - OPS_EXCEPTION_NOT_OPEN
+      - OPS_RECORD_CHANGED
+      - OPS_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/operations/incidents:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsIncidents
+      summary: Operational incidents
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.incident.view` (non-staff → `404`). Open first.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+        description: a status or OPEN_ANY
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsIncidentS14Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.incident.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsDeclareIncident
+      summary: Declare an incident
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.incident.manage` + fresh step-up (non-staff → `404`). From an alert,
+        the open incident of that alert is returned.
+
+
+
+        Idempotency: required (scope ops.incidents.create) · Rate-limit: RL-STAFF-WRITE · Audit: ops.incident.declared · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsIncidentCreateS14'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsIncidentS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.incident.manage
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required (scope ops.incidents.create)
+      x-fundzim-error-codes:
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/operations/incidents/{incident_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsIncident
+      summary: One incident
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.incident.view` (non-staff → `404`). With its timeline.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: incident_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsIncidentDetailS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.incident.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - OPS_NOT_FOUND
+  /admin/operations/incidents/{incident_id}/update:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsUpdateIncident
+      summary: Update an incident
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.incident.manage` + fresh step-up (non-staff → `404`). Transition,
+        owner, severity and/or a timeline note (post-incident notes after resolution).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ops.incident.updated · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: incident_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsIncidentUpdateS14'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsIncidentS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.incident.manage
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - OPS_RECORD_CHANGED
+      - OPS_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/operations/sla-targets:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsSLATargets
+      summary: Internal SLA targets
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.dashboard.view` (non-staff → `404`). Active and proposed targets.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSLATargetS14Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.dashboard.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsProposeSLA
+      summary: Propose an internal target (maker)
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.sla.request` + fresh step-up (non-staff → `404`). Not a contractual
+        or regulatory deadline.
+
+
+
+        Idempotency: required (scope ops.sla_targets.create) · Rate-limit: RL-STAFF-WRITE · Audit: ops.sla_target.proposed · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsSLACreateS14'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSLATargetS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.sla.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required (scope ops.sla_targets.create)
+      x-fundzim-error-codes:
+      - OPS_SLA_TARGET_PENDING
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/operations/sla-targets/{target_id}/approve:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsSLAApprove
+      summary: Approve an internal target (checker)
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.sla.approve` + fresh step-up (non-staff → `404`). Never the proposer
+        or a linked account (Go and database).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ops.sla_target.approved · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: target_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsReasonS14'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSLATargetS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.sla.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - OPS_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/operations/sla-targets/{target_id}/reject:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpsSLAReject
+      summary: Reject an internal target (checker)
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.sla.approve` + fresh step-up (non-staff → `404`). Never the proposer
+        or a linked account (Go and database).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ops.sla_target.rejected · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: target_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsReasonS14'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSLATargetS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.sla.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - OPS_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/approvals:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminApprovals
+      summary: Approval center
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.dashboard.view` (non-staff → `404`). Pending maker-checker decisions
+        across modules, oldest first; decide on the owning module (href). **Stage 14: TEST environment** — the portal orchestrates; decisions stay with the
+        owning modules (ADR-046).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: module
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: action
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: decidable
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - 'true'
+          - 'false'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsApprovalS14Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.dashboard.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/support/cases:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminSupportCases
+      summary: Support case queue
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.support.view` (non-staff → `404`). Newest first; keyset cursor.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+        description: a status or OPEN_ANY
+      - name: category
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - GENERAL
+          - ACCOUNT
+          - CAMPAIGN
+          - DONATION
+          - VERIFICATION
+          - WITHDRAWAL
+          - TECHNICAL
+      - name: priority
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - P1
+          - P2
+          - P3
+          - P4
+      - name: assigned_to
+        in: query
+        required: false
+        schema:
+          type: string
+        description: me, unassigned or a staff id
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+        description: case number or subject fragment
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSupportCaseS14Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.support.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminOpenSupportCase
+      summary: Open a support case
+      description: "**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.support.work` + fresh step-up (non-staff → `404`). \n\n\nIdempotency:\
+        \ required (scope ops.support_cases.create) · Rate-limit: RL-STAFF-WRITE · Audit: ops.support_case.opened · Cache-Control: no-store"
+      security:
+      - staffSession: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsSupportCreateS14'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSupportCaseS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.support.work
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required (scope ops.support_cases.create)
+      x-fundzim-error-codes:
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/support/cases/{case_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminSupportCase
+      summary: One support case
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.support.view` (non-staff → `404`). With its history (internal notes
+        included; never shown to the requester).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSupportDetailS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.support.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - OPS_NOT_FOUND
+  /admin/support/cases/{case_id}/assign:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminSupportCaseAssign
+      summary: Assign
+      description: "**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.support.work` + fresh step-up (non-staff → `404`). \n\n\nIdempotency:\
+        \ n/a · Rate-limit: RL-STAFF-WRITE · Audit: ops.support_case.assigned · Cache-Control: no-store"
+      security:
+      - staffSession: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsSupportActionS14'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSupportCaseS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.support.work
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - OPS_RECORD_CHANGED
+      - OPS_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/support/cases/{case_id}/transition:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminSupportCaseTransition
+      summary: Move along the lifecycle
+      description: "**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.support.work` + fresh step-up (non-staff → `404`). \n\n\nIdempotency:\
+        \ n/a · Rate-limit: RL-STAFF-WRITE · Audit: ops.support_case.transitioned · Cache-Control: no-store"
+      security:
+      - staffSession: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsSupportActionS14'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSupportCaseS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.support.work
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - OPS_RECORD_CHANGED
+      - OPS_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/support/cases/{case_id}/escalate:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminSupportCaseEscalate
+      summary: Escalate to another team (ownership kept)
+      description: "**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.support.work` + fresh step-up (non-staff → `404`). \n\n\nIdempotency:\
+        \ n/a · Rate-limit: RL-STAFF-WRITE · Audit: ops.support_case.escalated · Cache-Control: no-store"
+      security:
+      - staffSession: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsSupportActionS14'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSupportCaseS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.support.work
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - OPS_RECORD_CHANGED
+      - OPS_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/support/cases/{case_id}/notes:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminSupportCaseNotes
+      summary: Add an internal note
+      description: "**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `ops.support.work` + fresh step-up (non-staff → `404`). \n\n\nIdempotency:\
+        \ n/a · Rate-limit: RL-STAFF-WRITE · Audit: — · Cache-Control: no-store"
+      security:
+      - staffSession: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsSupportActionS14'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSupportCaseS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: ops.support.work
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - OPS_RECORD_CHANGED
+      - OPS_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/access-reviews:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminAccessReviews
+      summary: Staff access reviews
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `staff.view` (non-staff → `404`). Newest first.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsAccessReviewS14Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: staff.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminStartAccessReview
+      summary: Start an access review
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `access.review.run` + fresh step-up (non-staff → `404`). Snapshots the
+        current (staff, role) pairs; the reviewer is not the creator.
+
+
+
+        Idempotency: required (scope ops.access_reviews.create) · Rate-limit: RL-STAFF-WRITE · Audit: ops.access_review.started · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsAccessReviewCreateS14'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsAccessReviewS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: access.review.run
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required (scope ops.access_reviews.create)
+      x-fundzim-error-codes:
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/access-reviews/{review_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminAccessReview
+      summary: One access review
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `staff.view` (non-staff → `404`). With its items.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: review_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsAccessReviewS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: staff.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/access-reviews/{review_id}/items/{item_id}/decide:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminDecideAccessReviewItem
+      summary: Certify or recommend revocation
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `access.review.certify` + fresh step-up (non-staff → `404`). The named
+        reviewer only; never their own access or a linked account''s; a recommendation files a role REVOKE request.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ops.access_review.item_decided · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: review_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsReviewDecisionS14'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsAccessReviewS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: access.review.certify
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - OPS_CONFLICT_OF_INTEREST
+      - OPS_NOT_REVIEWER
+      - OPS_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/access-reviews/{review_id}/complete:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminCompleteAccessReview
+      summary: Complete an access review
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `access.review.run` + fresh step-up (non-staff → `404`). Its creator,
+        once every item is decided.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: ops.access_review.completed · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: review_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsAccessReviewS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: access.review.run
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - OPS_STATE
+      - STEP_UP_REQUIRED
+  /admin/staff/roles:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminStaffRoles
+      summary: Role and permission inventory
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `staff.view` (non-staff → `404`). Every role, its permissions and active
+        holders.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsRoleS14Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: staff.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/staff/{user_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminStaffMember
+      summary: One staff member
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `staff.view` (non-staff → `404`). Roles, effective permissions, role history,
+        pending role changes, recent security event types (view audited).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: staff.viewed (security) · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsStaffDetailS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: staff.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - STAFF_NOT_FOUND
+  /admin/staff/{user_id}/sessions/revoke:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminRevokeStaffSessions
+      summary: End a staff member's sessions
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `session.revoke` + fresh step-up (non-staff → `404`). Never your own (use
+        your account page).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: session.revoked_by_staff (security) · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsStaffReasonS14'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpsSessionsRevokedS14Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: session.revoke
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - SELF_ACTION_FORBIDDEN
+      - STAFF_NOT_FOUND
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/audit/exports:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Operations (Stage 14)
+      operationId: adminAuditExport
+      summary: Export audit events
+      description: '**Stage 14 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `audit.export` + fresh step-up (non-staff → `404`). Bounded CSV or JSON
+        export of the platform audit stream (≤ 31 days, ≤ 5,000 events), audited before it is returned.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: audit.exported (security) · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpsAuditExportS14'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+            Content-Disposition:
+              description: attachment; filename=…
+              schema:
+                type: string
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 14
+      x-fundzim-auth: staff
+      x-fundzim-permission: audit.export
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - AUDIT_EXPORT_TOO_LARGE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
 components:
   securitySchemes:
     session:
@@ -42623,37 +44616,6 @@ components:
       - permissions
       - mfa_methods
       - step_up_valid_until
-    StaffMember:
-      type: object
-      description: Staff account (role administration).
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        display_name:
-          type: string
-        email_masked:
-          type: string
-        roles:
-          type: array
-          items:
-            type: string
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - OFFBOARDED
-        last_login_at:
-          oneOf:
-          - $ref: '#/components/schemas/Timestamp'
-          - type: 'null'
-      required:
-      - id
-      - display_name
-      - email_masked
-      - roles
-      - status
-      - last_login_at
     AccountRecoveryAssistRequest:
       type: object
       description: Support-mediated recovery (identity re-verification; payout hold + cooling-off).
@@ -44420,19 +46382,6 @@ components:
           $ref: '#/components/schemas/StaffOrganisationView'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
-    StaffMemberPage:
-      type: object
-      description: Standard envelope (cursor page) for `StaffMember`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/StaffMember'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
     KillSwitchPage:
       type: object
       description: Standard envelope (cursor page) for `KillSwitch`.
@@ -44527,19 +46476,6 @@ components:
           $ref: '#/components/schemas/ReportJob'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
-    ReportJobPage:
-      type: object
-      description: Standard envelope (cursor page) for `ReportJob`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/ReportJob'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
     ReconciliationSourcePage:
       type: object
       description: Standard envelope (cursor page) for `ReconciliationSource`.
@@ -44647,19 +46583,6 @@ components:
           $ref: '#/components/schemas/SettlementBatch'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
-    AuditEventPage:
-      type: object
-      description: Standard envelope (cursor page) for `AuditEvent`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/AuditEvent'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
     AuditEventEnvelope:
       type: object
       description: Standard envelope for `AuditEvent`.
@@ -58654,6 +60577,1824 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/RiskHistoryEventS13'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsMetricS14:
+      type: object
+      description: One counted figure with its documented source. value null = not measurable (nature says why); a module that cannot be read is UNAVAILABLE,
+        never 0.
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        module:
+          type: string
+        value:
+          type:
+          - integer
+          - 'null'
+        nature:
+          type: string
+          enum:
+          - REAL
+          - SIMULATED
+          - TEST_ONLY
+          - UNKNOWN
+          - NOT_AVAILABLE
+          - BLOCKED
+          description: 'REAL: a count of records here (never business performance); TEST_ONLY: TEST money/fixtures; SIMULATED: simulator output; BLOCKED: deliberately
+            disabled.'
+        status:
+          type: string
+        source:
+          type: string
+        permission:
+          type: string
+        href:
+          type: string
+      required:
+      - key
+      - label
+      - module
+      - value
+      - nature
+      - source
+      - permission
+      additionalProperties: false
+    OpsSourceStatusS14:
+      type: object
+      properties:
+        module:
+          type: string
+        status:
+          type: string
+          enum:
+          - HEALTHY
+          - UNAVAILABLE
+        error:
+          type: string
+      required:
+      - module
+      - status
+      additionalProperties: false
+    OpsAlertS14:
+      type: object
+      description: 'An alert derived now from health checks and module snapshots (engineering-default thresholds). In-app only: no external delivery (Stage
+        15).'
+      properties:
+        key:
+          type: string
+        severity:
+          type: string
+          enum:
+          - SEV1
+          - SEV2
+          - SEV3
+          - SEV4
+        title:
+          type: string
+        source:
+          type: string
+        observed_at:
+          $ref: '#/components/schemas/Timestamp'
+        incident_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      required:
+      - key
+      - severity
+      - title
+      - source
+      - observed_at
+      - incident_id
+      additionalProperties: false
+    OpsTasksS14:
+      type: object
+      description: The caller's in-app task indicators.
+      properties:
+        approvals_to_decide:
+          type: integer
+        support_cases_assigned:
+          type: integer
+        support_cases_overdue:
+          type: integer
+        exceptions_assigned:
+          type: integer
+        incidents_owned:
+          type: integer
+        access_review_items_pending:
+          type: integer
+        open_incidents:
+          type: integer
+      required:
+      - approvals_to_decide
+      - support_cases_assigned
+      - support_cases_overdue
+      - exceptions_assigned
+      - incidents_owned
+      - access_review_items_pending
+      - open_incidents
+      additionalProperties: false
+    OpsOverviewS14:
+      type: object
+      description: 'The operations command center: only metrics the caller may see, each with its source; partial failure shows the module as UNAVAILABLE.'
+      properties:
+        generated_at:
+          $ref: '#/components/schemas/Timestamp'
+        environment:
+          type: string
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsMetricS14'
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsSourceStatusS14'
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsAlertS14'
+        tasks:
+          $ref: '#/components/schemas/OpsTasksS14'
+        notice:
+          type: string
+      required:
+      - generated_at
+      - environment
+      - metrics
+      - sources
+      - alerts
+      - tasks
+      - notice
+      additionalProperties: false
+    OpsComponentS14:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+          - HEALTHY
+          - DEGRADED
+          - UNAVAILABLE
+          - BLOCKED
+          - UNKNOWN
+          - NOT_CONFIGURED
+        detail:
+          type: string
+        source:
+          type: string
+        observed_at:
+          $ref: '#/components/schemas/Timestamp'
+        facts:
+          type: object
+      required:
+      - name
+      - status
+      - detail
+      - source
+      - observed_at
+      additionalProperties: false
+    OpsHealthS14:
+      type: object
+      description: Platform health measured now (probes, outbox table, job queue). Nothing is HEALTHY without evidence.
+      properties:
+        generated_at:
+          $ref: '#/components/schemas/Timestamp'
+        overall:
+          type: string
+          enum:
+          - HEALTHY
+          - DEGRADED
+          - UNAVAILABLE
+          - BLOCKED
+          - UNKNOWN
+          - NOT_CONFIGURED
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsComponentS14'
+        outbox:
+          type: object
+        jobs:
+          type: object
+        notice:
+          type: string
+      required:
+      - generated_at
+      - overall
+      - components
+      - outbox
+      - jobs
+      - notice
+      additionalProperties: false
+    OpsApprovalS14:
+      type: object
+      description: A pending maker-checker decision owned by a module. The decision is taken on the owning module's page and route (href), which re-checks permission,
+        step-up, maker-checker (linked accounts included), current state and idempotency. The approval center never decides.
+      properties:
+        id:
+          type: string
+        source_module:
+          type: string
+        source_record_id:
+          type: string
+        action:
+          type: string
+        summary:
+          type: string
+        requested_by:
+          type: string
+        requested_at:
+          $ref: '#/components/schemas/Timestamp'
+        required_permission:
+          type: string
+        status:
+          type: string
+        risk_level:
+          type: string
+        assigned_approver:
+          type: string
+        href:
+          type: string
+        can_decide:
+          type: boolean
+        blocked_reason:
+          type: string
+          enum:
+          - MAKER
+          - PERMISSION
+        age_seconds:
+          type: integer
+      required:
+      - id
+      - source_module
+      - source_record_id
+      - action
+      - summary
+      - requested_by
+      - requested_at
+      - required_permission
+      - status
+      - href
+      - can_decide
+      - age_seconds
+      additionalProperties: false
+    OpsExceptionS14:
+      type: object
+      description: An unresolved exception reported by its owning module, with the operations triage state (UNTRIAGED until touched). Resolution stays with
+        the module.
+      properties:
+        id:
+          type: string
+        source_module:
+          type: string
+        source_ref:
+          type: string
+        severity:
+          type: string
+        category:
+          type: string
+        summary:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        domain_status:
+          type: string
+        permission:
+          type: string
+        correlation_id:
+          type: string
+        evidence_ref:
+          type: string
+        href:
+          type: string
+        domain_open:
+          type: boolean
+        triage_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        triage_status:
+          type: string
+        assigned_to:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        triage_resolution:
+          type:
+          - string
+          - 'null'
+        triage_updated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        triage_version:
+          type: integer
+      required:
+      - id
+      - source_module
+      - severity
+      - category
+      - summary
+      - created_at
+      - domain_status
+      - domain_open
+      - triage_status
+      additionalProperties: false
+    OpsTriageS14:
+      type: object
+      description: RESOLVED is refused while the owning module still reports the exception as open (OPS_EXCEPTION_DOMAIN_OPEN).
+      properties:
+        to:
+          type: string
+          enum:
+          - ACKNOWLEDGED
+          - INVESTIGATING
+          - WAITING_EXTERNAL
+          - RESOLVED
+          - CLOSED
+          - REOPENED
+          - ''
+        assignee_id:
+          type: string
+          format: uuid
+        note:
+          type: string
+          maxLength: 4000
+        version:
+          type: integer
+      required: []
+      additionalProperties: false
+    OpsHistoryS14:
+      type: object
+      properties:
+        event_type:
+          type: string
+        actor_id:
+          type: string
+        from_status:
+          type: string
+        to_status:
+          type: string
+        note:
+          type: string
+        occurred_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - event_type
+      - actor_id
+      - occurred_at
+      additionalProperties: false
+    OpsIncidentS14:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        incident_number:
+          type: integer
+        title:
+          type: string
+        severity:
+          type: string
+          enum:
+          - SEV1
+          - SEV2
+          - SEV3
+          - SEV4
+        affected_module:
+          type: string
+        status:
+          type: string
+          enum:
+          - DETECTED
+          - ACKNOWLEDGED
+          - INVESTIGATING
+          - MITIGATING
+          - MONITORING
+          - RESOLVED
+          - CLOSED
+        owner_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        started_at:
+          $ref: '#/components/schemas/Timestamp'
+        detected_by:
+          type: string
+          enum:
+          - STAFF
+          - ALERT
+        alert_key:
+          type:
+          - string
+          - 'null'
+        resolution:
+          type:
+          - string
+          - 'null'
+        resolved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        post_incident_notes:
+          type:
+          - string
+          - 'null'
+        created_by:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - incident_number
+      - title
+      - severity
+      - affected_module
+      - status
+      - owner_id
+      - started_at
+      - detected_by
+      - alert_key
+      - resolution
+      - resolved_at
+      - post_incident_notes
+      - created_by
+      - version
+      - created_at
+      - updated_at
+      additionalProperties: false
+    OpsIncidentDetailS14:
+      type: object
+      properties:
+        incident:
+          $ref: '#/components/schemas/OpsIncidentS14'
+        timeline:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsHistoryS14'
+      required:
+      - incident
+      - timeline
+      additionalProperties: false
+    OpsIncidentCreateS14:
+      type: object
+      description: From an alert, an open incident for the same alert key is returned instead of a duplicate.
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 200
+        severity:
+          type: string
+          enum:
+          - SEV1
+          - SEV2
+          - SEV3
+          - SEV4
+        affected_module:
+          type: string
+          pattern: ^[a-z][a-z_]{1,40}$
+        started_at:
+          $ref: '#/components/schemas/Timestamp'
+        alert_key:
+          type: string
+          pattern: ^[A-Z][A-Z0-9_]{2,80}$
+        note:
+          type: string
+      required:
+      - title
+      - severity
+      - affected_module
+      additionalProperties: false
+    OpsIncidentUpdateS14:
+      type: object
+      properties:
+        to:
+          type: string
+          enum:
+          - DETECTED
+          - ACKNOWLEDGED
+          - INVESTIGATING
+          - MITIGATING
+          - MONITORING
+          - RESOLVED
+          - CLOSED
+        owner_id:
+          type: string
+          format: uuid
+        note:
+          type: string
+        severity:
+          type: string
+          enum:
+          - SEV1
+          - SEV2
+          - SEV3
+          - SEV4
+        version:
+          type: integer
+      required: []
+      additionalProperties: false
+    OpsSupportCaseS14:
+      type: object
+      description: A support case — not a risk or compliance investigation; it never holds risk evidence, compliance notes, KYC documents or account numbers.
+        due_at comes only from an approved internal SUPPORT_RESOLUTION target.
+      properties:
+        id:
+          type: string
+          format: uuid
+        case_number:
+          type: integer
+        subject:
+          type: string
+        category:
+          type: string
+          enum:
+          - GENERAL
+          - ACCOUNT
+          - CAMPAIGN
+          - DONATION
+          - VERIFICATION
+          - WITHDRAWAL
+          - TECHNICAL
+        priority:
+          type: string
+          enum:
+          - P1
+          - P2
+          - P3
+          - P4
+        status:
+          type: string
+          enum:
+          - OPEN
+          - TRIAGE
+          - IN_PROGRESS
+          - WAITING_FOR_CUSTOMER
+          - ESCALATED
+          - RESOLVED
+          - CLOSED
+          - REOPENED
+        requester_user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        assigned_to:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        related_campaign_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        related_reference_type:
+          type:
+          - string
+          - 'null'
+        related_reference_id:
+          type:
+          - string
+          - 'null'
+        escalated_to:
+          type:
+          - string
+          - 'null'
+        escalation_reference:
+          type:
+          - string
+          - 'null'
+        resolution:
+          type:
+          - string
+          - 'null'
+        resolved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        due_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_by:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - case_number
+      - subject
+      - category
+      - priority
+      - status
+      - requester_user_id
+      - assigned_to
+      - related_campaign_id
+      - related_reference_type
+      - related_reference_id
+      - escalated_to
+      - escalation_reference
+      - resolution
+      - resolved_at
+      - due_at
+      - created_by
+      - version
+      - created_at
+      - updated_at
+      additionalProperties: false
+    OpsSupportDetailS14:
+      type: object
+      properties:
+        case:
+          $ref: '#/components/schemas/OpsSupportCaseS14'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsHistoryS14'
+      required:
+      - case
+      - history
+      additionalProperties: false
+    OpsSupportCreateS14:
+      type: object
+      properties:
+        subject:
+          type: string
+          minLength: 3
+          maxLength: 200
+        category:
+          type: string
+          enum:
+          - GENERAL
+          - ACCOUNT
+          - CAMPAIGN
+          - DONATION
+          - VERIFICATION
+          - WITHDRAWAL
+          - TECHNICAL
+        priority:
+          type: string
+          enum:
+          - P1
+          - P2
+          - P3
+          - P4
+        requester_user_id:
+          type: string
+          format: uuid
+        related_campaign_id:
+          type: string
+          format: uuid
+        related_reference_type:
+          type: string
+          enum:
+          - DONATION_INTENT
+          - PAYMENT
+          - PAYOUT_REQUEST
+          - KYC_CASE
+          - KYB_CASE
+          - BENEFICIARY
+          - CAMPAIGN_REPORT
+          - OTHER
+        related_reference_id:
+          type: string
+          maxLength: 200
+        note:
+          type: string
+          maxLength: 4000
+      required:
+      - subject
+      - category
+      additionalProperties: false
+    OpsSupportActionS14:
+      type: object
+      description: 'assign: assignee_id (default the caller; must hold ops.support.work). transition: to (+ note for RESOLVED/CLOSED/REOPENED). escalate: escalated_to
+        + note. notes: note.'
+      properties:
+        assignee_id:
+          type: string
+          format: uuid
+        to:
+          type: string
+          enum:
+          - OPEN
+          - TRIAGE
+          - IN_PROGRESS
+          - WAITING_FOR_CUSTOMER
+          - ESCALATED
+          - RESOLVED
+          - CLOSED
+          - REOPENED
+        escalated_to:
+          type: string
+          enum:
+          - CAMPAIGN_MODERATION
+          - VERIFICATION
+          - RISK_COMPLIANCE
+          - PAYMENTS
+          - PAYOUTS
+          - FINANCIAL_OPERATIONS
+          - TECHNICAL_OPERATIONS
+        escalation_reference:
+          type: string
+          maxLength: 200
+        note:
+          type: string
+          maxLength: 4000
+        version:
+          type: integer
+      required: []
+      additionalProperties: false
+    OpsReviewItemS14:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        staff_user_id:
+          type: string
+          format: uuid
+        role_code:
+          type: string
+        decision:
+          type: string
+          enum:
+          - PENDING
+          - CERTIFIED
+          - REVOKE_RECOMMENDED
+        decided_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        reason:
+          type:
+          - string
+          - 'null'
+        revoke_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+      required:
+      - id
+      - staff_user_id
+      - role_code
+      - decision
+      - decided_by
+      - decided_at
+      - reason
+      - revoke_request_id
+      additionalProperties: false
+    OpsAccessReviewS14:
+      type: object
+      description: 'A staff access review: the reviewer is never its creator and never certifies their own access; a revocation recommendation files a dual-controlled
+        role REVOKE request.'
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        scope_role:
+          type:
+          - string
+          - 'null'
+        status:
+          type: string
+          enum:
+          - OPEN
+          - COMPLETED
+          - CANCELLED
+        created_by:
+          type: string
+          format: uuid
+        reviewer_id:
+          type: string
+          format: uuid
+        due_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        version:
+          type: integer
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsReviewItemS14'
+        pending_items:
+          type: integer
+      required:
+      - id
+      - title
+      - status
+      - created_by
+      - reviewer_id
+      - version
+      - created_at
+      - pending_items
+      additionalProperties: false
+    OpsAccessReviewCreateS14:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 200
+        scope_role:
+          type: string
+        reviewer_id:
+          type: string
+          format: uuid
+        due_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - title
+      - reviewer_id
+      additionalProperties: false
+    OpsReviewDecisionS14:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum:
+          - CERTIFIED
+          - REVOKE_RECOMMENDED
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 2000
+      required:
+      - decision
+      - reason
+      additionalProperties: false
+    OpsSLATargetS14:
+      type: object
+      description: An internal operational target (maker-checker) — never a contractual or regulatory deadline. None is seeded.
+      properties:
+        id:
+          type: string
+          format: uuid
+        metric_key:
+          type: string
+          enum:
+          - VERIFICATION_REVIEW_TURNAROUND
+          - CAMPAIGN_MODERATION_TURNAROUND
+          - SUPPORT_FIRST_RESPONSE
+          - SUPPORT_RESOLUTION
+          - RISK_INVESTIGATION_AGE
+          - APPROVAL_PROCESSING
+          - EXCEPTION_RESOLUTION
+          - INCIDENT_ACKNOWLEDGEMENT
+        target_seconds:
+          type: integer
+        status:
+          type: string
+          enum:
+          - PROPOSED
+          - ACTIVE
+          - REJECTED
+          - SUPERSEDED
+        reason:
+          type: string
+        proposed_by:
+          type: string
+          format: uuid
+        proposed_at:
+          $ref: '#/components/schemas/Timestamp'
+        decided_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        decision_reason:
+          type:
+          - string
+          - 'null'
+        notice:
+          type: string
+      required:
+      - id
+      - metric_key
+      - target_seconds
+      - status
+      - reason
+      - proposed_by
+      - proposed_at
+      - decided_by
+      - decided_at
+      - decision_reason
+      - notice
+      additionalProperties: false
+    OpsSLACreateS14:
+      type: object
+      properties:
+        metric_key:
+          type: string
+          enum:
+          - VERIFICATION_REVIEW_TURNAROUND
+          - CAMPAIGN_MODERATION_TURNAROUND
+          - SUPPORT_FIRST_RESPONSE
+          - SUPPORT_RESOLUTION
+          - RISK_INVESTIGATION_AGE
+          - APPROVAL_PROCESSING
+          - EXCEPTION_RESOLUTION
+          - INCIDENT_ACKNOWLEDGEMENT
+        target_seconds:
+          type: integer
+          minimum: 60
+          maximum: 31536000
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 2000
+      required:
+      - metric_key
+      - target_seconds
+      - reason
+      additionalProperties: false
+    OpsReasonS14:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 2000
+      required:
+      - reason
+      additionalProperties: false
+    OpsReportRowS14:
+      type: object
+      properties:
+        group:
+          type: string
+        label:
+          type: string
+        value:
+          type:
+          - integer
+          - 'null'
+        unit:
+          type: string
+          enum:
+          - count
+          - seconds
+        nature:
+          type: string
+          enum:
+          - REAL
+          - SIMULATED
+          - TEST_ONLY
+          - UNKNOWN
+          - NOT_AVAILABLE
+          - BLOCKED
+          description: 'REAL: a count of records here (never business performance); TEST_ONLY: TEST money/fixtures; SIMULATED: simulator output; BLOCKED: deliberately
+            disabled.'
+      required:
+      - group
+      - label
+      - value
+      - unit
+      - nature
+      additionalProperties: false
+    OpsReportS14:
+      type: object
+      description: Every report states source, range, filters, environment, freshness and limitations. Counts only; currencies never combined; no SLA claim
+        without an approved target.
+      properties:
+        key:
+          type: string
+        title:
+          type: string
+        generated_at:
+          $ref: '#/components/schemas/Timestamp'
+        from:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        to:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        filters:
+          type: object
+          additionalProperties:
+            type: string
+        environment:
+          type: string
+        source:
+          type: string
+        freshness:
+          type: string
+        limitations:
+          type: array
+          items:
+            type: string
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsReportRowS14'
+      required:
+      - key
+      - title
+      - generated_at
+      - from
+      - to
+      - filters
+      - environment
+      - source
+      - freshness
+      - limitations
+      - rows
+      additionalProperties: false
+    OpsSearchHitS14:
+      type: object
+      properties:
+        kind:
+          type: string
+        id:
+          type: string
+        label:
+          type: string
+        status:
+          type: string
+        permission:
+          type: string
+        href:
+          type: string
+      required:
+      - kind
+      - id
+      - label
+      - href
+      additionalProperties: false
+    OpsSearchS14:
+      type: object
+      description: Identifiers and campaign titles only (no email, phone or document search); per-module permission checks; at most 20 hits per module; audited
+        (kind and count only).
+      properties:
+        query:
+          type: string
+        hits:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsSearchHitS14'
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpsSourceStatusS14'
+        notice:
+          type: string
+      required:
+      - query
+      - hits
+      - sources
+      - notice
+      additionalProperties: false
+    OpsStaffMemberS14:
+      type: object
+      description: 'A staff directory row: no email, phone or personal data beyond the display name.'
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        status:
+          type: string
+        personal_account_linked:
+          type: boolean
+        suspended_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        roles:
+          type: array
+          items:
+            type: string
+        mfa_confirmed:
+          type: boolean
+        last_activity_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        active_sessions:
+          type: integer
+      required:
+      - id
+      - display_name
+      - status
+      - personal_account_linked
+      - suspended_at
+      - created_at
+      - roles
+      - mfa_confirmed
+      - last_activity_at
+      - active_sessions
+      additionalProperties: false
+    OpsStaffDetailS14:
+      type: object
+      properties:
+        member:
+          $ref: '#/components/schemas/OpsStaffMemberS14'
+        permissions:
+          type: array
+          items:
+            type: string
+        role_history:
+          type: array
+          items:
+            type: object
+        pending_role_requests:
+          type: array
+          items:
+            type: object
+        recent_security_events:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              occurred_at:
+                $ref: '#/components/schemas/Timestamp'
+            required:
+            - type
+            - occurred_at
+            additionalProperties: false
+      required:
+      - member
+      - permissions
+      - role_history
+      - pending_role_requests
+      - recent_security_events
+      additionalProperties: false
+    OpsRoleS14:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        holders:
+          type: integer
+      required:
+      - code
+      - name
+      - permissions
+      - holders
+      additionalProperties: false
+    OpsSessionsRevokedS14:
+      type: object
+      properties:
+        revoked_sessions:
+          type: integer
+      required:
+      - revoked_sessions
+      additionalProperties: false
+    OpsStaffReasonS14:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 1000
+      required:
+      - reason
+      additionalProperties: false
+    OpsAuditEventS14:
+      type: object
+      description: An append-only audit event (hash chained). ip and user_agent only for callers with security_audit.read.
+      properties:
+        id:
+          type: string
+          format: uuid
+        seq:
+          type: integer
+        occurred_at:
+          $ref: '#/components/schemas/Timestamp'
+        actor_type:
+          type: string
+        actor_id:
+          type:
+          - string
+          - 'null'
+        actor_role:
+          type:
+          - string
+          - 'null'
+        action:
+          type: string
+        target_type:
+          type: string
+        target_id:
+          type:
+          - string
+          - 'null'
+        outcome:
+          type: string
+        request_id:
+          type:
+          - string
+          - 'null'
+        correlation_id:
+          type:
+          - string
+          - 'null'
+        reason:
+          type:
+          - string
+          - 'null'
+        justification:
+          type:
+          - string
+          - 'null'
+        metadata:
+          type: object
+        break_glass:
+          type: boolean
+        ip:
+          type:
+          - string
+          - 'null'
+        user_agent:
+          type:
+          - string
+          - 'null'
+        hash:
+          type: string
+      required:
+      - id
+      - seq
+      - occurred_at
+      - actor_type
+      - action
+      - target_type
+      - outcome
+      - metadata
+      - break_glass
+      - hash
+      additionalProperties: false
+    OpsAuditExportS14:
+      type: object
+      description: At most 31 days and 5,000 events; never IP or user agent; spreadsheet formulas neutralised; the export is audited first.
+      properties:
+        format:
+          type: string
+          enum:
+          - csv
+          - json
+        from:
+          $ref: '#/components/schemas/Timestamp'
+        to:
+          $ref: '#/components/schemas/Timestamp'
+        action:
+          type: string
+        actor_id:
+          type: string
+          format: uuid
+        target_type:
+          type: string
+        correlation_id:
+          type: string
+      required:
+      - format
+      - from
+      - to
+      additionalProperties: false
+    OpsOverviewS14Envelope:
+      type: object
+      description: Standard envelope for `OpsOverviewS14`.
+      properties:
+        data:
+          $ref: '#/components/schemas/OpsOverviewS14'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsHealthS14Envelope:
+      type: object
+      description: Standard envelope for `OpsHealthS14`.
+      properties:
+        data:
+          $ref: '#/components/schemas/OpsHealthS14'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsTasksS14Envelope:
+      type: object
+      description: Standard envelope for `OpsTasksS14`.
+      properties:
+        data:
+          $ref: '#/components/schemas/OpsTasksS14'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsSearchS14Envelope:
+      type: object
+      description: Standard envelope for `OpsSearchS14`.
+      properties:
+        data:
+          $ref: '#/components/schemas/OpsSearchS14'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsExceptionS14Envelope:
+      type: object
+      description: Standard envelope for `OpsExceptionS14`.
+      properties:
+        data:
+          $ref: '#/components/schemas/OpsExceptionS14'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsIncidentS14Envelope:
+      type: object
+      description: Standard envelope for `OpsIncidentS14`.
+      properties:
+        data:
+          $ref: '#/components/schemas/OpsIncidentS14'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsIncidentDetailS14Envelope:
+      type: object
+      description: Standard envelope for `OpsIncidentDetailS14`.
+      properties:
+        data:
+          $ref: '#/components/schemas/OpsIncidentDetailS14'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsSupportCaseS14Envelope:
+      type: object
+      description: Standard envelope for `OpsSupportCaseS14`.
+      properties:
+        data:
+          $ref: '#/components/schemas/OpsSupportCaseS14'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsSupportDetailS14Envelope:
+      type: object
+      description: Standard envelope for `OpsSupportDetailS14`.
+      properties:
+        data:
+          $ref: '#/components/schemas/OpsSupportDetailS14'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsAccessReviewS14Envelope:
+      type: object
+      description: Standard envelope for `OpsAccessReviewS14`.
+      properties:
+        data:
+          $ref: '#/components/schemas/OpsAccessReviewS14'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsSLATargetS14Envelope:
+      type: object
+      description: Standard envelope for `OpsSLATargetS14`.
+      properties:
+        data:
+          $ref: '#/components/schemas/OpsSLATargetS14'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsStaffDetailS14Envelope:
+      type: object
+      description: Standard envelope for `OpsStaffDetailS14`.
+      properties:
+        data:
+          $ref: '#/components/schemas/OpsStaffDetailS14'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsSessionsRevokedS14Envelope:
+      type: object
+      description: Standard envelope for `OpsSessionsRevokedS14`.
+      properties:
+        data:
+          $ref: '#/components/schemas/OpsSessionsRevokedS14'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsMetricS14Page:
+      type: object
+      description: Page of `OpsMetricS14`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpsMetricS14'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsAlertS14Page:
+      type: object
+      description: Page of `OpsAlertS14`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpsAlertS14'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsApprovalS14Page:
+      type: object
+      description: Page of `OpsApprovalS14`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpsApprovalS14'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsExceptionS14Page:
+      type: object
+      description: Page of `OpsExceptionS14`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpsExceptionS14'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsHistoryS14Page:
+      type: object
+      description: Page of `OpsHistoryS14`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpsHistoryS14'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsIncidentS14Page:
+      type: object
+      description: Page of `OpsIncidentS14`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpsIncidentS14'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsSupportCaseS14Page:
+      type: object
+      description: Page of `OpsSupportCaseS14`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpsSupportCaseS14'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsAccessReviewS14Page:
+      type: object
+      description: Page of `OpsAccessReviewS14`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpsAccessReviewS14'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsSLATargetS14Page:
+      type: object
+      description: Page of `OpsSLATargetS14`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpsSLATargetS14'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsReportS14Page:
+      type: object
+      description: Page of `OpsReportS14`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpsReportS14'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsStaffMemberS14Page:
+      type: object
+      description: Page of `OpsStaffMemberS14`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpsStaffMemberS14'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsRoleS14Page:
+      type: object
+      description: Page of `OpsRoleS14`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpsRoleS14'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    OpsAuditEventS14Page:
+      type: object
+      description: Page of `OpsAuditEventS14`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OpsAuditEventS14'
             next_cursor:
               type:
               - string

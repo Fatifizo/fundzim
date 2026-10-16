@@ -19,7 +19,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   if (!session.authenticated || session.user?.account_kind !== "STAFF") return <>{children}</>;
   return (
     <StepUpProvider mfaEnabled codeOnly>
-      <AdminShell>{children}</AdminShell>
+      <AdminShell me={session.user}>{children}</AdminShell>
     </StepUpProvider>
   );
 }

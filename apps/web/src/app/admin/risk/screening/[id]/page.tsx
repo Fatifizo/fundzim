@@ -11,6 +11,7 @@ import { isUuid } from "@/lib/campaigns/paths";
 import { humanise } from "@/lib/payments/labels";
 import { screeningStatusLabel } from "@/lib/risk/labels";
 import { readScreeningDetail } from "@/lib/risk/normalise";
+import { mayRisk } from "@/lib/risk/permissions";
 
 export const metadata: Metadata = { title: "Screening request (TEST)", robots: { index: false, follow: false, nocache: true } };
 
@@ -18,7 +19,7 @@ export const metadata: Metadata = { title: "Screening request (TEST)", robots: {
 export default async function RiskScreeningRequestPage({ params }: PageProps<"/admin/risk/screening/[id]">) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
-  await requireStaff();
+  const me = await requireStaff();
   const d = readScreeningDetail((await serverGetOr404<unknown>(`/api/v1/admin/risk/screening/${id}`, `${RISK_BASE}/screening/${id}`)).data);
   if (!d) notFound();
   const s = d.request;
@@ -47,9 +48,9 @@ export default async function RiskScreeningRequestPage({ params }: PageProps<"/a
       <Section id="review" title="Analyst review">
         <p className="text-ink-700">A potential match is not a finding about anyone. You cannot review a screening you requested.</p>
         <div className="flex flex-wrap gap-3">
-          <RiskAction target={{ kind: "screening-confirm", id: s.id }} available={reviewable} />
-          <RiskAction target={{ kind: "screening-clear", id: s.id }} available={reviewable} />
-          <RiskAction target={{ kind: "screening-retry", id: s.id }} available={s.status === "ERROR"} />
+          <RiskAction target={{ kind: "screening-confirm", id: s.id }} available={(reviewable) && mayRisk(me.permissions, "screening-confirm")} />
+          <RiskAction target={{ kind: "screening-clear", id: s.id }} available={(reviewable) && mayRisk(me.permissions, "screening-clear")} />
+          <RiskAction target={{ kind: "screening-retry", id: s.id }} available={(s.status === "ERROR") && mayRisk(me.permissions, "screening-retry")} />
         </div>
       </Section>
       <Section id="results" title="Provider results (as received)">

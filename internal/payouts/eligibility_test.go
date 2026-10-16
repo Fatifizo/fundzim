@@ -92,6 +92,7 @@ func TestEvaluateEachBlockingCondition(t *testing.T) {
 		{"TEST screening timed out is not clear", PhaseRequest, "EC-15", Review, func(f *Facts) { f.ScreeningStatus = "ERROR" }},
 		{"TEST screening pending is not clear", PhaseRequest, "EC-15", Review, func(f *Facts) { f.ScreeningStatus = "PENDING" }},
 		{"high risk classification", PhaseRequest, "EC-16", Review, func(f *Facts) { f.Indicators = []string{"RISK_CLASSIFICATION_HIGH"} }},
+		{"incomplete risk evaluation (Stage 14)", PhaseRequest, "EC-16", Review, func(f *Facts) { f.Indicators = []string{"RISK_EVALUATION_INCOMPLETE"} }},
 		{"production payout: no screening", PhaseRequest, "EC-15", Fail, func(f *Facts) { f.TestMode = false }},
 		{"risk indicator", PhaseRequest, "EC-16", Review, func(f *Facts) { f.Indicators = []string{"RECENT_DESTINATION_CHANGE"} }},
 		{"velocity", PhaseRequest, "EC-17", Review, func(f *Facts) { f.RecentPayoutCount7d = 5 }},

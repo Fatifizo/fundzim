@@ -479,6 +479,14 @@ Notes on ordering:
 - **Acceptance criteria:** Every staff action authorised and audited; no role has implicit KYC or ledger
   powers.
 
+- **Stage 14 as delivered (2026-10-16, awaiting acceptance):** unified permission-aware admin shell, operations command
+  center, approval center (routing to owning modules), exception center with triage, platform health and alerts, incidents,
+  support cases, staff directory, session revocation, access reviews, audit center with bounded audited exports, reports and
+  maker-checker internal SLA targets; risk rule fault isolation ([stage-14/implementation.md](stage-14/implementation.md),
+  ADR-046). **Deviations:** the staff portal stays on the same hostname and session as the app (no hostname/session
+  separation); user search is exact-id only (no masked-PII search); KYC review, payout approval and investigation UIs are
+  the existing module pages, linked from the portal; no break-glass UI; exports are limited to the audit center.
+
 ## Stage 15 — Notifications & Communications
 
 - **Objective:** Reliable, consented email and SMS notifications.

@@ -13,6 +13,9 @@ import { isUuid } from "@/lib/campaigns/paths";
 import { humanise } from "@/lib/payments/labels";
 import { durationText, ruleActions } from "@/lib/risk/labels";
 import { readHistory, readRiskPage, readRule } from "@/lib/risk/normalise";
+import { NoPermission } from "@/components/admin/operations/ops";
+import { can } from "@/lib/operations/navigation";
+import { RISK_FORM_PERMISSION, mayRisk } from "@/lib/risk/permissions";
 
 export const metadata: Metadata = { title: "Risk rule", robots: { index: false, follow: false, nocache: true } };
 
@@ -22,7 +25,7 @@ const ACTIONS = ["submit", "approve", "reject", "activate", "suspend", "reactiva
 export default async function RiskRulePage({ params }: PageProps<"/admin/risk/rules/[id]">) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
-  await requireStaff();
+  const me = await requireStaff();
   const path = `${RISK_BASE}/rules/${id}`;
   const r = readRule((await serverGetOr404<unknown>(`/api/v1/admin/risk/rules/${id}`, path)).data);
   if (!r) notFound();
@@ -69,13 +72,13 @@ export default async function RiskRulePage({ params }: PageProps<"/admin/risk/ru
                 <div className="flex flex-wrap gap-3">
                   {ACTIONS.map((a) => {
                     const target: RiskActionTarget = a === "approve" ? { kind: "rule-approve", id: v.id, definitionHash: v.definition_hash } : { kind: `rule-${a}`, id: v.id };
-                    return <RiskAction key={a} target={target} available={ruleActions(v.status).includes(a)} />;
+                    return <RiskAction key={a} target={target} available={ruleActions(v.status).includes(a) && mayRisk(me.permissions, target.kind)} />;
                   })}
                 </div>
                 <details className="rounded-card border border-line p-3">
                   <summary className="cursor-pointer font-semibold text-ink-900">Simulate against a subject</summary>
                   <div className="mt-3">
-                    <SimulateForm versionId={v.id} />
+                    {can(me.permissions, RISK_FORM_PERMISSION.simulate) ? <SimulateForm versionId={v.id} /> : null}
                   </div>
                 </details>
                 <HistoryTable items={histories[i] ?? []} caption={`Version ${v.version_no} history`} />
@@ -86,11 +89,11 @@ export default async function RiskRulePage({ params }: PageProps<"/admin/risk/ru
       </Section>
       {draft ? (
         <Section id="edit-draft" title="Edit the draft" description="A draft is editable until it is submitted; submitting freezes and hashes it.">
-          <RuleVersionForm ruleId={r.id} draft={draft} />
+          {can(me.permissions, RISK_FORM_PERMISSION.ruleVersion) ? <RuleVersionForm ruleId={r.id} draft={draft} /> : <NoPermission action="Editing a draft" permission={RISK_FORM_PERMISSION.ruleVersion} />}
         </Section>
       ) : (
         <Section id="draft" title="Draft a new version" description="A new version is a draft until it is submitted, approved by a different person and activated.">
-          {openDraft ? <p className="text-ink-700">A pending version already exists. Decide it first.</p> : <RuleVersionForm ruleId={r.id} />}
+          {openDraft ? <p className="text-ink-700">A pending version already exists. Decide it first.</p> : can(me.permissions, RISK_FORM_PERMISSION.ruleVersion) ? <RuleVersionForm ruleId={r.id} /> : <NoPermission action="Drafting a version" permission={RISK_FORM_PERMISSION.ruleVersion} />}
         </Section>
       )}
     </AccountPage>

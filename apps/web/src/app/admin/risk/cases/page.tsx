@@ -8,6 +8,9 @@ import { requireStaff, serverGetOr404 } from "@/lib/auth/session";
 import { buildQuery, humanise, pick } from "@/lib/payments/labels";
 import { readCase, readRiskPage } from "@/lib/risk/normalise";
 import { CASE_STATUSES, CASE_TYPES, PRIORITIES } from "@/lib/risk/types";
+import { NoPermission } from "@/components/admin/operations/ops";
+import { can } from "@/lib/operations/navigation";
+import { RISK_FORM_PERMISSION } from "@/lib/risk/permissions";
 
 export const metadata: Metadata = { title: "Risk cases", robots: { index: false, follow: false, nocache: true } };
 
@@ -16,7 +19,7 @@ const STATUS_FILTER = ["OPEN_ANY", ...CASE_STATUSES] as const;
 
 /** Risk case queue (`risk.operations.view`), most urgent first. Opening a case needs `risk.case.work`. */
 export default async function RiskCasesPage({ searchParams }: PageProps<"/admin/risk/cases">) {
-  await requireStaff();
+  const me = await requireStaff();
   const p = await searchParams;
   const filters = { status: pick(p.status, STATUS_FILTER) ?? "OPEN_ANY", priority: pick(p.priority, PRIORITIES), case_type: pick(p.case_type, CASE_TYPES),
     assigned_to: pick(p.assigned_to, ["me", "unassigned"] as const) };
@@ -36,7 +39,7 @@ export default async function RiskCasesPage({ searchParams }: PageProps<"/admin/
       />
       <CasesTable items={page.items} caption="Risk cases" />
       <Section id="open" title="Open a case" description="Never about yourself or an account linked to yours.">
-        <OpenCaseForm />
+        {can(me.permissions, RISK_FORM_PERMISSION.openCase) ? <OpenCaseForm /> : <NoPermission action="Opening a case" permission={RISK_FORM_PERMISSION.openCase} />}
       </Section>
     </AccountPage>
   );

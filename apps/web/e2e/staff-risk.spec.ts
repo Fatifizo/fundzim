@@ -117,12 +117,19 @@ test("risk: TEST screening wording and the finance read-only view", async ({ pag
   await expect(other.getByRole("heading", { level: 1, name: "Risk operations" })).toBeVisible();
   await other.goto(`/admin/risk/rules/${s.rule_id}`);
   await expect(other.getByRole("heading", { level: 1, name: "Risk rule" })).toBeVisible();
-  await other.getByRole("button", { name: "Approve version" }).click();
-  const dialog = other.getByRole("dialog", { name: "Approve this rule version?" });
-  await dialog.getByLabel("Reason (staff only)").fill("E2E: finance has no approval permission");
-  await confirmIn(dialog, "Confirm: Approve");
-  await expect(dialog.getByRole("alert").first()).toBeVisible();
-  await expect(other.getByRole("status").filter({ hasText: "Version approved." })).toHaveCount(0);
+  // Stage 14 (KI-S13-21): actions the caller's roles do not include are not offered at all …
+  await expect(other.getByRole("button", { name: "Approve version" })).toHaveCount(0);
+  // … and the API still refuses them when sent directly
+  const status = await other.evaluate(async (vid) => {
+    const csrf = /(?:^|; )fz_csrf=([^;]+)/.exec(document.cookie)?.[1] ?? "";
+    const r = await fetch(`/api/v1/admin/risk/rule-versions/${vid}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+      body: JSON.stringify({ reason: "E2E: finance has no approval permission" }),
+    });
+    return r.status;
+  }, s.version_id);
+  expect(status).toBe(403);
   await ctx.close();
   expect(await cspViolations(page)).toEqual([]);
 });

@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 
 const ALL = ["risk.operations.view", "risk.case.work", "risk.case.approve", "risk.rule.request", "risk.rule.approve", "risk.hold.create", "risk.hold.release",
   "risk.screening.request", "risk.screening.review"];
-const ROLE_PERMISSIONS = { COMPLIANCE: ALL, FINANCE: ["risk.operations.view"], ADMIN: ["risk.sandbox.control"] };
+export const ROLE_PERMISSIONS = { COMPLIANCE: ALL, FINANCE: ["risk.operations.view"], ADMIN: ["risk.sandbox.control"] };
 const UUID = "[0-9a-f-]{36}";
 const OTHER_STAFF = "0192a000-0000-7000-8000-00000000f102";
 const iso = (msAgo = 0) => new Date(Date.now() - msAgo).toISOString();
