@@ -84,7 +84,9 @@ test("risk: overview banner, rule approval (checker), case assignment and hold r
   const release = page.getByRole("dialog", { name: "Approve the release of this hold?" });
   await release.getByLabel("Reason (staff only)").fill("E2E: review completed, release checked");
   await confirmIn(release, /^Confirm/);
-  await expect(page.getByRole("status").filter({ hasText: /release/i }).first()).toBeVisible();
+  // a released hold leaves the open list (its row, and the action's notice with it)
+  await expect(release).toHaveCount(0);
+  await expect(page.getByRole("row").filter({ hasText: s.hold_id.slice(0, 12) })).toHaveCount(0);
 
   expect(await main.textContent()).not.toMatch(FINDING);
   expect(await cspViolations(page)).toEqual([]);

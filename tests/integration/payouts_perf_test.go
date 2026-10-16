@@ -137,8 +137,14 @@ func TestPayoutsPerf(t *testing.T) {
 		return err
 	}))
 	for _, id := range ids_ {
+		// the compose worker may already have submitted an APPROVED payout (it shares the database): only those may stay
 		if _, err := p.po.CancelByStaff(ctx(t), p.f.finance1.id, id, "perf cleanup cancel"); err != nil {
-			t.Fatal(err)
+			var st string
+			_ = p.mig.QueryRow(ctx(t), `SELECT status FROM app.payout_requests WHERE id = $1`, id).Scan(&st)
+			if st == "APPROVED" || st == "PENDING_REVIEW" || st == "PAYOUT_REQUESTED" {
+				t.Fatal(err)
+			}
+			t.Logf("perf cleanup: payout %s already %s (taken by the worker)", id, st)
 		}
 	}
 	// reads

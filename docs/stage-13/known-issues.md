@@ -21,6 +21,7 @@
 | KI-S13-17 | Development-database residue: integration tests leave TEST rules (retired), signals, evaluations, cases, holds (released) and screening rows | Shared dev DB only | ACCEPTED |
 | KI-S13-18 | The compose worker image predates Stage 13 until rebuilt; integration tests run the risk pipeline in-process | Local stack only | OPEN — rebuild containers |
 | KI-S13-19 | Not built from the Stage 12 handover list: instrument-fingerprint signals (many donors from one payment instrument), self-donation detection, refund-abuse and chargeback-exposure signals (no dispute source; refunds cannot execute) | Narrower donation-risk coverage | OPEN (payments must emit fingerprint ids; disputes are a later stage) |
-| KI-S13-20 | `TestPublicExperienceEndpoints` failed once in the full local integration run (a campaign review required a second approval) and passed alone; it exercises no risk code | Possible cross-test interaction on the shared dev database | OPEN — watch CI |
+| KI-S13-20 | `TestPublicExperienceEndpoints` failed once in the full local integration run (a campaign review required a second approval) and passed alone; it exercises no risk code | Possible cross-test interaction on the shared dev database; it passed in CI run 38862166299 | OPEN — monitor |
 | KI-S13-21 | The risk UI offers actions the viewer may lack permission for (FINANCE sees buttons; the API refuses with 403); there is no client-side permission model in the app yet | UX only; the API is the authority | OPEN (Stage 14 permission matrix) |
+| KI-S13-22 | CI run 38862166299: `TestPayoutsPerf` cleanup failed to cancel a payout the compose worker had already submitted (shared database); cleanup now tolerates payouts the worker took | Test harness only | FIXED (harness) |
 
