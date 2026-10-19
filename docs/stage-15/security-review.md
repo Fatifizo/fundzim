@@ -22,6 +22,8 @@ review claimed).
 | Broadcast abuse | no broadcast or free-form send endpoint exists; staff cannot message users | route table review |
 | Replay abuse | per-dead-letter, step-up, reason, audited, one winner under concurrency, full re-check | dead-letter test |
 | Secrets and personal data in logs/audit | audit metadata has keys and codes only (no bodies, destinations, tokens); credential messages stay in `auth` and are never stored as notifications | code review |
+| Unbounded provider calls / duplicate payout submission (Stage 11, KI-S15-19) | payout resubmission after DEFINITELY_NOT_SENT is budgeted (configurable, jittered backoff); exhaustion opens a SEV2 exception and halts automatic submission in the dispatcher **and** in the attempts guard; an UNKNOWN outcome is never resubmitted; reservations and journals untouched | `TestPayoutSubmitRetryBudgetHaltsAndResumes` (4 concurrent dispatchers, restarted worker, database refusal, operator resume), `TestPayoutHistoricalExcessiveAttemptsHaltedWithoutAnotherCall`, `TestPayoutUnknownOutcomeKeepsReservationAndIsNeverResubmitted` |
+| Notification work starving financial jobs | notification fan-out, sweep and simulator callbacks run only on the River `notifications` queue | `TestNotificationsQueueIsolation`, `TestRelayPlanRoutesConsumerQueues` |
 | Open redirect via deep links | relative-path CHECK on `deep_link` | migration |
 | Enumeration through suppression or consent endpoints | user endpoints act only on the caller; staff suppression takes an account id, never an address | code review |
 
@@ -34,4 +36,7 @@ Findings fixed during Stage 15:
 * A simulator acceptance counted as WhatsApp template approval for any provider → only when the active provider is the
   simulator.
 * Staff accounts lost their security e-mails (creation was limited to in-app for staff) → security e-mail stays
+* Finalisation: payouts refused as DEFINITELY_NOT_SENT were resubmitted without an effective limit (Stage 11) → bounded
+  budget, exception and database halt (KI-S11-20 / KI-S15-19).
+* Finalisation: the notification fan-out shared the default queue with media scans and payouts → dedicated queue.
   mandatory for every account; other staff channels remain in-app only.

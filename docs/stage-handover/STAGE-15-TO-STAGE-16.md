@@ -22,6 +22,9 @@ From Stage 15 (this stage):
 - Consent records per channel and purpose; marketing disabled (`MarketingEnabled = false`). Referral or promotional
   messages are **marketing** and stay impossible until LR-023 is answered.
 - `CAMPAIGN_*` notices to owners (approved, published, paused, …) in-app and e-mail (development senders only).
+- All notification work on the River `notifications` queue (`outbox.Relay.ConsumerQueues`): new Stage 16 consumers that
+  could fan out widely (e.g. share analytics) should follow the same pattern rather than share the default queue.
+- Payout resubmission after "definitely not sent" outcomes is budgeted (KI-S11-20); Stage 16 does not touch payouts.
 
 ## 2. Scope to settle in Stage 16 (from the brief §88)
 

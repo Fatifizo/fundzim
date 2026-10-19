@@ -89,6 +89,10 @@ type Service struct {
 	ReconGrace time.Duration
 	// Fees estimates payout fees at request time and assesses them on completion (Stage 12; nil: no fee records).
 	Fees PayoutFees
+	// SubmitRetryBudget, SubmitRetryBase, SubmitRetryMax bound automatic same-reference resubmissions after
+	// DEFINITELY_NOT_SENT outcomes (PAYOUTS_SUBMIT_RETRY_*; zero values use the defaults).
+	SubmitRetryBudget               int
+	SubmitRetryBase, SubmitRetryMax time.Duration
 }
 
 // PayoutFees is the fees module's payout integration (fees.Service).

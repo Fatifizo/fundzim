@@ -37,12 +37,17 @@ func (s *Service) OpsSnapshot(ctx context.Context) (opsview.Snapshot, error) {
 		(SELECT count(*) FROM app.notification_webhook_rejections WHERE received_at > $2),
 		(SELECT count(*) FROM app.notification_deliveries WHERE conflicting_evidence),
 		(SELECT max(last_seen_at) FROM app.notification_worker_heartbeats),
-		-- consent enforcement check: an external delivery that reached a provider although the consent it needed is not GRANTED
-		(SELECT count(*) FROM app.notification_deliveries d JOIN app.notifications n ON n.id = d.notification_id
-		  WHERE d.status IN ('SUBMITTED','ACCEPTED','DELIVERED','READ') AND d.created_at > $2
-		  AND (d.channel IN ('SMS','WHATSAPP') OR n.category = 'MARKETING')
+		-- consent enforcement check: an external delivery that reached a provider although the consent it needed is not
+		-- GRANTED — SMS/WhatsApp service messages (index on status, channel) and marketing on any channel (partial index)
+		(SELECT count(*) FROM app.notification_deliveries d
+		  WHERE d.status IN ('SUBMITTED','ACCEPTED','DELIVERED','READ') AND d.channel IN ('SMS','WHATSAPP') AND d.created_at > $2
+		  -- a scalar subquery (not flattened into a join): one primary-key lookup per sent SMS/WhatsApp delivery
+		  AND (SELECT n.category <> 'MARKETING' AND NOT EXISTS (SELECT 1 FROM app.communication_consents c WHERE c.user_id = n.recipient_user_id
+		    AND c.channel = d.channel AND c.purpose = 'SERVICE_MESSAGES' AND c.status = 'GRANTED') FROM app.notifications n WHERE n.id = d.notification_id))
+		+ (SELECT count(*) FROM app.notifications n JOIN app.notification_deliveries d ON d.notification_id = n.id
+		  WHERE n.category = 'MARKETING' AND n.created_at > $2 AND d.status IN ('SUBMITTED','ACCEPTED','DELIVERED','READ')
 		  AND NOT EXISTS (SELECT 1 FROM app.communication_consents c WHERE c.user_id = n.recipient_user_id AND c.channel = d.channel
-		    AND c.purpose = CASE WHEN n.category = 'MARKETING' THEN 'MARKETING' ELSE 'SERVICE_MESSAGES' END AND c.status = 'GRANTED'))`,
+		    AND c.purpose = 'MARKETING' AND c.status = 'GRANTED'))`,
 		now.Add(-time.Hour), now.Add(-24*time.Hour)).
 		Scan(&queued, &oldestQueued, &retry, &unknown, &dead, &attempts, &failures, &rejections, &conflicts, &lastBeat, &violations); err != nil {
 		return snap, err

@@ -101,6 +101,13 @@ type Payouts struct {
 	// ExecutionEnvironment (PAYOUTS_EXECUTION_ENVIRONMENT): DISABLED (default) | LOCAL_SIMULATOR. PROVIDER_SANDBOX and
 	// PRODUCTION are refused: no payout provider is confirmed (ADR-040).
 	ExecutionEnvironment string
+	// SubmitRetryBudget (PAYOUTS_SUBMIT_RETRY_BUDGET, 1–50, default 5) bounds automatic same-reference resubmissions after
+	// DEFINITELY_NOT_SENT or RATE_LIMITED outcomes; when it is spent, automatic submission stops and an operational
+	// exception (SUBMISSION_RETRIES_EXHAUSTED) is opened. An UNKNOWN outcome is never retried, whatever the budget.
+	SubmitRetryBudget int
+	// SubmitRetryBase / SubmitRetryMax (PAYOUTS_SUBMIT_RETRY_BASE 1 s–5 min, default 5 s; PAYOUTS_SUBMIT_RETRY_MAX
+	// 10 s–6 h, default 10 min): exponential backoff with ±20 % jitter between those attempts.
+	SubmitRetryBase, SubmitRetryMax time.Duration
 }
 
 // Ledger configures the Stage 10 ledger (ADR-042). Production posting is a code constant (ledger.ProductionPostingEnabled).
@@ -554,7 +561,13 @@ func Load(get LookupFunc) (Config, error) {
 	if c.Ledger.SyntheticFixturesEnabled && env == EnvProduction {
 		l.fail("LEDGER_SYNTHETIC_FIXTURES_ENABLED is refused in production (synthetic fixtures are TEST_ONLY)")
 	}
-	c.Payouts = Payouts{ExecutionEnvironment: l.str("PAYOUTS_EXECUTION_ENVIRONMENT", ExecDisabled)}
+	c.Payouts = Payouts{ExecutionEnvironment: l.str("PAYOUTS_EXECUTION_ENVIRONMENT", ExecDisabled),
+		SubmitRetryBudget: l.integer("PAYOUTS_SUBMIT_RETRY_BUDGET", 5, 1, 50),
+		SubmitRetryBase:   l.duration("PAYOUTS_SUBMIT_RETRY_BASE", 5*time.Second, time.Second, 5*time.Minute),
+		SubmitRetryMax:    l.duration("PAYOUTS_SUBMIT_RETRY_MAX", 10*time.Minute, 10*time.Second, 6*time.Hour)}
+	if c.Payouts.SubmitRetryMax < c.Payouts.SubmitRetryBase {
+		l.fail("PAYOUTS_SUBMIT_RETRY_MAX must not be shorter than PAYOUTS_SUBMIT_RETRY_BASE")
+	}
 	switch c.Payouts.ExecutionEnvironment {
 	case ExecDisabled:
 	case ExecLocalSimulator:

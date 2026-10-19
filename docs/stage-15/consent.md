@@ -26,9 +26,9 @@ legal review) and an **evidence reference** (the server-assigned request id of t
 * **Policy change:** a grant under an older policy version is treated as `REQUIRES_RECONFIRMATION` (suppressed until the
   user confirms again; the UI shows "Confirm again").
 * **Expiry:** an `expires_at` column exists; no expiry period is set (none was confirmed).
-* A consent or suppression lookup error fails closed: nothing is sent, the delivery becomes FAILED_RETRYABLE
-  `ROUTING_CHECK_FAILED` and is retried (`deliver.go`). The failure-injection suite covers a database outage during a
-  sweep; a fault confined to the consent query alone is not separately injected (KI-S15-12, [known-issues.md](known-issues.md)).
+* A consent or suppression lookup error fails closed. At creation the whole notification fails and the outbox
+  redelivers the event (fault-injected in `TestNotificationsConsentLookupFailureFailsClosed`); before a send the delivery
+  becomes FAILED_RETRYABLE `ROUTING_CHECK_FAILED` and nothing is sent (`deliver.go`; code review — KI-S15-12).
 * Consent changes are rate-limited (`notifications.consent.user`, 30 per hour) and audited.
 * Consent records are never deleted; retention is LR-012.
 

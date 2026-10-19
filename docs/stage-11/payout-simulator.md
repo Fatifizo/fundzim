@@ -42,8 +42,9 @@ WORKER_RESTART                                UNKNOWN (CRASH_DURING_CREATE; rese
 ```
 
 Notes: duplicate deliveries are deduplicated by the inbox (UNIQUE provider + event id) before the payout sees them; the
-late lower-rank webhook is recorded as not applied (LOWER_RANK); PROVIDER_UNAVAILABLE keeps retrying with the **same**
-reference and backoff (all attempts DEFINITELY_NOT_SENT) and stays SUBMITTED with the money in transit; a crashed
+late lower-rank webhook is recorded as not applied (LOWER_RANK); PROVIDER_UNAVAILABLE retries with the **same**
+reference and jittered backoff (all attempts DEFINITELY_NOT_SENT) until the retry budget is spent (KI-S11-20), then
+automatic submission halts with a SUBMISSION_RETRIES_EXHAUSTED exception; it stays SUBMITTED with the money in transit; a crashed
 in-flight call becomes UNKNOWN (CRASH_DURING_CREATE) and is never resent (exactly one CREATE_PAYOUT attempt).
 Staff controls (development only, `payout.sandbox.control`): `GET /admin/payouts/sandbox/{id}`,
 `POST /admin/payouts/sandbox/{id}/webhooks`.

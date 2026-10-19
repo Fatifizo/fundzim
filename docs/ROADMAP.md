@@ -508,7 +508,9 @@ Notes on ordering:
   communications dashboard; operations health and alerts ([stage-15/implementation.md](stage-15/implementation.md),
   ADR-047). **Deviations:** no e-mail or SMS provider was chosen (LR-010, LR-011, LR-023 and provider confirmations are
   open) — TEST-only simulators and local development senders stand in and live messaging is disabled in code; marketing is
-  disabled; English templates only; polling instead of push.
+  disabled; English templates only; polling instead of push. **Finalisation (2026-10-19):** Stage 11 payout resubmission
+  after "definitely not sent" outcomes is now budgeted with jittered backoff and halts with an operational exception
+  (KI-S11-20); notification work runs on its own queue; staff-payments E2E flake fixed at its cause.
 
 ## Stage 16 — Discovery, Sharing & WhatsApp Optimisation
 

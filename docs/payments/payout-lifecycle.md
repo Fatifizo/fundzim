@@ -144,7 +144,8 @@ sequenceDiagram
         else timeout / reset after send / 5xx
             S->>DB: SUBMITTED → UNKNOWN; schedule poll (never resubmit)
         else definitely not sent (connection refused before write)
-            S->>P: CreatePayout(ref=payout_id) retry — same reference
+            S->>P: CreatePayout(ref=payout_id) retry — same reference, jittered backoff, within the retry budget
+            Note over S,DB: budget spent → SUBMISSION_RETRIES_EXHAUSTED exception; automatic submission halted (stays SUBMITTED)
         end
         P->>API: webhook payout.completed (verified, inbox, dedupe)
         API->>DB: BEGIN; lock payout; → COMPLETED; post payout:{id}:completed; COMMIT

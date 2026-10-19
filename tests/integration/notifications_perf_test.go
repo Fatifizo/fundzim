@@ -29,7 +29,13 @@ func TestNotificationsPerf(t *testing.T) {
 		recips[i] = x.taggedUser(t, "", "").id
 	}
 	var out string
-	add := func(res poRes) { out += res.row(); t.Log(res.row()) }
+	add := func(res poRes) {
+		out += res.row()
+		t.Log(res.row())
+		if res.errors > 0 { // a measurement with failed calls is a defect, not a number (an unindexed snapshot once failed here)
+			t.Errorf("%s: %d failed calls", res.name, res.errors)
+		}
+	}
 	header := "| scenario | c | n | p50 ms | p95 ms | max ms | ops/s | errors |\n|---|---:|---:|---:|---:|---:|---:|---:|\n"
 	add(poMeasure("notification creation (recipient resolution, routing for 4 channels, in-app render)", 400, workers, func(w, i int) error {
 		_, err := x.n.Notify(ctx(t), "perf:"+ids.New(), notifications.Intent{TemplateKey: "CAMPAIGN_APPROVED", Category: "CAMPAIGN", Recipients: []string{recips[w]}})

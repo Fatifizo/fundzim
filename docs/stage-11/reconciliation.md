@@ -23,7 +23,7 @@ RECONCILIATION_REQUIRED event. A rerun does not duplicate while that exception i
 ## 2. Exception queue (`app.payout_exceptions`)
 
 Types: UNKNOWN_PROVIDER_OUTCOME, DESTINATION_MISMATCH, INSUFFICIENT_ELIGIBLE_FUNDS, COMPLIANCE_HOLD, APPROVAL_EXPIRED,
-PROVIDER_UNAVAILABLE, RECONCILIATION_MISMATCH, DUPLICATE_SUBMISSION_ATTEMPT, LEDGER_POSTING_FAILED,
+PROVIDER_UNAVAILABLE, RECONCILIATION_MISMATCH, DUPLICATE_SUBMISSION_ATTEMPT, LEDGER_POSTING_FAILED, SUBMISSION_RETRIES_EXHAUSTED (KI-S11-20),
 LATE_COMPLETION_AFTER_FAILURE (SEV1: the provider paid a payout we released as FAILED), PAYOUT_RETURNED. Each has
 severity, source, detection time, owner, status, evidence (ids and codes, no personal data) and an append-only resolution
 history (`payout_exception_events`). One unresolved exception per (type, payout); detection fields are immutable.

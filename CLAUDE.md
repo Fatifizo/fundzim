@@ -34,7 +34,11 @@ placeholder-only, immutable after DRAFT and maker-checker (never the maker, subm
 is never APPROVED without provider evidence; acceptance is not delivery, an unknown outcome is looked up before any resend,
 and provider callbacks never regress a delivered state; no Zimbabwean consent or retention rule is assumed (LR-010, LR-011,
 LR-012, LR-023). Notification integration tests (`TestNotifications*`) build an in-process engine with simulators on the
-shared development database alongside the compose worker: scope assertions to the test's own users.
+shared development database alongside the compose worker: scope assertions to the test's own users. All notification
+work runs on the River `notifications` queue (`outbox.Relay.ConsumerQueues`); never put it back on the default queue.
+Stage 15 finalisation (KI-S11-20): payout resubmission after DEFINITELY_NOT_SENT is bounded by `PAYOUTS_SUBMIT_RETRY_BUDGET`
+with jittered backoff; when spent, a `SUBMISSION_RETRIES_EXHAUSTED` exception halts automatic submission (dispatcher and
+attempts guard) until an operator resolves it — never remove the halt or retry an UNKNOWN payout.
 
 **Stage 14 — Administration & operations portal (complete; awaiting acceptance; TEST data only).** What Stage 14 built:
 `docs/stage-14/implementation.md` (prerequisites, operations architecture, command center, staff management, approval center,

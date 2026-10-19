@@ -46,6 +46,13 @@ replaced by `/notifications/preferences`.
 `deliveries`, `deliveries/[id]`, `dead-letters`, `templates`, `templates/[id]`, `providers`, `suppressions`, `reports`,
 `consent`); unread counts on the dashboard home, account menu and admin shell; a "Communications" navigation group.
 
+**Finalisation (2026-10-19).** Stage 11 payout resubmission after DEFINITELY_NOT_SENT outcomes is bounded (KI-S11-20 /
+KI-S15-19; migration `20261019090000_payout_submit_retry_budget`, `PAYOUTS_SUBMIT_RETRY_*`); notification work runs on
+its own River queue (`outbox.Relay.ConsumerQueues`); the operations snapshot no longer scans whole tables (migration
+`20261019090100_notification_ops_indexes`, KI-S15-21); new tests for queue isolation, consent withdrawal during a retry,
+consent-lookup fault injection, payout terminal success and production delivery, notification and payout retry
+configuration; the staff-payments E2E flake was fixed at its cause (KI-S15-15).
+
 ## Acceptance criteria (brief §87) — engineering self-assessment
 
 | # | Criterion | Result | Evidence |
@@ -65,7 +72,7 @@ replaced by `/notifications/preferences`.
 | 47–49 | Dashboard, provider readiness, reporting | MET | E2E staff spec; `/admin/communications/*` |
 | 50–52 | Health, alerts, audit | MET | `OpsSnapshot` in the operations overview; seven alerts; audit actions `notifications.*` |
 | 53–55 | Migrations, API, RBAC | MET | migration round-trip; Redocly; RBAC tests |
-| 56–61 | Tenant isolation, security, consent, financial, concurrency, failure-injection tests | MET, with KI-S15-12 | [testing.md](testing.md) |
+| 56–61 | Tenant isolation, security, consent, financial, concurrency, failure-injection tests | MET (send-time consent-fault path code-reviewed only, KI-S15-12) | [testing.md](testing.md) |
 | 62–64 | Backend, frontend, accessibility | MET (automated) | Go, vitest, Playwright with axe (desktop and Pixel 7); no manual screen-reader audit |
 | 65 | OpenAPI | MET | Redocly 2.54.3 |
 | 66 | Remote CI | see the completion report | |

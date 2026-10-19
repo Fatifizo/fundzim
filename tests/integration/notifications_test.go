@@ -139,9 +139,10 @@ func (x *notifIT) taggedUser(t *testing.T, tag, lastTwo string) vUser {
 	}
 	u := verifiedUser(t, x.s, prefix)
 	if lastTwo != "" {
-		// synthetic +26377 numbers: 5 random digits + the scenario digits; a number another test already holds is redrawn
+		// synthetic +26371 numbers (a range no other test uses: verifiedUser draws +26377): 5 random digits + the scenario
+		// digits; a number already held is redrawn
 		for try := 0; ; try++ {
-			phone := fmt.Sprintf("+26377%05d%s", mrand.IntN(100000), lastTwo)
+			phone := fmt.Sprintf("+26371%05d%s", mrand.IntN(100000), lastTwo)
 			tx, err := x.s.d.DB.Begin(ctx(t))
 			if err != nil {
 				t.Fatal(err)
@@ -288,7 +289,7 @@ func TestNotificationsFinancialSafety(t *testing.T) {
 		!strings.HasPrefix(title, "[TEST]") {
 		t.Fatalf("TEST label: %q %v", title, err)
 	}
-	for _, to := range []string{"UNKNOWN", "FAILED", "PROCESSING"} {
+	for _, to := range []string{"SUBMITTED", "UNKNOWN", "FAILED", "PROCESSING"} {
 		raw, _ := json.Marshal(map[string]any{"payout_request_id": ids.New(), "requested_by": u.id, "to": to, "test_payout": true})
 		_ = x.n.Handle(ctx(t), outbox.Delivery{EventID: ids.New(), EventType: "payouts.status_changed", AggregateType: "payout_request", AggregateID: ids.New(),
 			Payload: raw, OccurredAt: time.Now()})
@@ -299,6 +300,32 @@ func TestNotificationsFinancialSafety(t *testing.T) {
 	if n := x.count(t, `SELECT count(*) FROM app.notification_deliveries d JOIN app.notifications n ON n.id = d.notification_id
 		WHERE n.recipient_user_id = $1 AND n.synthetic AND d.channel <> 'IN_APP' AND d.status <> 'SUPPRESSED'`, u.id); n != 0 {
 		t.Fatalf("%d external deliveries of TEST money", n)
+	}
+	// a submitted payout says "sent to the provider", never "completed"
+	if n := x.count(t, `SELECT count(*) FROM app.notifications WHERE recipient_user_id = $1 AND template_key = 'PAYOUT_SUBMITTED'`, u.id); n != 1 {
+		t.Fatalf("PAYOUT_SUBMITTED notices: %d", n)
+	}
+	// verified terminal success (the provider-confirmed COMPLETED state): one completion notice, TEST-labelled, in-app only
+	raw, _ := json.Marshal(map[string]any{"payout_request_id": ids.New(), "requested_by": u.id, "to": "COMPLETED", "test_payout": true})
+	if err := x.n.Handle(ctx(t), outbox.Delivery{EventID: ids.New(), EventType: "payouts.status_changed", AggregateType: "payout_request", AggregateID: ids.New(),
+		Payload: raw, OccurredAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if d := x.deliveries(t, u.id, "PAYOUT_COMPLETED"); d["IN_APP"].Status != "DELIVERED" || d["EMAIL"].Reason != "SYNTHETIC_SOURCE" {
+		t.Fatalf("TEST payout completion: %+v", d)
+	}
+	// production process: even a verified, non-TEST success reaches the user in-app only — live messaging is disabled
+	prod := *x.n
+	prod.Production = true
+	v := x.taggedUser(t, "", "")
+	raw, _ = json.Marshal(map[string]any{"payment_id": ids.New(), "donation_intent_id": ids.New(), "donor_user_id": v.id, "amount_minor": "2500",
+		"currency": "USD", "test_payment": false, "execution_environment": "PRODUCTION"})
+	if err := prod.Handle(ctx(t), outbox.Delivery{EventID: ids.New(), EventType: "payments.payment_succeeded", AggregateType: "payment", AggregateID: ids.New(),
+		Payload: raw, OccurredAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if d := x.deliveries(t, v.id, "DONATION_CONFIRMED"); d["IN_APP"].Status != "DELIVERED" || d["EMAIL"].Reason != "LIVE_MESSAGING_DISABLED" {
+		t.Fatalf("production confirmation: %+v", d)
 	}
 }
 
@@ -791,5 +818,147 @@ func TestNotificationsFailureInjection(t *testing.T) {
 	bp.Close()
 	if after := x.count(t, `SELECT count(*) FROM app.notification_deliveries WHERE status = 'PROCESSING'`); after > before+1 {
 		t.Fatalf("a failed sweep left claims: %d → %d", before, after)
+	}
+}
+
+// TestNotificationsQueueIsolation: notification work runs only on the River "notifications" queue (the outbox fan-out
+// of notifications.dispatch, the delivery sweep, simulator callbacks) and that queue runs nothing else, so payout
+// submission, media scans and other consumers never wait behind it (and vice versa); the fan-out is one job per
+// (consumer, event); every external send is recorded as an attempt.
+func TestNotificationsQueueIsolation(t *testing.T) {
+	x := newNotifIT(t)
+	var t0 time.Time
+	if err := x.mig.QueryRow(ctx(t), `SELECT now()`).Scan(&t0); err != nil {
+		t.Fatal(err)
+	}
+	u := basicUser(t, x.s, "ntq")
+	r := createCampaign(t, u, "Help Chipo buy school books ntq", "EDUCATION", nil)
+	u.expect(r, 201, "")
+	waitFor(t, 45*time.Second, "e-mail accepted", func() bool { return x.deliveries(t, u.id, "CAMPAIGN_CREATED")["EMAIL"].Status == "ACCEPTED" })
+	var evID string
+	if err := x.mig.QueryRow(ctx(t), `SELECT e.source_event_id::text FROM app.notification_events e JOIN app.notifications n ON n.event_id = e.id
+		WHERE n.recipient_user_id = $1 AND n.template_key = 'CAMPAIGN_CREATED'`, u.id).Scan(&evID); err != nil {
+		t.Fatal(err)
+	}
+	// this event's fan-out: exactly one notifications.dispatch job, on the notifications queue; its other consumers elsewhere
+	rows, err := x.mig.Query(ctx(t), `SELECT queue, args->>'consumer' FROM queue.river_job WHERE kind = 'outbox.deliver' AND args->>'event_id' = $1`, evID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatch := 0
+	for rows.Next() {
+		var q, consumer string
+		if err := rows.Scan(&q, &consumer); err != nil {
+			t.Fatal(err)
+		}
+		switch {
+		case consumer == notifications.ConsumerDispatch && q == "notifications":
+			dispatch++
+		case consumer == notifications.ConsumerDispatch:
+			t.Fatalf("notifications.dispatch delivered on queue %q", q)
+		case q == "notifications":
+			t.Fatalf("consumer %s delivered on the notifications queue", consumer)
+		}
+	}
+	rows.Close()
+	if dispatch != 1 {
+		t.Fatalf("%d notifications.dispatch jobs for one event", dispatch)
+	}
+	// since the test started: the notifications queue ran only notification work, and notification work ran nowhere else
+	var foreign, misplaced, payoutsOnNotif int
+	if err := x.mig.QueryRow(ctx(t), `SELECT
+		count(*) FILTER (WHERE queue = 'notifications' AND NOT (kind IN ('notifications.deliver','notifications.simulator_callbacks')
+		  OR (kind = 'outbox.deliver' AND args->>'consumer' = 'notifications.dispatch'))),
+		count(*) FILTER (WHERE queue <> 'notifications' AND (kind LIKE 'notifications.%' OR (kind = 'outbox.deliver' AND args->>'consumer' = 'notifications.dispatch'))),
+		count(*) FILTER (WHERE queue = 'notifications' AND kind LIKE 'payouts.%')
+		FROM queue.river_job WHERE created_at >= $1`, t0).Scan(&foreign, &misplaced, &payoutsOnNotif); err != nil {
+		t.Fatal(err)
+	}
+	if foreign != 0 || misplaced != 0 || payoutsOnNotif != 0 {
+		t.Fatalf("queue isolation: %d foreign jobs on the notifications queue, %d notification jobs elsewhere, %d payout jobs", foreign, misplaced, payoutsOnNotif)
+	}
+	// the external send is auditable: an attempt row for the e-mail delivery
+	if n := x.count(t, `SELECT count(*) FROM app.notification_attempts a JOIN app.notification_deliveries d ON d.id = a.delivery_id
+		JOIN app.notifications n ON n.id = d.notification_id WHERE n.recipient_user_id = $1 AND d.channel = 'EMAIL'`, u.id); n < 1 {
+		t.Fatal("no attempt recorded for the e-mail delivery")
+	}
+}
+
+// TestNotificationsConsentWithdrawnDuringRetry: an SMS that failed temporarily and waits for its retry is suppressed,
+// not resent, once the person withdraws consent (routing is re-checked before every attempt).
+func TestNotificationsConsentWithdrawnDuringRetry(t *testing.T) {
+	x := newNotifIT(t)
+	u := x.taggedUser(t, "", "94") // simulator: temporary failure on every SMS
+	u.expect(u.do("PUT", "/notifications/preferences", map[string]any{"changes": []map[string]any{{"category": "SECURITY", "channel": "SMS", "enabled": true}}}), 200, "")
+	u.expect(u.do("POST", "/communications/consent", map[string]any{"channel": "SMS", "purpose": "SERVICE_MESSAGES", "granted": true}), 200, "")
+	if n, err := x.n.Notify(ctx(t), "it:"+ids.New(), notifications.Intent{TemplateKey: "PAYOUT_DESTINATION_CHANGED", Category: "SECURITY", Recipients: []string{u.id}}); err != nil || n != 1 {
+		t.Fatalf("notify: %d %v", n, err)
+	}
+	var id string
+	if err := x.mig.QueryRow(ctx(t), `SELECT d.id::text FROM app.notification_deliveries d JOIN app.notifications n ON n.id = d.notification_id
+		WHERE n.recipient_user_id = $1 AND d.channel = 'SMS'`, u.id).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	status := func() (string, string) {
+		var st, reason string
+		_ = x.mig.QueryRow(ctx(t), `SELECT status, coalesce(suppression_reason, '') FROM app.notification_deliveries WHERE id = $1`, id).Scan(&st, &reason)
+		return st, reason
+	}
+	x.drive(t, "temporary failure", func() bool { st, _ := status(); return st == "FAILED_RETRYABLE" })
+	attempts := x.count(t, `SELECT count(*) FROM app.notification_attempts WHERE delivery_id = $1`, id)
+	u.expect(u.do("POST", "/communications/consent", map[string]any{"channel": "SMS", "purpose": "SERVICE_MESSAGES", "granted": false}), 200, "")
+	if _, err := x.mig.Exec(ctx(t), `UPDATE app.notification_deliveries SET next_attempt_at = now() - interval '1 second' WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	x.drive(t, "suppressed at the retry", func() bool { st, reason := status(); return st == "SUPPRESSED" && reason == "CONSENT_WITHDRAWN" })
+	if n := x.count(t, `SELECT count(*) FROM app.notification_attempts WHERE delivery_id = $1 AND outcome <> 'SUPPRESSED'`, id); n > attempts {
+		t.Fatalf("resent after withdrawal: %d provider attempts (was %d)", n, attempts)
+	}
+}
+
+// TestNotificationsConsentLookupFailureFailsClosed: a fault confined to the consent read (the consent table is locked
+// and the engine's connections give up after 300 ms) makes creation fail as a whole — no notification, no delivery,
+// nothing sent; the outbox redelivers the event later, and once consent can be read the notification is created once.
+func TestNotificationsConsentLookupFailureFailsClosed(t *testing.T) {
+	x := newNotifIT(t)
+	u := x.taggedUser(t, "", "21")
+	u.expect(u.do("PUT", "/notifications/preferences", map[string]any{"changes": []map[string]any{{"category": "SECURITY", "channel": "SMS", "enabled": true}}}), 200, "")
+	u.expect(u.do("POST", "/communications/consent", map[string]any{"channel": "SMS", "purpose": "SERVICE_MESSAGES", "granted": true}), 200, "")
+	cfg, err := pgxpool.ParseConfig(x.n.Pool.Config().ConnString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.ConnConfig.RuntimeParams["lock_timeout"] = "300ms"
+	impatient, err := pgxpool.NewWithConfig(ctx(t), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer impatient.Close()
+	broken := *x.n
+	broken.Pool = impatient
+	key := "it-consent-fault:" + ids.New()
+	intent := notifications.Intent{TemplateKey: "PAYOUT_DESTINATION_CHANGED", Category: "SECURITY", Recipients: []string{u.id}}
+
+	lock, err := x.mig.Begin(ctx(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := lock.Exec(ctx(t), `LOCK TABLE app.communication_consents IN ACCESS EXCLUSIVE MODE`); err != nil {
+		t.Fatal(err)
+	}
+	_, ferr := broken.Notify(ctx(t), key, intent)
+	_ = lock.Rollback(ctx(t))
+	if ferr == nil || !strings.Contains(ferr.Error(), "55P03") { // lock_not_available: the injected consent fault, nothing else
+		t.Fatalf("creation with an unreadable consent table: %v", ferr)
+	}
+	if n := x.count(t, `SELECT count(*) FROM app.notifications WHERE recipient_user_id = $1`, u.id); n != 0 {
+		t.Fatalf("%d notifications after a consent read failure (partial records)", n)
+	}
+	// consent readable again: created once, the SMS routed by the consent record
+	if n, err := x.n.Notify(ctx(t), key, intent); err != nil || n != 1 {
+		t.Fatalf("after recovery: %d %v", n, err)
+	}
+	if d := x.deliveries(t, u.id, "PAYOUT_DESTINATION_CHANGED"); d["SMS"].Reason != "" {
+		t.Fatalf("SMS after recovery: %+v", d)
 	}
 }

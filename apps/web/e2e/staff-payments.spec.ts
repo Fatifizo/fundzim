@@ -58,7 +58,12 @@ test("overview, navigation and attempt detail: SIMULATED labels, raw vs mapped s
   await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Unknown payments" }).click();
   await expect(page).toHaveURL(/\/admin\/payments\/unknown$/);
   await expect(page.getByText("Unknown is not failed")).toBeVisible();
+  // the queue is oldest first and the mock is shared by parallel tests: follow "Next page" to this test's own payment
   const row = page.getByRole("row").filter({ hasText: s.unknown_payment_id });
+  for (let i = 0; i < 20 && (await row.count()) === 0; i++) {
+    await page.getByRole("link", { name: "Next page" }).click();
+    await expect(page).toHaveURL(/cursor=/);
+  }
   await expect(row).toContainText("Simulated — development only");
   await expect(row).toContainText("US$25.50");
   await expect(row).toContainText("Reason: Timeout");
@@ -124,6 +129,20 @@ test("overview, navigation and attempt detail: SIMULATED labels, raw vs mapped s
   await expect(main.locator("span", { hasText: /^Received$/ }).first()).toBeVisible();
   await expect(main).not.toContainText("Dead lettered");
   await expect(page.getByRole("button", { name: "Re-queue" })).toHaveCount(0);
+
+  expect(await cspViolations(page)).toEqual([]);
+  expect(problems).toEqual([]);
+});
+
+// Split from the test above (KI-S15-15): nine full-page axe scans of the staff shell took ~15 s of a 30 s budget and timed
+// out under parallel load. Same assertions and scans; independent data (own seed and staff account).
+test("webhooks list, reconciliation, providers and intent pages render with secret references only", async ({ page }) => {
+  await trackCspViolations(page);
+  const problems = watchForBreakage(page);
+  const s = await seed(page);
+  const staff = await createStaff(page, ["FINANCE", "ADMIN"], "Farai Finance");
+  await signInStaff(page, staff, "/admin/payments");
+  await expect(page.getByRole("heading", { level: 1, name: "Payments" })).toBeVisible();
 
   // Webhooks list with the rejections section.
   await page.getByRole("navigation", { name: "Staff" }).getByRole("link", { name: "Payment webhooks" }).click();

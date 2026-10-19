@@ -20,6 +20,8 @@ func newPayouts(m *VerificationModules, d VerificationDeps) {
 	p.Refunds = m.Payments
 	p.ExecEnv = d.Config.Payouts.ExecutionEnvironment
 	p.StepUpMaxAge = d.Config.Auth.StepUpMaxAge
+	p.SubmitRetryBudget, p.SubmitRetryBase, p.SubmitRetryMax = d.Config.Payouts.SubmitRetryBudget, d.Config.Payouts.SubmitRetryBase,
+		d.Config.Payouts.SubmitRetryMax
 	m.PSP.Handle("PAYOUT", p.HandleInbox(m.PSP))
 	if p.ExecEnv == payouts.ExecLocalSimulator {
 		d.Logger.Warn("payouts: TEST payouts through the sandbox SIMULATOR enabled (development/test only; no real payouts)")

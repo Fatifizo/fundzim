@@ -57,6 +57,9 @@ x-common-env: &common-env
   # Stage 10 (ADR-042): TEST_ONLY synthetic ledger fixtures (refused in production)
   LEDGER_SYNTHETIC_FIXTURES_ENABLED: ${LEDGER_SYNTHETIC_FIXTURES_ENABLED:-false}
   PAYOUTS_EXECUTION_ENVIRONMENT: ${PAYOUTS_EXECUTION_ENVIRONMENT:-DISABLED}
+  PAYOUTS_SUBMIT_RETRY_BUDGET: ${PAYOUTS_SUBMIT_RETRY_BUDGET:-5}
+  PAYOUTS_SUBMIT_RETRY_BASE: ${PAYOUTS_SUBMIT_RETRY_BASE:-5s}
+  PAYOUTS_SUBMIT_RETRY_MAX: ${PAYOUTS_SUBMIT_RETRY_MAX:-10m}
   FEES_QUOTE_TTL: ${FEES_QUOTE_TTL:-15m}
   RISK_SCREENING_SANDBOX_ENABLED: ${RISK_SCREENING_SANDBOX_ENABLED:-false}
   # Stage 15 (ADR-047): messaging simulators and local Mailpit senders only
@@ -69,6 +72,9 @@ services:
   fundzim-postgres:
     image: postgres:17.11-alpine3.24
     restart: unless-stopped
+    # Docker's default /dev/shm (64 MB) is too small for parallel query workers on larger development datasets
+    # ("could not resize shared memory segment"); production sizing is an infrastructure decision (Stage 18)
+    shm_size: 256mb
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?run scripts/dev-env-init.sh}

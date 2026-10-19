@@ -14,6 +14,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
 	"github.com/Fatifizo/fundzim/internal/platform/httpx"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
+	"github.com/Fatifizo/fundzim/internal/platform/jobs"
 	"github.com/Fatifizo/fundzim/internal/psp"
 	"github.com/Fatifizo/fundzim/internal/risk"
 )
@@ -30,8 +31,51 @@ const (
 	pollMax           = 10 * time.Minute
 	unknownHorizon    = 15 * time.Minute // simulator contract: after this an UNKNOWN payout needs reconciliation
 	crashedAttemptAge = 2 * time.Minute  // an IN_FLIGHT attempt this old belongs to a crashed worker
-	maxNotSentRetries = 5
+
+	// Defaults of the submission retry budget (PAYOUTS_SUBMIT_RETRY_*; KI-S15-19).
+	DefaultSubmitRetryBudget = 5
+	DefaultSubmitRetryBase   = 5 * time.Second
+	DefaultSubmitRetryMax    = 10 * time.Minute
+
+	// ExcSubmissionRetriesExhausted halts automatic submission of a payout whose same-reference retries after
+	// DEFINITELY_NOT_SENT outcomes used up the budget. While it is unresolved the database refuses CREATE_PAYOUT;
+	// resolving it (operator, audited) grants a fresh budget.
+	ExcSubmissionRetriesExhausted = "SUBMISSION_RETRIES_EXHAUSTED"
 )
+
+// submitRetry returns the budget and the jittered, bounded backoff of automatic resubmissions.
+func (s *Service) submitRetry() (int, jobs.Backoff) {
+	budget, b := s.SubmitRetryBudget, jobs.Backoff{Base: s.SubmitRetryBase, Cap: s.SubmitRetryMax}
+	if budget <= 0 {
+		budget = DefaultSubmitRetryBudget
+	}
+	if b.Base <= 0 {
+		b.Base = DefaultSubmitRetryBase
+	}
+	if b.Cap <= 0 {
+		b.Cap = DefaultSubmitRetryMax
+	}
+	return budget, b
+}
+
+// notSentSinceResume counts the payout's DEFINITELY_NOT_SENT submissions since its budget was last renewed (the
+// latest resolution of a SUBMISSION_RETRIES_EXHAUSTED exception; the payout's whole history before any).
+func notSentSinceResume(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, id string) (int, error) {
+	var n int
+	err := q.QueryRow(ctx, `SELECT count(*) FROM app.payout_attempts a WHERE a.payout_request_id = $1 AND a.operation = 'CREATE_PAYOUT'
+		AND a.classification = 'DEFINITELY_NOT_SENT' AND a.started_at > coalesce((SELECT max(x.resolved_at) FROM app.payout_exceptions x
+		  WHERE x.payout_request_id = $1 AND x.exception_type = 'SUBMISSION_RETRIES_EXHAUSTED' AND x.status = 'RESOLVED'), '-infinity')`, id).Scan(&n)
+	return n, err
+}
+
+// haltSubmission opens the exhaustion exception (once; the open-exception index dedupes). The payout stays SUBMITTED:
+// its reservation and in-transit journal are untouched.
+func (s *Service) haltSubmission(ctx context.Context, tx pgx.Tx, p *Payout, attempts, budget int) error {
+	return s.openException(ctx, tx, ExcSubmissionRetriesExhausted, "SEV2", "ORCHESTRATION", p, "",
+		map[string]any{"definitely_not_sent_attempts": attempts, "budget": budget}, "")
+}
 
 // ---- approvals ---------------------------------------------------------------------------------------------------
 
@@ -392,6 +436,8 @@ func (s *Service) DispatchDue(ctx context.Context, limit int) (int, error) {
 		WHERE p.status = 'SUBMITTED' AND r.ledger_submit_txn_id IS NOT NULL AND (p.next_poll_at IS NULL OR p.next_poll_at <= $1)
 		  AND NOT EXISTS (SELECT 1 FROM app.payout_attempts a WHERE a.payout_request_id = p.id AND a.operation = 'CREATE_PAYOUT'
 		                   AND a.classification <> 'DEFINITELY_NOT_SENT')
+		  AND NOT EXISTS (SELECT 1 FROM app.payout_exceptions x WHERE x.payout_request_id = p.id
+		                   AND x.exception_type = 'SUBMISSION_RETRIES_EXHAUSTED' AND x.status <> 'RESOLVED')
 		ORDER BY p.submitted_at LIMIT $2`, s.now(), limit)
 	if err != nil {
 		return 0, err
@@ -443,8 +489,21 @@ func (s *Service) dispatch(ctx context.Context, id string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	// the retry budget is checked before the provider is called (also catches payouts that used it up before the budget
+	// existed: they are halted without another attempt)
+	budget, _ := s.submitRetry()
+	n, err := notSentSinceResume(ctx, s.Pool, p.ID)
+	if err != nil {
+		return false, err
+	}
+	if n >= budget {
+		return false, s.tx(ctx, func(ctx context.Context, tx pgx.Tx) error { return s.haltSubmission(ctx, tx, &p, n, budget) })
+	}
 	attemptID, err := s.startAttempt(ctx, p, "CREATE_PAYOUT")
 	if err != nil {
+		if strings.Contains(err.Error(), "automatic submission") {
+			return false, nil // halted by an exhaustion exception another worker opened: nothing to do
+		}
 		if strings.Contains(err.Error(), "resubmission forbidden") || strings.Contains(err.Error(), "in-transit journal") {
 			return false, s.tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 				if err := s.insertEvent(ctx, tx, p.ID, event{Type: "DUPLICATE_SUBMISSION_BLOCKED", Reason: "database refused CREATE_PAYOUT"}); err != nil {
@@ -544,17 +603,18 @@ func (s *Service) recordObservation(ctx context.Context, id, attemptID, op strin
 				return s.applyStatus(ctx, tx, &p, psp.PayoutFailed, event{Source: source, AttemptID: attemptID, RawStatus: o.RawStatus}, o)
 			}
 		case psp.ClassRetryableBeforeSend, psp.ClassRateLimited:
-			// nothing reached the provider: the same reference may be retried later (never a new one)
-			var notSent int
-			if err := tx.QueryRow(ctx, `SELECT count(*) FROM app.payout_attempts WHERE payout_request_id = $1 AND classification IN ('DEFINITELY_NOT_SENT','RATE_LIMITED')`,
-				p.ID).Scan(&notSent); err != nil {
+			// nothing reached the provider: the same reference may be retried later (never a new one), within the budget,
+			// with jittered exponential backoff; when the budget is spent automatic submission stops (exception)
+			budget, b := s.submitRetry()
+			notSent, err := notSentSinceResume(ctx, tx, p.ID)
+			if err != nil {
 				return err
 			}
-			if _, err := tx.Exec(ctx, `UPDATE app.payout_requests SET next_poll_at = $2 WHERE id = $1`, p.ID, s.now().Add(backoff(notSent))); err != nil {
+			if _, err := tx.Exec(ctx, `UPDATE app.payout_requests SET next_poll_at = $2 WHERE id = $1`, p.ID, s.now().Add(b.Delay(max(notSent, 1)))); err != nil {
 				return err
 			}
-			if notSent >= maxNotSentRetries {
-				return s.openException(ctx, tx, "PROVIDER_UNAVAILABLE", "SEV2", "ORCHESTRATION", &p, "", map[string]any{"attempts": notSent}, "")
+			if notSent >= budget {
+				return s.haltSubmission(ctx, tx, &p, notSent, budget)
 			}
 		case psp.ClassNotFound:
 			if o.NotFoundFinal && (p.Status == StUnknown || p.Status == StSubmitted) {

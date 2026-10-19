@@ -418,3 +418,71 @@ func TestSecretsManagerRules(t *testing.T) {
 		t.Fatalf("development kv2 + provider sandbox: %v %+v", err, c.Secrets.Provider)
 	}
 }
+
+// Stage 15: messaging is disabled by default, a production provider cannot be named, simulators need their switch,
+// development senders are development/test only and the simulator is refused in production.
+func TestNotificationsConfig(t *testing.T) {
+	c, err := Load(env(localEnv()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Notifications.SimulatorEnabled || c.Notifications.EmailProvider != "disabled" || c.Notifications.SMSProvider != "disabled" ||
+		c.Notifications.WhatsAppProvider != "disabled" {
+		t.Fatalf("defaults: %+v", c.Notifications)
+	}
+	for name, tc := range map[string]struct {
+		set  map[string]string
+		want string
+	}{
+		"unknown provider":       {map[string]string{"NOTIFICATIONS_EMAIL_PROVIDER": "sendgrid"}, "NOTIFICATIONS_EMAIL_PROVIDER must be one of"},
+		"whatsapp production":    {map[string]string{"NOTIFICATIONS_WHATSAPP_PROVIDER": "meta"}, "NOTIFICATIONS_WHATSAPP_PROVIDER must be one of"},
+		"simulator without flag": {map[string]string{"NOTIFICATIONS_SMS_PROVIDER": "simulator"}, "needs NOTIFICATIONS_SIMULATOR_ENABLED=true"},
+		"dev sender in staging": {map[string]string{"APP_ENV": "staging", "NOTIFICATIONS_SMS_PROVIDER": "dev_mailpit", "SMS_PROVIDER": "dev_mailpit"},
+			"allowed in development and test only"},
+		"dev smtp needs smtp": {map[string]string{"NOTIFICATIONS_EMAIL_PROVIDER": "dev_smtp", "EMAIL_PROVIDER": "disabled"}, "needs EMAIL_PROVIDER=smtp"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := localEnv()
+			for k, v := range tc.set {
+				m[k] = v
+			}
+			_, err := Load(env(m))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want %q, got %v", tc.want, err)
+			}
+		})
+	}
+	m := localEnv()
+	m["APP_ENV"], m["NOTIFICATIONS_SIMULATOR_ENABLED"] = "production", "true"
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "NOTIFICATIONS_SIMULATOR_ENABLED is refused in production") {
+		t.Fatalf("simulator in production: %v", err)
+	}
+}
+
+// KI-S15-19: the payout submission retry budget and its backoff are bounded configuration.
+func TestPayoutSubmitRetryConfig(t *testing.T) {
+	c, err := Load(env(localEnv()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Payouts.SubmitRetryBudget != 5 || c.Payouts.SubmitRetryBase != 5*time.Second || c.Payouts.SubmitRetryMax != 10*time.Minute {
+		t.Fatalf("defaults: %+v", c.Payouts)
+	}
+	m := localEnv()
+	m["PAYOUTS_SUBMIT_RETRY_BUDGET"], m["PAYOUTS_SUBMIT_RETRY_BASE"], m["PAYOUTS_SUBMIT_RETRY_MAX"] = "8", "10s", "1h"
+	if c, err = Load(env(m)); err != nil || c.Payouts.SubmitRetryBudget != 8 || c.Payouts.SubmitRetryMax != time.Hour {
+		t.Fatalf("explicit values: %+v %v", c.Payouts, err)
+	}
+	for k, v := range map[string]string{"PAYOUTS_SUBMIT_RETRY_BUDGET": "0", "PAYOUTS_SUBMIT_RETRY_BASE": "0s", "PAYOUTS_SUBMIT_RETRY_MAX": "48h"} {
+		m := localEnv()
+		m[k] = v
+		if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), k) {
+			t.Fatalf("%s=%s accepted: %v", k, v, err)
+		}
+	}
+	m = localEnv()
+	m["PAYOUTS_SUBMIT_RETRY_BASE"], m["PAYOUTS_SUBMIT_RETRY_MAX"] = "5m", "1m"
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "PAYOUTS_SUBMIT_RETRY_MAX must not be shorter") {
+		t.Fatalf("max < base accepted: %v", err)
+	}
+}
