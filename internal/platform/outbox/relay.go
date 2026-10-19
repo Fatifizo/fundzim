@@ -81,10 +81,13 @@ type Relay struct {
 	Metrics  *Metrics
 	Logger   *slog.Logger
 
-	BatchSize          int           // rows claimed per transaction (default 100)
-	Budget             time.Duration // a run loops over batches until empty or this budget (default 10 s)
-	DeliverQueue       string        // queue for outbox.deliver jobs (default jobs.QueueDefault)
-	DeliverMaxAttempts int           // default 8
+	BatchSize    int           // rows claimed per transaction (default 100)
+	Budget       time.Duration // a run loops over batches until empty or this budget (default 10 s)
+	DeliverQueue string        // queue for outbox.deliver jobs (default jobs.QueueDefault)
+	// ConsumerQueues routes a consumer's deliveries to its own queue (e.g. the notification fan-out), so a busy consumer
+	// never delays the others on DeliverQueue.
+	ConsumerQueues     map[string]string
+	DeliverMaxAttempts int // default 8
 
 	// EventTypes, when set, restricts the relay to these event types. Production leaves it empty (every
 	// event is relayed; events without subscribers are marked dispatched). Used to isolate tests.
@@ -207,10 +210,14 @@ func (r *Relay) plan(events []claimed) ([]river.InsertManyParams, []string) {
 	for _, e := range events {
 		idList = append(idList, e.id)
 		for _, consumer := range r.Registry.Consumers(e.eventType) {
+			q := queue
+			if cq := r.ConsumerQueues[consumer]; cq != "" {
+				q = cq
+			}
 			params = append(params, river.InsertManyParams{
 				Args: DeliverArgs{Consumer: consumer, EventID: e.id},
 				InsertOpts: &river.InsertOpts{
-					Queue:       queue,
+					Queue:       q,
 					MaxAttempts: maxAttempts,
 					UniqueOpts:  river.UniqueOpts{ByArgs: true, ByState: allStates},
 				},

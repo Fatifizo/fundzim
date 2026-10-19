@@ -97,7 +97,9 @@ func NewWorkerDeps(ctx context.Context, cfg config.Config, wcfg WorkerConfig, lo
 
 func (d *WorkerDeps) buildRiver() error {
 	workers := river.NewWorkers()
-	relay := &outbox.Relay{Pool: d.DB, Registry: d.Registry, Metrics: d.OutboxMetrics, Logger: d.Logger}
+	relay := &outbox.Relay{Pool: d.DB, Registry: d.Registry, Metrics: d.OutboxMetrics, Logger: d.Logger,
+		// the notification fan-out (one delivery per event) runs on its own queue: it never delays media scans or payments
+		ConsumerQueues: map[string]string{notifications.ConsumerDispatch: jobs.QueueNotifications}}
 	river.AddWorker(workers, &outbox.RelayWorker{Relay: relay})
 	// a delivery may run a malware scan: allow the scan timeout plus margin (default 30 s otherwise)
 	river.AddWorker(workers, &outbox.DeliverWorker{Pool: d.DB, Registry: d.Registry, Logger: d.Logger,

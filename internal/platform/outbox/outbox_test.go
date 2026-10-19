@@ -153,6 +153,22 @@ func TestRelayPlanFansOutUniquely(t *testing.T) {
 	}
 }
 
+func TestRelayPlanRoutesConsumerQueues(t *testing.T) {
+	r := NewRegistry()
+	h := func(context.Context, Delivery) error { return nil }
+	r.Subscribe("a.one", "x.created", h)
+	r.Subscribe("n.fanout", "x.created", h)
+	rel := &Relay{Registry: r, ConsumerQueues: map[string]string{"n.fanout": jobs.QueueNotifications}}
+	params, _ := rel.plan([]claimed{{ids.New(), "x.created"}})
+	got := map[string]string{}
+	for _, p := range params {
+		got[p.Args.(DeliverArgs).Consumer] = p.InsertOpts.Queue
+	}
+	if got["a.one"] != jobs.QueueDefault || got["n.fanout"] != jobs.QueueNotifications {
+		t.Fatalf("queues %v", got)
+	}
+}
+
 func TestDeliverRejectsMalformedArgsPermanently(t *testing.T) {
 	w := &DeliverWorker{Registry: NewRegistry()}
 	job := &river.Job[DeliverArgs]{JobRow: &rivertype.JobRow{Attempt: 1, MaxAttempts: 8}, Args: DeliverArgs{Consumer: "x.y", EventID: "nope"}}

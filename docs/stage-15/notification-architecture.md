@@ -12,7 +12,7 @@ Stage 15 reuses what earlier stages built; it adds no queue, broker or second no
 |---|---|
 | Event intake | the transactional outbox (`internal/platform/outbox`, Stage 3) — every mapped event is written by its owning module in the same transaction as the change, so a notification never exists for a change that rolled back |
 | Exactly-once creation | the outbox consumer inbox (`outbox.Consume`) **and** `notification_events.source_event_id UNIQUE` |
-| Background work | the River periodic jobs of `cmd/worker` (`notifications.deliver` every 5 s, `notifications.simulator_callbacks` every 2 s) |
+| Background work | the River `notifications` queue of `cmd/worker` (half the worker concurrency): the periodic jobs `notifications.deliver` (every 5 s) and `notifications.simulator_callbacks` (every 2 s), and the outbox deliveries of `notifications.dispatch` (`outbox.Relay.ConsumerQueues`), so the notification fan-out never delays media scans, payments or other consumers on the default queue |
 | Recipients | `users` (contact, status, account kind), organisation admins and staff-by-permission through the `notifications.Directory` interface implemented in `internal/app` (no cross-module SQL) |
 | Permissions and step-up | `platform/authz` + the Stage 4 step-up; six new `communications.*` permissions (migration) |
 | Rate limits | `platform/ratelimit` policies `notifications.webhook.ip` (600/min) and `notifications.consent.user` (30/h) |
