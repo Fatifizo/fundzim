@@ -30,6 +30,12 @@
 > immutable evidence, the central hold registry (enforced by campaigns, payments and payouts through `risk`'s public
 > service) and a TEST-only screening foundation ([stage-13/risk-architecture.md](stage-13/risk-architecture.md)); `risk`
 > stays a leaf module (platform, audit).
+> **Stage 15 (ADR-047):** `notifications` (imports platform, audit, users; organisation admins and staff-by-permission
+> through a `Directory` interface wired in `internal/app`) is the only notification path: the outbox consumer
+> `notifications.dispatch` turns documented events into notifications (exactly once per event), a worker sweep delivers
+> them through per-channel providers (TEST-only simulators and development senders; no production provider), provider
+> callbacks arrive on a signed webhook, and an `OpsSnapshot` feeds the Stage 14 portal. It owns `app.notification*` and
+> `app.communication_consent*`.
 > **Stage 14 (ADR-046):** `operations` (imports platform, audit) aggregates per-module `OpsSnapshot`s — each built by the
 > owning module from its own tables, shared types in `platform/opsview` — into the command center, approval center,
 > exception center, health, alerts, reports and search, and owns only its operational records (`app.ops_*`: support cases,

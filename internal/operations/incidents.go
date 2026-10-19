@@ -120,16 +120,21 @@ func (s *Service) DeclareIncident(ctx context.Context, staffID string, in NewInc
 		if alert != "" {
 			ak = alert
 		}
-		tag, err := tx.Exec(ctx, `INSERT INTO app.ops_incidents (id, title, severity, affected_module, status, owner_id, started_at, detected_by, alert_key,
-			created_by) VALUES ($1, $2, $3, $4, 'DETECTED', $5, $6, $7, $8, $5) ON CONFLICT DO NOTHING`,
-			id, title, in.Severity, in.AffectedModule, staffID, started, detected, ak)
+		var number int64
+		err := tx.QueryRow(ctx, `INSERT INTO app.ops_incidents (id, title, severity, affected_module, status, owner_id, started_at, detected_by, alert_key,
+			created_by) VALUES ($1, $2, $3, $4, 'DETECTED', $5, $6, $7, $8, $5) ON CONFLICT DO NOTHING RETURNING incident_number`,
+			id, title, in.Severity, in.AffectedModule, staffID, started, detected, ak).Scan(&number)
+		if errors.Is(err, pgx.ErrNoRows) { // declared concurrently from the same alert
+			return tx.QueryRow(ctx, `SELECT id::text FROM app.ops_incidents WHERE alert_key = $1 AND status NOT IN ('RESOLVED','CLOSED')`, alert).Scan(&id)
+		}
 		if err != nil {
 			return mapDB(err)
 		}
-		if tag.RowsAffected() == 0 { // declared concurrently from the same alert
-			return tx.QueryRow(ctx, `SELECT id::text FROM app.ops_incidents WHERE alert_key = $1 AND status NOT IN ('RESOLVED','CLOSED')`, alert).Scan(&id)
-		}
 		if err := incidentEvent(ctx, tx, id, "DECLARED", staffID, "", "DETECTED", strings.TrimSpace(in.Note), map[string]any{"alert_key": alert}, now); err != nil {
+			return err
+		}
+		if err := emit(ctx, tx, "incident", id, EvIncidentDeclared, map[string]any{"incident_id": id, "incident_number": number, "severity": in.Severity,
+			"affected_module": in.AffectedModule}, now); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Event{Action: "ops.incident.declared", TargetType: "ops_incident", TargetID: id,

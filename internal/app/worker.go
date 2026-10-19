@@ -49,6 +49,8 @@ type WorkerDeps struct {
 	River    *river.Client[pgx.Tx]
 	// Stage 5: verification modules (consumers, scans, sweeps)
 	Verification *VerificationModules
+	// Stage 15: notification engine (consumer, delivery sweep, simulator callbacks)
+	Notifications *notifications.Service
 
 	riverRunning atomic.Bool
 }
@@ -116,6 +118,9 @@ func (d *WorkerDeps) buildRiver() error {
 		periodic = append(periodic, payoutJobs(workers, d.Verification)...)        // Stage 11 (ADR-043)
 		periodic = append(periodic, feeJobs(workers, d.Verification)...)           // Stage 12 (ADR-044)
 		periodic = append(periodic, riskJobs(workers, d.Verification)...)          // Stage 13 (ADR-045)
+	}
+	if d.Notifications != nil {
+		periodic = append(periodic, notificationJobs(workers, d.Notifications, d.Config.Notifications.SimulatorEnabled)...) // Stage 15 (ADR-047)
 	}
 	client, err := jobs.NewWorkerClient(jobs.WorkerConfig{
 		Pool: d.DB, Logger: d.Logger, Metrics: d.JobMetrics, Workers: workers,

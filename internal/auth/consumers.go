@@ -54,39 +54,16 @@ func (s *Service) Consumers(mail Mailer) []Consumer {
 				"Confirm your FundZim email address",
 				"Confirm your email address by opening this link within %s:\n\n%s\n\nIf you did not create a FundZim account, ignore this email.")
 		})},
-		{"identity.send_existing_account_notice", EvRegistrationExisting, h(func(ctx context.Context, p eventPayload) error {
-			return s.sendNotice(ctx, mail, p.UserID, "Someone tried to register with your email",
-				"Someone tried to create a FundZim account with this email address. You already have an account.\n\n"+
-					"If this was you, sign in or reset your password at "+s.link("/forgot-password", "")+".\nIf it was not you, you can ignore this email.")
-		})},
 		{"identity.send_password_reset_email", EvPasswordResetRequested, h(func(ctx context.Context, p eventPayload) error {
 			return s.sendTokenEmail(ctx, mail, p.UserID, p.EmailID, "PASSWORD_RESET", s.Cfg.PasswordResetTTL, "/reset-password",
 				"Reset your FundZim password",
 				"Reset your password by opening this link within %s:\n\n%s\n\nIf you did not ask to reset your password, ignore this email; your password has not changed.")
 		})},
-		{"identity.send_password_changed_notice", EvPasswordChanged, h(func(ctx context.Context, p eventPayload) error {
-			return s.sendNotice(ctx, mail, p.UserID, "Your FundZim password was changed",
-				"The password for your FundZim account was just changed and other devices were signed out.\n\n"+
-					"If you did not do this, reset your password now at "+s.link("/forgot-password", "")+" and contact support.")
-		})},
-		{"identity.send_mfa_changed_notice", EvMFAChanged, h(func(ctx context.Context, p eventPayload) error {
-			what := map[string]string{"enabled": "Two-step verification was turned on", "disabled": "Two-step verification was turned off",
-				"recovery_code_used": "A recovery code was used to sign in", "recovery_codes_regenerated": "New recovery codes were generated"}[p.Change]
-			if what == "" {
-				what = "Your two-step verification settings changed"
-			}
-			return s.sendNotice(ctx, mail, p.UserID, "Security alert: two-step verification",
-				what+" on your FundZim account.\n\nIf you did not do this, reset your password at "+s.link("/forgot-password", "")+" and contact support.")
-		})},
 		{"identity.send_email_change_confirmation", EvEmailChangeRequested, h(func(ctx context.Context, p eventPayload) error {
-			if err := s.sendTokenEmail(ctx, mail, p.UserID, p.EmailID, "EMAIL_CHANGE", s.Cfg.EmailVerificationTTL, "/verify-email",
+			// the notice to the current address is a SECURITY notification of the Stage 15 engine (EMAIL_CHANGE_REQUESTED)
+			return s.sendTokenEmail(ctx, mail, p.UserID, p.EmailID, "EMAIL_CHANGE", s.Cfg.EmailVerificationTTL, "/verify-email",
 				"Confirm your new FundZim email address",
-				"Confirm this as the new sign-in address for your FundZim account by opening this link within %s:\n\n%s\n\nIf you did not ask for this, ignore this email."); err != nil {
-				return err
-			}
-			return s.sendNotice(ctx, mail, p.UserID, "Your FundZim email address is being changed",
-				"Someone asked to change the sign-in email address of your FundZim account. The change happens only after the new address is confirmed.\n\n"+
-					"If this was not you, reset your password at "+s.link("/forgot-password", "")+" and contact support.")
+				"Confirm this as the new sign-in address for your FundZim account by opening this link within %s:\n\n%s\n\nIf you did not ask for this, ignore this email.")
 		})},
 		{"identity.send_staff_invitation", EvStaffInvited, h(func(ctx context.Context, p eventPayload) error {
 			return s.sendTokenEmail(ctx, mail, p.UserID, p.EmailID, "STAFF_INVITATION", s.Cfg.StaffInvitationTTL, "/staff/accept-invitation",
@@ -95,23 +72,6 @@ func (s *Service) Consumers(mail Mailer) []Consumer {
 		})},
 		{"identity.send_staff_link_email", EvStaffLinkRequested, h(func(ctx context.Context, p eventPayload) error {
 			return s.sendStaffLinkEmail(ctx, mail, p.RequestID)
-		})},
-		{"identity.send_staff_link_confirmed_notice", EvStaffLinkConfirmed, h(func(ctx context.Context, p eventPayload) error {
-			if err := s.sendNotice(ctx, mail, p.UserID, "Your FundZim staff account is now linked",
-				"Your staff account was linked to your personal FundZim account. You will not be able to review or decide anything "+
-					"that concerns that personal account. Links cannot be removed.\n\nIf you did not do this, contact the FundZim security team now."); err != nil {
-				return err
-			}
-			if !ids.Valid(p.PersonalUserID) {
-				return nil
-			}
-			return s.sendNotice(ctx, mail, p.PersonalUserID, "Your FundZim account is now linked to a staff account",
-				"Your personal FundZim account was linked to a FundZim staff account at your confirmation. Links cannot be removed.\n\n"+
-					"If you did not do this, reset your password at "+s.link("/forgot-password", "")+" and contact support.")
-		})},
-		{"identity.send_account_suspended_notice", EvAccountSuspended, h(func(ctx context.Context, p eventPayload) error {
-			return s.sendNotice(ctx, mail, p.UserID, "Your FundZim account has been suspended",
-				"Your FundZim account has been suspended and all sessions were signed out. Contact support if you have questions.")
 		})},
 	}
 }
@@ -184,21 +144,6 @@ func (s *Service) sendTokenEmail(ctx context.Context, mail Mailer, userID, email
 		return err
 	}
 	return mail.SendEmail(ctx, to, subject, fmt.Sprintf(body, humanDuration(ttl), s.link(path, string(tok))))
-}
-
-// sendNotice emails the account's current sign-in address.
-func (s *Service) sendNotice(ctx context.Context, mail Mailer, userID, subject, body string) error {
-	acct, err := users.ByID(ctx, s.Pool, userID)
-	if errors.Is(err, users.ErrNotFound) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if acct.IsSystem {
-		return nil
-	}
-	return mail.SendEmail(ctx, acct.Email, subject, body)
 }
 
 func humanDuration(d time.Duration) string {

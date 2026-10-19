@@ -61,6 +61,11 @@ export function AccountMenu({ displayName }: { displayName: string }) {
               </Link>
             </li>
             <li>
+              <Link href="/dashboard/notifications" className={linkClass} onClick={() => setOpen(false)}>
+                Notifications
+              </Link>
+            </li>
+            <li>
               <Link href="/dashboard/verification" className={linkClass} onClick={() => setOpen(false)}>
                 Verification
               </Link>

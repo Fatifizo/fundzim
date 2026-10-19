@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { AccountContainer } from "@/components/account/account-shell";
 import { AdminBreadcrumbs, TasksIndicator } from "@/components/admin/admin-shell-client";
 import { NavLink } from "@/components/layout/nav-link";
+import { UnreadLink } from "@/components/notifications/inbox";
 import { inputClasses } from "@/components/forms/text-field";
 import { buttonClasses } from "@/components/ui/button";
 import type { Me } from "@/lib/auth/types";
@@ -69,6 +70,7 @@ export function AdminShell({ me, children }: { me: Me; children: ReactNode }) {
                 </button>
               </form>
               <TasksIndicator />
+              <UnreadLink href="/admin/notifications" />
             </div>
           ) : null}
         </div>

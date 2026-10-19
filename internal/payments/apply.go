@@ -243,14 +243,15 @@ func (s *Service) transition(ctx context.Context, tx pgx.Tx, p *payRow, o Obs) (
 	p.Version++
 	payload := map[string]any{"payment_id": p.ID, "donation_intent_id": p.DonationIntentID, "from": from, "to": to, "source": o.Source,
 		"simulated": p.Simulated, "execution_environment": p.ExecEnv, "test_payment": p.ExecEnv != psp.ExecProduction}
-	if to == psp.StatusFailed {
-		// risk signals (Stage 13): who tried to pay which campaign — ids only
+	if to == psp.StatusFailed || to == psp.StatusUnknown {
+		// risk signals (Stage 13) and the donor's notification (Stage 15, ADR-047): ids and the amount only
 		var donor, campaign string
 		if err := tx.QueryRow(ctx, `SELECT donor_user_id::text, campaign_id::text FROM app.donation_intents WHERE id = $1`, p.DonationIntentID).
 			Scan(&donor, &campaign); err != nil {
 			return Outcome{}, err
 		}
 		payload["donor_user_id"], payload["campaign_id"] = donor, campaign
+		payload["amount_minor"], payload["currency"] = strconv.FormatInt(p.Amount, 10), p.Currency
 	}
 	if _, err := outbox.Write(ctx, tx, outbox.Event{AggregateType: "payment", AggregateID: p.ID, EventType: "payments.payment_status_changed",
 		Payload:       payload,
@@ -295,8 +296,13 @@ func (s *Service) onSucceeded(ctx context.Context, tx pgx.Tx, p *payRow, from st
 		}
 	}
 	now := s.now()
+	var donor string // the donor's confirmation (Stage 15): only this event, emitted for authoritative provider evidence, may produce one
+	if err := tx.QueryRow(ctx, `SELECT donor_user_id::text FROM app.donation_intents WHERE id = $1`, p.DonationIntentID).Scan(&donor); err != nil {
+		return err
+	}
 	if _, err := outbox.Write(ctx, tx, outbox.Event{AggregateType: "payment", AggregateID: p.ID, EventType: "payments.payment_succeeded",
 		Payload: map[string]any{"payment_id": p.ID, "donation_intent_id": p.DonationIntentID, "campaign_id": p.CampaignID,
+			"donor_user_id": donor, "amount_minor": strconv.FormatInt(p.Amount, 10), "currency": p.Currency,
 			"posting_key": key, "simulated": p.Simulated, "execution_environment": p.ExecEnv,
 			// Stage 10 posts only PRODUCTION payments; simulator and provider-sandbox successes are test payments
 			"test_payment": p.ExecEnv != psp.ExecProduction}, CorrelationID: o.Correlation, OccurredAt: now}); err != nil {

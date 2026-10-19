@@ -90,11 +90,13 @@ func (s *smtpSender) Send(ctx context.Context, m Email) error {
 	ctx, cancel := context.WithTimeout(ctx, s.totalTO)
 	defer cancel()
 	// wrap names the stage; once ctx has ended, a closed-connection error is really the timeout/cancel.
+	// ctx.Err() is read once: the connection deadline (same instant) can fire just before the context's timer, and two
+	// reads could see nil and then DeadlineExceeded, reporting a timeout as a cancellation.
 	wrap := func(stage string, err error) error {
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		switch cerr := ctx.Err(); {
+		case errors.Is(cerr, context.DeadlineExceeded):
 			return fmt.Errorf("smtp: %s: timeout", stage)
-		}
-		if ctx.Err() != nil {
+		case cerr != nil:
 			return fmt.Errorf("smtp: %s: cancelled", stage)
 		}
 		return fmt.Errorf("smtp: %s: %w", stage, sanitize(err))

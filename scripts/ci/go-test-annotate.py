@@ -43,7 +43,8 @@ pout = sum(1 for _, t in passed if t.startswith("TestPayout"))
 fee = sum(1 for _, t in passed if t.startswith("TestFee"))
 risk = sum(1 for _, t in passed if t.startswith("TestRisk"))
 ops = sum(1 for _, t in passed if t.startswith("TestOperations"))
+notif = sum(1 for _, t in passed if t.startswith("TestNotifications"))
 names = ", ".join(sorted(t for _, t in skipped)) or "none"
 print(f"::notice title=Go test summary::passed {len(passed)}, failed {len(top_failed)}, skipped {len(skipped)} "
-      f"(skipped: {esc(names)}); TestPayments* passed: {pay}; TestPayout* passed: {pout}; TestFee* passed: {fee}; TestRisk* passed: {risk}; TestOperations* passed: {ops}")
+      f"(skipped: {esc(names)}); TestPayments* passed: {pay}; TestPayout* passed: {pout}; TestFee* passed: {fee}; TestRisk* passed: {risk}; TestOperations* passed: {ops}; TestNotifications* passed: {notif}")
 sys.exit(1 if failed or pkg_failed else 0)

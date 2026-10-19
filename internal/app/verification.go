@@ -328,49 +328,7 @@ type eventPayload struct {
 }
 
 // notifications (no identity details, no document content: brief §26)
-var verificationNotices = map[string][2]string{
-	"kyc.case_submitted":                               {"We received your verification", "Thank you. Your verification was submitted and is waiting for review. We will email you when it has been reviewed."},
-	"kyc.information_requested":                        {"More information needed for your verification", "A reviewer needs more information to complete your verification. Sign in to FundZim and open your verification dashboard to respond."},
-	"kyc.case_approved":                                {"Your verification was approved", "Your verification was approved. Sign in to see what you can now do on FundZim."},
-	"kyc.case_rejected":                                {"Your verification was not approved", "Your verification was not approved. Sign in to FundZim to see the reason and your options."},
-	"kyc.verification_expired":                         {"Your verification has expired", "Your verification is no longer current. Sign in to FundZim to verify again."},
-	"kyc.verification_suspended":                       {"Your verification is suspended", "Your verification has been suspended pending review. Contact support if you have questions."},
-	"kyc.verification_revoked":                         {"Your verification was revoked", "Your verification was revoked. Contact support if you have questions."},
-	"beneficiaries.verification_submitted":             {"Beneficiary submitted for verification", "A beneficiary you declared was submitted for verification."},
-	"beneficiaries.verification_information_requested": {"More information needed for a beneficiary", "A reviewer needs more information about a beneficiary you declared. Sign in to respond."},
-	"beneficiaries.verification_approved":              {"Beneficiary verified", "A beneficiary you declared has been verified."},
-	"beneficiaries.verification_rejected":              {"Beneficiary not verified", "A beneficiary you declared was not verified. Sign in to see the reason."},
-	"beneficiaries.verification_expired":               {"Beneficiary verification expired", "A beneficiary verification expired because the requested information was not provided."},
-	"payouts.destination_verified":                     {"Payout destination review completed", "Your payout destination was verified. Payouts are not available on FundZim yet."},
-	"payouts.destination_rejected":                     {"Payout destination review completed", "Your payout destination could not be verified. Sign in to see the reason."},
-	"payouts.destination_information_requested":        {"More information needed for a payout destination", "A reviewer needs more information about your payout destination. Sign in to respond."},
-	"payouts.destination_suspended":                    {"Payout destination suspended", "One of your payout destinations was suspended pending review."},
-	"payouts.destination_expired":                      {"Payout destination verification expired", "One of your payout destinations needs to be verified again."},
-}
-
-// recipients resolves notification recipients' email addresses (subject user, or organisation admins).
-func recipients(ctx context.Context, pool *pgxpool.Pool, orgs *organisations.Service, subjectType, subjectID string) ([]string, error) {
-	var userIDs []string
-	switch subjectType {
-	case "USER":
-		userIDs = []string{subjectID}
-	case "ORGANISATION":
-		ids, err := orgs.AdminIDs(ctx, subjectID)
-		if err != nil {
-			return nil, err
-		}
-		userIDs = ids
-	}
-	var out []string
-	for _, id := range userIDs {
-		a, err := users.ByID(ctx, pool, id)
-		if err != nil {
-			continue
-		}
-		out = append(out, a.Email)
-	}
-	return out, nil
-}
+// Verification notices are Stage 15 notification templates (KYC_*, BENEFICIARY_*, PAYOUT_DESTINATION_*).
 
 // registerVerificationConsumers subscribes Stage 5 consumers in the worker.
 func registerVerificationConsumers(reg *outbox.Registry, m *VerificationModules, appPool *pgxpool.Pool, orgs *organisations.Service, mail auth.Mailer, clk clock.Clock) {
@@ -401,29 +359,6 @@ func registerVerificationConsumers(reg *outbox.Registry, m *VerificationModules,
 		}
 		return m.KYC.RecordPayoutOwnership(ctx, p.OwnerID, p.DestinationID)
 	})
-	for evType, tpl := range verificationNotices {
-		tpl := tpl
-		reg.Subscribe("verification.notify", evType, func(ctx context.Context, del outbox.Delivery) error {
-			p, err := parse(del)
-			if err != nil {
-				return err
-			}
-			st, sid := p.SubjectType, p.SubjectID
-			if st == "" {
-				st, sid = p.OwnerType, p.OwnerID
-			}
-			to, err := recipients(ctx, appPool, orgs, st, sid)
-			if err != nil {
-				return err
-			}
-			for _, addr := range to {
-				if err := mail.SendEmail(ctx, addr, tpl[0], tpl[1]+"\n\nThis is an automated message from FundZim."); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	}
 }
 
 // VerificationSweepArgs runs the verification lifecycle sweeps (expiry, information-request timeouts).

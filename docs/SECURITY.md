@@ -539,6 +539,18 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 > repeated after one may have reached the provider; owner-facing refusals reveal no compliance or risk detail. Full review:
 > [stage-11/security-review.md](stage-11/security-review.md).
 
+## 21j. Notification security (Stage 15, summary)
+
+> **Stage 15 as built ([ADR-047](adr/ADR-047-notification-engine.md)):** users read only their own notifications (404
+> otherwise); staff communication routes need `communications.*` permissions and every mutation a fresh step-up; templates
+> are placeholder-only (no code, no template HTML; HTML e-mail built from escaped text; no header injection), immutable
+> after DRAFT and maker-checker with linked-identity separation; provider callbacks are HMAC-signed with a 5-minute
+> window, stored once, size-limited and IP rate-limited, and every rejection is recorded and alerted; consent is created
+> only by the user's own settings request; routing is re-checked before every send and replay; external channels are
+> disabled in production (`LiveMessagingEnabled = false`) and TEST money never leaves the app; credential messages stay in
+> `auth` and are never stored as notifications; audit metadata carries keys and codes, never bodies or destinations.
+> Full review: [stage-15/security-review.md](stage-15/security-review.md).
+
 ## 21i. Operations portal security (Stage 14, summary)
 
 > **Stage 14 as built ([ADR-046](adr/ADR-046-operations-portal.md)):** every operations route is a staff permission route

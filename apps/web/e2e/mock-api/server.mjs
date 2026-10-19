@@ -14,6 +14,7 @@ import http from "node:http";
 import { createCampaignsMock, ROLE_PERMISSIONS as CAMPAIGN_PERMS } from "./campaigns.mjs";
 import { createLedgerMock, ROLE_PERMISSIONS as LEDGER_PERMS } from "./ledger.mjs";
 import { createFeesMock, ROLE_PERMISSIONS as FEE_PERMS } from "./fees.mjs";
+import { createNotificationsMock, ROLE_PERMISSIONS as NOTIF_PERMS } from "./notifications.mjs";
 import { createOperationsMock, ROLE_PERMISSIONS as OPS_PERMS } from "./operations.mjs";
 import { createPayoutsMock, ROLE_PERMISSIONS as PAYOUT_PERMS } from "./payouts.mjs";
 import { createPaymentsMock, ROLE_PERMISSIONS as PAYMENT_PERMS } from "./payments.mjs";
@@ -78,7 +79,7 @@ addUser({ email: "unverified@example.test", display_name: "Farai New", email_ver
 const ME_FIELDS = ["id", "account_kind", "email", "email_verified", "display_name", "phone_masked", "phone_verified", "mfa_enabled", "created_at"];
 
 // effective staff permissions: the union of every module mock's role mapping (Stage 14 shell navigation and actions)
-const PERMISSION_MAPS = [CAMPAIGN_PERMS, LEDGER_PERMS, FEE_PERMS, OPS_PERMS, PAYOUT_PERMS, PAYMENT_PERMS, RISK_PERMS, VERIFICATION_PERMS];
+const PERMISSION_MAPS = [CAMPAIGN_PERMS, LEDGER_PERMS, FEE_PERMS, OPS_PERMS, NOTIF_PERMS, PAYOUT_PERMS, PAYMENT_PERMS, RISK_PERMS, VERIFICATION_PERMS];
 function permissionsOf(user) {
   if (user?.account_kind !== "STAFF") return new Set();
   return new Set((user.roles ?? []).flatMap((r) => PERMISSION_MAPS.flatMap((m) => m[r] ?? [])));
@@ -161,6 +162,7 @@ const ledger = createLedgerMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS });
 const payouts = createPayoutsMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS, users, getDestination: (id) => verification.getDestination(id) });
 const fees = createFeesMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS, users });
 const risk = createRiskMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS });
+const notificationsMock = createNotificationsMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS, permissionsOf });
 const operations = createOperationsMock({ send, err, stepUpTtlMs: STEP_UP_TTL_MS, permissionsOf,
   staffUsers: () => [...users.values()].filter((u) => u.account_kind === "STAFF") });
 
@@ -205,6 +207,7 @@ const server = http.createServer(async (req, res) => {
     if (await fees.control(path, controlBody, res)) return;
     if (await risk.control(path, controlBody, res)) return;
     if (await operations.control(path, controlBody, res)) return;
+    if (await notificationsMock.control(path, controlBody, res)) return;
   }
   if (path === "/api/v1/health") return send(res, 200, { status: "ok" });
   if (path === "/api/v1/version") return send(res, 200, { name: "fundzim-api", version: "mock", build: "mock", commit: "mock" });
@@ -394,6 +397,7 @@ const server = http.createServer(async (req, res) => {
       if (await fees.handle({ req, res, method, path, url, user, session, body })) return;
       if (await risk.handle({ req, res, method, path, url, user, session, body })) return;
       if (await operations.handle({ req, res, method, path, url, user, session, body })) return;
+      if (await notificationsMock.handle({ res, method, path, url, user, session, body })) return;
       if (await campaigns.handle({ req, res, method, path, url, user, session, body, raw })) return;
       if (await verification.handle({ req, res, method, path, url, user, session, sessionToken, body, raw })) return;
       return err(res, 404, "ROUTE_NOT_FOUND");

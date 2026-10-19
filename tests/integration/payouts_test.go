@@ -430,8 +430,21 @@ func TestPayoutUnknownOutcomeKeepsReservationAndIsNeverResubmitted(t *testing.T)
 		t.Fatalf("after timeout: %+v %+v", po, po.Reservation)
 	}
 	// no resubmission: the dispatcher finds nothing, the database refuses a second CREATE_PAYOUT, cancellation is refused
-	if n, _ := p.po.DispatchDue(ctx(t), 10); n != 0 {
-		t.Fatalf("dispatch resubmitted an UNKNOWN payout (%d)", n)
+	// the shared development database can hold other tests' due payouts (DispatchDue's count covers them), so the check is
+	// on this payout: the dispatcher made no new CREATE_PAYOUT attempt and it is still UNKNOWN
+	creates := func() int {
+		var n int
+		if err := p.mig.QueryRow(ctx(t), `SELECT count(*) FROM app.payout_attempts WHERE payout_request_id = $1 AND operation = 'CREATE_PAYOUT'`, id).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	before := creates()
+	if _, err := p.po.DispatchDue(ctx(t), 10); err != nil {
+		t.Fatal(err)
+	}
+	if after := creates(); after != before || p.payout(t, id).Status != payouts.StUnknown {
+		t.Fatalf("dispatch resubmitted an UNKNOWN payout (CREATE_PAYOUT attempts %d → %d)", before, after)
 	}
 	if _, err := p.app.Exec(ctx(t), `INSERT INTO app.payout_attempts (id, payout_request_id, attempt_no, operation, provider_id, our_reference,
 		correlation_id, started_at) SELECT gen_random_uuid(), id, 99, 'CREATE_PAYOUT', provider_id, id, 'it', now() FROM app.payout_requests WHERE id = $1`, id); err == nil {

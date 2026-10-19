@@ -501,6 +501,15 @@ Notes on ordering:
 - **Acceptance criteria:** Each financial event produces exactly one receipt/notification; opt-outs honoured
   except for mandatory security/transactional messages.
 
+- **Stage 15 as delivered (2026-10-19, awaiting acceptance):** one outbox-fed notification engine (exactly-once creation
+  per event), documented routing policy with mandatory security notices, preferences, opt-in consent records for SMS and
+  WhatsApp, suppressions and no fallback; delivery state machine with retries, unknown-outcome lookups, signed callbacks
+  and dead letters with safe replay; maker-checker templates; in-app notification centre and unread counts; staff
+  communications dashboard; operations health and alerts ([stage-15/implementation.md](stage-15/implementation.md),
+  ADR-047). **Deviations:** no e-mail or SMS provider was chosen (LR-010, LR-011, LR-023 and provider confirmations are
+  open) — TEST-only simulators and local development senders stand in and live messaging is disabled in code; marketing is
+  disabled; English templates only; polling instead of push.
+
 ## Stage 16 — Discovery, Sharing & WhatsApp Optimisation
 
 - **Objective:** Help campaigns get found and shared, especially through WhatsApp.

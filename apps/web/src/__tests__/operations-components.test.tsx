@@ -74,7 +74,7 @@ describe("permission-aware navigation", () => {
     for (const g of NAV_GROUPS)
       for (const i of g.items) {
         expect(i.href.startsWith("/admin")).toBe(true);
-        if (i.href !== "/admin/account/personal-link") expect(i.permission).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
+        if (!["/admin/account/personal-link", "/admin/notifications"].includes(i.href)) expect(i.permission).toMatch(/^[a-z_]+(\.[a-z_]+)+$/);
       }
   });
 

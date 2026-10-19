@@ -47,24 +47,38 @@ func (s Secret) Reveal() string { return string(s) }
 
 // Config is the complete runtime configuration.
 type Config struct {
-	App          App
-	HTTP         HTTP
-	Database     Database
-	Redis        Redis
-	Storage      Storage
-	Log          Log
-	RateLimit    RateLimit
-	Auth         Auth
-	Email        Email
-	SMS          SMS
-	Verification Verification
-	Security     Security
-	Payments     Payments
-	Secrets      Secrets
-	Ledger       Ledger
-	Payouts      Payouts
-	Fees         Fees
-	Risk         Risk
+	App           App
+	HTTP          HTTP
+	Database      Database
+	Redis         Redis
+	Storage       Storage
+	Log           Log
+	RateLimit     RateLimit
+	Auth          Auth
+	Email         Email
+	SMS           SMS
+	Verification  Verification
+	Security      Security
+	Payments      Payments
+	Secrets       Secrets
+	Ledger        Ledger
+	Payouts       Payouts
+	Fees          Fees
+	Risk          Risk
+	Notifications Notifications
+}
+
+// Notifications configures the Stage 15 notification engine (ADR-047). Live messaging is not configurable: it is the
+// code constant notifications.LiveMessagingEnabled = false (no messaging provider is selected).
+type Notifications struct {
+	// SimulatorEnabled (NOTIFICATIONS_SIMULATOR_ENABLED) runs the TEST_ONLY e-mail, SMS and WhatsApp simulators; refused in production.
+	SimulatorEnabled bool
+	// EmailProvider (NOTIFICATIONS_EMAIL_PROVIDER): disabled | simulator | dev_smtp (Mailpit; development and test only).
+	EmailProvider string
+	// SMSProvider (NOTIFICATIONS_SMS_PROVIDER): disabled | simulator | dev_mailpit (development and test only).
+	SMSProvider string
+	// WhatsAppProvider (NOTIFICATIONS_WHATSAPP_PROVIDER): disabled | simulator.
+	WhatsAppProvider string
 }
 
 // Risk configures the Stage 13 risk module (ADR-045). Production screening is not configurable: it is the code constant
@@ -560,6 +574,42 @@ func Load(get LookupFunc) (Config, error) {
 	c.Risk = Risk{ScreeningSandboxEnabled: l.boolean("RISK_SCREENING_SANDBOX_ENABLED", false)}
 	if c.Risk.ScreeningSandboxEnabled && env == EnvProduction {
 		l.fail("RISK_SCREENING_SANDBOX_ENABLED is refused in production (the screening simulator is TEST_ONLY, ADR-045)")
+	}
+
+	c.Notifications = Notifications{SimulatorEnabled: l.boolean("NOTIFICATIONS_SIMULATOR_ENABLED", false),
+		EmailProvider: l.str("NOTIFICATIONS_EMAIL_PROVIDER", "disabled"), SMSProvider: l.str("NOTIFICATIONS_SMS_PROVIDER", "disabled"),
+		WhatsAppProvider: l.str("NOTIFICATIONS_WHATSAPP_PROVIDER", "disabled")}
+	n := c.Notifications
+	if n.SimulatorEnabled && env == EnvProduction {
+		l.fail("NOTIFICATIONS_SIMULATOR_ENABLED is refused in production (the messaging simulators are TEST_ONLY, ADR-047)")
+	}
+	devOnly := env == EnvDevelopment || env == EnvTest
+	for _, x := range []struct {
+		key, val string
+		allowed  []string
+	}{
+		{"NOTIFICATIONS_EMAIL_PROVIDER", n.EmailProvider, []string{"disabled", "simulator", "dev_smtp"}},
+		{"NOTIFICATIONS_SMS_PROVIDER", n.SMSProvider, []string{"disabled", "simulator", "dev_mailpit"}},
+		{"NOTIFICATIONS_WHATSAPP_PROVIDER", n.WhatsAppProvider, []string{"disabled", "simulator"}},
+	} {
+		ok := false
+		for _, a := range x.allowed {
+			ok = ok || a == x.val
+		}
+		switch {
+		case !ok:
+			l.fail("%s must be one of %s (no production messaging provider is selected)", x.key, strings.Join(x.allowed, ", "))
+		case x.val == "simulator" && !n.SimulatorEnabled:
+			l.fail("%s=simulator needs NOTIFICATIONS_SIMULATOR_ENABLED=true", x.key)
+		case strings.HasPrefix(x.val, "dev_") && !devOnly:
+			l.fail("%s=%s is allowed in development and test only", x.key, x.val)
+		}
+	}
+	if n.EmailProvider == "dev_smtp" && c.Email.Provider != "smtp" {
+		l.fail("NOTIFICATIONS_EMAIL_PROVIDER=dev_smtp needs EMAIL_PROVIDER=smtp")
+	}
+	if n.SMSProvider == "dev_mailpit" && c.SMS.Provider != "dev_mailpit" {
+		l.fail("NOTIFICATIONS_SMS_PROVIDER=dev_mailpit needs SMS_PROVIDER=dev_mailpit")
 	}
 
 	if len(l.problems) > 0 {

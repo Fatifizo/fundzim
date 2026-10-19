@@ -53,6 +53,8 @@ type Deps struct {
 	Orgs        *organisations.Service
 	// Stage 5 verification modules (nil only in platform-only tests)
 	Verification *VerificationModules
+	// Stage 15 notification engine (nil only in platform-only tests)
+	Notifications *notifications.Service
 }
 
 // NewDeps connects the dependencies described by cfg. The database pool is lazy: a database that is
@@ -141,6 +143,8 @@ func NewDeps(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Deps
 		d.Close()
 		return nil, err
 	}
+	d.Notifications = NewNotifications(NotificationDeps{Config: cfg, Pool: pool, Clock: clock.System, Logger: logger, Modules: d.Verification,
+		Orgs: d.Orgs, Auth: d.Auth, Email: email, SMS: sms})
 	return d, nil
 }
 

@@ -15,8 +15,28 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
-**Stage 14 — Administration & operations portal (complete; awaiting acceptance; TEST data only).** Stages 1–14 are complete
-but their acceptance has not been recorded (never mark a stage accepted yourself); Stage 9 is PARTIAL. What Stage 14 built:
+**Stage 15 — Notifications & communications (complete; awaiting acceptance; simulators and development senders only).**
+Stages 1–15 are complete but their acceptance has not been recorded (never mark a stage accepted yourself); Stage 9 is
+PARTIAL. What Stage 15 built: `docs/stage-15/implementation.md` (prerequisites, architecture, event contracts, e-mail, SMS,
+WhatsApp, in-app, templates, preferences, consent, delivery lifecycle, retries, dead letters, provider readiness, security
+review, testing, known issues; ADR-047); Stage 16 starts from `docs/stage-handover/STAGE-15-TO-STAGE-16.md`. Binding Stage 15
+rules: **one notification engine** (`internal/notifications`) fed only by the outbox through the consumer
+`notifications.dispatch` — never add a second notification path or send a message from a domain module; credential messages
+(verification/reset links, invitations, OTPs) stay in `auth`; **no provider is selected**: `LiveMessagingEnabled = false`
+(production suppresses every external channel), provider configs are CHECK-limited to TEST and never VERIFIED or
+PRODUCTION_ENABLED, simulators and `dev_*` senders are refused in production; `MarketingEnabled = false` and no marketing
+consent can be granted; routing is the pure `notifications.Route` re-run before every send and replay (consent, preference,
+suppression, verified contact, synthetic source) and **never falls back** to another channel; SMS and WhatsApp need a
+GRANTED consent record that only the user can create (`USER_SETTINGS`); SECURITY in-app and e-mail are mandatory; synthetic
+(TEST) money events notify in-app only with a `[TEST]` label, and a donation success notice comes only from
+`payments.payment_succeeded`; risk and compliance outcomes never notify their subject (LR-008); templates are
+placeholder-only, immutable after DRAFT and maker-checker (never the maker, submitter or a linked account); a WhatsApp template
+is never APPROVED without provider evidence; acceptance is not delivery, an unknown outcome is looked up before any resend,
+and provider callbacks never regress a delivered state; no Zimbabwean consent or retention rule is assumed (LR-010, LR-011,
+LR-012, LR-023). Notification integration tests (`TestNotifications*`) build an in-process engine with simulators on the
+shared development database alongside the compose worker: scope assertions to the test's own users.
+
+**Stage 14 — Administration & operations portal (complete; awaiting acceptance; TEST data only).** What Stage 14 built:
 `docs/stage-14/implementation.md` (prerequisites, operations architecture, command center, staff management, approval center,
 module operations, support, exceptions, health, incidents, audit center, reporting, security review, testing, known issues;
 ADR-046); Stage 15 starts from `docs/stage-handover/STAGE-14-TO-STAGE-15.md`. Binding Stage 14 rules: `internal/operations`

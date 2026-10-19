@@ -8,11 +8,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/Fatifizo/fundzim/internal/auth"
 	"github.com/Fatifizo/fundzim/internal/campaigns"
 	"github.com/Fatifizo/fundzim/internal/compliance"
 	"github.com/Fatifizo/fundzim/internal/kyc"
-	"github.com/Fatifizo/fundzim/internal/organisations"
 	"github.com/Fatifizo/fundzim/internal/platform/featureflags"
 	"github.com/Fatifizo/fundzim/internal/platform/httpx"
 	"github.com/Fatifizo/fundzim/internal/platform/idempotency"
@@ -93,19 +91,7 @@ const (
 	consumerCampaignNotify      = "campaigns.notify"
 )
 
-// campaignNotices are owner emails. They never carry compliance reasons, reviewer identities or internal notes.
-var campaignNotices = map[string][2]string{
-	"campaigns.created":           {"Your campaign draft was created", "Your campaign draft is saved. Complete it and submit it for review when you are ready."},
-	"campaigns.submitted":         {"We received your campaign", "Your campaign was submitted and is waiting for review. Submitting does not guarantee approval; we will email you when it has been reviewed."},
-	"campaigns.changes_requested": {"Changes requested for your campaign", "A reviewer asked for changes to your campaign. Sign in to FundZim to see what to update."},
-	"campaigns.approved":          {"Your campaign was approved", "Your campaign was approved. Sign in to FundZim to publish it."},
-	"campaigns.rejected":          {"Your campaign was not approved", "Your campaign was not approved. Sign in to FundZim to see the reason and your options."},
-	"campaigns.published":         {"Your campaign is live", "Your campaign is now published. Donations are not yet available on FundZim."},
-	"campaigns.paused":            {"Your campaign is paused", "Your campaign is paused. You can resume it from your dashboard."},
-	"campaigns.suspended":         {"Your campaign is suspended", "Your campaign has been suspended pending review. Contact support if you have questions."},
-	"campaigns.reactivated":       {"Your campaign was reactivated", "Your campaign has been reactivated."},
-	"campaigns.completed":         {"Your campaign is completed", "Your campaign has been marked as completed."},
-}
+// Owner notices for campaign events are Stage 15 notification templates (CAMPAIGN_*; internal/notifications/events.go).
 
 type campaignEvent struct {
 	CampaignID string `json:"campaign_id"`
@@ -116,8 +102,8 @@ type campaignEvent struct {
 	Level      string `json:"level"`
 }
 
-// registerCampaignConsumers subscribes restriction enforcement and owner notifications (worker).
-func registerCampaignConsumers(reg *outbox.Registry, m *VerificationModules, appPool *pgxpool.Pool, orgs *organisations.Service, mail auth.Mailer) {
+// registerCampaignConsumers subscribes restriction enforcement (worker).
+func registerCampaignConsumers(reg *outbox.Registry, m *VerificationModules) {
 	parse := func(del outbox.Delivery) (campaignEvent, error) {
 		var p campaignEvent
 		if err := json.Unmarshal(del.Payload, &p); err != nil {
@@ -145,27 +131,4 @@ func registerCampaignConsumers(reg *outbox.Registry, m *VerificationModules, app
 		}
 		return nil
 	})
-	for evType, tpl := range campaignNotices {
-		tpl := tpl
-		reg.Subscribe(consumerCampaignNotify, evType, func(ctx context.Context, del outbox.Delivery) error {
-			p, err := parse(del)
-			if err != nil {
-				return err
-			}
-			st, sid := "USER", p.OwnerUser
-			if p.OwnerOrg != "" {
-				st, sid = "ORGANISATION", p.OwnerOrg
-			}
-			to, err := recipients(ctx, appPool, orgs, st, sid)
-			if err != nil {
-				return err
-			}
-			for _, addr := range to {
-				if err := mail.SendEmail(ctx, addr, tpl[0], tpl[1]+"\n\nThis is an automated message from FundZim."); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	}
 }

@@ -128,13 +128,19 @@ func (s *Service) OpenSupportCase(ctx context.Context, staffID string, in NewSup
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO app.ops_support_cases (id, subject, category, priority, status, requester_user_id, related_campaign_id,
+		var number int64
+		if err := tx.QueryRow(ctx, `INSERT INTO app.ops_support_cases (id, subject, category, priority, status, requester_user_id, related_campaign_id,
 			related_reference_type, related_reference_id, due_at, created_by) VALUES ($1, $2, $3, $4, 'OPEN', nullif($5, '')::uuid, nullif($6, '')::uuid,
-			nullif($7, ''), nullif($8, ''), $9, $10)`, id, subject, in.Category, in.Priority, in.RequesterUserID, in.RelatedCampaignID,
-			in.RelatedReferenceType, in.RelatedReferenceID, due, staffID); err != nil {
+			nullif($7, ''), nullif($8, ''), $9, $10) RETURNING case_number`, id, subject, in.Category, in.Priority, in.RequesterUserID, in.RelatedCampaignID,
+			in.RelatedReferenceType, in.RelatedReferenceID, due, staffID).Scan(&number); err != nil {
 			return mapDB(err)
 		}
 		if err := supportEvent(ctx, tx, id, "OPENED", staffID, "", "OPEN", note, nil, now); err != nil {
+			return err
+		}
+		// Stage 15: the requester's notification (ids and the case number only; never the subject or notes)
+		if err := emit(ctx, tx, "support_case", id, EvSupportCaseOpened, map[string]any{"case_id": id, "case_number": number,
+			"requester_user_id": in.RequesterUserID}, now); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Event{Action: "ops.support_case.opened", TargetType: "ops_support_case", TargetID: id,
@@ -298,6 +304,12 @@ func (s *Service) AssignSupportCase(ctx context.Context, op SupportOp, assignee 
 		if err := supportEvent(ctx, tx, c.ID, "ASSIGNED", op.StaffID, c.Status, to, op.Note, map[string]any{"assigned_to": assignee}, now); err != nil {
 			return err
 		}
+		if assignee != op.StaffID { // nobody is notified of taking a case themselves
+			if err := emit(ctx, tx, "support_case", c.ID, EvSupportCaseAssigned, map[string]any{"case_id": c.ID, "case_number": c.CaseNumber,
+				"assigned_to": assignee}, now); err != nil {
+				return err
+			}
+		}
 		return audit.Record(ctx, tx, audit.Event{Action: "ops.support_case.assigned", TargetType: "ops_support_case", TargetID: c.ID,
 			Metadata: map[string]any{"assigned_to": assignee}})
 	})
@@ -335,6 +347,14 @@ func (s *Service) TransitionSupportCase(ctx context.Context, op SupportOp, to st
 			return mapDB(err)
 		}
 		if err := supportEvent(ctx, tx, c.ID, "STATUS_"+to, op.StaffID, c.Status, to, note, nil, now); err != nil {
+			return err
+		}
+		req := ""
+		if c.RequesterUserID != nil {
+			req = *c.RequesterUserID
+		}
+		if err := emit(ctx, tx, "support_case", c.ID, EvSupportCaseStatusChanged, map[string]any{"case_id": c.ID, "case_number": c.CaseNumber,
+			"requester_user_id": req, "from": c.Status, "to": to}, now); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Event{Action: "ops.support_case.transitioned", TargetType: "ops_support_case", TargetID: c.ID,

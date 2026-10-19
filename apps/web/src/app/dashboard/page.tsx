@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AccountContainer, AccountPage } from "@/components/account/account-shell";
+import { UnreadLink } from "@/components/notifications/inbox";
 import { EmailVerificationBanner } from "@/components/account/email-verification-banner";
 import { formatDateTime } from "@/components/account/format";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,7 @@ export default async function DashboardPage() {
     <AccountContainer>
       <AccountPage title={`Welcome, ${me.display_name || "there"}`} intro="Your FundZim account.">
         {!me.email_verified ? <EmailVerificationBanner email={me.email} /> : null}
+        <UnreadLink href="/dashboard/notifications" />
         <div className="grid gap-6 md:grid-cols-2">
           <Card as="section" aria-labelledby="account-title">
             <h2 id="account-title" className="font-display text-xl font-semibold text-ink-900">

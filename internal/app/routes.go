@@ -63,6 +63,9 @@ func NewRouter(d *Deps, checker *health.Checker) *httpx.Router {
 		registerFeeRoutes(r, d.Verification, d.Idempotency, d.Limiter, d.Logger)     // Stage 12 (ADR-044)
 		registerRiskRoutes(r, d.Verification, d.Idempotency, d.Limiter, d.Logger)    // Stage 13 (ADR-045)
 		registerOperationsRoutes(r, d, d.Idempotency, d.Logger)                      // Stage 14 (ADR-046)
+		if d.Notifications != nil {
+			registerNotificationRoutes(r, d.Notifications, d.Verification.KYC, d.Idempotency, d.Limiter, d.Logger) // Stage 15 (ADR-047)
+		}
 	}
 	return r
 }

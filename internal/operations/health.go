@@ -149,6 +149,21 @@ func (s *Service) alerts(ctx context.Context, h HealthReport, snaps []opsview.Sn
 				add("RISK_P1_UNASSIGNED", "SEV2", "Critical risk cases have no investigator", m.Source)
 			case m.Key == "providers.webhooks.dead_lettered" && m.Value != nil && *m.Value > 0:
 				add("PROVIDER_WEBHOOKS_DEAD_LETTERED", "SEV2", "Provider webhooks could not be dispatched", m.Source)
+			// Stage 15 notifications (ADR-047); thresholds are engineering defaults
+			case m.Key == "notifications.worker" && m.Status == opsview.Unavailable:
+				add("NOTIFICATION_WORKER_UNAVAILABLE", "SEV2", "The notification delivery worker has stopped sweeping", m.Source)
+			case m.Key == "notifications.queue.backlog" && m.Status == opsview.Degraded:
+				add("NOTIFICATION_QUEUE_BACKLOG", "SEV3", "Notifications are waiting longer than the backlog threshold", m.Source)
+			case m.Key == "notifications.error_rate" && m.Status == opsview.Degraded:
+				add("NOTIFICATION_DELIVERY_ERRORS", "SEV3", "More than 10% of notification delivery attempts failed in the last hour", m.Source)
+			case m.Key == "notifications.dead_letters.open" && m.Value != nil && *m.Value >= 10:
+				add("NOTIFICATION_DEAD_LETTERS", "SEV3", "Dead-lettered notifications are accumulating", m.Source)
+			case m.Key == "notifications.webhook_rejections" && m.Value != nil && *m.Value > 0:
+				add("NOTIFICATION_WEBHOOK_REJECTED", "SEV2", "Provider callbacks failed verification", m.Source)
+			case m.Key == "notifications.conflicting_evidence" && m.Value != nil && *m.Value > 0:
+				add("NOTIFICATION_CONFLICTING_EVIDENCE", "SEV3", "Providers reported contradictory or duplicate delivery outcomes", m.Source)
+			case m.Key == "notifications.consent_violations" && m.Value != nil && *m.Value > 0:
+				add("NOTIFICATION_CONSENT_ENFORCEMENT", "SEV1", "An external message was sent without the consent it needs", m.Source)
 			}
 		}
 		for _, e := range snap.Exceptions {

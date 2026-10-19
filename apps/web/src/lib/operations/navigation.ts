@@ -52,6 +52,20 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [{ href: "/admin/support", label: "Support cases", permission: "ops.support.view" }],
   },
   {
+    id: "communications",
+    label: "Communications",
+    items: [
+      { href: "/admin/communications", label: "Communications", permission: "communications.view", exact: true },
+      { href: "/admin/communications/deliveries", label: "Deliveries", permission: "communications.view" },
+      { href: "/admin/communications/dead-letters", label: "Dead letters", permission: "communications.view" },
+      { href: "/admin/communications/templates", label: "Templates", permission: "communications.view" },
+      { href: "/admin/communications/providers", label: "Messaging providers", permission: "communications.view" },
+      { href: "/admin/communications/suppressions", label: "Suppressions", permission: "communications.view" },
+      { href: "/admin/communications/reports", label: "Communication reports", permission: "communications.view" },
+      { href: "/admin/communications/consent", label: "Consent records", permission: "communications.consent.view" },
+    ],
+  },
+  {
     id: "staff",
     label: "Staff and audit",
     items: [
@@ -154,7 +168,10 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     id: "account",
     label: "My staff account",
-    items: [{ href: "/admin/account/personal-link", label: "Personal account link", permission: null }],
+    items: [
+      { href: "/admin/notifications", label: "My notifications", permission: null },
+      { href: "/admin/account/personal-link", label: "Personal account link", permission: null },
+    ],
   },
 ];
 
@@ -195,6 +212,14 @@ const SEGMENT_LABELS: Record<string, string> = {
   compliance: "Compliance",
   cases: "Cases",
   account: "Account",
+  communications: "Communications",
+  deliveries: "Deliveries",
+  "dead-letters": "Dead letters",
+  templates: "Templates",
+  providers: "Messaging providers",
+  suppressions: "Suppressions",
+  consent: "Consent records",
+  notifications: "Notifications",
 };
 
 const UUIDISH = /^[0-9a-f]{8}-[0-9a-f]{4}-/i;

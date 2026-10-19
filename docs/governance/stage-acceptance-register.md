@@ -32,6 +32,7 @@
 | 12 | Fees & platform revenue | see docs/stage-12 (TEST fees only; production fee charging and revenue recognition BLOCKED) | **NOT_RECORDED** | Fee model PD-01/LR-028; tax LR-016/LR-045/LR-059; accounting review (KI-S10-02); provider fee evidence (ADR-040, PCR-016); PD-20, PD-23; see docs/stage-12/known-issues.md |
 | 13 | Trust, fraud & risk engine | see docs/stage-13 (TEST data; production screening BLOCKED) | **NOT_RECORDED** | Screening provider and scope (LR-009/LR-053/LR-064/LR-065/LR-066); reporting duties (LR-008/LR-051/LR-060); automated decisions LR-071; retention LR-012/LR-034/LR-074; no approved rules; see docs/stage-13/known-issues.md |
 | 14 | Administration & operations portal | see docs/stage-14 (TEST data; live payments, payouts and screening BLOCKED) | **NOT_RECORDED** | Stage 0–13 acceptance; no internal SLA targets configured; health thresholds are engineering defaults; see docs/stage-14/known-issues.md |
+| 15 | Notifications & communications | see docs/stage-15 (simulators and development senders only; live messaging and marketing BLOCKED) | **NOT_RECORDED** | Stage 0–14 acceptance; no messaging provider (LR-010, LR-011, PCR); consent wording and basis LR-023; retention LR-012; thresholds are engineering defaults; see docs/stage-15/known-issues.md |
 
 ## Effect of a missing acceptance
 

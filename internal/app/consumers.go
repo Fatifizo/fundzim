@@ -29,12 +29,15 @@ func registerConsumers(ctx context.Context, d *WorkerDeps, reg *outbox.Registry)
 		return fmt.Errorf("verification consumers: %w", err)
 	}
 	registerVerificationConsumers(reg, d.Verification, d.DB, o, mailAdapter{d.Email}, d.Clock)
-	registerRemediationConsumers(reg, d.Verification)                             // Stage 6 stream R (ADR-037)
-	registerCampaignConsumers(reg, d.Verification, d.DB, o, mailAdapter{d.Email}) // Stage 6 campaigns (ADR-036)
-	registerCampaignMediaConsumers(reg, d.Verification)                           // Stage 6 stream M
-	registerPaymentConsumers(reg, d.Verification)                                 // Stage 8 (ADR-039)
-	registerLedgerConsumers(reg, d.Verification)                                  // Stage 10 (ADR-042)
-	registerFeeConsumers(reg, d.Verification)                                     // Stage 12 (ADR-044)
+	registerRemediationConsumers(reg, d.Verification)   // Stage 6 stream R (ADR-037)
+	registerCampaignConsumers(reg, d.Verification)      // Stage 6 campaigns (ADR-036)
+	registerCampaignMediaConsumers(reg, d.Verification) // Stage 6 stream M
+	registerPaymentConsumers(reg, d.Verification)       // Stage 8 (ADR-039)
+	registerLedgerConsumers(reg, d.Verification)        // Stage 10 (ADR-042)
+	registerFeeConsumers(reg, d.Verification)           // Stage 12 (ADR-044)
+	d.Notifications = NewNotifications(NotificationDeps{Config: d.Config, Pool: d.DB, Clock: d.Clock, Logger: d.Logger, Modules: d.Verification,
+		Orgs: o, Auth: a, Email: d.Email, SMS: d.SMS, WorkerID: workerID()})
+	registerNotificationConsumers(reg, d.Notifications) // Stage 15 (ADR-047)
 	return nil
 }
 

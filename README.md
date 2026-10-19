@@ -11,6 +11,15 @@ providers.
 FundZim is **not** an investment, lending, equity or rewards platform, and it is not a wallet or a payment
 provider.
 
+> **Status: Stage 15 — Notifications & communications (complete; awaiting acceptance; simulators and development senders
+> only).** One outbox-fed notification engine creates each notification exactly once, routes every channel through a
+> documented policy (mandatory security notices, preferences, opt-in consent for SMS and WhatsApp, suppressions, verified
+> contacts, no fallback), delivers through TEST-only simulators or local development senders with retries, unknown-outcome
+> lookups, signed callbacks and dead letters, and keeps an in-app notification centre for users and staff. Templates are
+> placeholder-only and maker-checker. No e-mail, SMS or WhatsApp provider is selected and live messaging is disabled in
+> code; marketing is disabled; TEST payments and payouts notify in-app only. Docs:
+> [stage-15/implementation.md](docs/stage-15/implementation.md) (ADR-047).
+>
 > **Status: Stage 14 — Administration & operations portal (complete; awaiting acceptance; TEST data only).** A unified,
 > permission-aware staff shell (navigation, search, task indicator and actions follow the caller's effective permissions;
 > every API route still enforces its own), an operations command center whose metrics come from each module's own
@@ -294,7 +303,8 @@ Reset deletes the Postgres and Garage volumes (database, roles, objects). `.env`
 | [Stage 12 implementation](docs/stage-12/implementation.md) · [architecture](docs/stage-12/fee-architecture.md) · [policy model](docs/stage-12/fee-policy-model.md) · [calculation](docs/stage-12/fee-calculation.md) · [rounding](docs/stage-12/rounding.md) · [revenue accounting](docs/stage-12/revenue-accounting.md) · [security review](docs/stage-12/security-review.md) · [testing](docs/stage-12/testing.md) · [known issues](docs/stage-12/known-issues.md) | Fees & platform revenue (TEST fees only) |
 | [Stage 13 implementation](docs/stage-13/implementation.md) · [architecture](docs/stage-13/risk-architecture.md) · [signals](docs/stage-13/risk-signals.md) · [scoring](docs/stage-13/risk-scoring.md) · [rules](docs/stage-13/risk-rules.md) · [cases](docs/stage-13/case-management.md) · [holds](docs/stage-13/compliance-holds.md) · [screening](docs/stage-13/screening.md) · [security review](docs/stage-13/security-review.md) · [testing](docs/stage-13/testing.md) · [known issues](docs/stage-13/known-issues.md) | Trust, fraud & risk engine (TEST data; screening BLOCKED) |
 | [Stage 14 implementation](docs/stage-14/implementation.md) · [architecture](docs/stage-14/operations-architecture.md) · [command center](docs/stage-14/command-center.md) · [staff](docs/stage-14/staff-management.md) · [approvals](docs/stage-14/approval-center.md) · [support](docs/stage-14/support-operations.md) · [exceptions](docs/stage-14/exception-management.md) · [health](docs/stage-14/platform-health.md) · [incidents](docs/stage-14/incident-management.md) · [audit](docs/stage-14/audit-center.md) · [reporting](docs/stage-14/reporting.md) · [security review](docs/stage-14/security-review.md) · [testing](docs/stage-14/testing.md) · [known issues](docs/stage-14/known-issues.md) | Stage 14 administration & operations portal (ADR-046) |
-| [Stage handovers](docs/stage-handover/STAGE-14-TO-STAGE-15.md) | Stage 14 → 15 (notifications & communications); earlier handovers in the same folder |
+| [Stage 15 implementation](docs/stage-15/implementation.md) · [architecture](docs/stage-15/notification-architecture.md) · [events](docs/stage-15/event-contracts.md) · [e-mail](docs/stage-15/email.md) · [SMS](docs/stage-15/sms.md) · [WhatsApp](docs/stage-15/whatsapp.md) · [in-app](docs/stage-15/in-app.md) · [templates](docs/stage-15/templates.md) · [preferences](docs/stage-15/preferences.md) · [consent](docs/stage-15/consent.md) · [delivery](docs/stage-15/delivery-lifecycle.md) · [retries](docs/stage-15/retries.md) · [dead letters](docs/stage-15/dead-letters.md) · [providers](docs/stage-15/provider-readiness.md) · [security review](docs/stage-15/security-review.md) · [testing](docs/stage-15/testing.md) · [known issues](docs/stage-15/known-issues.md) | Stage 15 notifications & communications (ADR-047) |
+| [Stage handovers](docs/stage-handover/STAGE-15-TO-STAGE-16.md) | Stage 15 → 16 (discovery, sharing & WhatsApp optimisation); earlier handovers in the same folder |
 
 ## Licence
 

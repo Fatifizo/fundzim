@@ -421,3 +421,34 @@ func justificationText(s string) (string, bool) {
 	}
 	return justification(s)
 }
+
+// StaffWithPermission returns the ACTIVE staff accounts that currently hold a permission through an active role
+// assignment (notification recipients, Stage 15). Break-glass grants are not used for routing notifications.
+func (s *Service) StaffWithPermission(ctx context.Context, permission string) ([]string, error) {
+	now := s.now()
+	rows, err := s.Pool.Query(ctx, `SELECT DISTINCT ra.user_id::text FROM app.role_assignments ra
+		JOIN app.role_permissions rp ON rp.role_id = ra.role_id JOIN app.permissions p ON p.id = rp.permission_id
+		WHERE p.code = $1 AND ra.revoked_at IS NULL AND ra.valid_from <= $2 AND (ra.expires_at IS NULL OR ra.expires_at > $2)`, permission, now)
+	if err != nil {
+		return nil, err
+	}
+	holders, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil || len(holders) == 0 {
+		return holders, err
+	}
+	active, err := users.ActiveStaffIDs(ctx, s.Pool)
+	if err != nil {
+		return nil, err
+	}
+	ok := map[string]bool{}
+	for _, id := range active {
+		ok[id] = true
+	}
+	out := holders[:0]
+	for _, id := range holders {
+		if ok[id] {
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}

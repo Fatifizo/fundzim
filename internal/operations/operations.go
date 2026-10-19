@@ -25,6 +25,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/db"
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
 	"github.com/Fatifizo/fundzim/internal/platform/opsview"
+	"github.com/Fatifizo/fundzim/internal/platform/outbox"
 )
 
 // Permissions (migration 20261017090100).
@@ -287,4 +288,18 @@ func (s *Service) Approvals(ctx context.Context, v Viewer, f ApprovalFilter) ([]
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].RequestedAt.Before(out[j].RequestedAt) })
 	return out, c.statuses, nil
+}
+
+// Outbox events written by the operations module (Stage 15, ADR-047: the notification engine consumes them). Payloads
+// carry ids and numbers only — never subjects, notes or resolutions.
+const (
+	EvSupportCaseOpened        = "operations.support_case_opened"
+	EvSupportCaseAssigned      = "operations.support_case_assigned"
+	EvSupportCaseStatusChanged = "operations.support_case_status_changed"
+	EvIncidentDeclared         = "operations.incident_declared"
+)
+
+func emit(ctx context.Context, tx pgx.Tx, aggType, aggID, eventType string, payload map[string]any, now time.Time) error {
+	_, err := outbox.Write(ctx, tx, outbox.Event{AggregateType: aggType, AggregateID: aggID, EventType: eventType, Payload: payload, OccurredAt: now})
+	return err
 }

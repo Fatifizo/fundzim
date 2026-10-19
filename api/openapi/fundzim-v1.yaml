@@ -109,6 +109,8 @@ tags:
   description: Risk signals, the explainable rule engine (maker-checker rules), cases, the hold registry, TEST screening and monitoring (ADR-045). A score is never proof of fraud.
 - name: Operations (Stage 14)
   description: Command center, approval and exception centers, support, incidents, staff access governance, audit center, health, reports and search (ADR-046). The portal orchestrates; decisions stay with the owning modules.
+- name: Notifications (Stage 15)
+  description: In-app inbox, preferences, consent, staff communications (deliveries, dead letters, providers, templates, suppressions, reports) and provider callbacks (ADR-047). No production messaging provider is selected.
 - name: Webhooks
   description: 'Provider callbacks: signature-authenticated, CSRF/session-exempt, inbox + 2xx fast.'
 - name: Health
@@ -16731,101 +16733,6 @@ paths:
       - MFA_REQUIRED
       - PERMISSION_DENIED
       - VALIDATION_FAILED
-  /me/notification-preferences:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Notifications
-      operationId: getNotificationPreferences
-      summary: Get notification preferences
-      description: '**NTF-01** · Auth: session · Authorization: Self.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-USER-READ` · Audit: —'
-      security:
-      - session: []
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/NotificationPreferencesEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: NTF-01
-      x-fundzim-auth: session
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-USER-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-    put:
-      tags:
-      - Notifications
-      operationId: updateNotificationPreferences
-      summary: Replace notification preferences
-      description: '**NTF-02** · Auth: session · Authorization: Self.
-
-
-        Idempotency: optional · Rate-limit class: `RL-USER-WRITE` · Audit: notification.preferences.changed (new)'
-      security:
-      - session: []
-        csrfToken: []
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKeyOptional'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/NotificationPreferencesUpdate'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/NotificationPreferencesEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: NTF-02
-      x-fundzim-auth: session
-      x-fundzim-idempotency: optional
-      x-fundzim-rate-limit-class: RL-USER-WRITE
-      x-fundzim-audit: notification.preferences.changed (new)
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - VALIDATION_FAILED
-      - VERSION_CONFLICT
   /notifications/unsubscribe:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -40039,6 +39946,1857 @@ paths:
       - AUDIT_EXPORT_TOO_LARGE
       - STEP_UP_REQUIRED
       - VALIDATION_FAILED
+  /notifications:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Notifications (Stage 15)
+      operationId: listNotifications
+      summary: My in-app notifications
+      description: '**Stage 15 · IMPLEMENTED** · Auth: session (USER or STAFF; own records only). The caller''s own notifications, newest first (users and
+        staff). **Stage 15: TEST environment** — no production messaging provider; simulators send nothing (ADR-047).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-USER-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      - staffSession: []
+      parameters:
+      - name: unread
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - 'true'
+      - name: category
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - SECURITY
+          - TRANSACTIONAL
+          - CAMPAIGN
+          - VERIFICATION
+          - PAYMENT
+          - WITHDRAWAL
+          - PAYOUT
+          - RISK
+          - COMPLIANCE
+          - SUPPORT
+          - ADMINISTRATIVE
+          - MARKETING
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationS15Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: any
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /notifications/unread-count:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Notifications (Stage 15)
+      operationId: notificationsUnreadCount
+      summary: My unread count
+      description: '**Stage 15 · IMPLEMENTED** · Auth: session (USER or STAFF; own records only). Indexed count of the caller''s unread in-app notifications.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-USER-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadCountS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: any
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /notifications/read-all:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: markAllNotificationsRead
+      summary: Mark all as read
+      description: '**Stage 15 · IMPLEMENTED** · Auth: session (USER or STAFF; own records only). Marks every unread in-app notification of the caller read.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-USER-WRITE · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkAllReadS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: any
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /notifications/{notification_id}/read:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: markNotificationRead
+      summary: Mark one as read
+      description: '**Stage 15 · IMPLEMENTED** · Auth: session (USER or STAFF; own records only). Another person''s notification is 404.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-USER-WRITE · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      - staffSession: []
+      parameters:
+      - name: notification_id
+        in: path
+        required: true
+        description: Notification id.
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkReadS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: any
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /notifications/preferences:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Notifications (Stage 15)
+      operationId: getNotificationPreferencesS15
+      summary: My notification preferences
+      description: '**Stage 15 · IMPLEMENTED** · Auth: session (USER). Every user category and channel with its mandatory and consent flags.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-USER-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    put:
+      tags:
+      - Notifications (Stage 15)
+      operationId: updateNotificationPreferences
+      summary: Change my notification preferences
+      description: '**Stage 15 · IMPLEMENTED** · Auth: session (USER). Atomic; security e-mail and in-app cannot be turned off.
+
+
+
+        Idempotency: n/a · Rate-limit: notifications.consent.user · Audit: notifications.preferences.updated · Cache-Control: no-store'
+      security:
+      - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPreferencesUpdateS15'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - NOTIFICATION_MANDATORY
+      - VALIDATION_FAILED
+  /communications/consent:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Notifications (Stage 15)
+      operationId: getCommunicationConsent
+      summary: My communication consents
+      description: '**Stage 15 · IMPLEMENTED** · Auth: session (USER). Per channel and purpose; NOT_REQUESTED when no record exists.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-USER-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - session: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentListS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: setCommunicationConsent
+      summary: Give or withdraw my consent
+      description: '**Stage 15 · IMPLEMENTED** · Auth: session (USER). Recorded with the consent policy version and this request as evidence. Marketing consent
+        cannot be given (marketing disabled).
+
+
+
+        Idempotency: n/a · Rate-limit: notifications.consent.user · Audit: notifications.consent.recorded · Cache-Control: no-store'
+      security:
+      - session: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentChangeS15'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: user
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - MARKETING_NOT_AVAILABLE
+      - VALIDATION_FAILED
+  /webhooks/notifications/{provider}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: notificationProviderWebhook
+      summary: Messaging provider callback
+      description: '**Stage 15 · IMPLEMENTED** · Auth: none (provider callback). HMAC signature and timestamp window (simulator scheme; a real provider''s
+        scheme must come from its documentation), provider event id dedupe, payload validation; refusals are recorded. Out-of-order and duplicate reports
+        never regress a delivery.
+
+
+
+        Idempotency: n/a · Rate-limit: notifications.webhook.ip · Audit: — · Cache-Control: no-store'
+      security: []
+      parameters:
+      - name: provider
+        in: path
+        required: true
+        description: Provider code (simulators only today).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookAckS15Envelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: none
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - WEBHOOK_PAYLOAD_INVALID
+      - WEBHOOK_PROVIDER_UNKNOWN
+      - WEBHOOK_SIGNATURE_INVALID
+  /admin/communications/overview:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsOverview
+      summary: Communications dashboard
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.view` (non-staff → `404`). Backlogs, failures, dead letters,
+        latency, error rate, providers, workers. **Stage 15: TEST environment** — no production messaging provider; simulators send nothing (ADR-047).
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsOverviewS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/communications/deliveries:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsDeliveries
+      summary: Deliveries
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.view` (non-staff → `404`). Newest first; masked destinations;
+        no bodies.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - QUEUED
+          - PROCESSING
+          - SUBMITTED
+          - ACCEPTED
+          - DELIVERED
+          - READ
+          - FAILED_RETRYABLE
+          - FAILED_PERMANENT
+          - SUPPRESSED
+          - CANCELLED
+          - UNKNOWN
+          description: 'Provider acceptance (ACCEPTED) is never delivery. UNKNOWN: the outcome is looked up before any resend.'
+      - name: channel
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - EMAIL
+          - SMS
+          - WHATSAPP
+          - IN_APP
+      - name: template_key
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: recipient_user_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: notification_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsDeliveryS15Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/communications/deliveries/{delivery_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsDelivery
+      summary: One delivery
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.view` (non-staff → `404`). Attempts and provider evidence.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: delivery_id
+        in: path
+        required: true
+        description: Delivery id.
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsDeliveryDetailS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/communications/dead-letters:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsDeadLetters
+      summary: Dead letters
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.view` (non-staff → `404`). OPEN by default.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - REPLAYED
+          - DISCARDED
+          - ALL
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsDeadLetterS15Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/communications/dead-letters/{dead_letter_id}/replay:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsReplay
+      summary: Replay a dead letter
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.replay` + fresh step-up (non-staff → `404`). Re-checks
+        everything a send would; blocked replays say why. Concurrent replays: one wins.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: notifications.dead_letter.replayed · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: dead_letter_id
+        in: path
+        required: true
+        description: Dead letter id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommsReasonS15'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsReplayS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.replay
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - NOTIFICATION_STATE
+      - STEP_UP_REQUIRED
+  /admin/communications/dead-letters/{dead_letter_id}/discard:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsDiscard
+      summary: Discard a dead letter
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.replay` + fresh step-up (non-staff → `404`). Closes it
+        without resending.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: notifications.dead_letter.discarded · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: dead_letter_id
+        in: path
+        required: true
+        description: Dead letter id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommsReasonS15'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsDiscardS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.replay
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - NOTIFICATION_STATE
+      - STEP_UP_REQUIRED
+  /admin/communications/providers:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsProviders
+      summary: Provider readiness
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.view` (non-staff → `404`). Configuration, readiness and
+        health derived from attempts.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsProvidersS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/communications/reports:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsReports
+      summary: Communication reports
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.view` (non-staff → `404`). By channel, category, status,
+        suppression reason, provider error, template; rates; latency.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: from
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Timestamp'
+      - name: to
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Timestamp'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsReportS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/communications/suppressions:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsSuppressions
+      summary: Suppressions
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.view` (non-staff → `404`). Active by default.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: include_lifted
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - 'true'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsSuppressionS15Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsSuppress
+      summary: Suppress a user's destination
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.suppression.manage` + fresh step-up (non-staff → `404`).
+        The destination is read from the account (hashed), never typed in.
+
+
+
+        Idempotency: required · Rate-limit: RL-STAFF-WRITE · Audit: notifications.suppression.added · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommsSuppressCreateS15'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsSuppressedS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.suppression.manage
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required
+      x-fundzim-error-codes:
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/communications/suppressions/{suppression_id}/lift:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsLift
+      summary: Lift a suppression
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.suppression.manage` + fresh step-up (non-staff → `404`).
+        Suppressions are never deleted.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: notifications.suppression.lifted · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: suppression_id
+        in: path
+        required: true
+        description: Suppression id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommsReasonS15'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsLiftedS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.suppression.manage
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - NOTIFICATION_STATE
+      - STEP_UP_REQUIRED
+  /admin/communications/consent:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsConsent
+      summary: Consent records
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.consent.view` (non-staff → `404`). Counts; with user_id,
+        that user''s records and history.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: user_id
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsConsentOverviewS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.consent.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/communications/templates:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsTemplates
+      summary: Templates
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.view` (non-staff → `404`). Active version and pending
+        state per template.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: category
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - SECURITY
+          - TRANSACTIONAL
+          - CAMPAIGN
+          - VERIFICATION
+          - PAYMENT
+          - WITHDRAWAL
+          - PAYOUT
+          - RISK
+          - COMPLIANCE
+          - SUPPORT
+          - ADMINISTRATIVE
+          - MARKETING
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsTemplateS15Page'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/communications/templates/{template_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsTemplate
+      summary: One template
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.view` (non-staff → `404`). Every version.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: template_id
+        in: path
+        required: true
+        description: Template id.
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsTemplateS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/communications/templates/{template_id}/versions:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsCreateDraft
+      summary: Draft a template version (maker)
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.template.request` + fresh step-up (non-staff → `404`).
+        One open version per template.
+
+
+
+        Idempotency: required · Rate-limit: RL-STAFF-WRITE · Audit: notifications.template.drafted · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: template_id
+        in: path
+        required: true
+        description: Template id.
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommsDraftS15'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+            Idempotent-Replayed:
+              $ref: '#/components/headers/IdempotentReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsTemplateVersionS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.template.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required
+      x-fundzim-error-codes:
+      - NOTIFICATION_TEMPLATE_STATE
+      - STEP_UP_REQUIRED
+      - VALIDATION_FAILED
+  /admin/communications/template-versions/{version_id}:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    put:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsUpdateDraft
+      summary: Edit a draft (its maker)
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.template.request` + fresh step-up (non-staff → `404`).
+        Only a DRAFT; content is hashed again.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: notifications.template.draft_updated · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        description: Template version id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommsDraftUpdateS15'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsTemplateVersionS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.template.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - NOTIFICATION_RECORD_CHANGED
+      - NOTIFICATION_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - VALIDATION_FAILED
+  /admin/communications/template-versions/{version_id}/preview:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsPreview
+      summary: Preview a version
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.view` (non-staff → `404`). Sample values only; nothing
+        is sent.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        description: Template version id.
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsPreviewS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/communications/template-versions/{version_id}/submit:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsTemplateSubmit
+      summary: Submit for approval (maker)
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.template.request` + fresh step-up (non-staff → `404`).
+        Freezes the content.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: notifications.template.submit · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        description: Template version id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommsTemplateActionS15'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsTemplateVersionS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.template.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - NOTIFICATION_RECORD_CHANGED
+      - NOTIFICATION_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+  /admin/communications/template-versions/{version_id}/whatsapp-simulator:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsTemplateWhatsappSimulator
+      summary: Submit the WhatsApp template to the simulator
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.template.request` + fresh step-up (non-staff → `404`).
+        Result SIMULATOR_ACCEPTED or SIMULATOR_REJECTED — never APPROVED.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: notifications.template.whatsapp_simulator · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        description: Template version id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommsTemplateActionS15'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsTemplateVersionS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.template.request
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - NOTIFICATION_RECORD_CHANGED
+      - NOTIFICATION_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+  /admin/communications/template-versions/{version_id}/approve:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsTemplateApprove
+      summary: Approve (checker)
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.template.approve` + fresh step-up (non-staff → `404`).
+        Never the maker, the submitter or an account linked to them.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: notifications.template.approve · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        description: Template version id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommsTemplateActionS15'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsTemplateVersionS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.template.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - NOTIFICATION_RECORD_CHANGED
+      - NOTIFICATION_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+  /admin/communications/template-versions/{version_id}/reject:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsTemplateReject
+      summary: Reject (checker)
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.template.approve` + fresh step-up (non-staff → `404`).
+        The version is retired.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: notifications.template.reject · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        description: Template version id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommsTemplateActionS15'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsTemplateVersionS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.template.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - NOTIFICATION_RECORD_CHANGED
+      - NOTIFICATION_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+  /admin/communications/template-versions/{version_id}/activate:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsTemplateActivate
+      summary: Activate (checker)
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.template.approve` + fresh step-up (non-staff → `404`).
+        The previous ACTIVE version is retired in the same transaction.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: notifications.template.activate · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        description: Template version id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommsTemplateActionS15'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsTemplateVersionS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.template.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - NOTIFICATION_RECORD_CHANGED
+      - NOTIFICATION_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
+  /admin/communications/template-versions/{version_id}/retire:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Notifications (Stage 15)
+      operationId: adminCommsTemplateRetire
+      summary: Retire a draft or approved version
+      description: '**Stage 15 · IMPLEMENTED** · Auth: staff + MFA · Authorization: `communications.template.approve` + fresh step-up (non-staff → `404`).
+        An ACTIVE version is replaced by activating another.
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: notifications.template.retire · Cache-Control: no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: version_id
+        in: path
+        required: true
+        description: Template version id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommsTemplateActionS15'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommsTemplateVersionS15Envelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 15
+      x-fundzim-auth: staff
+      x-fundzim-permission: communications.template.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+      x-fundzim-error-codes:
+      - NOTIFICATION_RECORD_CHANGED
+      - NOTIFICATION_STATE
+      - SELF_APPROVAL_FORBIDDEN
+      - STEP_UP_REQUIRED
 components:
   securitySchemes:
     session:
@@ -45291,53 +47049,6 @@ components:
       - legal_hold
       - created_at
       - related_refs
-    NotificationPreferences:
-      type: object
-      description: Notification preferences. Security, payment and payout notifications cannot be disabled.
-      properties:
-        marketing_email:
-          type: boolean
-        marketing_sms:
-          type: boolean
-        campaign_update_digest:
-          type: boolean
-        preferred_channel:
-          type: string
-          enum:
-          - SMS
-          - EMAIL
-          - WHATSAPP
-        version:
-          type: integer
-      required:
-      - marketing_email
-      - marketing_sms
-      - campaign_update_digest
-      - version
-    NotificationPreferencesUpdate:
-      type: object
-      description: Replace preferences.
-      properties:
-        marketing_email:
-          type: boolean
-        marketing_sms:
-          type: boolean
-        campaign_update_digest:
-          type: boolean
-        preferred_channel:
-          type: string
-          enum:
-          - SMS
-          - EMAIL
-          - WHATSAPP
-        version:
-          type: integer
-      required:
-      - marketing_email
-      - marketing_sms
-      - campaign_update_digest
-      - version
-      additionalProperties: false
     UnsubscribeRequest:
       type: object
       description: One-click unsubscribe (signed token from the message).
@@ -46452,17 +48163,6 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/WebhookDeadLetter'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    NotificationPreferencesEnvelope:
-      type: object
-      description: Standard envelope for `NotificationPreferences`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/NotificationPreferences'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
     ReportJobEnvelope:
@@ -62395,6 +64095,1678 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/OpsAuditEventS14'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    NotificationS15:
+      type: object
+      description: 'One in-app notification of the caller. test_data: produced by TEST money or a simulator (labelled [TEST]; never sent outside the app).'
+      properties:
+        id:
+          type: string
+          format: uuid
+        category:
+          type: string
+          enum:
+          - SECURITY
+          - TRANSACTIONAL
+          - CAMPAIGN
+          - VERIFICATION
+          - PAYMENT
+          - WITHDRAWAL
+          - PAYOUT
+          - RISK
+          - COMPLIANCE
+          - SUPPORT
+          - ADMINISTRATIVE
+          - MARKETING
+        title:
+          type: string
+        body:
+          type: string
+        priority:
+          type: string
+          enum:
+          - NORMAL
+          - HIGH
+        deep_link:
+          type:
+          - string
+          - 'null'
+        related_type:
+          type:
+          - string
+          - 'null'
+        related_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        test_data:
+          type: boolean
+        read_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - category
+      - title
+      - body
+      - priority
+      - deep_link
+      - related_type
+      - related_id
+      - test_data
+      - read_at
+      - created_at
+      additionalProperties: false
+    UnreadCountS15:
+      type: object
+      properties:
+        unread:
+          type: integer
+      required:
+      - unread
+      additionalProperties: false
+    MarkReadS15:
+      type: object
+      properties:
+        read:
+          type: boolean
+      required:
+      - read
+      additionalProperties: false
+    MarkAllReadS15:
+      type: object
+      properties:
+        marked_read:
+          type: integer
+      required:
+      - marked_read
+      additionalProperties: false
+    NotificationPreferenceS15:
+      type: object
+      description: 'mandatory: cannot be turned off (security e-mail and in-app). consent_required: SMS and WhatsApp (and marketing) also need a GRANTED consent
+        record.'
+      properties:
+        category:
+          type: string
+          enum:
+          - SECURITY
+          - TRANSACTIONAL
+          - CAMPAIGN
+          - VERIFICATION
+          - PAYMENT
+          - WITHDRAWAL
+          - PAYOUT
+          - RISK
+          - COMPLIANCE
+          - SUPPORT
+          - ADMINISTRATIVE
+          - MARKETING
+        channel:
+          type: string
+          enum:
+          - EMAIL
+          - SMS
+          - WHATSAPP
+          - IN_APP
+        enabled:
+          type: boolean
+        mandatory:
+          type: boolean
+        consent_required:
+          type: boolean
+        available:
+          type: boolean
+      required:
+      - category
+      - channel
+      - enabled
+      - mandatory
+      - consent_required
+      - available
+      additionalProperties: false
+    NotificationPreferencesS15:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationPreferenceS15'
+        quiet_hours:
+          type: string
+          enum:
+          - NOT_AVAILABLE
+        marketing_enabled:
+          type: boolean
+      required:
+      - items
+      - quiet_hours
+      - marketing_enabled
+      additionalProperties: false
+    NotificationPreferenceChangeS15:
+      type: object
+      properties:
+        category:
+          type: string
+          enum:
+          - SECURITY
+          - TRANSACTIONAL
+          - CAMPAIGN
+          - VERIFICATION
+          - PAYMENT
+          - WITHDRAWAL
+          - PAYOUT
+          - RISK
+          - COMPLIANCE
+          - SUPPORT
+          - ADMINISTRATIVE
+          - MARKETING
+        channel:
+          type: string
+          enum:
+          - EMAIL
+          - SMS
+          - WHATSAPP
+          - IN_APP
+        enabled:
+          type: boolean
+      required:
+      - category
+      - channel
+      - enabled
+      additionalProperties: false
+    NotificationPreferencesUpdateS15:
+      type: object
+      properties:
+        changes:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/NotificationPreferenceChangeS15'
+      required:
+      - changes
+      additionalProperties: false
+    ConsentS15:
+      type: object
+      description: 'NOT_REQUESTED: no record. A grant under an older consent policy version reads REQUIRES_RECONFIRMATION. Marketing consent is not available
+        (marketing is disabled).'
+      properties:
+        channel:
+          type: string
+          enum:
+          - EMAIL
+          - SMS
+          - WHATSAPP
+        purpose:
+          type: string
+          enum:
+          - SERVICE_MESSAGES
+          - MARKETING
+        status:
+          type: string
+          enum:
+          - NOT_REQUESTED
+          - GRANTED
+          - WITHDRAWN
+          - EXPIRED
+          - REQUIRES_RECONFIRMATION
+        policy_version:
+          type:
+          - string
+          - 'null'
+        current_policy_version:
+          type: string
+        granted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        withdrawn_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        available:
+          type: boolean
+        version:
+          type: integer
+      required:
+      - channel
+      - purpose
+      - status
+      - policy_version
+      - current_policy_version
+      - granted_at
+      - withdrawn_at
+      - expires_at
+      - available
+      - version
+      additionalProperties: false
+    ConsentListS15:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsentS15'
+        policy_version:
+          type: string
+        notice:
+          type: string
+      required:
+      - items
+      - policy_version
+      - notice
+      additionalProperties: false
+    ConsentChangeS15:
+      type: object
+      description: The caller's own decision; the evidence reference is this request. Consent is never recorded on anyone's behalf.
+      properties:
+        channel:
+          type: string
+          enum:
+          - EMAIL
+          - SMS
+          - WHATSAPP
+        purpose:
+          type: string
+          enum:
+          - SERVICE_MESSAGES
+          - MARKETING
+        granted:
+          type: boolean
+      required:
+      - channel
+      - purpose
+      - granted
+      additionalProperties: false
+    WebhookAckS15:
+      type: object
+      properties:
+        received:
+          type: boolean
+        duplicate:
+          type: boolean
+      required:
+      - received
+      - duplicate
+      additionalProperties: false
+    CommsWorkerS15:
+      type: object
+      properties:
+        worker_id:
+          type: string
+        last_seen_at:
+          $ref: '#/components/schemas/Timestamp'
+        status:
+          type: string
+          enum:
+          - HEALTHY
+          - UNAVAILABLE
+      required:
+      - worker_id
+      - last_seen_at
+      - status
+      additionalProperties: false
+    CommsProviderS15:
+      type: object
+      description: 'VERIFIED and PRODUCTION_ENABLED are refused by a database CHECK (no provider selected). health is derived from recorded attempts only: UNKNOWN
+        without attempts.'
+      properties:
+        provider_code:
+          type: string
+        channel:
+          type: string
+          enum:
+          - EMAIL
+          - SMS
+          - WHATSAPP
+        display_name:
+          type: string
+        environment:
+          type: string
+          enum:
+          - TEST
+        readiness:
+          type: string
+          enum:
+          - NOT_SELECTED
+          - NOT_CONFIGURED
+          - CONFIGURED_TEST
+          - CERTIFICATION_PENDING
+        simulated:
+          type: boolean
+        capabilities:
+          type: object
+        credential_ref:
+          type:
+          - string
+          - 'null'
+        known_limitations:
+          type: string
+        active_in_this_process:
+          type: boolean
+        attempts_24h:
+          type: integer
+        failed_attempts_24h:
+          type: integer
+        health:
+          type: string
+          enum:
+          - HEALTHY
+          - DEGRADED
+          - UNKNOWN
+          - NOT_CONFIGURED
+      required:
+      - provider_code
+      - channel
+      - display_name
+      - environment
+      - readiness
+      - simulated
+      - capabilities
+      - credential_ref
+      - known_limitations
+      - active_in_this_process
+      - attempts_24h
+      - failed_attempts_24h
+      - health
+      additionalProperties: false
+    CommsOverviewS15:
+      type: object
+      description: 'Every figure is a query over the engine''s tables, measured now. error_rate null: nothing attempted (never 0).'
+      properties:
+        generated_at:
+          $ref: '#/components/schemas/Timestamp'
+        environment:
+          type: string
+        live_messaging_enabled:
+          type: boolean
+        marketing_enabled:
+          type: boolean
+        deliveries_by_status:
+          type: object
+          additionalProperties:
+            type: integer
+        deliveries_by_channel_24h:
+          type: object
+          additionalProperties:
+            type: integer
+        dead_letters_open:
+          type: integer
+        retry_backlog:
+          type: integer
+        oldest_retry_age_seconds:
+          type:
+          - integer
+          - 'null'
+        queue_backlog:
+          type: integer
+        oldest_queued_age_seconds:
+          type:
+          - integer
+          - 'null'
+        attempts_last_1h:
+          type: integer
+        failed_attempts_last_1h:
+          type: integer
+        error_rate_last_1h:
+          type:
+          - number
+          - 'null'
+        latency_p50_ms_24h:
+          type:
+          - integer
+          - 'null'
+        latency_p95_ms_24h:
+          type:
+          - integer
+          - 'null'
+        consent_restricted_24h:
+          type: integer
+        webhook_rejections_24h:
+          type: integer
+        conflicting_evidence:
+          type: integer
+        workers:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommsWorkerS15'
+        providers:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommsProviderS15'
+        notice:
+          type: string
+      required:
+      - generated_at
+      - environment
+      - live_messaging_enabled
+      - marketing_enabled
+      - deliveries_by_status
+      - deliveries_by_channel_24h
+      - dead_letters_open
+      - retry_backlog
+      - oldest_retry_age_seconds
+      - queue_backlog
+      - oldest_queued_age_seconds
+      - attempts_last_1h
+      - failed_attempts_last_1h
+      - error_rate_last_1h
+      - latency_p50_ms_24h
+      - latency_p95_ms_24h
+      - consent_restricted_24h
+      - webhook_rejections_24h
+      - conflicting_evidence
+      - workers
+      - providers
+      - notice
+      additionalProperties: false
+    CommsDeliveryS15:
+      type: object
+      description: 'One channel delivery: the routing decision, state and evidence timestamps. Destinations are masked; no message body is stored or returned.'
+      properties:
+        id:
+          type: string
+          format: uuid
+        notification_id:
+          type: string
+          format: uuid
+        template_key:
+          type: string
+        category:
+          type: string
+          enum:
+          - SECURITY
+          - TRANSACTIONAL
+          - CAMPAIGN
+          - VERIFICATION
+          - PAYMENT
+          - WITHDRAWAL
+          - PAYOUT
+          - RISK
+          - COMPLIANCE
+          - SUPPORT
+          - ADMINISTRATIVE
+          - MARKETING
+        recipient_user_id:
+          type: string
+          format: uuid
+        test_data:
+          type: boolean
+        channel:
+          type: string
+          enum:
+          - EMAIL
+          - SMS
+          - WHATSAPP
+          - IN_APP
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - PROCESSING
+          - SUBMITTED
+          - ACCEPTED
+          - DELIVERED
+          - READ
+          - FAILED_RETRYABLE
+          - FAILED_PERMANENT
+          - SUPPRESSED
+          - CANCELLED
+          - UNKNOWN
+          description: 'Provider acceptance (ACCEPTED) is never delivery. UNKNOWN: the outcome is looked up before any resend.'
+        provider_code:
+          type:
+          - string
+          - 'null'
+        destination_masked:
+          type:
+          - string
+          - 'null'
+        decision:
+          type: string
+        suppression_reason:
+          type:
+          - string
+          - 'null'
+        attempt_count:
+          type: integer
+        max_attempts:
+          type: integer
+        next_attempt_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        provider_message_id:
+          type:
+          - string
+          - 'null'
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        accepted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        delivered_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        read_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        failed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        failure_code:
+          type:
+          - string
+          - 'null'
+        conflicting_evidence:
+          type: boolean
+        version:
+          type: integer
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - notification_id
+      - template_key
+      - category
+      - recipient_user_id
+      - test_data
+      - channel
+      - status
+      - provider_code
+      - destination_masked
+      - decision
+      - suppression_reason
+      - attempt_count
+      - max_attempts
+      - next_attempt_at
+      - provider_message_id
+      - submitted_at
+      - accepted_at
+      - delivered_at
+      - read_at
+      - failed_at
+      - failure_code
+      - conflicting_evidence
+      - version
+      - created_at
+      additionalProperties: false
+    CommsAttemptS15:
+      type: object
+      properties:
+        attempt_no:
+          type: integer
+        provider_code:
+          type: string
+        outcome:
+          type: string
+        error_code:
+          type:
+          - string
+          - 'null'
+        provider_message_id:
+          type:
+          - string
+          - 'null'
+        latency_ms:
+          type: integer
+        started_at:
+          $ref: '#/components/schemas/Timestamp'
+        finished_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - attempt_no
+      - provider_code
+      - outcome
+      - error_code
+      - provider_message_id
+      - latency_ms
+      - started_at
+      - finished_at
+      additionalProperties: false
+    CommsEvidenceS15:
+      type: object
+      properties:
+        provider_event_id:
+          type: string
+        reported_status:
+          type: string
+        occurred_at:
+          $ref: '#/components/schemas/Timestamp'
+        received_at:
+          $ref: '#/components/schemas/Timestamp'
+        applied:
+          type: boolean
+        not_applied_reason:
+          type:
+          - string
+          - 'null'
+        applied_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+      required:
+      - provider_event_id
+      - reported_status
+      - occurred_at
+      - received_at
+      - applied
+      - not_applied_reason
+      - applied_at
+      additionalProperties: false
+    CommsDeliveryDetailS15:
+      type: object
+      properties:
+        delivery:
+          $ref: '#/components/schemas/CommsDeliveryS15'
+        attempts:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommsAttemptS15'
+        provider_evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommsEvidenceS15'
+        template_version_no:
+          type: integer
+      required:
+      - delivery
+      - attempts
+      - provider_evidence
+      - template_version_no
+      additionalProperties: false
+    CommsDeadLetterS15:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        delivery_id:
+          type: string
+          format: uuid
+        failure_category:
+          type: string
+          enum:
+          - RETRIES_EXHAUSTED
+          - PERMANENT_FAILURE
+          - OUTCOME_UNKNOWN
+          - RENDER_FAILURE
+        attempt_count:
+          type: integer
+        last_error:
+          type:
+          - string
+          - 'null'
+        next_action:
+          type: string
+        review_status:
+          type: string
+          enum:
+          - OPEN
+          - REPLAYED
+          - DISCARDED
+        reviewed_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        reviewed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        review_reason:
+          type:
+          - string
+          - 'null'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        delivery:
+          $ref: '#/components/schemas/CommsDeliveryS15'
+      required:
+      - id
+      - delivery_id
+      - failure_category
+      - attempt_count
+      - last_error
+      - next_action
+      - review_status
+      - reviewed_by
+      - reviewed_at
+      - review_reason
+      - created_at
+      - delivery
+      additionalProperties: false
+    CommsReasonS15:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 2000
+      required:
+      - reason
+      additionalProperties: false
+    CommsReplayS15:
+      type: object
+      description: A replay re-checks delivery state (an UNKNOWN outcome is looked up first), the source, recipient eligibility, consent, preferences and suppressions.
+      properties:
+        replayed:
+          type: boolean
+        blocked_reason:
+          type: string
+        delivery_status:
+          type: string
+      required:
+      - replayed
+      - delivery_status
+      additionalProperties: false
+    CommsDiscardS15:
+      type: object
+      properties:
+        discarded:
+          type: boolean
+      required:
+      - discarded
+      additionalProperties: false
+    CommsProvidersS15:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommsProviderS15'
+        live_messaging_enabled:
+          type: boolean
+        next_cursor:
+          type: 'null'
+      required:
+      - items
+      - live_messaging_enabled
+      - next_cursor
+      additionalProperties: false
+    CommsReportRowS15:
+      type: object
+      properties:
+        group:
+          type: string
+        key:
+          type: string
+        count:
+          type: integer
+        rate:
+          type: number
+      required:
+      - group
+      - key
+      - count
+      additionalProperties: false
+    CommsReportS15:
+      type: object
+      properties:
+        from:
+          $ref: '#/components/schemas/Timestamp'
+        to:
+          $ref: '#/components/schemas/Timestamp'
+        environment:
+          type: string
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommsReportRowS15'
+        latency_p50_ms:
+          type:
+          - integer
+          - 'null'
+        latency_p95_ms:
+          type:
+          - integer
+          - 'null'
+        limitations:
+          type: array
+          items:
+            type: string
+      required:
+      - from
+      - to
+      - environment
+      - rows
+      - latency_p50_ms
+      - latency_p95_ms
+      - limitations
+      additionalProperties: false
+    CommsSuppressionS15:
+      type: object
+      description: The destination itself is stored only as a SHA-256 hash.
+      properties:
+        id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+          enum:
+          - EMAIL
+          - SMS
+          - WHATSAPP
+        user_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        reason:
+          type: string
+        source:
+          type: string
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        lifted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        lift_reason:
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - channel
+      - user_id
+      - reason
+      - source
+      - created_at
+      - lifted_at
+      - lift_reason
+      additionalProperties: false
+    CommsSuppressCreateS15:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+          enum:
+          - EMAIL
+          - SMS
+          - WHATSAPP
+        reason:
+          type: string
+          enum:
+          - USER_OPT_OUT
+          - SECURITY_RESTRICTION
+          - LEGAL_RESTRICTION
+          - INVALID_DESTINATION
+      required:
+      - user_id
+      - channel
+      - reason
+      additionalProperties: false
+    CommsSuppressedS15:
+      type: object
+      properties:
+        suppressed:
+          type: boolean
+      required:
+      - suppressed
+      additionalProperties: false
+    CommsLiftedS15:
+      type: object
+      properties:
+        lifted:
+          type: boolean
+      required:
+      - lifted
+      additionalProperties: false
+    CommsConsentSummaryS15:
+      type: object
+      properties:
+        channel:
+          type: string
+        purpose:
+          type: string
+        status:
+          type: string
+        count:
+          type: integer
+      required:
+      - channel
+      - purpose
+      - status
+      - count
+      additionalProperties: false
+    CommsConsentEventS15:
+      type: object
+      properties:
+        from_status:
+          type:
+          - string
+          - 'null'
+        to_status:
+          type: string
+        source:
+          type: string
+        policy_version:
+          type: string
+        evidence_ref:
+          type: string
+        occurred_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - from_status
+      - to_status
+      - source
+      - policy_version
+      - evidence_ref
+      - occurred_at
+      additionalProperties: false
+    CommsConsentRecordS15:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+        purpose:
+          type: string
+        status:
+          type: string
+        source:
+          type: string
+        policy_version:
+          type: string
+        evidence_ref:
+          type: string
+        granted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        withdrawn_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        updated_at:
+          $ref: '#/components/schemas/Timestamp'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommsConsentEventS15'
+      required:
+      - id
+      - user_id
+      - channel
+      - purpose
+      - status
+      - source
+      - policy_version
+      - evidence_ref
+      - granted_at
+      - withdrawn_at
+      - updated_at
+      - history
+      additionalProperties: false
+    CommsConsentOverviewS15:
+      type: object
+      properties:
+        summary:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommsConsentSummaryS15'
+        records:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/CommsConsentRecordS15'
+        policy_version:
+          type: string
+      required:
+      - summary
+      - records
+      - policy_version
+      additionalProperties: false
+    CommsTemplateVersionS15:
+      type: object
+      description: Content is frozen after submission (database trigger). WhatsApp APPROVED needs a real provider's evidence (unreachable today).
+      properties:
+        id:
+          type: string
+          format: uuid
+        version_no:
+          type: integer
+        locale:
+          type: string
+          enum:
+          - en
+          - sn
+          - nd
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - APPROVED
+          - ACTIVE
+          - RETIRED
+        email_subject:
+          type:
+          - string
+          - 'null'
+        email_text:
+          type:
+          - string
+          - 'null'
+        sms_text:
+          type:
+          - string
+          - 'null'
+        whatsapp_template_name:
+          type:
+          - string
+          - 'null'
+        whatsapp_language:
+          type:
+          - string
+          - 'null'
+        whatsapp_provider_status:
+          type: string
+          enum:
+          - NOT_SUBMITTED
+          - SUBMITTED_TO_SIMULATOR
+          - SIMULATOR_ACCEPTED
+          - SIMULATOR_REJECTED
+          - SUBMITTED
+          - APPROVED
+          - REJECTED
+        inapp_title:
+          type: string
+        inapp_body:
+          type: string
+        content_hash:
+          type: string
+        approval_source:
+          type: string
+          enum:
+          - MIGRATION_BASELINE
+          - MAKER_CHECKER
+        created_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        approved_by:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        decision_reason:
+          type:
+          - string
+          - 'null'
+        activated_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        sms_segments:
+          type:
+          - integer
+          - 'null'
+        version:
+          type: integer
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+      required:
+      - id
+      - version_no
+      - locale
+      - status
+      - email_subject
+      - email_text
+      - sms_text
+      - whatsapp_template_name
+      - whatsapp_language
+      - whatsapp_provider_status
+      - inapp_title
+      - inapp_body
+      - content_hash
+      - approval_source
+      - created_by
+      - submitted_by
+      - approved_by
+      - decision_reason
+      - activated_at
+      - sms_segments
+      - version
+      - created_at
+      additionalProperties: false
+    CommsTemplateS15:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        category:
+          type: string
+          enum:
+          - SECURITY
+          - TRANSACTIONAL
+          - CAMPAIGN
+          - VERIFICATION
+          - PAYMENT
+          - WITHDRAWAL
+          - PAYOUT
+          - RISK
+          - COMPLIANCE
+          - SUPPORT
+          - ADMINISTRATIVE
+          - MARKETING
+        sensitive:
+          type: boolean
+        allowed_variables:
+          type: array
+          items:
+            type: string
+        origin:
+          type: string
+        active_version:
+          type:
+          - integer
+          - 'null'
+        pending_status:
+          type:
+          - string
+          - 'null'
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommsTemplateVersionS15'
+      required:
+      - id
+      - key
+      - category
+      - sensitive
+      - allowed_variables
+      - origin
+      - active_version
+      additionalProperties: false
+    CommsDraftS15:
+      type: object
+      description: '{{variable}} placeholders only, from the template''s allow-list (no logic, no code execution).'
+      properties:
+        email_subject:
+          type:
+          - string
+          - 'null'
+        email_text:
+          type:
+          - string
+          - 'null'
+        sms_text:
+          type:
+          - string
+          - 'null'
+        whatsapp_template_name:
+          type:
+          - string
+          - 'null'
+        whatsapp_language:
+          type:
+          - string
+          - 'null'
+        inapp_title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        inapp_body:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required:
+      - inapp_title
+      - inapp_body
+      additionalProperties: false
+    CommsDraftUpdateS15:
+      type: object
+      properties:
+        email_subject:
+          type:
+          - string
+          - 'null'
+        email_text:
+          type:
+          - string
+          - 'null'
+        sms_text:
+          type:
+          - string
+          - 'null'
+        whatsapp_template_name:
+          type:
+          - string
+          - 'null'
+        whatsapp_language:
+          type:
+          - string
+          - 'null'
+        inapp_title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        inapp_body:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        version:
+          type: integer
+      required:
+      - inapp_title
+      - inapp_body
+      additionalProperties: false
+    CommsTemplateActionS15:
+      type: object
+      properties:
+        reason:
+          type: string
+        version:
+          type: integer
+      required: []
+      additionalProperties: false
+    CommsPreviewS15:
+      type: object
+      description: Rendered with sample values ([variable]) for each channel the version has; nothing is sent or stored.
+      additionalProperties:
+        type: object
+    UnreadCountS15Envelope:
+      type: object
+      description: Standard envelope for `UnreadCountS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/UnreadCountS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    MarkReadS15Envelope:
+      type: object
+      description: Standard envelope for `MarkReadS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/MarkReadS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    MarkAllReadS15Envelope:
+      type: object
+      description: Standard envelope for `MarkAllReadS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/MarkAllReadS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    NotificationPreferencesS15Envelope:
+      type: object
+      description: Standard envelope for `NotificationPreferencesS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/NotificationPreferencesS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ConsentListS15Envelope:
+      type: object
+      description: Standard envelope for `ConsentListS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/ConsentListS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ConsentS15Envelope:
+      type: object
+      description: Standard envelope for `ConsentS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/ConsentS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    WebhookAckS15Envelope:
+      type: object
+      description: Standard envelope for `WebhookAckS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/WebhookAckS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsOverviewS15Envelope:
+      type: object
+      description: Standard envelope for `CommsOverviewS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/CommsOverviewS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsDeliveryDetailS15Envelope:
+      type: object
+      description: Standard envelope for `CommsDeliveryDetailS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/CommsDeliveryDetailS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsReplayS15Envelope:
+      type: object
+      description: Standard envelope for `CommsReplayS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/CommsReplayS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsDiscardS15Envelope:
+      type: object
+      description: Standard envelope for `CommsDiscardS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/CommsDiscardS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsProvidersS15Envelope:
+      type: object
+      description: Standard envelope for `CommsProvidersS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/CommsProvidersS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsReportS15Envelope:
+      type: object
+      description: Standard envelope for `CommsReportS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/CommsReportS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsSuppressedS15Envelope:
+      type: object
+      description: Standard envelope for `CommsSuppressedS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/CommsSuppressedS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsLiftedS15Envelope:
+      type: object
+      description: Standard envelope for `CommsLiftedS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/CommsLiftedS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsConsentOverviewS15Envelope:
+      type: object
+      description: Standard envelope for `CommsConsentOverviewS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/CommsConsentOverviewS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsTemplateS15Envelope:
+      type: object
+      description: Standard envelope for `CommsTemplateS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/CommsTemplateS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsTemplateVersionS15Envelope:
+      type: object
+      description: Standard envelope for `CommsTemplateVersionS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/CommsTemplateVersionS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsPreviewS15Envelope:
+      type: object
+      description: Standard envelope for `CommsPreviewS15`.
+      properties:
+        data:
+          $ref: '#/components/schemas/CommsPreviewS15'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    NotificationS15Page:
+      type: object
+      description: Page of `NotificationS15`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/NotificationS15'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsDeliveryS15Page:
+      type: object
+      description: Page of `CommsDeliveryS15`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CommsDeliveryS15'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsDeadLetterS15Page:
+      type: object
+      description: Page of `CommsDeadLetterS15`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CommsDeadLetterS15'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsSuppressionS15Page:
+      type: object
+      description: Page of `CommsSuppressionS15`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CommsSuppressionS15'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+          required:
+          - items
+          - next_cursor
+          additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CommsTemplateS15Page:
+      type: object
+      description: Page of `CommsTemplateS15`.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CommsTemplateS15'
             next_cursor:
               type:
               - string
