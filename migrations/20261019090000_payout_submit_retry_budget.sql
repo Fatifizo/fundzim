@@ -51,15 +51,11 @@ END $$;
 
 -- +goose Down
 -- +goose StatementBegin
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM app.payout_exceptions WHERE exception_type = 'SUBMISSION_RETRIES_EXHAUSTED') THEN
-    RAISE EXCEPTION 'SUBMISSION_RETRIES_EXHAUSTED exceptions exist: exception records are never deleted, so this migration cannot be rolled back';
-  END IF;
-END $$;
+-- existing SUBMISSION_RETRIES_EXHAUSTED records are kept (never deleted): the narrower CHECK is restored NOT VALID
 ALTER TABLE app.payout_exceptions DROP CONSTRAINT ck_payout_exceptions_type;
 ALTER TABLE app.payout_exceptions ADD CONSTRAINT ck_payout_exceptions_type CHECK (exception_type IN ('UNKNOWN_PROVIDER_OUTCOME',
   'DESTINATION_MISMATCH','INSUFFICIENT_ELIGIBLE_FUNDS','COMPLIANCE_HOLD','APPROVAL_EXPIRED','PROVIDER_UNAVAILABLE','RECONCILIATION_MISMATCH',
-  'DUPLICATE_SUBMISSION_ATTEMPT','LEDGER_POSTING_FAILED','LATE_COMPLETION_AFTER_FAILURE','PAYOUT_RETURNED'));
+  'DUPLICATE_SUBMISSION_ATTEMPT','LEDGER_POSTING_FAILED','LATE_COMPLETION_AFTER_FAILURE','PAYOUT_RETURNED')) NOT VALID;
 CREATE OR REPLACE FUNCTION app.payout_attempts_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
   p app.payout_requests%ROWTYPE;
