@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	mrand "math/rand/v2"
 	"net/http"
 	"os"
 	"strings"
@@ -138,16 +139,25 @@ func (x *notifIT) taggedUser(t *testing.T, tag, lastTwo string) vUser {
 	}
 	u := verifiedUser(t, x.s, prefix)
 	if lastTwo != "" {
-		phone := fmt.Sprintf("+26377%05d%s", time.Now().UnixNano()%100000, lastTwo)
-		tx, err := x.s.d.DB.Begin(ctx(t))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := users.SetVerifiedPhone(ctx(t), tx, u.id, phone, time.Now()); err != nil {
-			t.Fatal(err)
-		}
-		if err := tx.Commit(ctx(t)); err != nil {
-			t.Fatal(err)
+		// synthetic +26377 numbers: 5 random digits + the scenario digits; a number another test already holds is redrawn
+		for try := 0; ; try++ {
+			phone := fmt.Sprintf("+26377%05d%s", mrand.IntN(100000), lastTwo)
+			tx, err := x.s.d.DB.Begin(ctx(t))
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = users.SetVerifiedPhone(ctx(t), tx, u.id, phone, time.Now())
+			if err == nil {
+				err = tx.Commit(ctx(t))
+			} else {
+				_ = tx.Rollback(ctx(t))
+			}
+			if err == nil {
+				break
+			}
+			if try >= 20 {
+				t.Fatalf("no free synthetic phone number: %v", err)
+			}
 		}
 	}
 	return u

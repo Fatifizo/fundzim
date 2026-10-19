@@ -17,6 +17,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/config"
 	"github.com/Fatifizo/fundzim/internal/platform/httpx"
 	"github.com/Fatifizo/fundzim/internal/platform/idempotency"
+	"github.com/Fatifizo/fundzim/internal/platform/jobs"
 	"github.com/Fatifizo/fundzim/internal/platform/outbox"
 	"github.com/Fatifizo/fundzim/internal/platform/ratelimit"
 )
@@ -163,19 +164,20 @@ func (w *notificationSimWorker) Work(ctx context.Context, _ *river.Job[notificat
 	return nil
 }
 
-// notificationJobs registers the delivery sweep (every 5 s) and, with the simulators, their callbacks (every 2 s).
+// notificationJobs registers the delivery sweep (every 5 s) and, with the simulators, their callbacks (every 2 s), on the
+// notifications queue so they never hold the default queue's workers (media scans, campaign jobs).
 func notificationJobs(workers *river.Workers, n *notifications.Service, simulators bool) []*river.PeriodicJob {
 	river.AddWorker(workers, &notificationSweepWorker{N: n})
-	jobs := []*river.PeriodicJob{river.NewPeriodicJob(river.PeriodicInterval(5*time.Second), func() (river.JobArgs, *river.InsertOpts) {
-		return notificationSweepArgs{}, &river.InsertOpts{UniqueOpts: river.UniqueOpts{ByPeriod: 5 * time.Second}}
+	periodic := []*river.PeriodicJob{river.NewPeriodicJob(river.PeriodicInterval(5*time.Second), func() (river.JobArgs, *river.InsertOpts) {
+		return notificationSweepArgs{}, &river.InsertOpts{Queue: jobs.QueueNotifications, UniqueOpts: river.UniqueOpts{ByPeriod: 5 * time.Second}}
 	}, &river.PeriodicJobOpts{ID: kindNotificationSweep, RunOnStart: true})}
 	if simulators {
 		river.AddWorker(workers, &notificationSimWorker{N: n})
-		jobs = append(jobs, river.NewPeriodicJob(river.PeriodicInterval(2*time.Second), func() (river.JobArgs, *river.InsertOpts) {
-			return notificationSimArgs{}, &river.InsertOpts{UniqueOpts: river.UniqueOpts{ByPeriod: 2 * time.Second}}
+		periodic = append(periodic, river.NewPeriodicJob(river.PeriodicInterval(2*time.Second), func() (river.JobArgs, *river.InsertOpts) {
+			return notificationSimArgs{}, &river.InsertOpts{Queue: jobs.QueueNotifications, UniqueOpts: river.UniqueOpts{ByPeriod: 2 * time.Second}}
 		}, &river.PeriodicJobOpts{ID: kindNotificationSimHook, RunOnStart: true}))
 	}
-	return jobs
+	return periodic
 }
 
 func workerID() string {
