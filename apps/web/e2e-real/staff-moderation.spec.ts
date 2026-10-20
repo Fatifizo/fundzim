@@ -163,7 +163,8 @@ test("resubmitted campaign: approve with step-up; the owner publishes in the UI;
   const { slug, status } = await ownerView(c.id);
   expect(status).toBe("ACTIVE");
   expect(await publicStatus(browser, slug!)).toEqual({ status: 200, heading: c.title });
-  expect(await listedInDiscovery(browser, c.title)).toBe(true);
+  // Listing is restored by the asynchronous discovery index consumer (removal is immediate: serve-time re-check).
+  await expect.poll(() => listedInDiscovery(browser, c.title), { timeout: 60_000 }).toBe(true);
 });
 
 test("suspension in the UI removes the public page and the listing; reactivation restores both", async ({ browser }) => {
@@ -185,7 +186,8 @@ test("suspension in the UI removes the public page and the listing; reactivation
   await staffAction(page, reviewer(), "Reactivate", { reason: "ISSUE_RESOLVED", note: "Investigation closed, no issue (e2e)." });
   await expectStatus(page, "Active (published)");
   expect(await publicStatus(browser, slug!)).toEqual({ status: 200, heading: c.title });
-  expect(await listedInDiscovery(browser, c.title)).toBe(true);
+  // Listing is restored by the asynchronous discovery index consumer (removal is immediate: serve-time re-check).
+  await expect.poll(() => listedInDiscovery(browser, c.title), { timeout: 60_000 }).toBe(true);
   await ctx.close();
 });
 
