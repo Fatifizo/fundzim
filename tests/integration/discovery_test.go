@@ -88,9 +88,30 @@ type discoPage struct {
 	Personalised *bool `json:"personalised"`
 }
 
+// discoClientIP is this run's client address for discovery's public reads: like every other suite, the tests present
+// their own address (loopback is a trusted proxy) so they never share per-IP limits (global.ip, discovery.search.ip)
+// with the rest of the integration run. Callers that test per-address behaviour pass their own X-Forwarded-For.
+var discoClientIP = fmt.Sprintf("198.18.%d.%d", rand.Intn(250)+1, rand.Intn(250)+1)
+
+func discoReq(t *testing.T, s *itServer, method, path string, body any, hdr ...string) (int, http.Header, []byte) {
+	t.Helper()
+	for i := 0; i+1 < len(hdr); i += 2 {
+		if strings.EqualFold(hdr[i], "X-Forwarded-For") {
+			return publicReq(t, s, method, path, body, hdr...)
+		}
+	}
+	return publicReq(t, s, method, path, body, append([]string{"X-Forwarded-For", discoClientIP}, hdr...)...)
+}
+
+func discoPublicGet(t *testing.T, s *itServer, path string) (int, []byte) {
+	t.Helper()
+	c, _, b := discoReq(t, s, "GET", path, nil)
+	return c, b
+}
+
 func discoGet(t *testing.T, s *itServer, path string, hdr ...string) (int, http.Header, discoPage, []byte) {
 	t.Helper()
-	code, h, raw := publicReq(t, s, "GET", path, nil, hdr...)
+	code, h, raw := discoReq(t, s, "GET", path, nil, hdr...)
 	var env struct {
 		Data discoPage `json:"data"`
 	}
@@ -110,7 +131,7 @@ func (p discoPage) has(slug string) bool {
 // view posts engagement events from one simulated visitor (address + browser user agent).
 func view(t *testing.T, s *itServer, ip string, events ...map[string]string) int {
 	t.Helper()
-	code, _, _ := publicReq(t, s, "POST", "/discovery/events", map[string]any{"events": events}, "X-Forwarded-For", ip, "User-Agent", browserUA)
+	code, _, _ := discoReq(t, s, "POST", "/discovery/events", map[string]any{"events": events}, "X-Forwarded-For", ip, "User-Agent", browserUA)
 	return code
 }
 
@@ -157,7 +178,7 @@ func TestDiscoveryEndToEnd(t *testing.T) {
 	if !marked {
 		t.Fatalf("highlight missing: %s", raw)
 	}
-	if c, _, _ := publicReq(t, s, "GET", "/discovery/search?q="+tok, nil, "If-None-Match", hdr.Get("ETag")); c != 304 {
+	if c, _, _ := discoReq(t, s, "GET", "/discovery/search?q="+tok, nil, "If-None-Match", hdr.Get("ETag")); c != 304 {
 		t.Fatalf("conditional search: %d", c)
 	}
 	// relevance: the extra term ranks B first for "tok bursary"
@@ -213,12 +234,12 @@ func TestDiscoveryEndToEnd(t *testing.T) {
 	if p3.Items[0].Slug != slugA {
 		t.Fatalf("oldest: %+v", p3)
 	}
-	if c, _, _ := publicReq(t, s, "GET", "/discovery/campaigns?q="+tok+"&sort=oldest&cursor="+*p1.NextCursor, nil); c != 422 {
+	if c, _, _ := discoReq(t, s, "GET", "/discovery/campaigns?q="+tok+"&sort=oldest&cursor="+*p1.NextCursor, nil); c != 422 {
 		t.Fatalf("cursor of another sort accepted: %d", c)
 	}
 	// ---- validation and injection
 	for _, bad := range []string{"?q=" + strings.Repeat("x", 101), "?sort=popular", "?status=DRAFT", "?category=x'--", "?cursor=bm9wZQ"} {
-		if c, h, _ := publicReq(t, s, "GET", "/discovery/campaigns"+bad, nil); c != 422 || h.Get("Cache-Control") != "no-store" {
+		if c, h, _ := discoReq(t, s, "GET", "/discovery/campaigns"+bad, nil); c != 422 || h.Get("Cache-Control") != "no-store" {
 			t.Fatalf("%s: %d %s", bad, c, h.Get("Cache-Control"))
 		}
 	}
@@ -234,7 +255,7 @@ func TestDiscoveryEndToEnd(t *testing.T) {
 	}
 	_, _, _, raw = discoGet(t, s, "/discovery/categories")
 	assertPublicKeys(t, "discovery categories", raw)
-	if c, h, raw := publicReq(t, s, "GET", "/campaign-locations", nil); c != 200 || h.Get("Cache-Control") != "public, max-age=300" ||
+	if c, h, raw := discoReq(t, s, "GET", "/campaign-locations", nil); c != 200 || h.Get("Cache-Control") != "public, max-age=300" ||
 		!strings.Contains(string(raw), "TOWN_MUTARE") {
 		t.Fatalf("location reference: %d %v", c, h)
 	}
@@ -249,7 +270,7 @@ func TestDiscoveryEndToEnd(t *testing.T) {
 	if strings.Join(kinds, ",") != "LOCATION" {
 		t.Fatalf("material change kinds: %v", kinds)
 	}
-	if _, raw := publicGet(t, s, "/public/campaigns/"+slugA); !strings.Contains(string(raw), `"name":"Mutare"`) {
+	if _, raw := discoPublicGet(t, s, "/public/campaigns/"+slugA); !strings.Contains(string(raw), `"name":"Mutare"`) {
 		t.Fatalf("approved location must stay until re-review: %.300s", raw)
 	}
 
@@ -257,7 +278,7 @@ func TestDiscoveryEndToEnd(t *testing.T) {
 	ref := struct {
 		Code string `json:"code"`
 	}{}
-	c, _, raw := publicReq(t, s, "POST", "/discovery/referrals", map[string]string{"slug": slugA, "channel": "WHATSAPP"}, "User-Agent", browserUA)
+	c, _, raw := discoReq(t, s, "POST", "/discovery/referrals", map[string]string{"slug": slugA, "channel": "WHATSAPP"}, "User-Agent", browserUA)
 	if c != 201 {
 		t.Fatalf("referral: %d %s", c, raw)
 	}
@@ -266,7 +287,7 @@ func TestDiscoveryEndToEnd(t *testing.T) {
 	}
 	_ = json.Unmarshal(raw, &env)
 	_ = json.Unmarshal(env.Data, &ref)
-	if c, _, _ := publicReq(t, s, "POST", "/discovery/referrals", map[string]string{"slug": "no-such-campaign-0000000000", "channel": "WHATSAPP"}); c != 404 {
+	if c, _, _ := discoReq(t, s, "POST", "/discovery/referrals", map[string]string{"slug": "no-such-campaign-0000000000", "channel": "WHATSAPP"}); c != 404 {
 		t.Fatalf("referral for unknown campaign: %d", c)
 	}
 	ipBase := fmt.Sprintf("198.19.%d.", rand.Intn(200)+20)
@@ -284,7 +305,7 @@ func TestDiscoveryEndToEnd(t *testing.T) {
 		map[string]string{"type": "RESULT_CLICK", "slug": slugA, "source": "SEARCH"})
 	view(t, s, ipBase+"2", map[string]string{"type": "SHARE_CLICK", "slug": slugA, "channel": "COPY_LINK"})
 	// automated clients and invalid referral codes: accepted silently, never counted as engagement
-	publicReq(t, s, "POST", "/discovery/events", map[string]any{"events": []map[string]string{{"type": "CAMPAIGN_VIEW", "slug": slugA}}},
+	discoReq(t, s, "POST", "/discovery/events", map[string]any{"events": []map[string]string{{"type": "CAMPAIGN_VIEW", "slug": slugA}}},
 		"X-Forwarded-For", ipBase+"9", "User-Agent", "WhatsApp/2.23.20.0 A")
 	view(t, s, ipBase+"3", map[string]string{"type": "CAMPAIGN_VIEW", "slug": slugA, "ref": "0000000000ab"})
 	// a visitor over the daily cap
@@ -439,11 +460,11 @@ func TestDiscoveryEndToEnd(t *testing.T) {
 	// immediately (before the index consumer runs): no search result, no sitemap entry, no legacy listing
 	for _, path := range []string{"/discovery/search?q=" + tok, "/discovery/sitemap", "/public/campaigns?q=" + tok, "/public/sitemap",
 		"/discovery/recommendations?campaign=" + slugA + "&limit=12"} {
-		if _, _, body := publicReq(t, s, "GET", path, nil); strings.Contains(string(body), slugB) {
+		if _, _, body := discoReq(t, s, "GET", path, nil); strings.Contains(string(body), slugB) {
 			t.Fatalf("%s lists a restricted campaign", path)
 		}
 	}
-	if c, _ := publicGet(t, s, "/public/campaigns/"+slugB); c != 200 {
+	if c, _ := discoPublicGet(t, s, "/public/campaigns/"+slugB); c != 200 {
 		t.Fatalf("RESTRICTED (not suspended) campaign page: %d", c)
 	}
 	waitFor(t, 60*time.Second, "restricted campaign removed from the index", func() bool {
@@ -455,7 +476,7 @@ func TestDiscoveryEndToEnd(t *testing.T) {
 	// ---- suspension of A: gone from every surface; then a deliberately stale row must not leak
 	rev.expect(rev.do("POST", "/admin/campaigns/"+idA+"/suspend", map[string]string{"reason_code": "IT_REVIEW", "note": "IT: suspended for the discovery test"}), 200, "")
 	for _, path := range []string{"/discovery/search?q=" + tok, "/discovery/featured?limit=12", "/discovery/trending?limit=24", "/discovery/sitemap"} {
-		if _, _, body := publicReq(t, s, "GET", path, nil); strings.Contains(string(body), slugA) {
+		if _, _, body := discoReq(t, s, "GET", path, nil); strings.Contains(string(body), slugA) {
 			t.Fatalf("%s lists a suspended campaign", path)
 		}
 	}
@@ -557,7 +578,7 @@ func TestDiscoveryFailureInjectionAndAbuse(t *testing.T) {
 	if code != 503 || hdr.Get("Cache-Control") != "no-store" || !strings.Contains(string(raw), "DISCOVERY_UNAVAILABLE") || strings.Contains(string(raw), slug) {
 		t.Fatalf("search with the restriction registry down: %d %v %s", code, hdr, raw)
 	}
-	if c, _ := publicGet(t, s, "/public/campaigns/"+slug); c != 503 {
+	if c, _ := discoPublicGet(t, s, "/public/campaigns/"+slug); c != 503 {
 		t.Fatalf("public page with the registry down: %d", c)
 	}
 	// indexing fails closed too: the row is marked dirty, never made discoverable without a check
@@ -585,7 +606,7 @@ func TestDiscoveryFailureInjectionAndAbuse(t *testing.T) {
 	// scraping: one address is limited (120/min) with the limiter's real wait
 	got429 := false
 	for i := 0; i < 140 && !got429; i++ {
-		c, h, _ := publicReq(t, s, "GET", "/discovery/campaigns?limit=1", nil, "X-Forwarded-For", "198.51.100.77")
+		c, h, _ := discoReq(t, s, "GET", "/discovery/campaigns?limit=1", nil, "X-Forwarded-For", "198.51.100.77")
 		if c == 429 {
 			got429 = true
 			if h.Get("Retry-After") == "" {
