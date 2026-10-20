@@ -11,6 +11,17 @@ providers.
 FundZim is **not** an investment, lending, equity or rewards platform, and it is not a wallet or a payment
 provider.
 
+> **Status: Stage 16 — Discovery, sharing & WhatsApp optimisation (complete; awaiting acceptance; non-production).**
+> Campaign search with relevance ranking, typo tolerance, highlights, filters (category, province and town, status,
+> publication date, organiser type) and keyset pagination over a search projection whose results are always re-checked
+> against current eligibility (restricted, suspended, unlisted and draft campaigns never appear, even from a stale index);
+> province and town browsing from a reviewed, coarse campaign location; maker-checker featured placements; a published,
+> money-free trending rule with maker-checker weights; rule-based recommendations that say why; WhatsApp, Facebook, X,
+> LinkedIn, e-mail, copy-link and device sharing with anonymous referral codes (blocked in production until LR-023);
+> generated link-preview images, printable QR posters, breadcrumbs and noindex listing variants; aggregate, cookie-less
+> engagement analytics for organisers and staff. Docs: [stage-16/implementation.md](docs/stage-16/implementation.md)
+> (ADR-048).
+>
 > **Status: Stage 15 — Notifications & communications (complete; awaiting acceptance; simulators and development senders
 > only).** One outbox-fed notification engine creates each notification exactly once, routes every channel through a
 > documented policy (mandatory security notices, preferences, opt-in consent for SMS and WhatsApp, suppressions, verified
@@ -304,7 +315,8 @@ Reset deletes the Postgres and Garage volumes (database, roles, objects). `.env`
 | [Stage 13 implementation](docs/stage-13/implementation.md) · [architecture](docs/stage-13/risk-architecture.md) · [signals](docs/stage-13/risk-signals.md) · [scoring](docs/stage-13/risk-scoring.md) · [rules](docs/stage-13/risk-rules.md) · [cases](docs/stage-13/case-management.md) · [holds](docs/stage-13/compliance-holds.md) · [screening](docs/stage-13/screening.md) · [security review](docs/stage-13/security-review.md) · [testing](docs/stage-13/testing.md) · [known issues](docs/stage-13/known-issues.md) | Trust, fraud & risk engine (TEST data; screening BLOCKED) |
 | [Stage 14 implementation](docs/stage-14/implementation.md) · [architecture](docs/stage-14/operations-architecture.md) · [command center](docs/stage-14/command-center.md) · [staff](docs/stage-14/staff-management.md) · [approvals](docs/stage-14/approval-center.md) · [support](docs/stage-14/support-operations.md) · [exceptions](docs/stage-14/exception-management.md) · [health](docs/stage-14/platform-health.md) · [incidents](docs/stage-14/incident-management.md) · [audit](docs/stage-14/audit-center.md) · [reporting](docs/stage-14/reporting.md) · [security review](docs/stage-14/security-review.md) · [testing](docs/stage-14/testing.md) · [known issues](docs/stage-14/known-issues.md) | Stage 14 administration & operations portal (ADR-046) |
 | [Stage 15 implementation](docs/stage-15/implementation.md) · [architecture](docs/stage-15/notification-architecture.md) · [events](docs/stage-15/event-contracts.md) · [e-mail](docs/stage-15/email.md) · [SMS](docs/stage-15/sms.md) · [WhatsApp](docs/stage-15/whatsapp.md) · [in-app](docs/stage-15/in-app.md) · [templates](docs/stage-15/templates.md) · [preferences](docs/stage-15/preferences.md) · [consent](docs/stage-15/consent.md) · [delivery](docs/stage-15/delivery-lifecycle.md) · [retries](docs/stage-15/retries.md) · [dead letters](docs/stage-15/dead-letters.md) · [providers](docs/stage-15/provider-readiness.md) · [security review](docs/stage-15/security-review.md) · [testing](docs/stage-15/testing.md) · [known issues](docs/stage-15/known-issues.md) | Stage 15 notifications & communications (ADR-047) |
-| [Stage handovers](docs/stage-handover/STAGE-15-TO-STAGE-16.md) | Stage 15 → 16 (discovery, sharing & WhatsApp optimisation); earlier handovers in the same folder |
+| [Stage 16 implementation](docs/stage-16/implementation.md) · [architecture](docs/stage-16/discovery-architecture.md) · [search](docs/stage-16/search.md) · [indexing](docs/stage-16/search-indexing.md) · [ranking](docs/stage-16/ranking.md) · [trending](docs/stage-16/trending.md) · [recommendations](docs/stage-16/recommendations.md) · [categories](docs/stage-16/categories.md) · [locations](docs/stage-16/location-discovery.md) · [WhatsApp](docs/stage-16/whatsapp-sharing.md) · [social sharing](docs/stage-16/social-sharing.md) · [SEO](docs/stage-16/seo.md) · [referrals](docs/stage-16/referrals.md) · [analytics](docs/stage-16/analytics.md) · [mobile performance](docs/stage-16/mobile-performance.md) · [security review](docs/stage-16/security-review.md) · [testing](docs/stage-16/testing.md) · [known issues](docs/stage-16/known-issues.md) | Stage 16 discovery, sharing & WhatsApp optimisation (ADR-048) |
+| [Stage handovers](docs/stage-handover/STAGE-16-TO-STAGE-17.md) | Stage 16 → 17 (financial reconciliation & settlement operations); earlier handovers in the same folder |
 
 ## Licence
 

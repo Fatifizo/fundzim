@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { readFeaturedPicks, readStaffReports } from "./normalise";
+import { readStaffReports } from "./normalise";
 
 describe("staff report queue reader", () => {
   it("reads the Go ReportItem shape and never carries an email", () => {
@@ -14,21 +14,5 @@ describe("staff report queue reader", () => {
 
   it("drops malformed rows", () => {
     expect(readStaffReports({ items: [{ id: 1 }, { id: "r2" }] })).toEqual([]);
-  });
-});
-
-describe("featured picks reader", () => {
-  it("sorts by position and treats only shown: true as public", () => {
-    const picks = readFeaturedPicks({
-      items: [
-        { campaign_id: "b", title: "B", position: 5, shown: "true" },
-        { campaign_id: "a", title: "A", position: 1, shown: true, note: "n" },
-      ],
-      next_cursor: null,
-    });
-    expect(picks.map((p) => [p.campaign_id, p.shown])).toEqual([
-      ["a", true],
-      ["b", false],
-    ]);
   });
 });

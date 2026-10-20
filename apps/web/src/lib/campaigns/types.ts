@@ -78,6 +78,8 @@ export interface Campaign {
   status: CampaignStatus | string;
   visibility: Visibility | string;
   category: string;
+  /** Stage 16 working-copy location (reference code) or null. */
+  location_code: string | null;
   organisation_id: string | null;
   title: string;
   summary: string;
@@ -146,6 +148,16 @@ export interface CampaignPatch {
   category?: string;
   goal?: { amount_minor: string; currency: string };
   visibility?: Visibility;
+  /** Reference location code; "" clears it. */
+  location_code?: string;
+}
+
+/** Location reference entry (GET /campaign-locations): a Zimbabwe province or town. */
+export interface CampaignLocationOption {
+  code: string;
+  kind: "PROVINCE" | "TOWN" | string;
+  name: string;
+  province_code: string | null;
 }
 
 // ---- Public (Stage 6 + Stage 7 contract §3) ----
@@ -194,6 +206,16 @@ export interface CategoryRef {
   slug: string | null;
 }
 
+/** Coarse public location of a campaign (Stage 16): a Zimbabwe province or town chosen by the organiser; never an address. */
+export interface PublicLocation {
+  code: string;
+  name: string;
+  kind: "PROVINCE" | "TOWN" | string;
+  province_name: string;
+  province_slug: string;
+  town_slug: string | null;
+}
+
 export interface PublicCampaign {
   slug: string;
   /** The slug the campaign is published under; the web app redirects permanently when the request differs. */
@@ -213,9 +235,11 @@ export interface PublicCampaign {
   trust: PublicTrust;
   published_at: string | null;
   completed_at: string | null;
+  location: PublicLocation | null;
 }
 
-export type FeaturedSelection = "STAFF_PICK" | "RECENTLY_PUBLISHED";
+/** FEATURED: an approved featured placement (Stage 16 maker-checker); RECENTLY_PUBLISHED: fills the list. */
+export type FeaturedSelection = "FEATURED" | "RECENTLY_PUBLISHED";
 
 export interface PublicCampaignSummary {
   slug: string;
@@ -228,7 +252,7 @@ export interface PublicCampaignSummary {
   trust: PublicTrust;
   cover: PublicImageRef | null;
   published_at: string | null;
-  /** Featured lists only: why the campaign is shown (no popularity or ranking exists). */
+  /** Featured lists only: why the campaign is shown (never popularity or payment). */
   selection: FeaturedSelection | null;
 }
 
@@ -249,6 +273,8 @@ export interface PublicUpdate {
 export interface SitemapData {
   campaigns: Array<{ slug: string; updated_at: string | null }>;
   categories: Array<{ slug: string; updated_at: string | null }>;
+  /** Stage 16: provinces with at least one discoverable campaign. */
+  provinces?: Array<{ slug: string; updated_at: string | null }>;
 }
 
 // ---- Staff ----
@@ -381,15 +407,3 @@ export interface StaffReport {
   triage_note: string | null;
 }
 
-/** `GET /admin/campaigns/featured` row. `shown: false` = the campaign is no longer live and listed, so the public never sees it. */
-export interface StaffFeaturedPick {
-  campaign_id: string;
-  title: string;
-  slug: string | null;
-  status: string;
-  visibility: string;
-  position: number;
-  note: string;
-  added_at: string | null;
-  shown: boolean;
-}

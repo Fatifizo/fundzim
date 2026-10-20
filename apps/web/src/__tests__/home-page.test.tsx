@@ -28,7 +28,7 @@ const CARD: PublicCampaignSummary = {
   trust: { organiser_identity_verified: false, organisation_verified: false, beneficiary_verified: false, campaign_reviewed: true },
   cover: null,
   published_at: null,
-  selection: "STAFF_PICK",
+  selection: "FEATURED",
 };
 const CATEGORY: PublicCategory = { code: "MEDICAL", slug: "medical", name: "Medical", description: null, display_order: 1, sensitive: true, live_campaigns: 3 };
 

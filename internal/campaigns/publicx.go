@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/Fatifizo/fundzim/internal/audit"
 	"github.com/Fatifizo/fundzim/internal/kyc"
@@ -86,7 +85,7 @@ func (s *Service) publicByCode(ctx context.Context, code string) (Access, error)
 	if err != nil || !a.Public {
 		return Access{}, ErrNotFound
 	}
-	return a, nil
+	return a, s.pageAllowed(ctx, a)
 }
 
 // CanonicalByCode returns the canonical slug of a live campaign (short links /c/{code}).
@@ -209,80 +208,6 @@ type Count struct {
 
 const searchCountCap = 1000
 
-// FeaturedCard is a card with the reason it was selected.
-type FeaturedCard struct {
-	PublicCard
-	Selection string `json:"selection"` // STAFF_PICK | RECENTLY_PUBLISHED
-}
-
-// Featured returns staff picks first, then recently published live PUBLIC campaigns (ADR-038 §2). No
-// popularity or paid ranking exists.
-func (s *Service) Featured(ctx context.Context, limit int) ([]FeaturedCard, error) {
-	if limit <= 0 || limit > 12 {
-		limit = 6
-	}
-	rows, err := s.Pool.Query(ctx, cardSelect+`, f.position::text FROM app.campaign_featured f
-		JOIN app.campaigns c ON c.id = f.campaign_id AND f.removed_at IS NULL
-		JOIN app.campaign_versions v ON v.id = c.approved_version_id
-		WHERE c.status IN ('ACTIVE','PAUSED') AND c.visibility = 'PUBLIC' -- same rule as picking: completed picks drop out
-		ORDER BY f.position, f.added_at LIMIT $1`, limit)
-	if err != nil {
-		return nil, err
-	}
-	picks, err := scanCardsWithIgnored(rows)
-	if err != nil {
-		return nil, err
-	}
-	seen := []string{}
-	for _, p := range picks {
-		seen = append(seen, p.id)
-	}
-	if len(picks) < limit {
-		rows, err := s.Pool.Query(ctx, cardSelect+` FROM app.campaigns c JOIN app.campaign_versions v ON v.id = c.approved_version_id
-			WHERE c.status IN ('ACTIVE','PAUSED') AND c.visibility = 'PUBLIC' AND NOT (c.id = ANY ($1::uuid[]))
-			ORDER BY c.published_at DESC, c.id DESC LIMIT $2`, seen, limit-len(picks))
-		if err != nil {
-			return nil, err
-		}
-		recent, err := scanCards(rows, false)
-		if err != nil {
-			return nil, err
-		}
-		picks = append(picks, recent...)
-	}
-	cards, err := s.enrichCards(ctx, picks)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]FeaturedCard, 0, len(cards))
-	for i, c := range cards {
-		sel := "RECENTLY_PUBLISHED"
-		if i < len(seen) {
-			sel = "STAFF_PICK"
-		}
-		out = append(out, FeaturedCard{PublicCard: c, Selection: sel})
-	}
-	return out, nil
-}
-
-// scanCardsWithIgnored scans card rows followed by one extra ignored text column.
-func scanCardsWithIgnored(rows pgx.Rows) ([]cardRow, error) {
-	defer rows.Close()
-	var out []cardRow
-	for rows.Next() {
-		var c cardRow
-		var amount int64
-		var ignored string
-		if err := rows.Scan(&c.id, &c.Slug, &c.Title, &c.Summary, &c.Category, &amount, &c.Goal.Currency, &c.Status, &c.CoverMedia,
-			&c.PublishedAt, &c.CreatedAt, &c.ownerUser, &c.ownerOrg, &c.ben, &ignored); err != nil {
-			return nil, err
-		}
-		c.Goal.AmountMinor = itoa(amount)
-		out = append(out, c)
-	}
-	return out, rows.Err()
-}
-
 // ---- categories ---------------------------------------------------------------------------------------------
 
 // PublicCategory is an active category with its live public campaign count.
@@ -331,14 +256,35 @@ type SitemapEntry struct {
 
 // Sitemap returns live PUBLIC campaigns (capped at 50 000) and active categories.
 func (s *Service) Sitemap(ctx context.Context) ([]SitemapEntry, []SitemapEntry, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT slug, updated_at FROM app.campaigns WHERE status IN ('ACTIVE','PAUSED','COMPLETED')
-		AND visibility = 'PUBLIC' ORDER BY published_at DESC LIMIT 50000`)
+	rows, err := s.Pool.Query(ctx, `SELECT id::text, slug, updated_at FROM app.campaigns WHERE status IN ('ACTIVE','PAUSED','COMPLETED')
+		AND visibility = 'PUBLIC' AND approved_version_id IS NOT NULL ORDER BY published_at DESC LIMIT 50000`)
 	if err != nil {
 		return nil, nil, err
 	}
-	camps, err := pgx.CollectRows(rows, pgx.RowToStructByPos[SitemapEntry])
+	var idl []string
+	var all []SitemapEntry
+	for rows.Next() {
+		var id string
+		var e SitemapEntry
+		if err := rows.Scan(&id, &e.Slug, &e.UpdatedAt); err != nil {
+			rows.Close()
+			return nil, nil, err
+		}
+		idl, all = append(idl, id), append(all, e)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	disc, _, err := s.eligibility(ctx, idl, false) // Stage 16: restricted campaigns are not listed
 	if err != nil {
 		return nil, nil, err
+	}
+	var camps []SitemapEntry
+	for i, e := range all {
+		if disc[idl[i]] {
+			camps = append(camps, e)
+		}
 	}
 	cats, err := s.PublicCategories(ctx, "")
 	if err != nil {
@@ -640,79 +586,6 @@ func (s *Service) TriageReport(ctx context.Context, staffID, reportID string, es
 		}
 		return nil
 	})
-}
-
-// ---- staff picks ----------------------------------------------------------------------------------------
-
-// FeatureInput adds a staff pick.
-type FeatureInput struct {
-	Position int    `json:"position"`
-	Note     string `json:"note"`
-	Reason   string `json:"reason"`
-}
-
-// Feature adds or removes a staff pick; only live PUBLIC campaigns can be picked.
-func (s *Service) Feature(ctx context.Context, staffID, campaignID string, add bool, in FeatureInput) error {
-	return s.tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		c, err := s.loadRow(ctx, tx, campaignID, true)
-		if err != nil {
-			return err
-		}
-		if !add {
-			reason, code := CleanText(in.Reason, 3, 500, false)
-			if code != "" {
-				return httpx.Validation(errs.Detail{Field: "reason", Code: code})
-			}
-			tag, err := tx.Exec(ctx, `UPDATE app.campaign_featured SET removed_by = $2, removed_at = $3, removal_reason = $4
-				WHERE campaign_id = $1 AND removed_at IS NULL`, c.ID, staffID, s.now(), reason)
-			if err != nil {
-				return err
-			}
-			if tag.RowsAffected() == 0 {
-				return errs.New(errs.NotFound, "NOT_FEATURED", "This campaign is not featured.")
-			}
-			return s.reviewAudit(ctx, tx, staffID, c.ID, "unfeatured", map[string]any{"reason": reason})
-		}
-		if !Live(c.Status) || c.Status == StatusCompleted || c.Visibility != "PUBLIC" {
-			return errs.New(errs.Conflict, "NOT_FEATURABLE", "Only live, listed campaigns can be featured.")
-		}
-		note, code := CleanText(in.Note, 3, 500, false)
-		if code != "" || in.Position < 1 || in.Position > 100 {
-			return httpx.Validation(errs.Detail{Field: "note", Code: "INVALID_VALUE"}, errs.Detail{Field: "position", Code: "INVALID_VALUE"})
-		}
-		_, err = tx.Exec(ctx, `INSERT INTO app.campaign_featured (id, campaign_id, position, note, added_by, added_at) VALUES ($1,$2,$3,$4,$5,$6)`,
-			ids.New(), c.ID, in.Position, note, staffID, s.now())
-		var pg *pgconn.PgError
-		if errors.As(err, &pg) && pg.Code == "23505" {
-			return errs.New(errs.Conflict, "ALREADY_FEATURED", "This campaign is already featured.")
-		}
-		if err != nil {
-			return err
-		}
-		return s.reviewAudit(ctx, tx, staffID, c.ID, "featured", map[string]any{"position": in.Position})
-	})
-}
-
-// FeaturedAdmin lists the active staff picks for staff.
-func (s *Service) FeaturedAdmin(ctx context.Context) ([]map[string]any, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT f.campaign_id, c.title, c.slug, c.status, c.visibility, f.position, f.note, f.added_by, f.added_at
-		FROM app.campaign_featured f JOIN app.campaigns c ON c.id = f.campaign_id WHERE f.removed_at IS NULL ORDER BY f.position, f.added_at`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []map[string]any{}
-	for rows.Next() {
-		var id, title, slug, status, vis, note, by string
-		var pos int
-		var at time.Time
-		if err := rows.Scan(&id, &title, &slug, &status, &vis, &pos, &note, &by, &at); err != nil {
-			return nil, err
-		}
-		out = append(out, map[string]any{"campaign_id": id, "title": title, "slug": slug, "status": status, "visibility": vis, "position": pos,
-			"note": note, "added_by": by, "added_at": at, "shown": Live(status) && status != StatusCompleted && vis == "PUBLIC"})
-	}
-	return out, rows.Err()
 }
 
 // ---- conditional public responses (ADR-038 §1) --------------------------------------------------------------

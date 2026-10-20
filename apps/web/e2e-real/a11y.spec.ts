@@ -14,6 +14,9 @@ const PUBLIC_PAGES: [string, () => string][] = [
   ["home", () => "/"],
   ["discovery", () => "/campaigns"],
   ["category", () => "/categories/education"],
+  ["trending", () => "/campaigns/trending"],
+  ["featured", () => "/campaigns/featured"],
+  ["province", () => "/campaigns/location/harare"],
   ["campaign", () => `/campaigns/${run().campaigns.pubDetail.slug}`],
   ["safety", () => "/safety"],
 ];
@@ -33,7 +36,9 @@ for (const [name, path] of PUBLIC_PAGES) {
 
 const STAFF_PAGES: [string, string, () => string][] = [
   ["reports", "/admin/campaigns/reports", () => run().staffEmails.reviewer],
-  ["featured", "/admin/campaigns/featured", () => run().staffEmails.compliance],
+  ["featured placements", "/admin/discovery/featured", () => run().staffEmails.compliance],
+  ["discovery overview", "/admin/discovery", () => run().staffEmails.compliance],
+  ["trending ranking", "/admin/discovery/ranking", () => run().staffEmails.compliance],
 ];
 
 for (const [name, path, who] of STAFF_PAGES) {

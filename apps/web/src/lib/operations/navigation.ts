@@ -95,7 +95,15 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/campaigns", label: "All campaigns", permission: "campaign.view", exact: true },
       { href: "/admin/campaigns/updates", label: "Update moderation", permission: "content.moderate" },
       { href: "/admin/campaigns/reports", label: "Campaign reports", permission: "campaign.review" },
-      { href: "/admin/campaigns/featured", label: "Featured campaigns", permission: "campaign.feature" },
+    ],
+  },
+  {
+    id: "discovery",
+    label: "Discovery",
+    items: [
+      { href: "/admin/discovery", label: "Discovery overview", permission: "discovery.view", exact: true },
+      { href: "/admin/discovery/featured", label: "Featured placements", permission: "discovery.view" },
+      { href: "/admin/discovery/ranking", label: "Trending ranking", permission: "discovery.view" },
     ],
   },
   {

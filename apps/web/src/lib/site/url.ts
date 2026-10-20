@@ -48,5 +48,10 @@ export function categoryPath(slug: string): string {
   return `/categories/${slug}`;
 }
 
+/** Generated link-preview image for a campaign without an approved cover (src/app/og/campaigns/[slug]/route.tsx). */
+export function previewImagePath(slug: string): string {
+  return `/og/campaigns/${slug}`;
+}
+
 /** Generic Open Graph image shipped in public/ (used when a campaign has no approved cover). */
 export const DEFAULT_OG_IMAGE = { path: "/og/fundzim-og.png", width: 1200, height: 630, alt: "FundZim" } as const;

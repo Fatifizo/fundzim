@@ -2,7 +2,6 @@ import { browserApi, type ApiClient } from "@/lib/api/client";
 
 import {
   readAgeAttestation,
-  readFeaturedPicks,
   readCampaign,
   readEligibility,
   readMedia,
@@ -85,15 +84,11 @@ export function createCampaignApi(api: ApiClient = browserApi) {
     moderateUpdate: (updateId: string, action: "approve" | "hide", body: { reason_code: string; note: string }) =>
       post<unknown>(`/api/v1/admin/campaigns/updates/${enc(updateId)}/${action}`, body),
 
-    // Stage 7 staff (contract §4): report triage (campaign.review) and staff picks (campaign.feature).
+    // Stage 7 staff (contract §4): report triage (campaign.review). Staff picks became Stage 16 featured placements.
     /** A report never changes the campaign's status; escalation opens a compliance case. */
     triageReport: (reportId: string, action: "dismiss" | "escalate", body: { reason_code: string; note: string }) =>
       post<unknown>(`/api/v1/admin/campaigns/reports/${enc(reportId)}/${action}`, body),
     /** Returns the updated pick list. */
-    feature: (campaignId: string, body: { position: number; note: string }) =>
-      post<unknown>(`/api/v1/admin/campaigns/${enc(campaignId)}/feature`, body).then(readFeaturedPicks),
-    unfeature: (campaignId: string, reason: string) =>
-      api.delete<unknown>(`/api/v1/admin/campaigns/${enc(campaignId)}/feature`, { body: { reason }, timeoutMs: WRITE_TIMEOUT_MS }).then((r) => readFeaturedPicks(r.data)),
   };
 }
 

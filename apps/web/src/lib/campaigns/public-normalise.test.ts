@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { readCampaigns, readCanonicalSlug, readMedia, readNextCursor, readPublicCampaign, readPublicCategories, readPublicSummaries, readPublicUpdates, readSitemap, readStaffSummaries, readTotal, readTrust, readUpdates, withCategoryName } from "./normalise";
-import { readListQuery } from "./list-query";
 import { isCategoryFilter, isPublicCode } from "./paths";
 import { activeTrustIndicators, TRUST_DISCLAIMER } from "./trust";
 
@@ -73,8 +72,8 @@ describe("public campaign detail", () => {
 
 describe("cards, totals and featured", () => {
   it("reads organiser, trust and featured selection", () => {
-    const [card] = readPublicSummaries({ items: [{ slug: "a-1", title: "T", category: "MEDICAL", organiser: { type: "INDIVIDUAL", display_name: "Tendai" }, trust: { campaign_reviewed: true }, selection: "STAFF_PICK" }] });
-    expect(card).toMatchObject({ organiser: { display_name: "Tendai" }, trust: { campaign_reviewed: true, organiser_identity_verified: false }, selection: "STAFF_PICK" });
+    const [card] = readPublicSummaries({ items: [{ slug: "a-1", title: "T", category: "MEDICAL", organiser: { type: "INDIVIDUAL", display_name: "Tendai" }, trust: { campaign_reviewed: true }, selection: "FEATURED" }] });
+    expect(card).toMatchObject({ organiser: { display_name: "Tendai" }, trust: { campaign_reviewed: true, organiser_identity_verified: false }, selection: "FEATURED" });
     expect(readPublicSummaries({ items: [{ slug: "a-1", selection: "MOST_POPULAR" }] })[0]?.selection).toBeNull();
   });
 
@@ -129,14 +128,6 @@ describe("categories, updates, sitemap, short links", () => {
   });
 });
 
-describe("listing query", () => {
-  it("bounds q to 100 characters and strips control characters", () => {
-    const q = readListQuery({ q: `  ${"a".repeat(150)}\u0007 `, category: "medical", sort: "created", cursor: "o:12" });
-    expect(q.q).toBe("a".repeat(100));
-    expect(q).toMatchObject({ category: "medical", sort: "created", cursor: "o:12" });
-    expect(readListQuery({ q: "x\ty", category: "../admin", sort: "popular", cursor: "bad cursor" })).toEqual({ q: "x y", category: "", sort: "published", cursor: "" });
-  });
-});
 
 describe("trust indicators", () => {
   it("lists only the true indicators, and the disclaimer never promises claims are true", () => {

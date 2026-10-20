@@ -53,6 +53,9 @@ var allowedImports = map[string][]string{
 	// Stage 12 (ADR-044 amends baseline §3): fees posts fee journals through the ledger's service; campaign facts,
 	// routing and linked identities arrive through interfaces implemented in internal/app
 	"fees": {"platform", "audit", "ledger"},
+	// Stage 16 (ADR-048): discovery reads campaigns through the campaigns service (cards, eligibility, snapshots); linked
+	// identities and feature flags arrive through interfaces implemented in internal/app
+	"discovery": {"platform", "audit", "campaigns"},
 }
 
 // ownedTables is design-baseline §5 (plus the Stage 4 additions recorded in docs/stage-4/implementation.md:
@@ -99,7 +102,11 @@ var ownedTables = map[string][]string{
 	"campaigns": {"app.campaign_categories", "app.campaign_policies", "app.campaigns", "app.campaign_goals", "app.campaign_versions",
 		"app.campaign_beneficiaries", "app.campaign_reviews", "app.campaign_status_history", "app.campaign_eligibility_evaluations",
 		"app.campaign_media", "app.campaign_media_events", "app.campaign_media_variants", "app.campaign_updates", "app.campaign_update_events",
-		"app.campaign_reports", "app.campaign_featured", "app.public_event_counters"}, // Stage 7
+		"app.campaign_reports", "app.campaign_featured", "app.public_event_counters", // Stage 7
+		"app.campaign_locations"}, // Stage 16 reference list
+	"discovery": {"app.discovery_campaign_index", "app.discovery_engagement_keys", "app.discovery_campaign_daily", "app.discovery_search_daily",
+		"app.discovery_abuse_daily", "app.discovery_referral_tokens", "app.discovery_featured_placements", "app.discovery_ranking_policies",
+		"app.discovery_trending_scores"}, // Stage 16 (ADR-048)
 	// Stage 8 (ADR-039)
 	"psp": {"app.payment_providers", "app.provider_capabilities", "app.provider_capabilities_current", "app.provider_accounts",
 		"app.provider_webhook_inbox", "app.provider_webhook_rejections", "app.provider_health_events", "app.sandbox_provider_payments",

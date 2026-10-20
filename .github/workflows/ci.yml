@@ -34,6 +34,8 @@ jobs:
       - run: go vet -tags integration ./tests/...
       - name: vet the payments performance harness (never run in CI)
         run: go vet -tags integration,perf -overlay tests/perf/payments/overlay.json ./tests/integration/
+      - name: vet the public and discovery performance harnesses (Stage 7, Stage 16; never run in CI)
+        run: go vet -tags perf ./tests/perf/
       - run: go test -race -count=1 ./apps/api/... ./internal/... ./migrations/...
       - name: fuzz smoke (money)
         run: |

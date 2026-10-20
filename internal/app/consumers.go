@@ -38,6 +38,8 @@ func registerConsumers(ctx context.Context, d *WorkerDeps, reg *outbox.Registry)
 	d.Notifications = NewNotifications(NotificationDeps{Config: d.Config, Pool: d.DB, Clock: d.Clock, Logger: d.Logger, Modules: d.Verification,
 		Orgs: o, Auth: a, Email: d.Email, SMS: d.SMS, WorkerID: workerID()})
 	registerNotificationConsumers(reg, d.Notifications) // Stage 15 (ADR-047)
+	d.Discovery = NewDiscovery(d.Config, d.DB, d.Verification, nil, d.Logger, false)
+	registerDiscoveryConsumers(reg, d.Discovery) // Stage 16 (ADR-048)
 	return nil
 }
 

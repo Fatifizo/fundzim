@@ -4,9 +4,9 @@ import { notFound } from "next/navigation";
 
 import { serverGetOptional, serverGetOr404 } from "@/lib/auth/session";
 
-import { readCampaign, readCategories, readCurrencies, readMedia } from "./normalise";
+import { readCampaign, readCategories, readCurrencies, readLocationOptions, readMedia } from "./normalise";
 import { isUuid } from "./paths";
-import type { Campaign, CampaignMedia, Category, CurrencyInfo } from "./types";
+import type { Campaign, CampaignLocationOption, CampaignMedia, Category, CurrencyInfo } from "./types";
 
 /**
  * Server Component loaders for the owner's campaign pages. A malformed id is a 404 before any API call; the
@@ -30,4 +30,9 @@ export async function loadCategories(currentPath: string): Promise<Category[]> {
 /** Usable goal currencies (`GET /campaign-currencies`); anything marked unavailable is dropped as well. */
 export async function loadCurrencies(currentPath: string): Promise<CurrencyInfo[]> {
   return readCurrencies(await serverGetOptional<unknown>("/api/v1/campaign-currencies", currentPath, []));
+}
+
+/** Location reference list (`GET /campaign-locations`); empty when unavailable (the field is then hidden). */
+export async function loadLocationOptions(currentPath: string): Promise<CampaignLocationOption[]> {
+  return readLocationOptions(await serverGetOptional<unknown>("/api/v1/campaign-locations", currentPath, []));
 }

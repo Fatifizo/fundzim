@@ -131,6 +131,9 @@ type Deps struct {
 // PublicationHolds is the risk module's hold registry as campaigns needs it.
 type PublicationHolds interface {
 	PublicationHolds(ctx context.Context, campaignID, ownerUserID, ownerOrgID string) ([]risk.Hold, error)
+	// BlockingHolds is the batched registry read used for discovery promotion (Stage 16): any hold of the given types
+	// on any of the subjects.
+	BlockingHolds(ctx context.Context, types []string, subjects ...risk.HoldSubject) ([]risk.Hold, error)
 }
 
 // ErrOnHold: an enforced risk hold (campaign or account review) stops publication. No detail is exposed.
@@ -217,7 +220,22 @@ func (s *Service) PublicBySlug(ctx context.Context, slug string) (Access, error)
 	if !a.Public {
 		return Access{}, ErrNotFound
 	}
-	return a, nil
+	return a, s.pageAllowed(ctx, a)
+}
+
+// pageAllowed hides a live campaign whose campaign, owner, organisation or beneficiary carries a SUSPENDED or
+// OFFBOARDED restriction (Stage 16): the restriction consumer suspends such campaigns asynchronously (ADR-036 §6), and
+// public reads must not depend on that consumer having run. A registry error fails closed (503, never cached).
+func (s *Service) pageAllowed(ctx context.Context, a Access) error {
+	lvl, err := s.Restricted(ctx, a)
+	if err != nil {
+		s.Logger.WarnContext(ctx, "public campaign: restriction lookup failed", "error_category", "dependency", "error", err.Error())
+		return ErrEligibilityUnavailable
+	}
+	if lvl == RestrictionSuspended || lvl == RestrictionOffboarded {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // Restricted returns the highest compliance restriction on the campaign, its owner, owning organisation and

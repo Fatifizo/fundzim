@@ -97,3 +97,10 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* Stage 16 campaign posters: print only the poster (site chrome stays on screen) */
+@media print {
+  body:has([data-print-poster]) > *:not(main) {
+    display: none !important;
+  }
+}

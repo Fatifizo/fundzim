@@ -116,13 +116,17 @@ test("campaign page: approved content, no donations, canonical URL and the exact
   expect(errors).toEqual([]);
 });
 
-test("copy link puts the canonical URL on the clipboard", async ({ page, context }) => {
+test("copy link puts the canonical URL (plus an anonymous referral code, Stage 16) on the clipboard", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: WEB_URL });
   const slug = slugOf(run().campaigns.pubDetail);
   await page.goto(`/campaigns/${slug}`);
   await page.getByRole("button", { name: "Copy link" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Link copied" })).toBeVisible();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`${SITE}/campaigns/${slug}`);
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  const u = new URL(copied);
+  expect(`${u.origin}${u.pathname}`).toBe(`${SITE}/campaigns/${slug}`);
+  expect([...u.searchParams.keys()]).toEqual(["ref"]); // nothing else: no session, no personal data
+  expect(u.searchParams.get("ref")).toMatch(/^[0-9a-hjkmnp-tv-z]{12}$/);
 });
 
 test("suspended campaigns are gone: 404 page, absent from discovery and the public API", async ({ page }) => {

@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 
+	"github.com/Fatifizo/fundzim/internal/discovery"
 	"github.com/Fatifizo/fundzim/internal/notifications"
 	"github.com/Fatifizo/fundzim/internal/platform/clock"
 	"github.com/Fatifizo/fundzim/internal/platform/config"
@@ -51,6 +52,8 @@ type WorkerDeps struct {
 	Verification *VerificationModules
 	// Stage 15: notification engine (consumer, delivery sweep, simulator callbacks)
 	Notifications *notifications.Service
+	// Stage 16: discovery (index consumer, reconciliation, trending, maintenance)
+	Discovery *discovery.Service
 
 	riverRunning atomic.Bool
 }
@@ -99,7 +102,8 @@ func (d *WorkerDeps) buildRiver() error {
 	workers := river.NewWorkers()
 	relay := &outbox.Relay{Pool: d.DB, Registry: d.Registry, Metrics: d.OutboxMetrics, Logger: d.Logger,
 		// the notification fan-out (one delivery per event) runs on its own queue: it never delays media scans or payments
-		ConsumerQueues: map[string]string{notifications.ConsumerDispatch: jobs.QueueNotifications}}
+		ConsumerQueues: map[string]string{notifications.ConsumerDispatch: jobs.QueueNotifications,
+			discovery.ConsumerIndex: jobs.QueueDiscovery}} // Stage 16: indexing never delays payments or notifications
 	river.AddWorker(workers, &outbox.RelayWorker{Relay: relay})
 	// a delivery may run a malware scan: allow the scan timeout plus margin (default 30 s otherwise)
 	river.AddWorker(workers, &outbox.DeliverWorker{Pool: d.DB, Registry: d.Registry, Logger: d.Logger,
@@ -124,6 +128,7 @@ func (d *WorkerDeps) buildRiver() error {
 	if d.Notifications != nil {
 		periodic = append(periodic, notificationJobs(workers, d.Notifications, d.Config.Notifications.SimulatorEnabled)...) // Stage 15 (ADR-047)
 	}
+	periodic = append(periodic, discoveryJobs(workers, d.Discovery)...) // Stage 16 (ADR-048)
 	client, err := jobs.NewWorkerClient(jobs.WorkerConfig{
 		Pool: d.DB, Logger: d.Logger, Metrics: d.JobMetrics, Workers: workers,
 		Queues: jobs.DefaultQueues(d.Worker.Concurrency), PeriodicJobs: periodic,

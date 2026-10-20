@@ -160,7 +160,16 @@ async function pages() {
   const res = await fetch(`${BASE}/api/v1/public/campaigns?limit=1&category=EDUCATION`);
   const slug = (await res.json()).data.items[0]?.slug;
   if (!slug) throw new Error("no live campaign to measure");
-  return { "/": "/", "/campaigns": "/campaigns", "/categories/education": "/categories/education", "campaign detail": `/campaigns/${slug}` };
+  // Stage 16 pages: search results (with highlights), trending and a province page
+  return {
+    "/": "/",
+    "/campaigns": "/campaigns",
+    "/categories/education": "/categories/education",
+    "campaign detail": `/campaigns/${slug}`,
+    "/campaigns?q=school": "/campaigns?q=school",
+    "/campaigns/trending": "/campaigns/trending",
+    "/campaigns/location/harare": "/campaigns/location/harare",
+  };
 }
 
 const browser = await chromium.launch();

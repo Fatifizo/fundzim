@@ -46,6 +46,9 @@ type Policies struct {
 	ScreeningWebhookIP       Policy // risk.screening_webhook.ip — screening callbacks per client IP (Stage 13)
 	NotificationsWebhookIP   Policy // notifications.webhook.ip — messaging provider callbacks per client IP (Stage 15)
 	NotificationsConsentUser Policy // notifications.consent.user — consent and preference changes per user (Stage 15)
+	DiscoverySearchIP        Policy // discovery.search.ip — discovery listing and search requests per client IP (Stage 16)
+	DiscoveryEventIP         Policy // discovery.event.ip — discovery engagement events per client IP (Stage 16)
+	DiscoveryReferralIP      Policy // discovery.referral.ip — referral codes issued per client IP (Stage 16)
 }
 
 // DefaultPolicies returns the Stage 4 starting values.
@@ -79,6 +82,10 @@ func DefaultPolicies() Policies {
 		ScreeningWebhookIP:       Policy{Name: "risk.screening_webhook.ip", Limit: 300, Window: time.Minute, Protective: true},
 		NotificationsWebhookIP:   Policy{Name: "notifications.webhook.ip", Limit: 600, Window: time.Minute, Protective: true},
 		NotificationsConsentUser: Policy{Name: "notifications.consent.user", Limit: 30, Window: time.Hour, Protective: true},
+		// Stage 16: generous for people on shared (carrier-grade NAT) addresses, tight enough to stop bulk scraping
+		DiscoverySearchIP:   Policy{Name: "discovery.search.ip", Limit: 120, Window: time.Minute, Protective: true},
+		DiscoveryEventIP:    Policy{Name: "discovery.event.ip", Limit: 240, Window: time.Minute, Protective: true},
+		DiscoveryReferralIP: Policy{Name: "discovery.referral.ip", Limit: 30, Window: time.Hour, Protective: true},
 	}
 }
 
@@ -88,7 +95,8 @@ func (ps Policies) All() []Policy {
 		ps.AuthPasswordResetAccount, ps.AuthVerifyResendAccount, ps.AuthMFAChallenge, ps.AuthOTPSendPhone,
 		ps.AuthOTPSendUser, ps.AuthOTPVerify, ps.AuthStepUp, ps.AuthTokenIP, ps.AuthVerifyResendIP, ps.PublicReportIP,
 		ps.PublicReportCampaign, ps.PublicEventIP, ps.PaymentsIntentUser, ps.PaymentsIntentCampaign, ps.PaymentsAttemptUser,
-		ps.PaymentsWebhookIP, ps.PayoutsRequestUser, ps.FeesQuoteUser, ps.ScreeningWebhookIP, ps.NotificationsWebhookIP, ps.NotificationsConsentUser}
+		ps.PaymentsWebhookIP, ps.PayoutsRequestUser, ps.FeesQuoteUser, ps.ScreeningWebhookIP, ps.NotificationsWebhookIP, ps.NotificationsConsentUser,
+		ps.DiscoverySearchIP, ps.DiscoveryEventIP, ps.DiscoveryReferralIP}
 }
 
 // Validate checks every policy.

@@ -30,6 +30,12 @@
 > immutable evidence, the central hold registry (enforced by campaigns, payments and payouts through `risk`'s public
 > service) and a TEST-only screening foundation ([stage-13/risk-architecture.md](stage-13/risk-architecture.md)); `risk`
 > stays a leaf module (platform, audit).
+> **Stage 16 (ADR-048):** `discovery` (imports platform, audit, campaigns) owns `app.discovery_*`: a search projection fed
+> by the outbox consumer `discovery.index` and a reconciliation job (River queue `discovery`), featured placements and
+> ranking policies (maker-checker), trending scores, referral codes and aggregate engagement counters (an in-memory
+> recorder in the API writes them in batches). It never decides visibility: every card it serves is rendered by
+> `campaigns.PublicCards`, which re-checks restrictions (compliance) and, for promotion, holds (risk) at serve time.
+> Campaigns gains a coarse, reviewed `location_code` over the reference list `app.campaign_locations`.
 > **Stage 15 (ADR-047):** `notifications` (imports platform, audit, users; organisation admins and staff-by-permission
 > through a `Directory` interface wired in `internal/app`) is the only notification path: the outbox consumer
 > `notifications.dispatch` turns documented events into notifications (exactly once per event), a worker sweep delivers

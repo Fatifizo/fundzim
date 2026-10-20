@@ -25,6 +25,7 @@ type OwnerView struct {
 	Summary           string           `json:"summary"`
 	Story             string           `json:"story"`
 	Category          string           `json:"category"`
+	Location          *string          `json:"location_code"`
 	Goal              Money            `json:"goal"`
 	Status            string           `json:"status"`
 	Visibility        string           `json:"visibility"`
@@ -62,7 +63,7 @@ func donationsNotAvailable() map[string]any {
 }
 
 func (s *Service) ownerView(ctx context.Context, c campaignRow) (OwnerView, error) {
-	v := OwnerView{ID: c.ID, Slug: c.Slug, PublicCode: c.PublicCode, Title: c.Title, Summary: c.Summary, Story: c.Story, Category: c.Category,
+	v := OwnerView{ID: c.ID, Slug: c.Slug, PublicCode: c.PublicCode, Title: c.Title, Summary: c.Summary, Story: c.Story, Category: c.Category, Location: c.LocationCode,
 		Goal: Money{AmountMinor: itoa(c.GoalAmountMinor), Currency: c.GoalCurrency}, Status: c.Status, Visibility: c.Visibility,
 		ReReviewRequired: c.ReReviewRequired, CompletionReason: c.CompletionReason, CreatedAt: c.CreatedAt, SubmittedAt: c.SubmittedAt,
 		ApprovedAt: c.ApprovedAt, PublishedAt: c.PublishedAt, PausedAt: c.PausedAt, SuspendedAt: c.SuspendedAt, CompletedAt: c.CompletedAt,
@@ -461,6 +462,7 @@ type VersionContent struct {
 	BeneficiaryID *string   `json:"beneficiary_id"`
 	Disclosure    string    `json:"beneficiary_disclosure"`
 	MediaIDs      []string  `json:"media_ids"`
+	Location      *string   `json:"location_code"`
 	CreatedAt     time.Time `json:"created_at"`
 }
 
@@ -468,9 +470,9 @@ func (s *Service) versionContent(ctx context.Context, id string) (VersionContent
 	var v VersionContent
 	var amount int64
 	err := s.Pool.QueryRow(ctx, `SELECT id, version_number, change_kind, material_change_types, title, summary, story, category_code, goal_amount_minor,
-		goal_currency, beneficiary_id, beneficiary_disclosure, media_ids::text[], created_at FROM app.campaign_versions WHERE id = $1`, id).
+		goal_currency, beneficiary_id, beneficiary_disclosure, media_ids::text[], created_at, location_code FROM app.campaign_versions WHERE id = $1`, id).
 		Scan(&v.ID, &v.Number, &v.Kind, &v.MaterialTypes, &v.Title, &v.Summary, &v.Story, &v.Category, &amount, &v.Goal.Currency, &v.BeneficiaryID,
-			&v.Disclosure, &v.MediaIDs, &v.CreatedAt)
+			&v.Disclosure, &v.MediaIDs, &v.CreatedAt, &v.Location)
 	v.Goal.AmountMinor = itoa(amount)
 	return v, err
 }

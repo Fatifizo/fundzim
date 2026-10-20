@@ -15,6 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/Fatifizo/fundzim/internal/auth"
+	"github.com/Fatifizo/fundzim/internal/discovery"
 	"github.com/Fatifizo/fundzim/internal/notifications"
 	"github.com/Fatifizo/fundzim/internal/organisations"
 	"github.com/Fatifizo/fundzim/internal/platform/cache"
@@ -55,6 +56,8 @@ type Deps struct {
 	Verification *VerificationModules
 	// Stage 15 notification engine (nil only in platform-only tests)
 	Notifications *notifications.Service
+	// Stage 16 discovery (nil only in platform-only tests)
+	Discovery *discovery.Service
 }
 
 // NewDeps connects the dependencies described by cfg. The database pool is lazy: a database that is
@@ -145,11 +148,15 @@ func NewDeps(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Deps
 	}
 	d.Notifications = NewNotifications(NotificationDeps{Config: cfg, Pool: pool, Clock: clock.System, Logger: logger, Modules: d.Verification,
 		Orgs: d.Orgs, Auth: d.Auth, Email: email, SMS: sms})
+	d.Discovery = NewDiscovery(cfg, pool, d.Verification, d.Limiter, logger, true) // Stage 16 (ADR-048)
 	return d, nil
 }
 
 // Close releases dependency resources.
 func (d *Deps) Close() {
+	if d.Discovery != nil && d.Discovery.Recorder != nil {
+		d.Discovery.Recorder.Stop() // flushes buffered engagement
+	}
 	d.Verification.Close()
 	if d.DB != nil {
 		d.DB.Close()

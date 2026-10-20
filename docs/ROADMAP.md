@@ -525,6 +525,15 @@ Notes on ordering:
 - **Acceptance criteria:** Link previews render correctly in WhatsApp; attribution reveals no individual
   donor paths.
 
+- **Stage 16 as delivered (2026-10-19, awaiting acceptance):** discovery module with a search projection re-checked at
+  serve time (PostgreSQL full-text search, trigram typo tolerance, highlights, filters including province and town, four
+  sorts, keyset pagination), outbox indexing with reconciliation, coarse reviewed campaign location, maker-checker featured
+  placements, a published money-free trending rule with maker-checker weights, rule-based recommendations, LinkedIn and
+  referral-coded sharing, generated preview images, printable QR posters, SEO hardening, aggregate cookie-less analytics
+  for organisers and staff ([stage-16/implementation.md](stage-16/implementation.md), ADR-048). **Deviations:** no
+  WhatsApp Business integration (optional; LR-023); WhatsApp preview rendering not verified on real clients (no public
+  staging URL; KI-S16-01); referral attribution blocked in production until LR-023.
+
 ## Stage 17 — Financial Reconciliation & Reporting
 
 - **Objective:** Prove that FundZim's records match provider and settlement reality, and produce financial

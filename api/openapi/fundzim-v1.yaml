@@ -115,6 +115,8 @@ tags:
   description: 'Provider callbacks: signature-authenticated, CSRF/session-exempt, inbox + 2xx fast.'
 - name: Health
   description: Outside `/api/v1`. Liveness and readiness for the platform; not routed publicly in production.
+- name: Discovery (Stage 16)
+  description: 'Search, categories, locations, featured, trending, recommendations, referral codes, aggregate analytics (ADR-048).'
 paths:
   /auth/session:
     parameters:
@@ -25992,10 +25994,10 @@ paths:
       tags:
       - Campaign discovery
       operationId: listFeaturedCampaigns
-      summary: Featured campaigns (staff picks, then recently published)
-      description: '**DIS-13** · Auth: none · Authorization: Public. Staff picks first (by position), then recently published live PUBLIC campaigns to fill
-        the list; each item says which (`selection`). No popularity, ranking or paid promotion; a pick never overrides visibility. Only ACTIVE and PAUSED
-        campaigns are listed (a pick whose campaign completes drops out; new picks of COMPLETED campaigns are refused). Implemented in Stage 6.
+      summary: Featured campaigns (approved placements, then recently published)
+      description: '**DIS-13** · Auth: none · Authorization: Public. Stage 16 (ADR-048 supersedes the ADR-038 §2 staff picks): approved featured placements
+        inside their window (maker-checker), promotable now, by position; then recently published promotable campaigns to fill; each item says which
+        (`selection`). Same contract as GET /discovery/featured. No popularity or paid promotion; being featured is not an endorsement.
 
 
         Idempotency: n/a · Rate-limit class: `RL-PUBLIC-READ` (policies: `global.ip`) · Audit: —'
@@ -26585,236 +26587,6 @@ paths:
       - ROUTE_NOT_FOUND
       - SELF_DECISION_FORBIDDEN
       - SERVICE_UNAVAILABLE
-      - UNSUPPORTED_MEDIA_TYPE
-      - VALIDATION_FAILED
-      x-fundzim-status: IMPLEMENTED
-  /admin/campaigns/featured:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Campaign moderation (staff)
-      operationId: listStaffPicks
-      summary: List active staff picks
-      description: '**MOD-38** · Auth: staff + MFA + step-up · Authorization: `campaign.feature` with a fresh step-up (staff session; non-staff → `404 ROUTE_NOT_FOUND`).
-        Implemented in Stage 6.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` (policies: `global.ip`) · Audit: —'
-      security:
-      - staffSession: []
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Cache-Control:
-              description: '`private, no-store` (verification data is never cached).'
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CampaignStaffPickListEnvelope'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-        '503':
-          $ref: '#/components/responses/ServiceUnavailable'
-      x-fundzim-endpoint-id: MOD-38
-      x-fundzim-auth: staff+MFA+step-up
-      x-fundzim-permission: campaign.feature
-      x-fundzim-step-up: true
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-rate-limit-policies:
-      - global.ip
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - INTERNAL_ERROR
-      - PERMISSION_DENIED
-      - RATE_LIMITED
-      - ROUTE_NOT_FOUND
-      - SERVICE_UNAVAILABLE
-      - STEP_UP_REQUIRED
-      x-fundzim-status: IMPLEMENTED
-  /admin/campaigns/{campaign_id}/feature:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Campaign moderation (staff)
-      operationId: featureCampaign
-      summary: Add a staff pick
-      description: '**MOD-39** · Auth: staff + MFA + step-up · Authorization: `campaign.feature` with a fresh step-up (staff session; non-staff → `404 ROUTE_NOT_FOUND`).
-        Body `{position 1–100, note 3–500}` (`422`). Only live (ACTIVE or PAUSED) PUBLIC campaigns (`409 NOT_FEATURABLE`); already picked → `409 ALREADY_FEATURED`.
-        Returns the staff pick list. Implemented in Stage 6.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` (policies: `global.ip`) · Audit: campaign.featured'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - name: campaign_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CampaignFeatureInput'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Cache-Control:
-              description: '`private, no-store` (verification data is never cached).'
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CampaignStaffPickListEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '413':
-          $ref: '#/components/responses/PayloadTooLarge'
-        '415':
-          $ref: '#/components/responses/UnsupportedMediaType'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-        '503':
-          $ref: '#/components/responses/ServiceUnavailable'
-      x-fundzim-endpoint-id: MOD-39
-      x-fundzim-auth: staff+MFA+step-up
-      x-fundzim-permission: campaign.feature
-      x-fundzim-step-up: true
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-rate-limit-policies:
-      - global.ip
-      x-fundzim-audit: campaign.featured
-      x-fundzim-error-codes:
-      - ALREADY_FEATURED
-      - CAMPAIGN_NOT_FOUND
-      - CSRF_ORIGIN_MISMATCH
-      - CSRF_TOKEN_INVALID
-      - INTERNAL_ERROR
-      - MALFORMED_REQUEST
-      - NOT_FEATURABLE
-      - PAYLOAD_TOO_LARGE
-      - PERMISSION_DENIED
-      - RATE_LIMITED
-      - ROUTE_NOT_FOUND
-      - SERVICE_UNAVAILABLE
-      - STEP_UP_REQUIRED
-      - UNSUPPORTED_MEDIA_TYPE
-      - VALIDATION_FAILED
-      x-fundzim-status: IMPLEMENTED
-    delete:
-      tags:
-      - Campaign moderation (staff)
-      operationId: unfeatureCampaign
-      summary: Remove a staff pick
-      description: '**MOD-40** · Auth: staff + MFA + step-up · Authorization: `campaign.feature` with a fresh step-up (staff session; non-staff → `404 ROUTE_NOT_FOUND`).
-        JSON body `{reason}` (3–500 characters) is required (`422`); not picked → `404 NOT_FEATURED`. Returns the staff pick list (200). Implemented in Stage
-        6.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-WRITE` (policies: `global.ip`) · Audit: campaign.unfeatured'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - name: campaign_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CampaignFeatureInput'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Cache-Control:
-              description: '`private, no-store` (verification data is never cached).'
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CampaignStaffPickListEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '413':
-          $ref: '#/components/responses/PayloadTooLarge'
-        '415':
-          $ref: '#/components/responses/UnsupportedMediaType'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-        '503':
-          $ref: '#/components/responses/ServiceUnavailable'
-      x-fundzim-endpoint-id: MOD-40
-      x-fundzim-auth: staff+MFA+step-up
-      x-fundzim-permission: campaign.feature
-      x-fundzim-step-up: true
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-rate-limit-policies:
-      - global.ip
-      x-fundzim-audit: campaign.unfeatured
-      x-fundzim-error-codes:
-      - CAMPAIGN_NOT_FOUND
-      - CSRF_ORIGIN_MISMATCH
-      - CSRF_TOKEN_INVALID
-      - INTERNAL_ERROR
-      - MALFORMED_REQUEST
-      - NOT_FEATURED
-      - PAYLOAD_TOO_LARGE
-      - PERMISSION_DENIED
-      - RATE_LIMITED
-      - ROUTE_NOT_FOUND
-      - SERVICE_UNAVAILABLE
-      - STEP_UP_REQUIRED
       - UNSUPPORTED_MEDIA_TYPE
       - VALIDATION_FAILED
       x-fundzim-status: IMPLEMENTED
@@ -41797,6 +41569,1613 @@ paths:
       - NOTIFICATION_STATE
       - SELF_APPROVAL_FORBIDDEN
       - STEP_UP_REQUIRED
+  /campaign-locations:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Discovery (Stage 16)
+      operationId: listCampaignLocations
+      summary: Campaign location reference list
+      description: '**Stage 16 · IMPLEMENTED** · Auth: none · Authorization: Public. Zimbabwe provinces and towns an organiser may choose as a campaign location
+        (coarse; never an address). Configuration: `public, max-age=300`.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-PUBLIC-READ · Audit: — · Cache-Control: public, no-cache + ETag'
+      security: []
+      parameters:
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, max-age=300` with an `ETag` (reference data).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignLocationListEnvelope'
+        '304':
+          description: Not modified (the `If-None-Match` ETag still matches).
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: none
+      x-fundzim-permission: Public
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /discovery/campaigns:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Discovery (Stage 16)
+      operationId: discoveryCampaigns
+      summary: Campaign directory and search
+      description: '**Stage 16 · IMPLEMENTED** · Auth: none · Authorization: Public. Candidates from the discovery projection; every returned card re-checked
+        by campaigns at serve time (live, PUBLIC, no compliance restriction). A page may hold fewer items than `limit` when a candidate stopped being eligible
+        since it was indexed. With `q` and no exact match on the first page, a typo-tolerant title match is returned with `match: FUZZY`. Counts are capped
+        at 1000 (`total.capped`). Search text is never stored. `503 DISCOVERY_UNAVAILABLE` when eligibility cannot be checked (fail closed); `503 SEARCH_TIMEOUT`
+        past 2 s.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-PUBLIC-READ · Audit: — · Cache-Control: public, no-cache + ETag'
+      security: []
+      parameters:
+      - &id001
+        name: q
+        in: query
+        required: false
+        description: 'Search text (≤ 100 characters). Normalised: lower case, letters and digits only, at most 8 terms; the last term matches as a prefix.
+          No operators or wildcards are interpreted.'
+        schema:
+          type: string
+          maxLength: 100
+      - &id002
+        name: category
+        in: query
+        required: false
+        description: Category slug or code.
+        schema:
+          type: string
+          maxLength: 40
+      - &id003
+        name: province
+        in: query
+        required: false
+        description: Province slug (see GET /discovery/locations).
+        schema:
+          type: string
+          maxLength: 40
+      - &id004
+        name: town
+        in: query
+        required: false
+        description: Town slug.
+        schema:
+          type: string
+          maxLength: 40
+      - &id005
+        name: status
+        in: query
+        required: false
+        description: Campaign status filter.
+        schema:
+          type: string
+          enum:
+          - active
+          - paused
+          - ended
+      - &id006
+        name: published
+        in: query
+        required: false
+        description: Published within.
+        schema:
+          type: string
+          enum:
+          - 7d
+          - 30d
+          - 90d
+          - 365d
+      - &id007
+        name: organiser
+        in: query
+        required: false
+        description: Organiser type.
+        schema:
+          type: string
+          enum:
+          - individual
+          - organisation
+      - &id008
+        name: sort
+        in: query
+        required: false
+        description: 'Order. Default: relevance with a query, newest without. Relevance without a query is newest.'
+        schema:
+          type: string
+          enum:
+          - relevance
+          - newest
+          - oldest
+          - trending
+      - &id009
+        name: cursor
+        in: query
+        required: false
+        description: Opaque keyset cursor from `next_cursor` (bound to the sort).
+        schema:
+          type: string
+          maxLength: 200
+      - &id010
+        name: limit
+        in: query
+        required: false
+        description: Page size (1–48, default 12).
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 48
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, no-cache` with a strong `ETag` (revalidated every time; a campaign that leaves public view disappears at once, ADR-038
+                §1).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverySearchEnvelope'
+        '304':
+          description: Not modified (the `If-None-Match` ETag still matches).
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: none
+      x-fundzim-permission: Public
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /discovery/search:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Discovery (Stage 16)
+      operationId: discoverySearch
+      summary: Campaign search (same as /discovery/campaigns; impressions counted as search)
+      description: '**Stage 16 · IMPLEMENTED** · Auth: none · Authorization: Public. Identical contract to GET /discovery/campaigns.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-PUBLIC-READ · Audit: — · Cache-Control: public, no-cache + ETag'
+      security: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+      - *id004
+      - *id005
+      - *id006
+      - *id007
+      - *id008
+      - *id009
+      - *id010
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, no-cache` with a strong `ETag` (revalidated every time; a campaign that leaves public view disappears at once, ADR-038
+                §1).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverySearchEnvelope'
+        '304':
+          description: Not modified (the `If-None-Match` ETag still matches).
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: none
+      x-fundzim-permission: Public
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /discovery/categories:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Discovery (Stage 16)
+      operationId: discoveryCategories
+      summary: Categories with discoverable campaign counts
+      description: '**Stage 16 · IMPLEMENTED** · Auth: none · Authorization: Public. Active categories with the number of discoverable (indexed) campaigns.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-PUBLIC-READ · Audit: — · Cache-Control: public, no-cache + ETag'
+      security: []
+      parameters:
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, no-cache` with a strong `ETag` (revalidated every time; a campaign that leaves public view disappears at once, ADR-038
+                §1).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryCategoryListEnvelope'
+        '304':
+          description: Not modified (the `If-None-Match` ETag still matches).
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: none
+      x-fundzim-permission: Public
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /discovery/locations:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Discovery (Stage 16)
+      operationId: discoveryLocations
+      summary: Provinces and towns with counts
+      description: '**Stage 16 · IMPLEMENTED** · Auth: none · Authorization: Public. Zimbabwe provinces and towns with discoverable campaign counts, and the
+        number without a location.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-PUBLIC-READ · Audit: — · Cache-Control: public, no-cache + ETag'
+      security: []
+      parameters:
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, no-cache` with a strong `ETag` (revalidated every time; a campaign that leaves public view disappears at once, ADR-038
+                §1).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryLocationsEnvelope'
+        '304':
+          description: Not modified (the `If-None-Match` ETag still matches).
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: none
+      x-fundzim-permission: Public
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /discovery/trending:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Discovery (Stage 16)
+      operationId: discoveryTrending
+      summary: Trending campaigns
+      description: '**Stage 16 · IMPLEMENTED** · Auth: none · Authorization: Public. Promotable campaigns ranked by the trending rule (unique visitors and
+        sharers over a window, bot-filtered, log-scaled, freshness-weighted; never money). The rule text and policy version are returned.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-PUBLIC-READ · Audit: — · Cache-Control: public, no-cache + ETag'
+      security: []
+      parameters:
+      - name: category
+        in: query
+        required: false
+        description: Category slug or code.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: 1–24 (default 12).
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 24
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, no-cache` with a strong `ETag` (revalidated every time; a campaign that leaves public view disappears at once, ADR-038
+                §1).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryTrendingEnvelope'
+        '304':
+          description: Not modified (the `If-None-Match` ETag still matches).
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: none
+      x-fundzim-permission: Public
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /discovery/featured:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Discovery (Stage 16)
+      operationId: discoveryFeatured
+      summary: Featured campaigns
+      description: '**Stage 16 · IMPLEMENTED** · Auth: none · Authorization: Public. Approved featured placements inside their window (maker-checker), promotable
+        now, by position; then recently published promotable campaigns to fill (unless `fill=false`). Each item says why (`selection`).
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-PUBLIC-READ · Audit: — · Cache-Control: public, no-cache + ETag'
+      security: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        description: 1–12 (default 6).
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 12
+      - name: fill
+        in: query
+        required: false
+        description: '`false`: approved placements only.'
+        schema:
+          type: string
+          enum:
+          - 'true'
+          - 'false'
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, no-cache` with a strong `ETag` (revalidated every time; a campaign that leaves public view disappears at once, ADR-038
+                §1).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryFeaturedEnvelope'
+        '304':
+          description: Not modified (the `If-None-Match` ETag still matches).
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: none
+      x-fundzim-permission: Public
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /discovery/recommendations:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Discovery (Stage 16)
+      operationId: discoveryRecommendations
+      summary: Rule-based recommendations
+      description: '**Stage 16 · IMPLEMENTED** · Auth: none · Authorization: Public. Fixed rules, the same for everyone (related to the search, same category,
+        same province, featured, popular now, recently published); nothing about the viewer is used (`personalised` is always false). Each item carries its
+        reason.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-PUBLIC-READ · Audit: — · Cache-Control: public, no-cache + ETag'
+      security: []
+      parameters:
+      - name: campaign
+        in: query
+        required: false
+        description: Slug of the campaign being viewed (excluded).
+        schema:
+          type: string
+      - name: category
+        in: query
+        required: false
+        description: Category slug or code.
+        schema:
+          type: string
+      - name: q
+        in: query
+        required: false
+        description: Search text.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: 1–12 (default 4).
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 12
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, no-cache` with a strong `ETag` (revalidated every time; a campaign that leaves public view disappears at once, ADR-038
+                §1).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryRecommendationsEnvelope'
+        '304':
+          description: Not modified (the `If-None-Match` ETag still matches).
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: none
+      x-fundzim-permission: Public
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /discovery/sitemap:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Discovery (Stage 16)
+      operationId: discoverySitemap
+      summary: Sitemap source
+      description: '**Stage 16 · IMPLEMENTED** · Auth: none · Authorization: Public. Discoverable campaigns (re-checked, ≤ 50 000), categories and provinces
+        with at least one discoverable campaign.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-PUBLIC-READ · Audit: — · Cache-Control: public, no-cache + ETag'
+      security: []
+      parameters:
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`public, no-cache` with a strong `ETag` (revalidated every time; a campaign that leaves public view disappears at once, ADR-038
+                §1).'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverySitemapEnvelope'
+        '304':
+          description: Not modified (the `If-None-Match` ETag still matches).
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: none
+      x-fundzim-permission: Public
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /discovery/events:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Discovery (Stage 16)
+      operationId: discoveryEvents
+      summary: Engagement events (aggregate analytics)
+      description: '**Stage 16 · IMPLEMENTED** · Auth: none · Authorization: Public. Up to 20 events. Accepted events are buffered and aggregated; nothing
+        identifying is stored (no IP, user id, user agent or cookie; a daily keyed hash is used only for de-duplication and purged after two days). Unknown
+        or non-public campaigns, automated clients and invalid referral codes are accepted silently (no existence oracle). Clients must not retry.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-PUBLIC-WRITE (discovery.event.ip) · Audit: — · Cache-Control: private, no-store'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoveryEventsInput'
+      responses:
+        '204':
+          description: Accepted (no body; clients send these as keepalive requests and never read a response).
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: none
+      x-fundzim-permission: Public
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /discovery/referrals:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Discovery (Stage 16)
+      operationId: discoveryReferral
+      summary: Issue a referral code
+      description: '**Stage 16 · IMPLEMENTED** · Auth: none · Authorization: Public. An opaque code naming only the campaign and the share channel (no user,
+        device or address; no privileges; expires after 90 days). `503 REFERRALS_DISABLED` when the kill switch is off and always in production while LR-023
+        is open; `404 CAMPAIGN_NOT_FOUND` for anything not discoverable.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-PUBLIC-WRITE (discovery.referral.ip) · Audit: — · Cache-Control: private, no-store'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoveryReferralInput'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryReferralEnvelope'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: none
+      x-fundzim-permission: Public
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /campaigns/{campaign_id}/analytics:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Discovery (Stage 16)
+      operationId: campaignAnalytics
+      summary: Campaign discovery analytics (owner)
+      description: '**Stage 16 · IMPLEMENTED** · Auth: user · Authorization: Owner or organisation member. Aggregates for the campaign owner or members of
+        the owning organisation (anyone else: `404 CAMPAIGN_NOT_FOUND`). Every figure has a definition in `definitions`; none is a donation or an amount.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-USER-READ · Audit: — · Cache-Control: private, no-store'
+      security:
+      - session: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        description: Campaign id.
+        schema: &id011
+          type: string
+          format: uuid
+      - name: days
+        in: query
+        required: false
+        description: 1–90 (default 30).
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 90
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampaignAnalyticsEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: user
+      x-fundzim-permission: Owner or organisation member
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/discovery/overview:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Discovery (Stage 16)
+      operationId: adminDiscoveryOverview
+      summary: Discovery overview
+      description: '**Stage 16 · IMPLEMENTED** · Auth: staff · Authorization: `discovery.view`. Index health and backlog, search counters (never query text),
+        engagement, shares, referral visits, abuse indicators, featured and ranking state, top trending with score components. Aggregates only.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryOverviewEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: staff
+      x-fundzim-permission: '`discovery.view`'
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/discovery/featured:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Discovery (Stage 16)
+      operationId: adminDiscoveryPlacements
+      summary: Featured placements
+      description: '**Stage 16 · IMPLEMENTED** · Auth: staff · Authorization: `discovery.view`. Open placements first, then history (≤ 200).
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        description: Filter.
+        schema:
+          type: string
+          enum:
+          - REQUESTED
+          - APPROVED
+          - HISTORY
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryPlacementPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: staff
+      x-fundzim-permission: '`discovery.view`'
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    post:
+      tags:
+      - Discovery (Stage 16)
+      operationId: adminDiscoveryRequestPlacement
+      summary: Request a featured placement (maker)
+      description: '**Stage 16 · IMPLEMENTED** · Auth: staff · Authorization: `discovery.feature.request` + fresh step-up. The campaign must be promotable
+        now (`409 CAMPAIGN_NOT_PROMOTABLE`); window ≤ 31 days starting within 90 days; one open placement per campaign (`409 PLACEMENT_EXISTS`).
+
+
+
+
+        Idempotency: required · Rate-limit: RL-STAFF-WRITE · Audit: discovery.featured_requested · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoveryPlacementInput'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryPlacementEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: staff
+      x-fundzim-permission: '`discovery.feature.request` + fresh step-up'
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required
+  /admin/discovery/featured/{placement_id}/approve:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Discovery (Stage 16)
+      operationId: adminDiscoveryPlacementApprove
+      summary: Approve a featured placement
+      description: '**Stage 16 · IMPLEMENTED** · Auth: staff · Authorization: `discovery.feature.approve` + fresh step-up. Checker: never the requester or
+        a linked account (`403 SELF_DECISION_FORBIDDEN`, Go and database); re-checks promotability.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: discovery.featured_approved · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: placement_id
+        in: path
+        required: true
+        description: Placement id.
+        schema: *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoveryNoteInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryPlacementEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: staff
+      x-fundzim-permission: '`discovery.feature.approve` + fresh step-up'
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/discovery/featured/{placement_id}/reject:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Discovery (Stage 16)
+      operationId: adminDiscoveryPlacementReject
+      summary: Reject a featured placement
+      description: '**Stage 16 · IMPLEMENTED** · Auth: staff · Authorization: `discovery.feature.approve` + fresh step-up. Checker: never the requester or
+        a linked account.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: discovery.featured_rejected · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: placement_id
+        in: path
+        required: true
+        description: Placement id.
+        schema: *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoveryNoteInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryPlacementEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: staff
+      x-fundzim-permission: '`discovery.feature.approve` + fresh step-up'
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/discovery/featured/{placement_id}/cancel:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Discovery (Stage 16)
+      operationId: adminDiscoveryPlacementCancel
+      summary: Cancel a featured placement
+      description: '**Stage 16 · IMPLEMENTED** · Auth: staff · Authorization: `discovery.feature.request` + fresh step-up. The requester withdraws an undecided
+        request.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: discovery.featured_cancelled · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: placement_id
+        in: path
+        required: true
+        description: Placement id.
+        schema: *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoveryNoteInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryPlacementEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: staff
+      x-fundzim-permission: '`discovery.feature.request` + fresh step-up'
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/discovery/featured/{placement_id}/remove:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Discovery (Stage 16)
+      operationId: adminDiscoveryPlacementRemove
+      summary: Remove a featured placement
+      description: '**Stage 16 · IMPLEMENTED** · Auth: staff · Authorization: `discovery.feature.remove` + fresh step-up. Ends an approved placement at once
+        (reason required).
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: discovery.featured_removed · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: placement_id
+        in: path
+        required: true
+        description: Placement id.
+        schema: *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoveryNoteInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryPlacementEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: staff
+      x-fundzim-permission: '`discovery.feature.remove` + fresh step-up'
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/discovery/ranking:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+      - Discovery (Stage 16)
+      operationId: adminDiscoveryRanking
+      summary: Trending ranking policies
+      description: '**Stage 16 · IMPLEMENTED** · Auth: staff · Authorization: `discovery.view`. Weights in force (an approved policy or the engineering default)
+        and every version.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-READ · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryRankingEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: staff
+      x-fundzim-permission: '`discovery.view`'
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    post:
+      tags:
+      - Discovery (Stage 16)
+      operationId: adminDiscoveryProposeRanking
+      summary: Propose a ranking policy version (maker)
+      description: '**Stage 16 · IMPLEMENTED** · Auth: staff · Authorization: `discovery.ranking.request` + fresh step-up. Closed, bounded weight set; content
+        hashed and immutable once submitted.
+
+
+
+
+        Idempotency: required · Rate-limit: RL-STAFF-WRITE · Audit: discovery.ranking_policy_proposed · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoveryRankingInput'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryRankingPolicyEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: staff
+      x-fundzim-permission: '`discovery.ranking.request` + fresh step-up'
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required
+  /admin/discovery/ranking/{policy_id}/approve:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Discovery (Stage 16)
+      operationId: adminDiscoveryRankingApprove
+      summary: Approve a ranking policy version
+      description: '**Stage 16 · IMPLEMENTED** · Auth: staff · Authorization: `discovery.ranking.approve` + fresh step-up. Approve activates it and retires
+        the previous one; checker never the proposer or a linked account. Withdraw: the proposer only.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: discovery.ranking_policy_approved · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: policy_id
+        in: path
+        required: true
+        description: Policy id.
+        schema: *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoveryNoteInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryRankingPolicyEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: staff
+      x-fundzim-permission: '`discovery.ranking.approve` + fresh step-up'
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/discovery/ranking/{policy_id}/reject:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Discovery (Stage 16)
+      operationId: adminDiscoveryRankingReject
+      summary: Reject a ranking policy version
+      description: '**Stage 16 · IMPLEMENTED** · Auth: staff · Authorization: `discovery.ranking.approve` + fresh step-up. Approve activates it and retires
+        the previous one; checker never the proposer or a linked account. Withdraw: the proposer only.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: discovery.ranking_policy_rejected · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: policy_id
+        in: path
+        required: true
+        description: Policy id.
+        schema: *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoveryNoteInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryRankingPolicyEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: staff
+      x-fundzim-permission: '`discovery.ranking.approve` + fresh step-up'
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/discovery/ranking/{policy_id}/withdraw:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Discovery (Stage 16)
+      operationId: adminDiscoveryRankingWithdraw
+      summary: Withdraw a ranking policy version
+      description: '**Stage 16 · IMPLEMENTED** · Auth: staff · Authorization: `discovery.ranking.request` + fresh step-up. Approve activates it and retires
+        the previous one; checker never the proposer or a linked account. Withdraw: the proposer only.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: discovery.ranking_policy_withdrawn · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: policy_id
+        in: path
+        required: true
+        description: Policy id.
+        schema: *id011
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoveryNoteInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryRankingPolicyEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: staff
+      x-fundzim-permission: '`discovery.ranking.request` + fresh step-up'
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/discovery/referrals/{code}/revoke:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Discovery (Stage 16)
+      operationId: adminDiscoveryRevokeReferral
+      summary: Revoke a referral code
+      description: '**Stage 16 · IMPLEMENTED** · Auth: staff · Authorization: `discovery.operate` + fresh step-up. Abuse response: later visits with the code
+        are not counted.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: discovery.referral_revoked · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: code
+        in: path
+        required: true
+        description: Referral code.
+        schema:
+          type: string
+          pattern: ^[0-9a-hjkmnp-tv-z]{12}$
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscoveryNoteInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryRevokedEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: staff
+      x-fundzim-permission: '`discovery.operate` + fresh step-up'
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/discovery/index/reconcile:
+    parameters:
+    - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+      - Discovery (Stage 16)
+      operationId: adminDiscoveryReconcile
+      summary: Reconcile the search index now
+      description: '**Stage 16 · IMPLEMENTED** · Auth: staff · Authorization: `discovery.operate` + fresh step-up. One bounded pass (≤ 2 000 campaigns); the
+        periodic job covers the rest.
+
+
+
+
+        Idempotency: n/a · Rate-limit: RL-STAFF-WRITE · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoveryReconcileEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 16
+      x-fundzim-auth: staff
+      x-fundzim-permission: '`discovery.operate` + fresh step-up'
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
 components:
   securitySchemes:
     session:
@@ -51828,6 +53207,11 @@ components:
           pattern: ^[0-9A-Z]{10}$
         owner:
           $ref: '#/components/schemas/CampaignOwnerRef'
+        location_code:
+          type:
+          - string
+          - 'null'
+          description: Stage 16 working-copy location (reference code) or null.
         title:
           type: string
         summary:
@@ -52149,6 +53533,12 @@ components:
           description: An active category code.
         goal:
           $ref: '#/components/schemas/CampaignMoney'
+        location_code:
+          type:
+          - string
+          - 'null'
+          description: 'Stage 16: a reference location code (GET /campaign-locations): a Zimbabwe province or town, never an address. Empty string clears
+            it (PATCH). A change to a live campaign is a material edit (LOCATION) and needs re-review.'
         organisation_id:
           $ref: '#/components/schemas/Uuid'
           description: Create for an organisation the caller is a member of (ORG_ADMIN per eligibility).
@@ -52173,6 +53563,12 @@ components:
           enum:
           - PUBLIC
           - UNLISTED
+        location_code:
+          type:
+          - string
+          - 'null'
+          description: 'Stage 16: a reference location code (GET /campaign-locations): a Zimbabwe province or town, never an address. Empty string clears
+            it (PATCH). A change to a live campaign is a material edit (LOCATION) and needs re-review.'
     CampaignOwnerActionRequest:
       type: object
       additionalProperties: false
@@ -52267,6 +53663,11 @@ components:
       properties:
         slug:
           type: string
+        location:
+          oneOf:
+          - $ref: '#/components/schemas/CampaignPublicLocation'
+          - type: 'null'
+          description: Stage 16 coarse location of the approved version (null when not specified).
         canonical_slug:
           type: string
           description: The campaign's fixed slug. When the requested slug differs but its trailing public code identifies this campaign, the data is returned
@@ -53338,9 +54739,9 @@ components:
           selection:
             type: string
             enum:
-            - STAFF_PICK
+            - FEATURED
             - RECENTLY_PUBLISHED
-            description: 'Why it is listed: a staff pick, or recently published to fill the list. No popularity, ranking or paid promotion exists; being featured
+            description: 'Why it is listed: an approved featured placement, or recently published to fill the list. No popularity, ranking or paid promotion exists; being featured
               is not an endorsement.'
     CampaignFeaturedEnvelope:
       type: object
@@ -53615,83 +55016,6 @@ components:
         assignee_id:
           $ref: '#/components/schemas/Uuid'
       description: Same decision body as the review actions; only `reason_code` and `note` are used.
-    CampaignFeatureInput:
-      type: object
-      additionalProperties: false
-      properties:
-        position:
-          type: integer
-          minimum: 1
-          maximum: 100
-          description: 'POST: required.'
-        note:
-          type: string
-          minLength: 3
-          maxLength: 500
-          description: 'POST: required.'
-        reason:
-          type: string
-          minLength: 3
-          maxLength: 500
-          description: 'DELETE: required.'
-    CampaignStaffPickListEnvelope:
-      type: object
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: object
-          required:
-          - items
-          - next_cursor
-          properties:
-            items:
-              type: array
-              items:
-                $ref: '#/components/schemas/CampaignStaffPick'
-            next_cursor:
-              type:
-              - string
-              - 'null'
-              description: Always null.
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    CampaignStaffPick:
-      type: object
-      required:
-      - campaign_id
-      - title
-      - slug
-      - status
-      - visibility
-      - position
-      - note
-      - added_by
-      - added_at
-      - shown
-      properties:
-        campaign_id:
-          $ref: '#/components/schemas/Uuid'
-        title:
-          type: string
-        slug:
-          type: string
-        status:
-          $ref: '#/components/schemas/CampaignLifecycleStatus'
-        visibility:
-          type: string
-        position:
-          type: integer
-        note:
-          type: string
-        added_by:
-          $ref: '#/components/schemas/Uuid'
-        added_at:
-          $ref: '#/components/schemas/Timestamp'
-        shown:
-          type: boolean
-          description: 'Whether the pick is currently shown (a pick never overrides visibility: it is skipped unless the campaign is live and PUBLIC).'
     PaymentProviderRefS8:
       type: object
       properties:
@@ -65775,6 +67099,890 @@ components:
           - items
           - next_cursor
           additionalProperties: false
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryReason:
+      type: object
+      description: Why an item is shown.
+      properties:
+        code:
+          type: string
+          enum:
+          - FEATURED
+          - POPULAR_NOW
+          - RECENTLY_PUBLISHED
+          - MORE_IN_CATEGORY
+          - SAME_PROVINCE
+          - RELATED_TO_SEARCH
+        text:
+          type: string
+      required:
+      - code
+      - text
+      additionalProperties: false
+    CampaignPublicLocation:
+      type: object
+      description: Coarse public location (owner-chosen, reviewed; never an address).
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+          enum:
+          - PROVINCE
+          - TOWN
+        province_code:
+          type: string
+        province_name:
+          type: string
+        province_slug:
+          type: string
+        town_slug:
+          type:
+          - string
+          - 'null'
+      required:
+      - code
+      - name
+      - kind
+      - province_code
+      - province_name
+      - province_slug
+      - town_slug
+    CampaignLocation:
+      type: object
+      properties:
+        code:
+          type: string
+        kind:
+          type: string
+          enum:
+          - PROVINCE
+          - TOWN
+        slug:
+          type: string
+        name:
+          type: string
+        province_code:
+          type:
+          - string
+          - 'null'
+        display_order:
+          type: integer
+      required:
+      - code
+      - kind
+      - slug
+      - name
+      - province_code
+      - display_order
+    CampaignLocationListEnvelope:
+      type: object
+      description: Location reference list.
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CampaignLocation'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryCard:
+      allOf:
+      - $ref: '#/components/schemas/CampaignPublicCard'
+      - type: object
+        properties:
+          location:
+            oneOf:
+            - $ref: '#/components/schemas/CampaignPublicLocation'
+            - type: 'null'
+          highlights:
+            type: object
+            description: Title and summary split into plain-text segments; `match` segments matched a search term.
+            properties:
+              title:
+                type: array
+                items: &id001
+                  type: object
+                  properties:
+                    text:
+                      type: string
+                    match:
+                      type: boolean
+                  required:
+                  - text
+                  - match
+                  additionalProperties: false
+              summary:
+                type: array
+                items: *id001
+          reason:
+            $ref: '#/components/schemas/DiscoveryReason'
+    DiscoverySearchEnvelope:
+      type: object
+      description: One page of discovery results.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/DiscoveryCard'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+            total:
+              type: object
+              properties:
+                value:
+                  type: integer
+                capped:
+                  type: boolean
+              required:
+              - value
+              - capped
+            match:
+              type: string
+              enum:
+              - EXACT
+              - FUZZY
+              - NONE
+              - ALL
+            query:
+              type: string
+              description: The normalised query.
+            sort:
+              type: string
+              enum:
+              - relevance
+              - newest
+              - oldest
+              - trending
+          required:
+          - items
+          - next_cursor
+          - total
+          - match
+          - query
+          - sort
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryCategoryListEnvelope:
+      type: object
+      description: Categories with counts.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                allOf:
+                - $ref: '#/components/schemas/PublicCategory'
+                - type: object
+                  properties:
+                    discoverable_campaigns:
+                      type: integer
+                  required:
+                  - discoverable_campaigns
+          required:
+          - items
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryLocationsEnvelope:
+      type: object
+      description: Locations with counts.
+      properties:
+        data:
+          type: object
+          properties:
+            country:
+              type: string
+              enum:
+              - ZW
+            provinces:
+              type: array
+              items: &id002
+                allOf:
+                - $ref: '#/components/schemas/CampaignLocation'
+                - type: object
+                  properties:
+                    discoverable_campaigns:
+                      type: integer
+                  required:
+                  - discoverable_campaigns
+            towns:
+              type: array
+              items: *id002
+            unspecified_campaigns:
+              type: integer
+            note:
+              type: string
+          required:
+          - country
+          - provinces
+          - towns
+          - unspecified_campaigns
+          - note
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryTrendingEnvelope:
+      type: object
+      description: Trending campaigns.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/DiscoveryCard'
+            next_cursor:
+              type: 'null'
+            rule:
+              type: string
+            policy_version:
+              type:
+              - integer
+              - 'null'
+              description: 'Null: engineering default.'
+            window_days:
+              type: integer
+          required:
+          - items
+          - next_cursor
+          - rule
+          - policy_version
+          - window_days
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryFeaturedEnvelope:
+      type: object
+      description: Featured campaigns.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                allOf:
+                - $ref: '#/components/schemas/DiscoveryCard'
+                - type: object
+                  properties:
+                    selection:
+                      type: string
+                      enum:
+                      - FEATURED
+                      - RECENTLY_PUBLISHED
+                  required:
+                  - selection
+            next_cursor:
+              type: 'null'
+          required:
+          - items
+          - next_cursor
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryRecommendationsEnvelope:
+      type: object
+      description: Rule-based recommendations.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/DiscoveryCard'
+            personalised:
+              type: boolean
+              const: false
+            rules:
+              type: string
+          required:
+          - items
+          - personalised
+          - rules
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoverySitemapEnvelope:
+      type: object
+      description: Sitemap source.
+      properties:
+        data:
+          type: object
+          properties:
+            campaigns:
+              type: array
+              maxItems: 50000
+              items: &id003
+                type: object
+                properties:
+                  slug:
+                    type: string
+                  updated_at:
+                    type: string
+                    format: date-time
+                required:
+                - slug
+                - updated_at
+            categories:
+              type: array
+              items: *id003
+            provinces:
+              type: array
+              items: *id003
+          required:
+          - campaigns
+          - categories
+          - provinces
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryEventsInput:
+      type: object
+      properties:
+        events:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum:
+                - CAMPAIGN_VIEW
+                - SHARE_CLICK
+                - RESULT_CLICK
+              slug:
+                type: string
+                maxLength: 96
+              channel:
+                type: string
+                enum:
+                - WHATSAPP
+                - FACEBOOK
+                - X
+                - LINKEDIN
+                - EMAIL
+                - COPY_LINK
+                - WEB_SHARE
+                description: SHARE_CLICK only.
+              source:
+                type: string
+                description: 'CAMPAIGN_VIEW: DIRECT | SEARCH | CATEGORY | FEATURED | TRENDING | RECOMMENDED | INTERNAL | UNKNOWN. RESULT_CLICK: SEARCH | CATEGORY
+                  | FEATURED | TRENDING | RECOMMENDED.'
+              ref:
+                type: string
+                pattern: ^[0-9a-hjkmnp-tv-z]{12}$
+                description: Referral code from the landing URL (CAMPAIGN_VIEW).
+            required:
+            - type
+            - slug
+            additionalProperties: false
+      required:
+      - events
+      additionalProperties: false
+    DiscoveryReferralInput:
+      type: object
+      properties:
+        slug:
+          type: string
+          maxLength: 96
+        channel:
+          type: string
+          enum:
+          - WHATSAPP
+          - FACEBOOK
+          - X
+          - LINKEDIN
+          - EMAIL
+          - COPY_LINK
+          - WEB_SHARE
+      required:
+      - slug
+      - channel
+      additionalProperties: false
+    DiscoveryReferralEnvelope:
+      type: object
+      description: A referral code.
+      properties:
+        data:
+          type: object
+          properties:
+            code:
+              type: string
+            channel:
+              type: string
+            expires_at:
+              type: string
+              format: date-time
+          required:
+          - code
+          - channel
+          - expires_at
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    CampaignAnalyticsEnvelope:
+      type: object
+      description: Campaign analytics.
+      properties:
+        data:
+          type: object
+          properties:
+            campaign_id: &id005
+              type: string
+              format: uuid
+            from:
+              type: string
+              format: date
+            to:
+              type: string
+              format: date
+            days:
+              type: integer
+            nature:
+              type: string
+              enum:
+              - MEASURED_NON_PRODUCTION
+            totals: &id004
+              type: object
+              additionalProperties:
+                type: integer
+            shares_by_channel: *id004
+            referral_visits_by_channel: *id004
+            traffic_sources: *id004
+            impressions_by_surface: *id004
+            clicks_by_surface: *id004
+            click_through_bp:
+              type:
+              - integer
+              - 'null'
+              description: Clicks per impression in basis points; null without impressions.
+            daily:
+              type: array
+              items:
+                type: object
+                properties:
+                  day:
+                    type: string
+                    format: date
+                  views:
+                    type: integer
+                  unique_visitors:
+                    type: integer
+                  shares:
+                    type: integer
+                required:
+                - day
+                - views
+                - unique_visitors
+                - shares
+            donations:
+              type: object
+              description: 'Always `{available: false}`: views and shares are never donations.'
+            definitions:
+              type: object
+              additionalProperties:
+                type: string
+          required:
+          - campaign_id
+          - from
+          - to
+          - days
+          - nature
+          - totals
+          - daily
+          - donations
+          - definitions
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryOverviewEnvelope:
+      type: object
+      description: Discovery overview.
+      properties:
+        data:
+          type: object
+          description: Aggregates only; see GET /admin/discovery/overview.
+          additionalProperties: true
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryPlacement:
+      type: object
+      properties:
+        id: *id005
+        campaign_id: *id005
+        campaign_slug:
+          type: string
+        campaign_title:
+          type: string
+        position:
+          type: integer
+        reason:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+          - REQUESTED
+          - APPROVED
+          - REJECTED
+          - CANCELLED
+          - REMOVED
+          - ENDED
+        requested_by: *id005
+        requested_at:
+          type: string
+          format: date-time
+        decided_by:
+          type:
+          - string
+          - 'null'
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        decision_note:
+          type:
+          - string
+          - 'null'
+        removed_by:
+          type:
+          - string
+          - 'null'
+        removed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        removal_reason:
+          type:
+          - string
+          - 'null'
+        live:
+          type: boolean
+        promotable:
+          type:
+          - boolean
+          - 'null'
+        version:
+          type: integer
+      required:
+      - id
+      - campaign_id
+      - position
+      - reason
+      - starts_at
+      - ends_at
+      - status
+      - requested_by
+      - requested_at
+      - live
+    DiscoveryPlacementEnvelope:
+      type: object
+      description: A featured placement.
+      properties:
+        data:
+          $ref: '#/components/schemas/DiscoveryPlacement'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryPlacementPage:
+      type: object
+      description: Featured placements.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/DiscoveryPlacement'
+            next_cursor:
+              type: 'null'
+          required:
+          - items
+          - next_cursor
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryPlacementInput:
+      type: object
+      properties:
+        campaign_id: *id005
+        position:
+          type: integer
+          minimum: 1
+          maximum: 100
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 500
+        starts_at:
+          type: string
+          format: date-time
+          description: 'Default: now.'
+        ends_at:
+          type: string
+          format: date-time
+      required:
+      - campaign_id
+      - position
+      - reason
+      - ends_at
+      additionalProperties: false
+    DiscoveryNoteInput:
+      type: object
+      properties:
+        note:
+          type: string
+          minLength: 3
+          maxLength: 1000
+      required:
+      - note
+      additionalProperties: false
+    DiscoveryWeights:
+      type: object
+      properties:
+        view_weight:
+          type: integer
+          minimum: 0
+          maximum: 100
+        share_weight:
+          type: integer
+          minimum: 0
+          maximum: 100
+        freshness_half_life_hours:
+          type: integer
+          minimum: 6
+          maximum: 2160
+        window_days:
+          type: integer
+          minimum: 1
+          maximum: 30
+        min_unique_visitors:
+          type: integer
+          minimum: 0
+          maximum: 1000
+      required:
+      - view_weight
+      - share_weight
+      - freshness_half_life_hours
+      - window_days
+      - min_unique_visitors
+      additionalProperties: false
+    DiscoveryRankingInput:
+      type: object
+      properties:
+        weights:
+          $ref: '#/components/schemas/DiscoveryWeights'
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 1000
+      required:
+      - weights
+      - reason
+      additionalProperties: false
+    DiscoveryRankingPolicy:
+      type: object
+      properties:
+        id: *id005
+        policy_version:
+          type: integer
+        weights:
+          $ref: '#/components/schemas/DiscoveryWeights'
+        content_sha256:
+          type: string
+        status:
+          type: string
+          enum:
+          - SUBMITTED
+          - ACTIVE
+          - REJECTED
+          - WITHDRAWN
+          - RETIRED
+        reason:
+          type: string
+        proposed_by: *id005
+        proposed_at:
+          type: string
+          format: date-time
+        decided_by:
+          type:
+          - string
+          - 'null'
+        decided_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        decision_note:
+          type:
+          - string
+          - 'null'
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+      required:
+      - id
+      - policy_version
+      - weights
+      - content_sha256
+      - status
+    DiscoveryRankingPolicyEnvelope:
+      type: object
+      description: A ranking policy version.
+      properties:
+        data:
+          $ref: '#/components/schemas/DiscoveryRankingPolicy'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryRankingEnvelope:
+      type: object
+      description: Ranking policies.
+      properties:
+        data:
+          type: object
+          properties:
+            in_force:
+              $ref: '#/components/schemas/DiscoveryWeights'
+            in_force_version:
+              type:
+              - integer
+              - 'null'
+            in_force_source:
+              type: string
+              enum:
+              - APPROVED_POLICY
+              - ENGINEERING_DEFAULT
+            engineering_default:
+              $ref: '#/components/schemas/DiscoveryWeights'
+            policies:
+              type: array
+              items:
+                $ref: '#/components/schemas/DiscoveryRankingPolicy'
+          required:
+          - in_force
+          - in_force_version
+          - in_force_source
+          - engineering_default
+          - policies
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryRevokedEnvelope:
+      type: object
+      description: Revoked.
+      properties:
+        data:
+          type: object
+          properties:
+            code:
+              type: string
+            status:
+              type: string
+              enum:
+              - REVOKED
+          required:
+          - code
+          - status
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    DiscoveryReconcileEnvelope:
+      type: object
+      description: Reconciliation pass.
+      properties:
+        data:
+          type: object
+          properties:
+            checked:
+              type: integer
+            reindexed:
+              type: integer
+            failed:
+              type: integer
+          required:
+          - checked
+          - reindexed
+          - failed
         meta:
           $ref: '#/components/schemas/ResponseMeta'
       required:

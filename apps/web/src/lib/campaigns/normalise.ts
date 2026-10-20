@@ -14,6 +14,7 @@ import type {
   CampaignReview,
   CampaignUpdate,
   Category,
+  CampaignLocationOption,
   CategoryRef,
   CurrencyInfo,
   ListTotal,
@@ -21,6 +22,7 @@ import type {
   ModerationItem,
   PersonRef,
   PublicCampaign,
+  PublicLocation,
   PublicCampaignSummary,
   PublicCategory,
   PublicImageRef,
@@ -30,7 +32,6 @@ import type {
   ReviewHistoryEntry,
   SitemapData,
   StaffAction,
-  StaffFeaturedPick,
   StaffReport,
   StaffCampaignDetail,
   StaffCampaignSummary,
@@ -104,6 +105,7 @@ export function readCampaign(v: unknown): Campaign {
     status: str(c.status, "DRAFT"),
     visibility: str(c.visibility, "PUBLIC"),
     category,
+    location_code: strOrNull(c.location_code),
     organisation_id: strOrNull(c.organisation_id ?? (isRec(c.owner) && c.owner.type === "ORGANISATION" ? c.owner.id : null)),
     title: str(c.title),
     summary: str(c.summary),
@@ -255,6 +257,14 @@ function readOrganiser(v: unknown): PublicOrganiser | null {
   return { type: str(v.type, "INDIVIDUAL"), display_name: v.display_name };
 }
 
+/** Public location `{code, name, kind, province_name, province_slug, town_slug}` or null (unknown shapes are dropped). */
+export function readPublicLocation(v: unknown): PublicLocation | null {
+  if (!isRec(v) || typeof v.name !== "string" || typeof v.province_slug !== "string" || !/^[a-z0-9-]{1,40}$/.test(v.province_slug)) return null;
+  const town = strOrNull(v.town_slug);
+  return { code: str(v.code), name: v.name, kind: str(v.kind), province_name: str(v.province_name, v.name), province_slug: v.province_slug,
+    town_slug: town && /^[a-z0-9-]{1,40}$/.test(town) ? town : null };
+}
+
 export function readPublicCampaign(v: unknown): PublicCampaign {
   const c = isRec(v) ? v : {};
   const organiser = readOrganiser(c.organiser);
@@ -283,6 +293,24 @@ export function readPublicCampaign(v: unknown): PublicCampaign {
     trust: readTrust(c.trust),
     published_at: strOrNull(c.published_at),
     completed_at: strOrNull(c.completed_at),
+    location: readPublicLocation(c.location),
+  };
+}
+
+/** One public card (search, featured, category and discovery lists). */
+export function readPublicSummary(c: Record<string, unknown>): PublicCampaignSummary {
+  return {
+    slug: c.slug as string,
+    title: str(c.title),
+    summary: str(c.summary),
+    category: readCategoryRef(c.category, c.category_code, c.category_name),
+    goal: readMoney(c.goal),
+    status: str(c.status),
+    organiser: readOrganiser(c.organiser),
+    trust: readTrust(c.trust),
+    cover: readCover(c),
+    published_at: strOrNull(c.published_at),
+    selection: c.selection === "FEATURED" || c.selection === "RECENTLY_PUBLISHED" ? c.selection : null,
   };
 }
 
@@ -290,19 +318,7 @@ export function readPublicSummaries(v: unknown): PublicCampaignSummary[] {
   return list(v)
     .filter(isRec)
     .filter((c) => typeof c.slug === "string" && c.slug !== "")
-    .map((c) => ({
-      slug: c.slug as string,
-      title: str(c.title),
-      summary: str(c.summary),
-      category: readCategoryRef(c.category, c.category_code, c.category_name),
-      goal: readMoney(c.goal),
-      status: str(c.status),
-      organiser: readOrganiser(c.organiser),
-      trust: readTrust(c.trust),
-      cover: readCover(c),
-      published_at: strOrNull(c.published_at),
-      selection: c.selection === "STAFF_PICK" || c.selection === "RECENTLY_PUBLISHED" ? c.selection : null,
-    }));
+    .map(readPublicSummary);
 }
 
 /** `total: {value, capped}` from the list payload (or meta); a bare number is accepted as exact. */
@@ -549,20 +565,11 @@ export function readStaffReports(v: unknown): StaffReport[] {
     }));
 }
 
-export function readFeaturedPicks(v: unknown): StaffFeaturedPick[] {
+
+/** `GET /campaign-locations` → provinces then towns (well-formed codes only). */
+export function readLocationOptions(v: unknown): CampaignLocationOption[] {
   return list(v)
     .filter(isRec)
-    .filter((f) => typeof f.campaign_id === "string")
-    .map((f) => ({
-      campaign_id: f.campaign_id as string,
-      title: str(f.title),
-      slug: strOrNull(f.slug),
-      status: str(f.status),
-      visibility: str(f.visibility),
-      position: int(f.position, 0),
-      note: str(f.note),
-      added_at: strOrNull(f.added_at),
-      shown: f.shown === true,
-    }))
-    .sort((a, b) => a.position - b.position);
+    .filter((l) => typeof l.code === "string" && /^(PROVINCE|TOWN)_[A-Z_]{2,40}$/.test(l.code) && typeof l.name === "string")
+    .map((l) => ({ code: l.code as string, kind: str(l.kind), name: l.name as string, province_code: strOrNull(l.province_code) }));
 }

@@ -1,76 +1,88 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
 
 import { CampaignGridSkeleton } from "@/components/campaigns/campaign-card";
-import { CampaignResults } from "@/components/campaigns/campaign-results";
-import { inputClasses } from "@/components/forms/text-field";
-import { buttonClasses } from "@/components/ui/button";
+import { DiscoveryResults } from "@/components/discovery/discovery-results";
+import { ConnectionStatus } from "@/components/discovery/connection-status";
+import { DiscoverySearchForm } from "@/components/discovery/search-form";
+import { FeaturedStrip, TrendingStrip } from "@/components/discovery/strips";
 import { Container } from "@/components/ui/container";
-import { readListQuery } from "@/lib/campaigns/list-query";
 import { fetchCategories } from "@/lib/campaigns/public";
+import { isFiltered, readDiscoveryQuery } from "@/lib/discovery/query";
+import { fetchLocations } from "@/lib/discovery/server";
 import { pageMetadata } from "@/lib/seo/metadata";
 
-export function generateMetadata(): Metadata {
+export async function generateMetadata({ searchParams }: PageProps<"/campaigns">): Promise<Metadata> {
+  const query = readDiscoveryQuery(await searchParams);
   return pageMetadata({
-    title: "Explore campaigns",
-    description: "Browse campaigns on FundZim that were reviewed before they were published. Donations are not yet available.",
+    title: query.q ? `Search: ${query.q}` : "Explore campaigns",
+    description: "Browse campaigns on FundZim by category and place in Zimbabwe. Every campaign was reviewed before it was published. Donations are not yet available.",
     path: "/campaigns",
+    indexable: !isFiltered(query) && !query.cursor && !query.sort,
   });
 }
 
 /**
- * Discovery (GET /public/campaigns): live, listed campaigns only. The search form is a plain GET form (works
- * without JavaScript); results stream in behind a skeleton so the form shows at once.
+ * The campaign directory (GET /discovery/campaigns): search, filters (category, province, status, publication date,
+ * organiser type), sorts and keyset pagination. Without a query or filter, the first page also shows featured and
+ * trending campaigns and quick links to categories and provinces. Server-rendered; results stream in behind a skeleton.
  */
 export default async function CampaignsListPage({ searchParams }: PageProps<"/campaigns">) {
-  const query = readListQuery(await searchParams);
-  const categories = await fetchCategories();
-  const key = JSON.stringify(query);
+  const query = readDiscoveryQuery(await searchParams);
+  const [categories, locations] = await Promise.all([fetchCategories(), fetchLocations()]);
+  const provinces = locations.ok ? locations.data.provinces : [];
+  const landing = !isFiltered(query) && !query.cursor && !query.sort;
 
   return (
     <Container className="py-10 sm:py-14">
-      <div className="space-y-6">
+      <div className="space-y-8">
         <div>
           <h1 className="font-display text-3xl font-bold tracking-tight text-ink-900 sm:text-4xl">Explore campaigns</h1>
           <p className="mt-2 text-lg text-ink-600">Every campaign here was reviewed before it was published. Donations are not yet available.</p>
         </div>
-        <form method="get" action="/campaigns" role="search" aria-label="Search campaigns" className="grid gap-4 rounded-card border border-line bg-surface p-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
-          <div className="space-y-1 sm:col-span-2">
-            <label htmlFor="q" className="block font-semibold text-ink-900">
-              Search
-            </label>
-            <input id="q" name="q" type="search" defaultValue={query.q} maxLength={100} enterKeyHint="search" className={inputClasses} />
-          </div>
-          <div className="space-y-1">
-            <label htmlFor="category" className="block font-semibold text-ink-900">
-              Category
-            </label>
-            <select id="category" name="category" defaultValue={categories.find((c) => c.code === query.category)?.slug ?? query.category} className={inputClasses}>
-              <option value="">All categories</option>
-              {categories.map((c) => (
-                <option key={c.code} value={c.slug}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <label htmlFor="sort" className="block font-semibold text-ink-900">
-              Sort by
-            </label>
-            <select id="sort" name="sort" defaultValue={query.sort} className={inputClasses}>
-              <option value="published">Recently published</option>
-              <option value="created">Recently created</option>
-            </select>
-          </div>
-          <div className="sm:col-span-2 lg:col-span-4">
-            <button type="submit" className={buttonClasses("primary")}>
-              Search
-            </button>
-          </div>
-        </form>
-        <Suspense key={key} fallback={<CampaignGridSkeleton />}>
-          <CampaignResults query={query} basePath="/campaigns" includeCategory trackSearch />
+        <ConnectionStatus />
+        <DiscoverySearchForm action="/campaigns" query={query} categories={categories} provinces={provinces} />
+        {landing ? (
+          <>
+            <nav aria-label="Browse by category" className="space-y-2">
+              <h2 className="font-semibold text-ink-900">Browse by category</h2>
+              <ul className="flex flex-wrap gap-2">
+                {categories.map((c) => (
+                  <li key={c.code}>
+                    <Link href={`/categories/${c.slug}`} prefetch={false} className="inline-flex min-h-11 items-center rounded-full border border-line bg-surface px-4 font-semibold text-ink-900 hover:border-brand-700 hover:bg-brand-50">
+                      {c.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+            {provinces.length > 0 ? (
+              <nav aria-label="Browse by province" className="space-y-2">
+                <h2 className="font-semibold text-ink-900">Browse by province</h2>
+                <ul className="flex flex-wrap gap-2">
+                  {provinces.map((p) => (
+                    <li key={p.code}>
+                      <Link href={`/campaigns/location/${p.slug}`} prefetch={false} className="inline-flex min-h-11 items-center rounded-full border border-line bg-surface px-4 text-ink-900 hover:border-brand-700 hover:bg-brand-50">
+                        {p.name}
+                        {p.count > 0 ? <span className="ml-2 text-sm text-ink-600">({p.count})</span> : null}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            ) : null}
+            <Suspense fallback={<CampaignGridSkeleton count={3} />}>
+              <FeaturedStrip />
+            </Suspense>
+            <Suspense fallback={<CampaignGridSkeleton count={3} />}>
+              <TrendingStrip />
+            </Suspense>
+            <h2 className="font-display text-2xl font-semibold text-ink-900">Recently published</h2>
+          </>
+        ) : null}
+        <Suspense key={JSON.stringify(query)} fallback={<CampaignGridSkeleton />}>
+          <DiscoveryResults query={query} basePath="/campaigns" surface="SEARCH" />
         </Suspense>
       </div>
     </Container>

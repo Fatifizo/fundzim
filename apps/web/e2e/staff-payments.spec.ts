@@ -239,7 +239,7 @@ test("payment pages are a 404 for users and for staff without payment.view", asy
   for (const path of paths) expect((await page.goto(path))?.status(), path).toBe(404);
   await page.context().clearCookies();
   const admin = await createStaff(page, ["ADMIN"]); // payment.sandbox.control only
-  await signInStaff(page, admin, "/admin/campaigns/featured");
+  await signInStaff(page, admin, "/admin/discovery");
   expect((await page.goto("/admin/payments"))?.status()).toBe(404);
 });
 

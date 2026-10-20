@@ -65,11 +65,12 @@ describe("share URLs", () => {
     expect(new URL(whatsappShareUrl(evil)).hash).toBe("");
   });
 
-  it("lists the four link channels; only email stays in the tab", () => {
+  it("lists the five link channels; only email stays in the tab", () => {
     expect(shareLinks(INPUT).map((l) => [l.channel, l.external])).toEqual([
       ["WHATSAPP", true],
       ["FACEBOOK", true],
       ["X", true],
+      ["LINKEDIN", true],
       ["EMAIL", false],
     ]);
   });

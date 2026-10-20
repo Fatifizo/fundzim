@@ -90,7 +90,7 @@ func TestObserverCountsAndLogsDiscardAtErrorLevel(t *testing.T) {
 
 func TestDefaultQueues(t *testing.T) {
 	q := DefaultQueues(0)
-	for _, name := range []string{QueueDefault, QueueOutbox, QueueNotifications, QueueMaintenance} {
+	for _, name := range []string{QueueDefault, QueueOutbox, QueueNotifications, QueueDiscovery, QueueMaintenance} {
 		if q[name].MaxWorkers < 1 {
 			t.Fatalf("queue %s has no workers", name)
 		}

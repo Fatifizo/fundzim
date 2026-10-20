@@ -171,16 +171,15 @@ func TestPublicExperienceEndpoints(t *testing.T) {
 	if c, _, _ := publicReq(t, s, "GET", "/public/categories/no-such-category", nil); c != 404 {
 		t.Fatal("unknown category should 404")
 	}
-	comp := s.staff(t, f.compliance)
-	comp.expect(comp.do("POST", "/admin/campaigns/"+id+"/feature", map[string]any{"position": 1, "note": "integration test pick"}), 200, "")
-	comp.expect(comp.do("POST", "/admin/campaigns/"+id+"/feature", map[string]any{"position": 1, "note": "integration test pick"}), 409, "ALREADY_FEATURED")
+	// Stage 16 (ADR-048): staff picks became maker-checker featured placements (TestDiscoveryEndToEnd); the Stage 7 featured
+	// endpoint stays, now served by discovery, and fills with recently published campaigns
 	_, _, body = publicReq(t, s, "GET", "/public/campaigns/featured?limit=12", nil)
 	assertPublicKeys(t, "featured", body)
-	if !strings.Contains(string(body), `"slug":"`+slug+`","title"`) || !strings.Contains(string(body), "STAFF_PICK") {
+	if !strings.Contains(string(body), `"selection"`) || strings.Contains(string(body), "STAFF_PICK") {
 		t.Fatalf("featured: %s", body)
 	}
 	rev := s.staff(t, f.campRev1)
-	rev.expect(rev.do("POST", "/admin/campaigns/"+id+"/feature", map[string]any{"position": 1, "note": "no permission"}), 403, "PERMISSION_DENIED")
+	rev.expect(rev.do("POST", "/admin/campaigns/"+id+"/feature", map[string]any{"position": 1, "note": "retired route"}), 404, "")
 
 	// ---- events: aggregate counters only
 	mig := pool(t, os.Getenv("DATABASE_MIGRATION_URL"))
@@ -330,9 +329,4 @@ func TestPublicExperienceEndpoints(t *testing.T) {
 	if c, _, _ := publicReq(t, s, "GET", "/public/campaign-codes/"+code, nil); c != 404 {
 		t.Fatal("short code resolves a suspended campaign")
 	}
-	r = comp.do("GET", "/admin/campaigns/featured", nil)
-	if !strings.Contains(string(r.Data), `"shown":false`) {
-		t.Fatalf("staff view should show the pick as hidden: %s", r.Data)
-	}
-	comp.expect(comp.do("DELETE", "/admin/campaigns/"+id+"/feature", map[string]string{"reason": "suspended campaign"}), 200, "")
 }

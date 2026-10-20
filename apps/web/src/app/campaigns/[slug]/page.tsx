@@ -1,14 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
+import { Suspense } from "react";
 
-import { TrackEvent } from "@/components/analytics/track-event";
+import { TrackCampaignView } from "@/components/analytics/track-event";
 import { formatDateTime } from "@/components/account/format";
 import { PublicImage } from "@/components/campaigns/public-image";
 import { ReportCampaign } from "@/components/campaigns/report-dialog";
 import { ShareControls } from "@/components/campaigns/share-controls";
 import { StoryText } from "@/components/campaigns/story-text";
 import { TrustIndicators } from "@/components/campaigns/trust-indicators";
+import { ConnectionStatus } from "@/components/discovery/connection-status";
+import { RecommendationsSection } from "@/components/discovery/strips";
 import { JsonLdScript } from "@/components/seo/json-ld";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -20,9 +23,9 @@ import { IMAGE_SIZES, isSlug, isUuid, publicImageSources, publicMediaUrl } from 
 import type { PublicImageRef } from "@/lib/campaigns/types";
 import { fetchPublicCampaign, fetchPublicUpdates } from "@/lib/campaigns/public";
 import { truncate } from "@/lib/campaigns/text";
-import { campaignJsonLd } from "@/lib/seo/json-ld";
+import { breadcrumbJsonLd, campaignJsonLd } from "@/lib/seo/json-ld";
 import { pageMetadata } from "@/lib/seo/metadata";
-import { absoluteUrl, campaignPath, siteOrigin } from "@/lib/site/url";
+import { absoluteUrl, campaignPath, categoryPath, previewImagePath, siteOrigin } from "@/lib/site/url";
 
 const STATUS_SUFFIX: Record<string, string> = { PAUSED: " (paused)", COMPLETED: " (ended)" };
 
@@ -37,11 +40,14 @@ export async function generateMetadata({ params }: PageProps<"/campaigns/[slug]"
   if (!campaign) return { title: "Page not found", robots: { index: false, follow: false } };
   const title = `${campaign.title}${STATUS_SUFFIX[campaign.status] ?? ""}`;
   const cover = campaign.cover ? shareImagePath(campaign.slug, campaign.cover) : null;
+  // a campaign without a cover gets a generated preview card (title, category, place; never money) instead of the
+  // generic image, so link previews in WhatsApp and elsewhere still say which campaign it is
+  const image = cover ? { path: cover, alt: campaign.cover?.alt_text || campaign.title } : { path: previewImagePath(campaign.slug), alt: `${campaign.title} on FundZim`, width: 1200, height: 630 };
   return pageMetadata({
     title,
     description: truncate(campaign.summary, 200),
     path: campaignPath(campaign.slug),
-    image: cover ? { path: cover, alt: campaign.cover?.alt_text || campaign.title } : null,
+    image,
     type: "article",
   });
 }
@@ -75,11 +81,19 @@ export default async function PublicCampaignPage({ params }: PageProps<"/campaig
 
   return (
     <Container className="py-8 sm:py-12">
-      <TrackEvent event={{ type: "CAMPAIGN_PAGE_VIEW", slug: campaign.slug }} />
+      <TrackCampaignView slug={campaign.slug} />
       {origin ? (
         <JsonLdScript
           data={campaignJsonLd(
             { slug: campaign.slug, title: campaign.title, summary: campaign.summary, imageUrl: shareImage ? absoluteUrl(shareImage, origin) : null, publishedAt: campaign.published_at, categoryName: campaign.category.name || null },
+            origin,
+          )}
+        />
+      ) : null}
+      {origin ? (
+        <JsonLdScript
+          data={breadcrumbJsonLd(
+            [{ name: "Campaigns", path: "/campaigns" }, ...(campaign.category.slug ? [{ name: campaign.category.name, path: categoryPath(campaign.category.slug) }] : []), { name: campaign.title, path: campaignPath(campaign.slug) }],
             origin,
           )}
         />
@@ -121,6 +135,14 @@ export default async function PublicCampaignPage({ params }: PageProps<"/campaig
               {campaign.title}
             </h1>
             <p className="text-lg break-words text-ink-700">{campaign.summary}</p>
+            {campaign.location ? (
+              <p className="text-ink-700">
+                <span className="font-semibold">Where: </span>
+                <Link href={`/campaigns/location/${campaign.location.province_slug}${campaign.location.town_slug ? `?town=${campaign.location.town_slug}` : ""}`} prefetch={false} className="text-brand-700 underline">
+                  {campaign.location.kind === "TOWN" ? `${campaign.location.name}, ${campaign.location.province_name}` : `${campaign.location.province_name} province`}
+                </Link>
+              </p>
+            ) : null}
             {campaign.published_at ? <p className="text-ink-600">Published {formatDateTime(campaign.published_at)}</p> : null}
           </header>
 
@@ -208,16 +230,25 @@ export default async function PublicCampaignPage({ params }: PageProps<"/campaig
             </dl>
           </Card>
           <TrustIndicators trust={campaign.trust} />
+          <ConnectionStatus />
           <Card className="space-y-2">
             <h2 className="font-semibold text-ink-900">Share this campaign</h2>
             <ShareControls slug={campaign.slug} title={campaign.title} summary={campaign.summary} url={canonicalUrl} showConfigNote={process.env.NODE_ENV !== "production"} />
             {!canonicalUrl && process.env.NODE_ENV === "production" ? <p className="text-sm text-ink-700">Sharing is not available right now.</p> : null}
+            <Link href={`/campaigns/${campaign.slug}/poster`} prefetch={false} className="inline-flex min-h-11 items-center text-sm font-semibold text-brand-700 underline">
+              Print a poster with a QR code
+            </Link>
           </Card>
           <div>
             <ReportCampaign slug={campaign.slug} title={campaign.title} />
           </div>
         </aside>
       </article>
+      <div className="mt-12">
+        <Suspense fallback={null}>
+          <RecommendationsSection slug={campaign.slug} />
+        </Suspense>
+      </div>
     </Container>
   );
 }

@@ -2,6 +2,7 @@
  * Structured data (schema.org JSON-LD), used only where it describes the page honestly:
  *  - Organization on the home page (name, URL, logo).
  *  - WebPage for a campaign page (name, description, URL, primary image, dates, publisher).
+ *  - BreadcrumbList for campaign and category pages (Stage 16).
  * Never: DonateAction, MonetaryAmount totals, ratings, reviews, certifications or awards. Donations are not
  * available, and FundZim makes no claims it cannot evidence (CLAUDE.md regulatory rules).
  */
@@ -65,4 +66,13 @@ export function serializeJsonLd(data: JsonLd): string {
     .replace(/&/g, "\\u0026")
     .replace(/\u2028/g, "\\u2028")
     .replace(/\u2029/g, "\\u2029");
+}
+
+/** BreadcrumbList for a page's trail (names are plain text; URLs are canonical absolute URLs). */
+export function breadcrumbJsonLd(items: ReadonlyArray<{ name: string; path: string }>, origin: URL): JsonLd {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((it, i) => ({ "@type": "ListItem", position: i + 1, name: truncate(it.name, 200), item: absoluteUrl(it.path, origin)! })),
+  };
 }

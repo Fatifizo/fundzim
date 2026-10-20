@@ -24,6 +24,8 @@ type CreateInput struct {
 	Category       string  `json:"category"`
 	Goal           *Money  `json:"goal"`
 	OrganisationID *string `json:"organisation_id"`
+	// Location is an optional reference location code (Stage 16): a Zimbabwe province or town, never an address.
+	Location *string `json:"location_code"`
 }
 
 // Create creates a DRAFT campaign after the CREATE_DRAFT evaluation.
@@ -68,6 +70,15 @@ func (s *Service) Create(ctx context.Context, userID string, in CreateInput) (st
 		amount, gd = s.validateGoal(ctx, pol, in.Goal.AmountMinor, in.Goal.Currency)
 		det = append(det, gd...)
 	}
+	var location any
+	if in.Location != nil && *in.Location != "" {
+		if ok, err := validLocation(ctx, s.Pool, *in.Location); err != nil {
+			return "", err
+		} else if !ok {
+			det = append(det, errs.Detail{Field: "location_code", Code: "INVALID_VALUE"})
+		}
+		location = *in.Location
+	}
 	if len(det) > 0 {
 		return "", httpx.Validation(det...)
 	}
@@ -90,10 +101,10 @@ func (s *Service) Create(ctx context.Context, userID string, in CreateInput) (st
 				ownerUser, ownerOrg = nil, org
 			}
 			if _, err := tx.Exec(ctx, `INSERT INTO app.campaigns (id, public_code, slug, owner_user_id, owner_organisation_id, created_by,
-				category_code, title, summary, goal_amount_minor, goal_currency, status, risk_tier, policy_version, created_at)
-				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'DRAFT',$12,$13,$14)`,
+				category_code, title, summary, goal_amount_minor, goal_currency, status, risk_tier, policy_version, created_at, location_code)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'DRAFT',$12,$13,$14,$15)`,
 				id, pc, slugFor(title, pc), ownerUser, ownerOrg, userID, in.Category, title, summary, amount, in.Goal.Currency,
-				tier, pol.Version, s.now()); err != nil {
+				tier, pol.Version, s.now(), location); err != nil {
 				return err
 			}
 			if err := s.history(ctx, tx, id, 1, "CREATED", nil, StatusDraft, userActor(userID), "", "", nil); err != nil {
@@ -140,6 +151,8 @@ type Patch struct {
 	Category   *string `json:"category"`
 	Goal       *Money  `json:"goal"`
 	Visibility *string `json:"visibility"`
+	// Location: a reference location code; "" clears it (Stage 16). A change to a live campaign is a material edit.
+	Location *string `json:"location_code"`
 }
 
 // Update edits the working copy with optimistic concurrency (ifMatch = the version the client saw). DRAFT and
@@ -162,7 +175,7 @@ func (s *Service) Update(ctx context.Context, userID, id string, p Patch, ifMatc
 			return httpx.ErrPreconditionFailed
 		}
 		live := c.Status == StatusActive || c.Status == StatusPaused
-		contentChange := p.Title != nil || p.Summary != nil || p.Story != nil || p.Category != nil || p.Goal != nil
+		contentChange := p.Title != nil || p.Summary != nil || p.Story != nil || p.Category != nil || p.Goal != nil || p.Location != nil
 		switch {
 		case c.Status == StatusDraft || c.Status == StatusChangesRequested:
 		case live:
@@ -234,6 +247,27 @@ func (s *Service) Update(ctx context.Context, userID, id string, p Patch, ifMatc
 				}
 			}
 		}
+		if p.Location != nil {
+			cur := ""
+			if c.LocationCode != nil {
+				cur = *c.LocationCode
+			}
+			switch {
+			case *p.Location == cur:
+			case *p.Location == "":
+				set["location_code"] = nil
+				kinds = append(kinds, "LOCATION")
+			default:
+				if ok, err := validLocation(ctx, tx, *p.Location); err != nil {
+					return err
+				} else if !ok {
+					det = append(det, errs.Detail{Field: "location_code", Code: "INVALID_VALUE"})
+				} else {
+					set["location_code"] = *p.Location
+					kinds = append(kinds, "LOCATION")
+				}
+			}
+		}
 		if p.Visibility != nil {
 			if *p.Visibility != "PUBLIC" && *p.Visibility != "UNLISTED" {
 				det = append(det, errs.Detail{Field: "visibility", Code: "INVALID_VALUE"})
@@ -252,8 +286,11 @@ func (s *Service) Update(ctx context.Context, userID, id string, p Patch, ifMatc
 				set["slug"] = slugFor(set["title"].(string), c.PublicCode)
 			}
 		}
-		if err := s.apply(ctx, tx, &c, userActor(userID), change{event: "UPDATED", action: "updated", set: set,
-			payload: map[string]any{"fields": keys(set)}}); err != nil {
+		ch := change{event: "UPDATED", action: "updated", set: set, payload: map[string]any{"fields": keys(set)}}
+		if _, ok := set["visibility"]; ok {
+			ch.outboxType = "campaigns.visibility_changed" // discovery reindexes (Stage 16): UNLISTED leaves search at once
+		}
+		if err := s.apply(ctx, tx, &c, userActor(userID), ch); err != nil {
 			return err
 		}
 		if live && len(kinds) > 0 {
@@ -316,18 +353,24 @@ func (s *Service) snapshot(ctx context.Context, tx pgx.Tx, c campaignRow, kind s
 	if l != nil {
 		benef, disclosure = l.BeneficiaryID, l.Disclosure
 	}
-	canon, _ := json.Marshal(map[string]any{"title": c.Title, "summary": c.Summary, "story": c.Story, "category": c.Category,
-		"goal_amount_minor": itoa(c.GoalAmountMinor), "goal_currency": c.GoalCurrency, "beneficiary_id": benef, "disclosure": disclosure, "media": media})
+	content := map[string]any{"title": c.Title, "summary": c.Summary, "story": c.Story, "category": c.Category,
+		"goal_amount_minor": itoa(c.GoalAmountMinor), "goal_currency": c.GoalCurrency, "beneficiary_id": benef, "disclosure": disclosure, "media": media}
+	if c.LocationCode != nil {
+		content["location"] = *c.LocationCode // only when set: snapshots without a location keep their Stage 6 hash form
+	}
+	canon, _ := json.Marshal(content)
 	sum := sha256.Sum256(canon)
 	if types == nil {
 		types = []string{}
 	}
 	id := ids.New()
 	_, err = tx.Exec(ctx, `INSERT INTO app.campaign_versions (id, campaign_id, version_number, change_kind, material_change_types, title, summary,
-		story, category_code, goal_amount_minor, goal_currency, beneficiary_id, beneficiary_disclosure, media_ids, content_sha256, created_by, created_at)
-		SELECT $1, $2, coalesce(max(version_number), 0) + 1, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+		story, category_code, goal_amount_minor, goal_currency, beneficiary_id, beneficiary_disclosure, media_ids, content_sha256, created_by, created_at,
+		location_code)
+		SELECT $1, $2, coalesce(max(version_number), 0) + 1, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
 		FROM app.campaign_versions WHERE campaign_id = $2`,
-		id, c.ID, kind, types, c.Title, c.Summary, c.Story, c.Category, c.GoalAmountMinor, c.GoalCurrency, benef, disclosure, media, sum[:], by, s.now())
+		id, c.ID, kind, types, c.Title, c.Summary, c.Story, c.Category, c.GoalAmountMinor, c.GoalCurrency, benef, disclosure, media, sum[:], by, s.now(),
+		c.LocationCode)
 	return id, err
 }
 

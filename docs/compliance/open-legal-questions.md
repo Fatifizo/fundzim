@@ -165,6 +165,12 @@ for example "LR-068 (→ LR-046)". Items that overlap but ask a genuinely narrow
 Kept `OPEN` with cross-references (overlapping but narrower): LR-061 (vs LR-052), LR-064 (vs LR-009),
 LR-070 (vs LR-014/015/058), LR-072 (vs LR-008/034), LR-074 (vs LR-012/034), LR-079 (vs LR-042).
 
+## 4a. Items introduced in later stages
+
+| ID | Topic | Question | Why it matters | Affects | Owner | Priority | Status | Links |
+|---|---|---|---|---|---|---|---|---|
+| LR-090 | Public location of a campaign's cause | May a campaign publicly show the province or town where its cause is, for every category (including medical, funeral and children's welfare), and is a town-level place combined with a category and a story identifying enough to need consent from the beneficiary or a guardian? Is province-only required for some categories or for minors (LR-070)? | A coarse place helps donors find local causes but can identify people in small communities. Stage 16 offers province or provincial-capital town only, chosen by the organiser and reviewed with the campaign, never an address. | Campaign location field, review checklist, discovery filters (Stage 16) | Counsel, DPO | P1 | OPEN | [../stage-16/location-discovery.md](../stage-16/location-discovery.md); LR-035, LR-070 |
+
 ## 5. P0 summary (launch-blocking)
 
 | Theme | Items |

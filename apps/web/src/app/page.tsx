@@ -42,7 +42,7 @@ const TRUST = [
 export default async function HomePage() {
   const [featured, categories] = await Promise.all([fetchFeatured(6), fetchPublicCategories()]);
   const origin = siteOrigin();
-  const hasStaffPicks = featured.ok && featured.data.some((c) => c.selection === "STAFF_PICK");
+  const hasPlacements = featured.ok && featured.data.some((c) => c.selection === "FEATURED");
 
   return (
     <>
@@ -73,8 +73,8 @@ export default async function HomePage() {
             eyebrow="Featured campaigns"
             title="Causes you can support"
             description={
-              hasStaffPicks
-                ? "Some campaigns are chosen by the FundZim team to show the range of causes here; the rest are the most recently published. Being featured is not an endorsement or a ranking."
+              hasPlacements
+                ? "Some campaigns are featured by the FundZim team for a set period (a second team member must agree to each choice); the rest are the most recently published. Being featured is not an endorsement or a ranking, and nobody can pay for it."
                 : "The most recently published campaigns. Being shown here is not an endorsement or a ranking."
             }
           />

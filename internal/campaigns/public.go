@@ -19,25 +19,26 @@ import (
 // PublicCampaign is what anyone may see: the approved version only, and nothing private (no ids of the owner,
 // beneficiary or reviewers, no documents, no identity or payout details, no risk or compliance data).
 type PublicCampaign struct {
-	Slug          string         `json:"slug"`
-	CanonicalSlug string         `json:"canonical_slug"`
-	PublicCode    string         `json:"public_code"`
-	CategoryName  string         `json:"category_name"`
-	Trust         Trust          `json:"trust"`
-	Title         string         `json:"title"`
-	Summary       string         `json:"summary"`
-	Story         string         `json:"story"`
-	Category      string         `json:"category"`
-	Goal          Money          `json:"goal"`
-	Status        string         `json:"status"` // ACTIVE | PAUSED | COMPLETED
-	Organiser     map[string]any `json:"organiser"`
-	Beneficiary   map[string]any `json:"beneficiary"`
-	CoverMedia    *string        `json:"cover_media_id"`
-	MediaIDs      []string       `json:"media_ids"`
-	Media         []PublicMedia  `json:"media"`
-	PublishedAt   *time.Time     `json:"published_at"`
-	CompletedAt   *time.Time     `json:"completed_at"`
-	Donations     map[string]any `json:"donations"`
+	Slug          string          `json:"slug"`
+	CanonicalSlug string          `json:"canonical_slug"`
+	PublicCode    string          `json:"public_code"`
+	CategoryName  string          `json:"category_name"`
+	Trust         Trust           `json:"trust"`
+	Title         string          `json:"title"`
+	Summary       string          `json:"summary"`
+	Story         string          `json:"story"`
+	Category      string          `json:"category"`
+	Location      *PublicLocation `json:"location"` // coarse (province / town), owner-chosen and reviewed; null when not specified
+	Goal          Money           `json:"goal"`
+	Status        string          `json:"status"` // ACTIVE | PAUSED | COMPLETED
+	Organiser     map[string]any  `json:"organiser"`
+	Beneficiary   map[string]any  `json:"beneficiary"`
+	CoverMedia    *string         `json:"cover_media_id"`
+	MediaIDs      []string        `json:"media_ids"`
+	Media         []PublicMedia   `json:"media"`
+	PublishedAt   *time.Time      `json:"published_at"`
+	CompletedAt   *time.Time      `json:"completed_at"`
+	Donations     map[string]any  `json:"donations"`
 }
 
 // PublicMedia is an image of the approved version that is still APPROVED (removed media drop out).
@@ -111,6 +112,15 @@ func (s *Service) PublicView(ctx context.Context, slug string) (PublicCampaign, 
 	}
 	if err := s.Pool.QueryRow(ctx, `SELECT name FROM app.campaign_categories WHERE code = $1`, v.Category).Scan(&p.CategoryName); err != nil {
 		return p, err
+	}
+	if v.Location != nil {
+		lm, err := s.publicLocations(ctx, s.Pool, []string{*v.Location})
+		if err != nil {
+			return p, err
+		}
+		if l, ok := lm[*v.Location]; ok {
+			p.Location = &l
+		}
 	}
 	p.Beneficiary = map[string]any{"disclosed": false}
 	if v.BeneficiaryID != nil && v.Disclosure == "DISPLAY_NAME" {
@@ -237,7 +247,22 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]PublicCard, str
 		last := rows[len(rows)-1]
 		next = last.orderKey.UTC().Format(time.RFC3339Nano) + "|" + last.id
 	}
-	cards, err := s.enrichCards(ctx, rows)
+	// Stage 16: restricted campaigns never appear in a listing (the cursor still advances past them)
+	idl := make([]string, 0, len(rows))
+	for _, r := range rows {
+		idl = append(idl, r.id)
+	}
+	disc, _, err := s.eligibility(ctx, idl, false)
+	if err != nil {
+		return nil, "", total, err
+	}
+	kept := rows[:0]
+	for _, r := range rows {
+		if disc[r.id] {
+			kept = append(kept, r)
+		}
+	}
+	cards, err := s.enrichCards(ctx, kept)
 	return cards, next, total, err
 }
 

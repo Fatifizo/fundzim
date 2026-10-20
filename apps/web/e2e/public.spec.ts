@@ -34,13 +34,13 @@ async function noHorizontalOverflow(page: Page) {
   return page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
 }
 
-test("home: hero, featured campaigns (staff pick first), categories with counts, steps, trust, footer", async ({ page }) => {
+test("home: hero, featured campaigns (approved placement first), categories with counts, steps, trust, footer", async ({ page }) => {
   const problems = watchForBreakage(page);
   await trackCspViolations(page);
   const email = await owner(page);
   const title = `Borehole for Chiweshe ${token()}`;
   const { id } = await seed(page, email, { title, category: "COMMUNITY" });
-  await mockControl(page, "feature", { add: id });
+  await mockControl(page, "discovery/feature", { add: id });
 
   const response = await page.goto("/");
   expect(response?.status()).toBe(200);
@@ -67,10 +67,10 @@ test("home: hero, featured campaigns (staff pick first), categories with counts,
   expect(await axe(page)).toEqual([]);
   expect(await cspViolations(page)).toEqual([]);
   expect(problems).toEqual([]);
-  await mockControl(page, "feature", { remove: id });
+  await mockControl(page, "discovery/feature", { remove: id });
 });
 
-test("discovery: search, result count, category filter, sort and keyset pagination; search analytics has no query text", async ({ page }) => {
+test("discovery: search with highlights, result count, category filter, sort and keyset pagination; the query text is never sent as analytics", async ({ page }) => {
   const problems = watchForBreakage(page);
   const email = await owner(page);
   const word = token();
@@ -79,7 +79,10 @@ test("discovery: search, result count, category filter, sort and keyset paginati
   await page.goto("/campaigns");
   await expect(page.getByRole("heading", { level: 1, name: "Explore campaigns" })).toBeVisible();
   await page.getByRole("searchbox", { name: "Search" }).fill(word);
-  const searchEvent = page.waitForRequest((r) => r.url().endsWith("/api/v1/public/events") && r.postDataJSON()?.type === "CAMPAIGN_SEARCH");
+  const analytics: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().includes("/api/v1/discovery/events")) analytics.push(r.postData() ?? "");
+  });
   await page.getByRole("button", { name: "Search" }).click();
   await expect(page).toHaveURL(new RegExp(`q=${word}`));
   await expect(page.getByText("13 campaigns", { exact: true })).toBeVisible();
@@ -91,10 +94,9 @@ test("discovery: search, result count, category filter, sort and keyset paginati
   await expect(page.locator("progress, [role=progressbar]")).toHaveCount(0);
   expect(await axe(page)).toEqual([]);
 
-  // Search analytics: only that a search happened.
-  const sent = await searchEvent;
-  expect(sent.postDataJSON()).toEqual({ type: "CAMPAIGN_SEARCH" });
-  expect(sent.postData()).not.toContain(word);
+  // matched words are marked; searches are counted by the API, never sent (or stored) as text by the browser
+  await expect(list.locator("mark").first()).toHaveText(word);
+  expect(analytics.join("")).not.toContain(word);
 
   await page.getByRole("link", { name: "Next page" }).click();
   await expect(page).toHaveURL(/cursor=/);
@@ -104,13 +106,16 @@ test("discovery: search, result count, category filter, sort and keyset paginati
   await expect(cards).toHaveCount(12);
 
   await page.getByLabel("Category").selectOption("medical");
-  await page.getByLabel("Sort by").selectOption("created");
+  await page.getByLabel("Sort by").selectOption("oldest");
   await page.getByRole("button", { name: "Search" }).click();
   await expect(page).toHaveURL(/category=medical/);
   await expect(page.getByText("1 campaign", { exact: true })).toBeVisible();
   await expect(cards.getByRole("link")).toHaveText(`Clinic roof ${word} number 0`);
 
-  await page.goto(`/campaigns?q=${word}nothing`);
+  // a result click is counted (aggregate) and the campaign page reports where the view came from
+  await cards.getByRole("link").first().click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(`Clinic roof ${word} number 0`);
+  await page.goto("/campaigns?q=vvvwwwxxxyyy"); // nothing matches, not even approximately
   await expect(page.getByText("No campaigns found")).toBeVisible();
   await expect(page.getByText("0 campaigns", { exact: true })).toBeVisible();
   expect(problems).toEqual([]);
@@ -145,7 +150,6 @@ test("categories: list with live counts, category page with description and list
   await expect(page).toHaveTitle("Education campaigns · FundZim");
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", `${AUTH_BASE_URL}/categories/education`);
   expect(await axe(page)).toEqual([]);
-  await expect.poll(async () => (await mockControl<{ counts: Record<string, number> }>(page, "events")).counts["CATEGORY_VIEW|education|"] ?? 0).toBeGreaterThan(0);
 
   await page.goto("/categories/medical");
   await expect(page.getByText("Please be respectful")).toBeVisible();
@@ -200,7 +204,10 @@ test("detail: canonical redirect, short link, trust, updates with photos, metada
   const jsonLd = JSON.parse((await page.locator('script[type="application/ld+json"]').first().textContent()) ?? "{}");
   expect(jsonLd).toMatchObject({ "@type": "WebPage", url: `${AUTH_BASE_URL}/campaigns/${slug}`, name: title });
   expect(JSON.stringify(jsonLd)).not.toMatch(/DonateAction|amount|rating|review/i);
-  await expect.poll(async () => (await mockControl<{ counts: Record<string, number> }>(page, "events")).counts[`CAMPAIGN_PAGE_VIEW|${slug}|`] ?? 0).toBeGreaterThan(0);
+  // one view, counted with its traffic source (opened from a short link: no referrer → DIRECT)
+  await expect.poll(async () => (await mockControl<{ counts: Record<string, number> }>(page, "discovery/counts", { campaign_id: id })).counts["VIEW_RAW|DIRECT"] ?? 0).toBeGreaterThan(0);
+  const breadcrumbs = await page.locator('script[type="application/ld+json"]').allTextContents();
+  expect(breadcrumbs.map((b) => JSON.parse(b)["@type"])).toContain("BreadcrumbList");
 
   expect(await axe(page)).toEqual([]);
   expect(await cspViolations(page)).toEqual([]);
@@ -212,7 +219,7 @@ test("sharing: encoded WhatsApp/Facebook/X/email links from PUBLIC_SITE_URL and 
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: AUTH_BASE_URL });
   const email = await owner(page);
   const title = `Funeral costs for Gogo Ncube ${token()}`;
-  const { slug } = await seed(page, email, { title, category: "FUNERAL", summary: "Help the family & community give Gogo a dignified farewell." });
+  const { id, slug } = await seed(page, email, { title, category: "FUNERAL", summary: "Help the family & community give Gogo a dignified farewell." });
   const url = `${AUTH_BASE_URL}/campaigns/${slug}`;
   await page.goto(`/campaigns/${slug}`);
 
@@ -229,10 +236,21 @@ test("sharing: encoded WhatsApp/Facebook/X/email links from PUBLIC_SITE_URL and 
   await expect(share.getByRole("link", { name: /WhatsApp/ })).toHaveAttribute("rel", "noopener noreferrer");
   expect(JSON.stringify([wa.toString(), x.toString(), mail])).not.toMatch(/example\.com|beneficiary|Tendai/);
 
+  await expect(share.getByRole("link", { name: /LinkedIn/ })).toHaveAttribute("href", `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`);
+
+  // copy link: the canonical URL plus a referral code naming only the campaign and the channel
   await share.getByRole("button", { name: "Copy link" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Link copied." })).toBeVisible();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(url);
-  await expect.poll(async () => (await mockControl<{ counts: Record<string, number> }>(page, "events")).counts[`CAMPAIGN_SHARE_CLICK|${slug}|COPY_LINK`] ?? 0).toBe(1);
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toMatch(new RegExp(`^${url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\?ref=[0-9a-hjkmnp-tv-z]{12}$`));
+  await expect.poll(async () => (await mockControl<{ counts: Record<string, number> }>(page, "discovery/counts", { campaign_id: id })).counts["SHARE_RAW|COPY_LINK"] ?? 0).toBe(1);
+  const codes = await mockControl<{ referrals: Array<{ code: string; channel: string }> }>(page, "discovery/counts", { campaign_id: id });
+  expect(codes.referrals.map((r) => r.channel)).toEqual(["COPY_LINK"]);
+
+  // a visit through the shared link counts as a referral visit and the code leaves the address bar
+  await page.goto(copied.replace(AUTH_BASE_URL, ""));
+  await expect(page).toHaveURL(new RegExp(`/campaigns/${slug}$`));
+  await expect.poll(async () => (await mockControl<{ counts: Record<string, number> }>(page, "discovery/counts", { campaign_id: id })).counts["REFERRAL_VISIT_RAW|COPY_LINK"] ?? 0).toBe(1);
 });
 
 test("analytics: nothing is sent when Do Not Track or Global Privacy Control is on", async ({ page }) => {
@@ -243,7 +261,7 @@ test("analytics: nothing is sent when Do Not Track or Global Privacy Control is 
   });
   const events: string[] = [];
   page.on("request", (r) => {
-    if (r.url().includes("/api/v1/public/events")) events.push(r.url());
+    if (r.url().includes("/api/v1/discovery/events") || r.url().includes("/api/v1/public/events")) events.push(r.url());
   });
   await page.goto(`/campaigns/${slug}`);
   await page.waitForLoadState("networkidle");
@@ -316,7 +334,7 @@ test("robots.txt and sitemap.xml (indexing allowed; private areas disallowed; li
   const sitemap = await request.get("/sitemap.xml");
   expect(sitemap.status()).toBe(200);
   const xml = await sitemap.text();
-  for (const p of ["/", "/campaigns", "/categories", "/how-it-works", "/safety", "/about", "/contact", "/categories/education"]) expect(xml).toContain(`<loc>${AUTH_BASE_URL}${p}</loc>`);
+  for (const p of ["/", "/campaigns", "/campaigns/trending", "/campaigns/featured", "/categories", "/how-it-works", "/safety", "/about", "/contact"]) expect(xml).toContain(`<loc>${AUTH_BASE_URL}${p}</loc>`);
   expect(xml).toContain(`<loc>${AUTH_BASE_URL}/campaigns/${live.slug}</loc>`);
   expect(xml).not.toContain(unlisted.slug);
   expect(xml).not.toContain(suspended.slug!);

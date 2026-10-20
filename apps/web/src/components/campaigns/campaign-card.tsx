@@ -1,11 +1,16 @@
-import Link from "next/link";
-
 import { PublicImage } from "@/components/campaigns/public-image";
+import { Highlighted } from "@/components/discovery/highlighted";
+import { ResultLink } from "@/components/discovery/result-link";
 import { Badge } from "@/components/ui/badge";
 import { formatGoal } from "@/lib/campaigns/money";
 import { IMAGE_SIZES, publicImageSources } from "@/lib/campaigns/paths";
 import { activeTrustIndicators } from "@/lib/campaigns/trust";
 import type { PublicCampaignSummary } from "@/lib/campaigns/types";
+import type { ClickSurface } from "@/lib/analytics/events";
+import type { DiscoveryCard } from "@/lib/discovery/types";
+
+/** A card's data: any public summary, with the discovery extras when the list came from the discovery API. */
+export type CardData = PublicCampaignSummary & Partial<Pick<DiscoveryCard, "location" | "highlights" | "reason">>;
 
 const STATUS_BADGE: Record<string, { label: string; tone: "brand" | "gold" | "neutral" }> = {
   ACTIVE: { label: "Active", tone: "brand" },
@@ -14,11 +19,12 @@ const STATUS_BADGE: Record<string, { label: string; tone: "brand" | "gold" | "ne
 };
 
 /**
- * Public campaign card: approved cover, title, summary, category, organiser, goal with its currency, status
- * and only the trust indicators that are true. Never totals, donor counts or progress (none exist). The
- * cover is decorative here (the title link names the card), lazy-loaded with fixed dimensions (no CLS).
+ * Public campaign card: approved cover, title, summary, category, coarse location, organiser, goal with its currency,
+ * status and only the trust indicators that are true; in discovery lists also why it is shown and the words that matched
+ * a search. Never totals, donor counts or progress (none exist). The cover is decorative here (the title link names the
+ * card), lazy-loaded with fixed dimensions (no CLS).
  */
-export function CampaignCard({ campaign, headingLevel = 3, priority = false }: { campaign: PublicCampaignSummary; headingLevel?: 2 | 3; priority?: boolean }) {
+export function CampaignCard({ campaign, headingLevel = 3, priority = false, surface }: { campaign: CardData; headingLevel?: 2 | 3; priority?: boolean; surface?: ClickSurface }) {
   const cover = campaign.cover ? publicImageSources(campaign.slug, campaign.cover.id, campaign.cover.widths, 640) : null;
   const goal = formatGoal(campaign.goal);
   const status = STATUS_BADGE[campaign.status];
@@ -36,12 +42,21 @@ export function CampaignCard({ campaign, headingLevel = 3, priority = false }: {
           <Badge tone="neutral">{campaign.category.name || campaign.category.code}</Badge>
           {status ? <Badge tone={status.tone}>{status.label}</Badge> : null}
         </p>
+        {campaign.reason ? <p className="text-sm font-semibold text-brand-800">{campaign.reason.text}</p> : null}
         <Heading className="font-display text-xl font-semibold break-words text-ink-900">
-          <Link href={`/campaigns/${campaign.slug}`} className="underline-offset-4 hover:underline focus-visible:outline-none">
-            {campaign.title}
-          </Link>
+          <ResultLink href={`/campaigns/${campaign.slug}`} slug={campaign.slug} surface={surface} className="underline-offset-4 hover:underline focus-visible:outline-none">
+            <Highlighted text={campaign.title} segments={campaign.highlights?.title} />
+          </ResultLink>
         </Heading>
-        <p className="line-clamp-3 break-words text-ink-700">{campaign.summary}</p>
+        <p className="line-clamp-3 break-words text-ink-700">
+          <Highlighted text={campaign.summary} segments={campaign.highlights?.summary} />
+        </p>
+        {campaign.location ? (
+          <p className="text-sm text-ink-600">
+            <span className="sr-only">Location: </span>
+            {campaign.location.kind === "TOWN" ? `${campaign.location.name}, ${campaign.location.province_name}` : `${campaign.location.province_name} province`}
+          </p>
+        ) : null}
         {campaign.organiser ? <p className="text-sm break-words text-ink-600">By {campaign.organiser.display_name}</p> : null}
         {trust.length > 0 ? (
           <ul aria-label="Checks completed" className="flex flex-wrap gap-2">
@@ -67,11 +82,11 @@ export function CampaignCard({ campaign, headingLevel = 3, priority = false }: {
  * and lazy loading would start it late and let it share bandwidth with the covers below (measured in
  * docs/stage-7/performance.md §8). Every other cover stays lazy.
  */
-export function CampaignGrid({ campaigns, label, headingLevel = 3, priorityFirst = false }: { campaigns: PublicCampaignSummary[]; label: string; headingLevel?: 2 | 3; priorityFirst?: boolean }) {
+export function CampaignGrid({ campaigns, label, headingLevel = 3, priorityFirst = false, surface }: { campaigns: CardData[]; label: string; headingLevel?: 2 | 3; priorityFirst?: boolean; surface?: ClickSurface }) {
   return (
     <ul aria-label={label} className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {campaigns.map((c, i) => (
-        <CampaignCard key={c.slug} campaign={c} headingLevel={headingLevel} priority={priorityFirst && i === 0} />
+        <CampaignCard key={c.slug} campaign={c} headingLevel={headingLevel} priority={priorityFirst && i === 0} surface={surface} />
       ))}
     </ul>
   );

@@ -37,6 +37,7 @@ const (
 	QueueDefault       = "default"
 	QueueOutbox        = "outbox"
 	QueueNotifications = "notifications"
+	QueueDiscovery     = "discovery" // Stage 16: indexing, aggregation and trending (never delays payments or notifications)
 	QueueMaintenance   = "maintenance"
 )
 
@@ -50,6 +51,7 @@ func DefaultQueues(concurrency int) map[string]river.QueueConfig {
 		QueueDefault:       {MaxWorkers: concurrency},
 		QueueOutbox:        {MaxWorkers: concurrency},
 		QueueNotifications: {MaxWorkers: max(1, concurrency/2)},
+		QueueDiscovery:     {MaxWorkers: max(1, concurrency/4)},
 		QueueMaintenance:   {MaxWorkers: 2},
 	}
 }

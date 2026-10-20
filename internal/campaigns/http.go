@@ -31,6 +31,7 @@ func (s *Service) Routes() []Route {
 		{Pattern: "POST /api/v1/campaigns", Policy: user, Handler: s.handleCreate, Idempotent: true},
 		{Pattern: "GET /api/v1/campaigns/mine", Policy: user, Handler: s.handleMine},
 		{Pattern: "GET /api/v1/campaign-currencies", Policy: public, Handler: s.handleCurrencies},
+		{Pattern: "GET /api/v1/campaign-locations", Policy: public, Handler: s.handleLocations}, // Stage 16 reference list
 		{Pattern: "GET " + own, Policy: user, Handler: s.handleGet},
 		{Pattern: "GET " + own + "/eligibility", Policy: user, Handler: s.handleEligibility},
 		{Pattern: "PATCH " + own, Policy: user, Handler: s.handleUpdate},
@@ -47,7 +48,6 @@ func (s *Service) Routes() []Route {
 		{Pattern: "GET /api/v1/public/campaigns", Policy: public, Handler: s.handleSearch},
 		{Pattern: "GET /api/v1/public/campaigns/{slug}", Policy: public, Handler: s.handlePublic},
 		// Stage 7 (ADR-038)
-		{Pattern: "GET /api/v1/public/campaigns/featured", Policy: public, Handler: s.handleFeatured},
 		{Pattern: "GET /api/v1/public/campaign-codes/{code}", Policy: public, Handler: s.handleByCode},
 		{Pattern: "GET /api/v1/public/categories", Policy: public, Handler: s.handlePublicCategories},
 		{Pattern: "GET /api/v1/public/categories/{slug}", Policy: public, Handler: s.handlePublicCategory},
@@ -57,9 +57,6 @@ func (s *Service) Routes() []Route {
 		{Pattern: "GET /api/v1/admin/campaigns/reports", Policy: perm("campaign.review"), Handler: s.handleReports},
 		{Pattern: "POST /api/v1/admin/campaigns/reports/{report_id}/dismiss", Policy: perm("campaign.review"), Handler: s.triageHandler(false)},
 		{Pattern: "POST /api/v1/admin/campaigns/reports/{report_id}/escalate", Policy: perm("campaign.review"), Handler: s.triageHandler(true)},
-		{Pattern: "GET /api/v1/admin/campaigns/featured", Policy: perm("campaign.feature"), Handler: s.handleFeaturedAdmin},
-		{Pattern: "POST /api/v1/admin/campaigns/{campaign_id}/feature", Policy: perm("campaign.feature"), Handler: s.featureHandler(true)},
-		{Pattern: "DELETE /api/v1/admin/campaigns/{campaign_id}/feature", Policy: perm("campaign.feature"), Handler: s.featureHandler(false)},
 	}
 	for _, a := range []string{"cancel", "publish", "pause", "resume", "complete", "archive"} {
 		rs = append(rs, Route{Pattern: "POST " + own + "/" + a, Policy: user, Handler: s.ownerAction(a)})
@@ -375,14 +372,13 @@ func (s *Service) handlePublic(w http.ResponseWriter, r *http.Request) {
 	s.writePublic(w, r, p, cacheRevalidate)
 }
 
-func (s *Service) handleFeatured(w http.ResponseWriter, r *http.Request) {
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	items, err := s.Featured(r.Context(), limit)
+func (s *Service) handleLocations(w http.ResponseWriter, r *http.Request) {
+	ls, err := s.Locations(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.writePublic(w, r, Page(items, ""), cacheRevalidate)
+	s.writePublic(w, r, ls, cacheConfig)
 }
 
 func (s *Service) handleByCode(w http.ResponseWriter, r *http.Request) {
@@ -488,33 +484,6 @@ func (s *Service) triageHandler(escalate bool) http.HandlerFunc {
 		}
 		httpx.WriteData(w, r, http.StatusOK, map[string]string{"report_id": r.PathValue("report_id"), "status": status})
 	}
-}
-
-func (s *Service) featureHandler(add bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var in FeatureInput
-		if r.ContentLength != 0 {
-			if err := httpx.DecodeJSON(r, &in); err != nil {
-				s.fail(w, r, err)
-				return
-			}
-		}
-		if err := s.Feature(r.Context(), principal(r).UserID, r.PathValue("campaign_id"), add, in); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		s.handleFeaturedAdmin(w, r)
-	}
-}
-
-func (s *Service) handleFeaturedAdmin(w http.ResponseWriter, r *http.Request) {
-	items, err := s.FeaturedAdmin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	noStore(w)
-	httpx.WriteData(w, r, http.StatusOK, Page(items, ""))
 }
 
 // Page is the standard list envelope (ADR-038 §7): {items, next_cursor} with a null cursor on the last page.

@@ -5,7 +5,7 @@
  */
 import { truncate } from "@/lib/campaigns/text";
 
-export const SHARE_CHANNELS = ["WHATSAPP", "FACEBOOK", "X", "EMAIL", "COPY_LINK", "WEB_SHARE"] as const;
+export const SHARE_CHANNELS = ["WHATSAPP", "FACEBOOK", "X", "LINKEDIN", "EMAIL", "COPY_LINK", "WEB_SHARE"] as const;
 export type ShareChannel = (typeof SHARE_CHANNELS)[number];
 
 export interface ShareInput {
@@ -44,13 +44,18 @@ export function xShareUrl({ title, url }: Pick<ShareInput, "title" | "url">): st
   return `https://x.com/intent/post?text=${encodeURIComponent(`Support this FundZim campaign: ${clean(title, 200)}`)}&url=${encodeURIComponent(url)}`;
 }
 
+/** LinkedIn's share-offsite endpoint takes only the URL (title and image come from the page's Open Graph tags). */
+export function linkedinShareUrl({ url }: Pick<ShareInput, "url">): string {
+  return `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`;
+}
+
 /** mailto with percent-encoded subject and body (spaces as %20, never "+", which mail clients show literally). */
 export function emailShareUrl(input: ShareInput): string {
   return `mailto:?subject=${encodeURIComponent(`Support this FundZim campaign: ${clean(input.title, 200)}`)}&body=${encodeURIComponent(shareText(input))}`;
 }
 
 export interface ShareLink {
-  channel: Extract<ShareChannel, "WHATSAPP" | "FACEBOOK" | "X" | "EMAIL">;
+  channel: Extract<ShareChannel, "WHATSAPP" | "FACEBOOK" | "X" | "LINKEDIN" | "EMAIL">;
   label: string;
   href: string;
   /** Opens another site: rendered with target=_blank and announced as such. */
@@ -62,6 +67,24 @@ export function shareLinks(input: ShareInput): ShareLink[] {
     { channel: "WHATSAPP", label: "WhatsApp", href: whatsappShareUrl(input), external: true },
     { channel: "FACEBOOK", label: "Facebook", href: facebookShareUrl(input), external: true },
     { channel: "X", label: "X", href: xShareUrl(input), external: true },
+    { channel: "LINKEDIN", label: "LinkedIn", href: linkedinShareUrl(input), external: true },
     { channel: "EMAIL", label: "Email", href: emailShareUrl(input), external: false },
   ];
+}
+
+const REF = /^[0-9a-hjkmnp-tv-z]{12}$/;
+
+/**
+ * The canonical URL with a referral code (`?ref=`), or the canonical URL unchanged when the code is not well formed.
+ * The code names only the campaign and the channel (no person); the page's canonical tag never includes it.
+ */
+export function withReferral(url: string, code: string | null): string {
+  if (!code || !REF.test(code)) return url;
+  try {
+    const u = new URL(url);
+    u.searchParams.set("ref", code);
+    return u.toString();
+  } catch {
+    return url;
+  }
 }

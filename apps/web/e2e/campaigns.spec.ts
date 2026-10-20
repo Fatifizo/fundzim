@@ -244,9 +244,11 @@ test("reviewer approves with step-up and publishes; the public page shows no tot
   expect(response?.status()).toBe(200);
   await expect(anon.getByRole("heading", { level: 1, name: title })).toBeVisible();
   await expect(anon.getByRole("button", { name: "Donations are not yet available." })).toBeDisabled();
-  await expect(anon.getByText("US$1,500.00")).toBeVisible();
-  await expect(anon.getByText("Details kept private")).toBeVisible();
-  await expect(anon.getByText("Tendai Organiser")).toBeVisible();
+  // scoped to the campaign itself: the "More campaigns" recommendations below may show other goals and organisers
+  const article = anon.getByRole("article", { name: title });
+  await expect(article.getByText("US$1,500.00")).toBeVisible();
+  await expect(article.getByText("Details kept private")).toBeVisible();
+  await expect(article.getByText("Tendai Organiser")).toBeVisible();
   // The owner's alt text from the public view's `media` list (fallback "Cover photo for …" only when empty).
   await expect(anon.getByRole("img", { name: "Chipo outside her school" })).toBeVisible();
   await expect(anon.locator("main")).not.toContainText(/raised|donors|funded/i);

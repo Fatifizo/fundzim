@@ -539,6 +539,18 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 > repeated after one may have reached the provider; owner-facing refusals reveal no compliance or risk detail. Full review:
 > [stage-11/security-review.md](stage-11/security-review.md).
 
+## 21k. Discovery security (Stage 16, summary)
+
+> **Stage 16 as built ([ADR-048](adr/ADR-048-discovery-sharing-and-referrals.md)):** discovery never decides visibility —
+> candidates come from a projection, every served card is re-checked by campaigns against restrictions and holds, and a
+> registry error fails closed; search input is reduced to letters and digits (no query syntax or SQL can be injected),
+> bounded (length, terms, page size, 2 s timeout, capped counts) and rate limited per address; highlights and JSON-LD are
+> escaped text; featured placements and ranking weights are maker-checker with step-up and a database linked-identity
+> guard; analytics store no IP, user id, user agent, cookie or query text (daily keyed dedupe hashes, deleted after two
+> days; DNT/GPC honoured; no third-party scripts; no browser storage); referral codes are anonymous, privilege-less and
+> blocked in production pending LR-023; share links point only at the canonical page (no redirector); owner analytics are
+> object-authorised (404 otherwise). Full review: [stage-16/security-review.md](stage-16/security-review.md).
+
 ## 21j. Notification security (Stage 15, summary)
 
 > **Stage 15 as built ([ADR-047](adr/ADR-047-notification-engine.md)):** users read only their own notifications (404

@@ -63,6 +63,9 @@ func NewOperations(d *Deps) *operations.Service {
 		if d.Notifications != nil {
 			add("notifications", d.Notifications.OpsSnapshot, nil, "") // Stage 15 (ADR-047)
 		}
+		if d.Discovery != nil {
+			add("discovery", d.Discovery.OpsSnapshot, nil, "") // Stage 16 (ADR-048)
+		}
 		for _, x := range []struct {
 			name string
 			pool *pgxpool.Pool

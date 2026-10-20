@@ -5,7 +5,7 @@ import { CampaignEditForm } from "@/components/campaigns/edit-form";
 import { Alert } from "@/components/ui/alert";
 import { requireUser } from "@/lib/auth/session";
 import { EDITABLE_STATUSES } from "@/lib/campaigns/labels";
-import { loadCategories, loadCurrencies, loadOwnCampaign } from "@/lib/campaigns/server";
+import { loadCategories, loadCurrencies, loadLocationOptions, loadOwnCampaign } from "@/lib/campaigns/server";
 
 export const metadata: Metadata = { title: "Edit campaign", robots: { index: false, follow: false, nocache: true } };
 
@@ -13,12 +13,12 @@ export default async function EditCampaignPage({ params }: PageProps<"/dashboard
   const { id } = await params;
   const path = `/dashboard/campaigns/${id}/edit`;
   await requireUser(path);
-  const [campaign, categories, currencies] = await Promise.all([loadOwnCampaign(id, path), loadCategories(path), loadCurrencies(path)]);
+  const [campaign, categories, currencies, locations] = await Promise.all([loadOwnCampaign(id, path), loadCategories(path), loadCurrencies(path), loadLocationOptions(path)]);
   const editable = EDITABLE_STATUSES.has(String(campaign.status));
   return (
-    <AccountPage title="Campaign details" intro="Category, title, summary, story and goal.">
+    <AccountPage title="Campaign details" intro="Category, title, summary, story, goal and location.">
       {editable ? (
-        <CampaignEditForm campaign={campaign} categories={categories} currencies={currencies} />
+        <CampaignEditForm campaign={campaign} categories={categories} currencies={currencies} locations={locations} />
       ) : (
         <Alert tone="info" title="These details can't be changed now">
           A campaign can be edited while it is a draft, when changes are requested, or while it is published or paused.

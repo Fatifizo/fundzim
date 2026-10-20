@@ -10,19 +10,19 @@ import (
 
 // campaignRow is the full campaigns row.
 type campaignRow struct {
-	ID, PublicCode, Slug, CreatedBy, Category, Title, Summary, Story, GoalCurrency, Status, Visibility, RiskTier, PolicyVersion string
-	OwnerUserID, OwnerOrgID, FundraisingBasis, ApprovedVersionID, PendingVersionID, ReReviewReason, CompletionReason            *string
-	GoalAmountMinor                                                                                                             int64
-	ReReviewRequired                                                                                                            bool
-	ResubmissionCount, Version                                                                                                  int
-	SubmittedAt, ApprovedAt, PublishedAt, PausedAt, SuspendedAt, CompletedAt, CancelledAt, ArchivedAt                           *time.Time
-	CreatedAt, UpdatedAt                                                                                                        time.Time
+	ID, PublicCode, Slug, CreatedBy, Category, Title, Summary, Story, GoalCurrency, Status, Visibility, RiskTier, PolicyVersion    string
+	OwnerUserID, OwnerOrgID, FundraisingBasis, ApprovedVersionID, PendingVersionID, ReReviewReason, CompletionReason, LocationCode *string
+	GoalAmountMinor                                                                                                                int64
+	ReReviewRequired                                                                                                               bool
+	ResubmissionCount, Version                                                                                                     int
+	SubmittedAt, ApprovedAt, PublishedAt, PausedAt, SuspendedAt, CompletedAt, CancelledAt, ArchivedAt                              *time.Time
+	CreatedAt, UpdatedAt                                                                                                           time.Time
 }
 
 const campaignSelect = `SELECT id, public_code, slug, created_by, category_code, title, summary, story, goal_currency, status, visibility,
 	risk_tier, policy_version, owner_user_id, owner_organisation_id, fundraising_basis, approved_version_id, pending_version_id, re_review_reason,
 	completion_reason, goal_amount_minor, re_review_required, resubmission_count, version, submitted_at, approved_at, published_at, paused_at,
-	suspended_at, completed_at, cancelled_at, archived_at, created_at, updated_at FROM app.campaigns`
+	suspended_at, completed_at, cancelled_at, archived_at, created_at, updated_at, location_code FROM app.campaigns`
 
 func scanCampaign(row pgx.Row) (campaignRow, error) {
 	var c campaignRow
@@ -30,7 +30,7 @@ func scanCampaign(row pgx.Row) (campaignRow, error) {
 		&c.Visibility, &c.RiskTier, &c.PolicyVersion, &c.OwnerUserID, &c.OwnerOrgID, &c.FundraisingBasis, &c.ApprovedVersionID,
 		&c.PendingVersionID, &c.ReReviewReason, &c.CompletionReason, &c.GoalAmountMinor, &c.ReReviewRequired, &c.ResubmissionCount,
 		&c.Version, &c.SubmittedAt, &c.ApprovedAt, &c.PublishedAt, &c.PausedAt, &c.SuspendedAt, &c.CompletedAt, &c.CancelledAt,
-		&c.ArchivedAt, &c.CreatedAt, &c.UpdatedAt)
+		&c.ArchivedAt, &c.CreatedAt, &c.UpdatedAt, &c.LocationCode)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, ErrNotFound
 	}

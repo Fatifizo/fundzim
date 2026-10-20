@@ -10,10 +10,10 @@ import { campaignApi, type CampaignApi } from "@/lib/campaigns/api";
 import { describeCampaignError } from "@/lib/campaigns/errors";
 import { LIVE_STATUSES } from "@/lib/campaigns/labels";
 import { minorToInput } from "@/lib/campaigns/money";
-import type { Campaign, CampaignPatch, Category, CurrencyInfo, EligibilityReason } from "@/lib/campaigns/types";
+import type { Campaign, CampaignLocationOption, CampaignPatch, Category, CurrencyInfo, EligibilityReason } from "@/lib/campaigns/types";
 import { goalFromFields, validateSection, type DraftFields } from "@/lib/campaigns/validate";
 
-import { BasicsFields, CategoryField, GoalFields, StoryField } from "./content-fields";
+import { BasicsFields, CategoryField, GoalFields, LocationField, StoryField } from "./content-fields";
 import { EligibilityList } from "./eligibility-list";
 
 const FIELD_MAP: Record<string, string> = { "goal.amount_minor": "amount", "goal.currency": "currency", goal: "amount" };
@@ -22,7 +22,7 @@ const FIELD_MAP: Record<string, string> = { "goal.amount_minor": "amount", "goal
  * Edit a campaign's content (PATCH with If-Match = version). On a published or paused campaign a material
  * change is reviewed again and the public page keeps the approved version until then (ADR-036 §3).
  */
-export function CampaignEditForm({ campaign, categories, currencies, api = campaignApi }: { campaign: Campaign; categories: Category[]; currencies: CurrencyInfo[]; api?: CampaignApi }) {
+export function CampaignEditForm({ campaign, categories, currencies, locations = [], api = campaignApi }: { campaign: Campaign; categories: Category[]; currencies: CurrencyInfo[]; locations?: CampaignLocationOption[]; api?: CampaignApi }) {
   const router = useRouter();
   const minor = currencies.find((c) => c.code === campaign.goal?.currency)?.minor_units ?? 2;
   const [fields, setFields] = useState<DraftFields>(() => {
@@ -34,6 +34,7 @@ export function CampaignEditForm({ campaign, categories, currencies, api = campa
     }
     return { category: campaign.category, title: campaign.title, summary: campaign.summary, story: campaign.story, currency: campaign.goal?.currency ?? "", amount };
   });
+  const [location, setLocation] = useState(campaign.location_code ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [reasons, setReasons] = useState<EligibilityReason[]>([]);
@@ -64,6 +65,7 @@ export function CampaignEditForm({ campaign, categories, currencies, api = campa
     if (fields.story.trim() !== campaign.story) patch.story = fields.story.trim();
     const goal = goalFromFields(fields, options);
     if (goal && (goal.amount_minor !== campaign.goal?.amount_minor || goal.currency !== campaign.goal?.currency)) patch.goal = goal;
+    if (location !== (campaign.location_code ?? "")) patch.location_code = location;
     if (Object.keys(patch).length === 0) {
       setFormError(null);
       setSaved(true);
@@ -95,7 +97,7 @@ export function CampaignEditForm({ campaign, categories, currencies, api = campa
     <form ref={formRef} noValidate onSubmit={onSubmit} className="space-y-8" aria-label="Campaign details">
       {live ? (
         <Alert tone="notice" title="Changes to a published campaign are reviewed again">
-          Changes to the story, goal, category or beneficiary are checked by reviewers. Until they are approved, the public page keeps showing the approved version.
+          Changes to the story, goal, category, location or beneficiary are checked by reviewers. Until they are approved, the public page keeps showing the approved version.
         </Alert>
       ) : null}
       <FormError ref={errorRef} message={formError} />
@@ -105,6 +107,7 @@ export function CampaignEditForm({ campaign, categories, currencies, api = campa
       <BasicsFields value={fields} onChange={change} errors={errors} />
       <StoryField value={fields.story} onChange={change} error={errors.story} />
       <GoalFields value={fields} onChange={change} errors={errors} currencies={options} />
+      {locations.length > 0 ? <LocationField options={locations} value={location} onChange={setLocation} error={errors.location_code} /> : null}
       <SubmitButton busy={busy} busyLabel="Saving…">
         Save changes
       </SubmitButton>

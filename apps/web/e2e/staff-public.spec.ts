@@ -2,7 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { AUTH_BASE_URL, createStaff, createUser, seriousAxeViolations, signIn, signInStaff, TOTP, watchForBreakage } from "./helpers";
 
-// Stage 7 staff pages (contract §4) against the mock API: campaign reports triage and staff picks.
+// Stage 7 staff pages (contract §4) against the mock API: campaign reports triage; Stage 16 featured placements
+// (maker-checker; they replaced the Stage 7 staff picks).
 test.use({ baseURL: AUTH_BASE_URL });
 
 let n = 0;
@@ -95,79 +96,98 @@ test("reports: reviewer sees reason, escaped details, contact flag (never the em
   expect(problems).toEqual([]);
 });
 
-test("featured: add from the review page with step-up, hidden picks are marked, remove with a reason", async ({ page }) => {
+test("featured placements: a reviewer requests one (step-up), a compliance officer approves it, it is shown until the campaign stops qualifying, then removed", async ({ page }) => {
   const problems = watchForBreakage(page);
   const title = `Pick me ${token()}`;
   const { id, slug } = await seedLive(page, title);
-  const staff = await createStaff(page, ["COMPLIANCE"], "Farai Compliance");
-  await signInStaff(page, staff, `/admin/campaigns/review/${id}`);
-  await page.getByRole("link", { name: "Feature on the home page" }).click();
-  await expect(page).toHaveURL(new RegExp(`/admin/campaigns/featured\\?campaign_id=${id}$`));
+  const reviewer = await createStaff(page, ["REVIEWER"], "Rudo Reviewer");
+  const officer = await createStaff(page, ["COMPLIANCE"], "Farai Compliance");
+  await signInStaff(page, reviewer, `/admin/campaigns/review/${id}`);
+  await page.getByRole("link", { name: "Request a featured placement" }).click();
+  await expect(page).toHaveURL(new RegExp(`/admin/discovery/featured\\?campaign_id=${id}$`));
   await expect(page.getByLabel("Campaign id")).toHaveValue(id);
   expect(await axe(page)).toEqual([]);
 
   await page.getByLabel("Position (1–100)").fill("0");
-  await page.getByRole("button", { name: "Feature campaign" }).click();
+  await page.getByRole("button", { name: "Request placement" }).click();
   await expect(page.getByText("Choose a position from 1 to 100.").last()).toBeVisible();
-  await expect(page.getByText(/Write a note of 3 to 500/).last()).toBeVisible();
+  await expect(page.getByText(/Write 10 to 500 characters/).last()).toBeVisible();
   await page.getByLabel("Position (1–100)").fill("40");
-  await page.getByLabel("Why this campaign (staff only)").fill("Shows community fundraising for a clinic.");
-  await page.getByRole("button", { name: "Feature campaign" }).click();
+  await page.getByLabel(/Why this campaign/).fill("Shows community fundraising for a clinic.");
+  await page.getByRole("button", { name: "Request placement" }).click();
   await stepUpIfAsked(page);
-  await expect(page.getByRole("status").filter({ hasText: "Campaign featured." })).toBeVisible();
-  const pick = page.getByRole("list", { name: "Staff picks" }).locator(":scope > li").filter({ hasText: title });
-  await expect(pick).toContainText("Position 40");
-  await expect(pick).toContainText("Shown on the home page");
+  await expect(page.getByRole("status").filter({ hasText: "Placement requested." })).toBeVisible();
+  const item = page.getByRole("list", { name: "Featured placements" }).locator(":scope > li").filter({ hasText: title });
+  await expect(item).toContainText("Requested");
+  // not shown before a second person approves it
+  expect(await (await page.request.get("/campaigns/featured")).text()).not.toContain(title);
+  // the reviewer has no approval permission: the API refuses (the button is offered; the API is the authority)
+  await item.getByRole("button", { name: "Approve" }).click();
+  const selfDialog = page.getByRole("dialog", { name: "Approve this placement?" });
+  await selfDialog.getByLabel("Note (staff only)").fill("Trying to approve my own request.");
+  await selfDialog.getByRole("button", { name: "Confirm: Approve" }).click();
+  await expect(selfDialog.getByRole("alert")).toContainText(/permission/i);
+  await selfDialog.getByRole("button", { name: "Cancel" }).click();
 
-  // On the public home page the pick is listed.
-  const home = await page.request.get("/");
-  expect(await home.text()).toContain(title);
-
-  // A pick whose campaign stops being live stays listed for staff but is hidden from the public.
-  await page.request.post(`${AUTH_BASE_URL}/api/v1/__mock/campaign/${id}/status`, { data: { status: "SUSPENDED" } });
-  await page.reload();
-  await expect(pick).toContainText("Hidden from the public");
-  expect((await page.request.get(`/campaigns/${slug}`)).status()).toBe(404);
+  await page.context().clearCookies();
+  await signInStaff(page, officer, "/admin/discovery/featured");
+  await item.getByRole("button", { name: "Approve" }).click();
+  const dialog = page.getByRole("dialog", { name: "Approve this placement?" });
+  await dialog.getByLabel("Note (staff only)").fill("Checked the campaign and the reason.");
+  await dialog.getByRole("button", { name: "Confirm: Approve" }).click();
+  await stepUpIfAsked(page);
+  await expect(page.getByRole("status").filter({ hasText: "Placement approved." })).toBeVisible();
+  await expect(item).toContainText("Shown now");
+  const featured = await (await page.request.get("/campaigns/featured")).text();
+  expect(featured).toContain(title);
+  expect(featured).toContain("Featured by FundZim");
   expect(await axe(page)).toEqual([]);
 
-  await pick.getByRole("button", { name: /^Remove/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Remove this staff pick?" });
-  await dialog.getByRole("button", { name: "Confirm: Remove" }).click();
-  await expect(dialog.getByRole("alert")).toContainText("3 to 500");
-  await dialog.getByLabel("Reason (staff only)").fill("Campaign suspended.");
-  await dialog.getByRole("button", { name: "Confirm: Remove" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Campaign removed from the featured list." })).toBeVisible();
-  await expect(pick).toHaveCount(0);
+  // a campaign that stops being active is no longer shown; staff see why
+  await page.request.post(`${AUTH_BASE_URL}/api/v1/__mock/campaign/${id}/status`, { data: { status: "SUSPENDED" } });
+  await page.reload();
+  await expect(item).toContainText("Not shown: campaign not promotable");
+  expect(await (await page.request.get("/campaigns/featured")).text()).not.toContain(title);
+  expect((await page.request.get(`/campaigns/${slug}`)).status()).toBe(404);
+
+  await item.getByRole("button", { name: "Remove" }).click();
+  const remove = page.getByRole("dialog", { name: "Remove this placement now?" });
+  await remove.getByRole("button", { name: "Confirm: Remove" }).click();
+  await expect(remove.getByText("This is required.")).toBeVisible();
+  await remove.getByLabel("Reason (staff only)").fill("Campaign suspended.");
+  await remove.getByRole("button", { name: "Confirm: Remove" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Placement removed." })).toBeVisible();
+  await expect(item).toContainText("Removed");
   expect(problems).toEqual([]);
 });
 
-test("featured: a campaign that is not live cannot be picked", async ({ page }) => {
+test("featured placements: a campaign that is not active cannot be requested", async ({ page }) => {
   const { id } = await seedLive(page, `Not live ${token()}`);
   await page.request.post(`${AUTH_BASE_URL}/api/v1/__mock/campaign/${id}/status`, { data: { status: "COMPLETED" } });
   const staff = await createStaff(page, ["ADMIN"], "Admin Person");
-  await signInStaff(page, staff, "/admin/campaigns/featured");
-  await page.goto(`/admin/campaigns/featured?campaign_id=${id}`);
-  await page.getByLabel("Why this campaign (staff only)").fill("Trying an ended campaign.");
-  await page.getByRole("button", { name: "Feature campaign" }).click();
+  await signInStaff(page, staff, "/admin/discovery/featured");
+  await page.goto(`/admin/discovery/featured?campaign_id=${id}`);
+  await page.getByLabel(/Why this campaign/).fill("Trying an ended campaign.");
+  await page.getByRole("button", { name: "Request placement" }).click();
   await stepUpIfAsked(page);
-  await expect(page.getByRole("alert").filter({ hasText: "Only live" })).toHaveText("Only live, listed campaigns can be featured.");
+  await expect(page.getByRole("alert").filter({ hasText: "can't be featured now" })).toBeVisible();
 });
 
 test("staff pages are a 404 for users and for staff without the permission", async ({ page }) => {
   const email = await createUser(page, { phoneVerified: true });
   await signIn(page, email);
   await expect(page).toHaveURL(/\/dashboard$/);
-  for (const path of ["/admin/campaigns/reports", "/admin/campaigns/featured"]) {
+  for (const path of ["/admin/campaigns/reports", "/admin/discovery", "/admin/discovery/featured", "/admin/discovery/ranking"]) {
     expect((await page.goto(path))?.status(), path).toBe(404);
   }
   await page.context().clearCookies();
   const kyc = await createStaff(page, ["KYC_REVIEWER"]);
   await signInStaff(page, kyc, "/admin/verification");
-  for (const path of ["/admin/campaigns/reports", "/admin/campaigns/featured"]) {
+  for (const path of ["/admin/campaigns/reports", "/admin/discovery", "/admin/discovery/featured"]) {
     expect((await page.goto(path))?.status(), path).toBe(404);
   }
   await page.context().clearCookies();
-  const reviewer = await createStaff(page, ["REVIEWER"]);
-  await signInStaff(page, reviewer, "/admin/campaigns/reports");
-  expect((await page.goto("/admin/campaigns/featured"))?.status()).toBe(404); // REVIEWER lacks campaign.feature
+  const support = await createStaff(page, ["SUPPORT"]);
+  await signInStaff(page, support, "/admin/campaigns");
+  expect((await page.goto("/admin/discovery/featured"))?.status()).toBe(404); // SUPPORT lacks discovery.view
 });

@@ -16,12 +16,11 @@ import {
   readPublicCategory,
   readPublicSummaries,
   readPublicUpdates,
-  readSitemap,
   readTotal,
   withCategoryName,
 } from "./normalise";
 import { isCategorySlug, isPublicCode, isSlug, normalisePublicCode } from "./paths";
-import type { ListTotal, PublicCampaign, PublicCampaignSummary, PublicCategory, PublicUpdate, SitemapData } from "./types";
+import type { ListTotal, PublicCampaign, PublicCampaignSummary, PublicCategory, PublicUpdate } from "./types";
 
 /**
  * Public (no session) reads for the public site (docs/stage-7/interface-contracts.md §3). No cookies are
@@ -123,7 +122,7 @@ export async function fetchPublicList(query: URLSearchParams): Promise<PublicLis
 /** Featured campaigns (staff picks, then recently published; ADR-038 §2). */
 export async function fetchFeatured(limit = 6): Promise<Loaded<PublicCampaignSummary[]>> {
   try {
-    const result = await get(`/api/v1/public/campaigns/featured?limit=${Math.min(Math.max(limit, 1), 12)}`, 5_000);
+    const result = await get(`/api/v1/discovery/featured?limit=${Math.min(Math.max(limit, 1), 12)}`, 5_000);
     const categories = await fetchCategories();
     return { ok: true, data: readPublicSummaries(result.data).map((c) => withCategoryName(c, categories)) };
   } catch {
@@ -131,11 +130,3 @@ export async function fetchFeatured(limit = 6): Promise<Loaded<PublicCampaignSum
   }
 }
 
-/** Live PUBLIC campaigns and active categories for /sitemap.xml; null when the API is unavailable. */
-export async function fetchSitemapData(): Promise<SitemapData | null> {
-  try {
-    return readSitemap((await get("/api/v1/public/sitemap", 10_000)).data);
-  } catch {
-    return null;
-  }
-}

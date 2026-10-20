@@ -31,10 +31,10 @@ export default async function CampaignReviewPage({ params }: PageProps<"/admin/c
           <Link href="/admin/campaigns/review" className="font-semibold text-brand-700 underline">
             Back to the queue
           </Link>
-          {/* Only offered for live campaigns; the featured page itself needs campaign.feature (404 otherwise). */}
-          {["ACTIVE", "PAUSED"].includes(String(detail.campaign.status)) ? (
-            <Link href={`/admin/campaigns/featured?campaign_id=${id}`} className="font-semibold text-brand-700 underline">
-              Feature on the home page
+          {/* Only offered for active campaigns; requesting a placement needs discovery.feature.request (the API decides). */}
+          {String(detail.campaign.status) === "ACTIVE" ? (
+            <Link href={`/admin/discovery/featured?campaign_id=${id}`} className="font-semibold text-brand-700 underline">
+              Request a featured placement
             </Link>
           ) : null}
         </span>

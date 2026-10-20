@@ -3,9 +3,9 @@
 import { useId } from "react";
 
 import { SelectField, TextAreaField } from "@/components/forms/select-field";
-import { TextField } from "@/components/forms/text-field";
+import { inputClasses, TextField } from "@/components/forms/text-field";
 import { characterCount } from "@/lib/campaigns/text";
-import type { Category, CurrencyInfo } from "@/lib/campaigns/types";
+import type { CampaignLocationOption, Category, CurrencyInfo } from "@/lib/campaigns/types";
 import { LIMITS, type DraftFields } from "@/lib/campaigns/validate";
 
 /**
@@ -137,6 +137,53 @@ export function GoalFields({ value, onChange, errors, currencies }: { value: Pic
         hint={`For example 1500 or 1,500.${"0".repeat(Math.max(1, currency?.minor_units ?? 2))}. Set what you need; reviewers may ask how you arrived at it.`}
         error={errors.amount}
       />
+    </div>
+  );
+}
+
+/**
+ * Where the cause is (Stage 16): a Zimbabwe province or a town from a fixed list, or "not specified". Never an address,
+ * and never anyone's personal location; shown on the public page and used to browse campaigns by place.
+ */
+export function LocationField({ options, value, onChange, error }: { options: CampaignLocationOption[]; value: string; onChange: (v: string) => void; error?: string }) {
+  const id = useId();
+  const provinces = options.filter((o) => o.kind === "PROVINCE");
+  return (
+    <div className="space-y-1">
+      <label htmlFor={`${id}-location`} className="block font-semibold text-ink-900">
+        Where is the cause? (optional)
+      </label>
+      <p id={`${id}-hint`} className="text-ink-600">
+        Choose a province, or a town in it. This helps people find campaigns near them. Never enter an address: only the place name is shown.
+      </p>
+      <select
+        id={`${id}-location`}
+        name="location_code"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-describedby={[error ? `${id}-error` : null, `${id}-hint`].filter(Boolean).join(" ")}
+        aria-invalid={error ? true : undefined}
+        className={inputClasses}
+      >
+        <option value="">Not specified</option>
+        {provinces.map((p) => (
+          <optgroup key={p.code} label={p.name}>
+            <option value={p.code}>{p.name} (whole province)</option>
+            {options
+              .filter((t) => t.kind === "TOWN" && t.province_code === p.code)
+              .map((t) => (
+                <option key={t.code} value={t.code}>
+                  {t.name}
+                </option>
+              ))}
+          </optgroup>
+        ))}
+      </select>
+      {error ? (
+        <p id={`${id}-error`} className="font-semibold text-danger-700">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
