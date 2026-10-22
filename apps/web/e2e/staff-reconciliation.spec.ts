@@ -106,7 +106,9 @@ test("reconciliation: TEST evidence, imports, exception lifecycle with maker-che
   await proposal.getByLabel("Resolution").selectOption("PROVIDER_OUTCOME_APPLIED");
   await proposal.getByLabel(/Justification/).fill("The TEST statement reports the payment as succeeded at the provider.");
   await proposal.getByRole("button", { name: "Propose resolution" }).click();
-  await expect(proposal.getByRole("status")).toContainText("second team member");
+  // the confirmation survives the refresh that moves the exception to PENDING_APPROVAL (and removes the form)
+  await expect(page.getByRole("status").filter({ hasText: "second team member" })).toBeVisible();
+  await expect(proposal).toHaveCount(0);
   await page.reload();
   await expect(main).toContainText("Pending review");
   expect(await axe(page)).toEqual([]);

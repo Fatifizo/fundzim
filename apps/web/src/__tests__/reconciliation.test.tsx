@@ -94,6 +94,19 @@ describe("reconciliation forms", () => {
       evidence_refs: [`item:${EXC.item_id}`] }), expect.any(String));
   });
 
+  it("the proposal confirmation stays after the refresh closes the form", async () => {
+    const propose = vi.fn().mockResolvedValue({});
+    const api = { propose } as unknown as ReconciliationApi;
+    const { rerender } = render(<ProposalForm exc={readException(EXC)} api={api} />);
+    await userEvent.selectOptions(screen.getByLabelText("Resolution"), "PROVIDER_OUTCOME_APPLIED");
+    await userEvent.type(screen.getByLabelText(/Justification/), "The TEST statement line reports success at the provider.");
+    await userEvent.click(screen.getByRole("button", { name: "Propose resolution" }));
+    expect(await screen.findByText(/second team member/)).toBeInTheDocument();
+    rerender(<ProposalForm exc={readException(EXC)} open={false} api={api} />);
+    expect(screen.queryByRole("button", { name: "Propose resolution" })).not.toBeInTheDocument();
+    expect(screen.getByText(/second team member/)).toBeInTheDocument();
+  });
+
   it("a ledger adjustment proposal parses journal lines as integer minor units", async () => {
     const propose = vi.fn().mockResolvedValue({});
     render(<ProposalForm exc={readException(EXC)} api={{ propose } as unknown as ReconciliationApi} />);

@@ -17,8 +17,10 @@
 | KI-S17-13 | Exception assignment in the UI asks for the staff member's id (no picker) | usability | OPEN |
 | KI-S17-14 | Manual screen-reader audit of the reconciliation pages not performed; automated axe (WCAG 2.x A/AA serious and critical) on desktop and Pixel 7 | WCAG 2.2 AA not certified | OPEN |
 | KI-S17-15 | Not exercised by tests: a database outage in the middle of a run and a ledger failure during an adjustment execution (code paths reasoned: rollback, reaper, APPROVED with `last_error` retried) | — | OPEN |
-| KI-S17-17 | GO-2026-6809 (crypto/x509) reachable on go1.27.2, found by CI govulncheck | — | FIXED (Go 1.27.3) |
 | KI-S17-16 | Stage 0–16 acceptance not recorded; no stage branch has a pull request or is merged into `main` | governance | EXTERNAL_BLOCKER (owner) |
+| KI-S17-17 | GO-2026-6809 (crypto/x509) reachable on go1.27.2, found by CI govulncheck | — | FIXED (Go 1.27.3) |
+| KI-S17-18 | After a proposal the page refresh removed the proposal form and, with it, the confirmation (found by the CI mobile run) | staff saw no confirmation | FIXED (the form stays mounted and keeps its notice; unit test, E2E asserts it) |
+| KI-S17-19 | Stage 16 `TestDiscoveryEndToEnd` could hit the protective `global.ip` limit (40 per 2 s) with its own polling (CI: 429) | flaky integration run | FIXED (requests on the run's own address wait out a 429; the limit itself is still asserted on a separate address) |
 
 ## Earlier stages, revisited
 

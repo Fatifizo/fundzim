@@ -16,6 +16,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -100,7 +101,19 @@ func discoReq(t *testing.T, s *itServer, method, path string, body any, hdr ...s
 			return publicReq(t, s, method, path, body, hdr...)
 		}
 	}
-	return publicReq(t, s, method, path, body, append([]string{"X-Forwarded-For", discoClientIP}, hdr...)...)
+	// The run's own address shares global.ip (40 per 2 s) across the polling loops of one test: a 429 there is the
+	// protective limit, not the behaviour under test (TestDiscoveryFailureInjectionAndAbuse tests it on its own address), so wait it out.
+	for attempt := 0; ; attempt++ {
+		code, h, raw := publicReq(t, s, method, path, body, append([]string{"X-Forwarded-For", discoClientIP}, hdr...)...)
+		if code != http.StatusTooManyRequests || attempt == 3 {
+			return code, h, raw
+		}
+		wait, err := strconv.Atoi(h.Get("Retry-After"))
+		if err != nil || wait < 1 || wait > 5 {
+			wait = 2
+		}
+		time.Sleep(time.Duration(wait) * time.Second)
+	}
 }
 
 func discoPublicGet(t *testing.T, s *itServer, path string) (int, []byte) {

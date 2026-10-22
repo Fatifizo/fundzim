@@ -74,10 +74,10 @@ export default async function ReconciliationExceptionPage({ params }: PageProps<
             <ResolutionActions res={r} />
           </div>
         ))}
-        {e.status === "INVESTIGATING" && !pending ? (
+        {(e.status === "INVESTIGATING" && !pending) || e.status === "PENDING_APPROVAL" ? (
+          // Stays mounted after a proposal (the refresh moves the exception to PENDING_APPROVAL) so its confirmation remains.
           <div className="space-y-3">
-            <h3 className="font-display text-xl font-semibold text-ink-900">Propose a resolution</h3>
-            <ProposalForm exc={e} />
+            <ProposalForm exc={e} open={e.status === "INVESTIGATING" && !pending} />
           </div>
         ) : null}
       </Section>

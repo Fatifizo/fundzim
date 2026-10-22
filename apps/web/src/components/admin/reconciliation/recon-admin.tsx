@@ -285,7 +285,7 @@ export function ExceptionActions({ exc, api = reconciliationApi }: { exc: Except
 }
 
 /** Propose a resolution (maker; reconciliation.investigate). A second person approves it; nothing changes before. */
-export function ProposalForm({ exc, api = reconciliationApi }: { exc: ExceptionItem; api?: ReconciliationApi }) {
+export function ProposalForm({ exc, open = true, api = reconciliationApi }: { exc: ExceptionItem; open?: boolean; api?: ReconciliationApi }) {
   const router = useRouter();
   const withStepUp = useStepUp();
   const { busy, setBusy, error, setError, fieldErrors, notice, setNotice, noticeRef, errorRef, fail, invalid } = useFormState();
@@ -335,8 +335,10 @@ export function ProposalForm({ exc, api = reconciliationApi }: { exc: ExceptionI
     }
   }
 
+  if (!open) return <Messages notice={notice} error={error} noticeRef={noticeRef} errorRef={errorRef} />;
   return (
     <form noValidate onSubmit={submit} className="space-y-4">
+      <h3 className="font-display text-xl font-semibold text-ink-900">Propose a resolution</h3>
       <Messages notice={notice} error={error} noticeRef={noticeRef} errorRef={errorRef} />
       <SelectField label="Resolution" name="resolution_type" placeholderOption="Choose…" value={type} onChange={(e) => setType(e.target.value)}
         options={RESOLUTION_TYPES.map((x) => ({ value: x.type, label: x.label }))} hint={help} error={fieldErrors.resolution_type} />
