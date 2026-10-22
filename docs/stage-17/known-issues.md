@@ -17,6 +17,7 @@
 | KI-S17-13 | Exception assignment in the UI asks for the staff member's id (no picker) | usability | OPEN |
 | KI-S17-14 | Manual screen-reader audit of the reconciliation pages not performed; automated axe (WCAG 2.x A/AA serious and critical) on desktop and Pixel 7 | WCAG 2.2 AA not certified | OPEN |
 | KI-S17-15 | Not exercised by tests: a database outage in the middle of a run and a ledger failure during an adjustment execution (code paths reasoned: rollback, reaper, APPROVED with `last_error` retried) | — | OPEN |
+| KI-S17-17 | GO-2026-6809 (crypto/x509) reachable on go1.27.2, found by CI govulncheck | — | FIXED (Go 1.27.3) |
 | KI-S17-16 | Stage 0–16 acceptance not recorded; no stage branch has a pull request or is merged into `main` | governance | EXTERNAL_BLOCKER (owner) |
 
 ## Earlier stages, revisited

@@ -22,6 +22,7 @@ observed).
 | Real-stack E2E (full) | `npm --prefix apps/web run test:e2e:real` | 64 passed, 0 failed — includes the new reconciliation spec and, for the first time, Stage 16's `discovery.spec.ts` (3 tests), which had never been wired into a project |
 | OpenAPI | Redocly lint | valid (2 pre-existing warnings); route-coverage test passes |
 | Performance | `TestReconciliationPerf` on scratch `fundzim_perf` | §4 |
+| Vulnerabilities | `govulncheck@v1.8.0` | the first CI run on f812009 failed this step: GO-2026-6809 (crypto/x509, reachable from the SMTP sender) published for go1.27.2, fixed in go1.27.3. `go.mod` → `go 1.27.3`, API image → `golang:1.27.3-alpine3.24`; locally: 0 reachable vulnerabilities, Go unit suite passes on 1.27.3 |
 | Secrets | `scripts/check-secrets.sh` | no secrets found in 1 431 files; gitleaks is not installed on this machine (NOT RUN locally; CI runs its secret scanning job) |
 
 ## 2. Integration tests (`tests/integration/reconciliation_test.go`)
