@@ -805,7 +805,8 @@ INSERT INTO app.notification_templates (id, template_key, category, sensitive, a
   (md5('notification_template:RECON_EXCEPTION_ASSIGNED')::uuid, 'RECON_EXCEPTION_ASSIGNED', 'ADMINISTRATIVE', false, ARRAY['exception_type','severity']::text[], 'STAGE_17_BASELINE'),
   (md5('notification_template:RECON_IMPORT_FAILED')::uuid, 'RECON_IMPORT_FAILED', 'ADMINISTRATIVE', false, ARRAY['failure_code']::text[], 'STAGE_17_BASELINE'),
   (md5('notification_template:RECON_RESOLUTION_AWAITING_APPROVAL')::uuid, 'RECON_RESOLUTION_AWAITING_APPROVAL', 'ADMINISTRATIVE', false, ARRAY['resolution_type']::text[], 'STAGE_17_BASELINE'),
-  (md5('notification_template:RECON_UNKNOWN_OUTCOME_ESCALATED')::uuid, 'RECON_UNKNOWN_OUTCOME_ESCALATED', 'ADMINISTRATIVE', false, ARRAY['exception_type']::text[], 'STAGE_17_BASELINE');
+  (md5('notification_template:RECON_UNKNOWN_OUTCOME_ESCALATED')::uuid, 'RECON_UNKNOWN_OUTCOME_ESCALATED', 'ADMINISTRATIVE', false, ARRAY['exception_type']::text[], 'STAGE_17_BASELINE')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO app.notification_template_versions (id, template_id, email_subject, email_text, sms_text, inapp_title, inapp_body, content_hash)
 SELECT v.id, v.template_id, v.s, v.b, NULL, v.it, v.ib,
   sha256(convert_to(coalesce(v.s,'') || chr(31) || coalesce(v.b,'') || chr(31) || '' || chr(31) || coalesce(v.it,'') || chr(31) || coalesce(v.ib,''), 'UTF8'))
@@ -825,22 +826,19 @@ FROM (VALUES
   (md5('notification_template_version:RECON_UNKNOWN_OUTCOME_ESCALATED:1')::uuid, md5('notification_template:RECON_UNKNOWN_OUTCOME_ESCALATED')::uuid,
    'Statement evidence exists for an unknown outcome', 'A TEST statement reports an outcome for a payment or payout whose outcome is unknown ({{exception_type}}). Nothing was applied automatically.',
    'Statement evidence exists for an unknown outcome', 'A TEST statement reports an outcome for a payment or payout whose outcome is unknown ({{exception_type}}). Nothing was applied automatically.')
-) AS v(id, template_id, s, b, it, ib);
+) AS v(id, template_id, s, b, it, ib)
+ON CONFLICT (id) DO NOTHING;
 
 CALL app.apply_runtime_grants();
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
-ALTER TABLE app.notification_template_versions DISABLE TRIGGER USER;
-DELETE FROM app.notification_template_versions WHERE template_id IN (SELECT id FROM app.notification_templates WHERE origin = 'STAGE_17_BASELINE');
-ALTER TABLE app.notification_template_versions ENABLE TRIGGER USER;
-ALTER TABLE app.notification_templates DISABLE TRIGGER USER;
-DELETE FROM app.notification_templates WHERE origin = 'STAGE_17_BASELINE';
-ALTER TABLE app.notification_templates ENABLE TRIGGER USER;
+-- the Stage 17 templates are kept: notifications already sent reference their versions (communication history is never
+-- deleted), so the narrower origin CHECK is restored NOT VALID
 ALTER TABLE app.notification_templates DROP CONSTRAINT ck_notification_templates_origin;
 ALTER TABLE app.notification_templates ADD CONSTRAINT ck_notification_templates_origin CHECK (origin IN ('STAGE_4_NOTICE','STAGE_5_NOTICE',
-  'STAGE_6_NOTICE','STAGE_15_BASELINE','STAFF'));
+  'STAGE_6_NOTICE','STAGE_15_BASELINE','STAFF')) NOT VALID;
 ALTER TABLE app.role_permissions DISABLE TRIGGER USER;
 DELETE FROM app.role_permissions WHERE permission_id IN (SELECT id FROM app.permissions WHERE code IN ('reconciliation.view',
   'reconciliation.import','reconciliation.investigate','reconciliation.rules.request','reconciliation.rules.approve','reconciliation.report.export'));

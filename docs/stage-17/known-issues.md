@@ -21,6 +21,7 @@
 | KI-S17-17 | GO-2026-6809 (crypto/x509) reachable on go1.27.2, found by CI govulncheck | — | FIXED (Go 1.27.3) |
 | KI-S17-18 | After a proposal the page refresh removed the proposal form and, with it, the confirmation (found by the CI mobile run) | staff saw no confirmation | FIXED (the form stays mounted and keeps its notice; unit test, E2E asserts it) |
 | KI-S17-19 | Stage 16 `TestDiscoveryEndToEnd` could hit the protective `global.ip` limit (40 per 2 s) with its own polling (CI: 429) | flaky integration run | FIXED (requests on the run's own address wait out a 429; the limit itself is still asserted on a separate address) |
+| KI-S17-20 | The reconciliation migration's Down deleted its notification templates, which notifications already sent reference (CI destructive round trip failed after the integration run) | migration rollback with data impossible | FIXED (templates kept, origin CHECK restored NOT VALID, Up inserts idempotent; verified on a scratch copy of the development database: full down-to-0 and up, and single-step down/up) |
 
 ## Earlier stages, revisited
 

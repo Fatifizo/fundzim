@@ -24,6 +24,7 @@ observed).
 | Performance | `TestReconciliationPerf` on scratch `fundzim_perf` | §4 |
 | Vulnerabilities | `govulncheck@v1.8.0` | the first CI run on f812009 failed this step: GO-2026-6809 (crypto/x509, reachable from the SMTP sender) published for go1.27.2, fixed in go1.27.3. `go.mod` → `go 1.27.3`, API image → `golang:1.27.3-alpine3.24`; locally: 0 reachable vulnerabilities, Go unit suite passes on 1.27.3 |
 | CI fixes after the first runs | — | KI-S17-18 (proposal confirmation) and KI-S17-19 (Stage 16 discovery 429): mock reconciliation spec passes ×2 on desktop and Pixel 7; `TestDiscovery*` ok (62.6 s) |
+| Destructive migration round trip | `FUNDZIM_IT_DESTRUCTIVE=1 … -run TestMigrationsAppliedAndRepeatable` on `fundzim_rt` (a scratch copy of the development database with 40 337 notifications from Stage 17 templates; dropped afterwards) | PASS (13.7 s) after KI-S17-20; single-step down ×2 / up: templates kept, nothing duplicated, CHECK validated again |
 | Secrets | `scripts/check-secrets.sh` | no secrets found in 1 431 files; gitleaks is not installed on this machine (NOT RUN locally; CI runs its secret scanning job) |
 
 ## 2. Integration tests (`tests/integration/reconciliation_test.go`)
