@@ -30,6 +30,13 @@
 > immutable evidence, the central hold registry (enforced by campaigns, payments and payouts through `risk`'s public
 > service) and a TEST-only screening foundation ([stage-13/risk-architecture.md](stage-13/risk-architecture.md)); `risk`
 > stays a leaf module (platform, audit).
+> **Stage 17 (ADR-049, implements ADR-030):** `reconciliation` (imports platform, audit, storage, payments, payouts, fees,
+> ledger, psp; nothing imports it) owns the whole `recon` schema: sources, matching rule sets (maker-checker), statement
+> imports (hashed, stored as private evidence, scanned, parsed all or nothing), settlement batches, lines, runs, matches,
+> exceptions with append-only history, maker-checker resolutions and worker heartbeats (River queue `reconciliation`). It
+> reads the other modules through their services and changes them only through their own entry points: payments and
+> payouts apply statement evidence through their state machines (source `RECON`), the ledger posts only approved
+> adjustments. No settlement posting in Stage 17 ([stage-17/reconciliation-architecture.md](stage-17/reconciliation-architecture.md)).
 > **Stage 16 (ADR-048):** `discovery` (imports platform, audit, campaigns) owns `app.discovery_*`: a search projection fed
 > by the outbox consumer `discovery.index` and a reconciliation job (River queue `discovery`), featured placements and
 > ranking policies (maker-checker), trending scores, referral codes and aggregate engagement counters (an in-memory

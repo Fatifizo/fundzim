@@ -241,7 +241,7 @@ func (s *Service) Upload(ctx context.Context, in UploadInput) (Object, error) {
 		// the client went away or sent a malformed multipart body: nothing is stored
 		return Object{}, s.reject(ctx, obj, RejectMalformed, errors.Join(ErrMalformedUpload, rerr))
 	}
-	sniffed, reason, cerr := checkContent(in.BucketClass, declared, buf.Bytes(), tooLarge)
+	sniffed, reason, cerr := checkContent(in.BucketClass, in.Purpose, declared, buf.Bytes(), tooLarge)
 	if cerr != nil {
 		return Object{}, s.reject(ctx, obj, reason, cerr)
 	}

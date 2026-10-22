@@ -549,6 +549,17 @@ Notes on ordering:
 - **Acceptance criteria:** Every provider transaction is matched or in a tracked exception; unmatched items
   raise alerts; Gate B lifts for reconciled rails.
 
+- **Stage 17 as delivered (2026-10-22, awaiting acceptance):** `reconciliation` module on the `recon` schema with
+  canonical TEST statement imports (provider transaction and settlement reports, FundZim's operating bank statement),
+  a deterministic versioned matcher over payments, payouts, fees and ledger journals, every mismatch type of ADR-030 plus
+  ambiguity, conflicting evidence, unknown-outcome evidence and the Model A bank alarm, a tracked exception lifecycle,
+  maker-checker resolutions (statement outcomes applied by the owning modules, ledger adjustments through the ledger's
+  approval), settlement batches, daily and ageing reports with safe CSV export, operations snapshot and staff
+  notifications ([stage-17/implementation.md](stage-17/implementation.md), ADR-049); payout RATE_LIMITED retries now
+  budgeted (KI-S17-01). **Deviations:** no real provider statement or format exists (ADR-040) — only FundZim's canonical
+  format and simulator statements; no settlement postings (accounting review); campaign statements and regulatory
+  report exports not built (no format or obligation is defined yet; KI-S17-09); Gate B does not lift (no reconciled rail).
+
 ## Stage 18 — Security Hardening
 
 - **Objective:** Bring the platform to a standard where an independent security review and penetration test

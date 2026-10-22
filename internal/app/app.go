@@ -29,6 +29,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/ratelimit"
 	"github.com/Fatifizo/fundzim/internal/platform/storage"
 	"github.com/Fatifizo/fundzim/internal/platform/version"
+	"github.com/Fatifizo/fundzim/internal/reconciliation"
 	"github.com/Fatifizo/fundzim/migrations"
 )
 
@@ -58,6 +59,8 @@ type Deps struct {
 	Notifications *notifications.Service
 	// Stage 16 discovery (nil only in platform-only tests)
 	Discovery *discovery.Service
+	// Stage 17 reconciliation (nil when storage or a financial module is unavailable)
+	Reconciliation *reconciliation.Service
 }
 
 // NewDeps connects the dependencies described by cfg. The database pool is lazy: a database that is
@@ -148,7 +151,8 @@ func NewDeps(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Deps
 	}
 	d.Notifications = NewNotifications(NotificationDeps{Config: cfg, Pool: pool, Clock: clock.System, Logger: logger, Modules: d.Verification,
 		Orgs: d.Orgs, Auth: d.Auth, Email: email, SMS: sms})
-	d.Discovery = NewDiscovery(cfg, pool, d.Verification, d.Limiter, logger, true) // Stage 16 (ADR-048)
+	d.Discovery = NewDiscovery(cfg, pool, d.Verification, d.Limiter, logger, true)  // Stage 16 (ADR-048)
+	d.Reconciliation = NewReconciliation(cfg, pool, d.Verification, d.Auth, logger) // Stage 17 (ADR-049)
 	return d, nil
 }
 

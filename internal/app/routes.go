@@ -69,6 +69,9 @@ func NewRouter(d *Deps, checker *health.Checker) *httpx.Router {
 		if d.Discovery != nil {
 			registerDiscoveryRoutes(r, d.Discovery, d.Idempotency, d.Limiter, d.Logger) // Stage 16 (ADR-048)
 		}
+		if d.Reconciliation != nil {
+			registerReconciliationRoutes(r, d.Reconciliation, d.Idempotency, d.Logger) // Stage 17 (ADR-049)
+		}
 	}
 	return r
 }

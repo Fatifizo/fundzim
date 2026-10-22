@@ -138,10 +138,10 @@ func (s *Service) Reports(ctx context.Context, v Viewer, key string, from, to *t
 	out = append(out, r)
 
 	r = base("financial_reconciliation", "Financial reconciliation status (TEST)", "ledger, fees, payments and payouts module snapshots", "ledger.view",
-		pointInTime, "TEST ledger and TEST fees: never business performance", "settlement reconciliation is NOT_PERFORMED (no settlement evidence)",
+		pointInTime, "TEST ledger and TEST fees: never business performance", "settlement reconciliation runs on TEST statements only (Stage 17): no real settlement evidence exists",
 		"currencies are never combined; this report counts items, not amounts")
 	metricRows(&r, "reconciliation", "ledger.reconciliation.open", "ledger.integrity", "fees.reconciliation.open", "payments.reconciliation.open",
-		"payouts.exceptions.open")
+		"payouts.exceptions.open", "reconciliation.exceptions.open", "reconciliation.lines.open", "reconciliation.settlements.discrepancy")
 	out = append(out, r)
 
 	r = base("support_case_volumes", "Support case volumes", "app.ops_support_cases (created in the range)", PermSupportView)

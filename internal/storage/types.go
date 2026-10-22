@@ -71,6 +71,8 @@ const (
 	TypeJPEG = "image/jpeg"
 	TypePNG  = "image/png"
 	TypePDF  = "application/pdf"
+	TypeCSV  = "text/csv"         // RECONCILIATION_REPORT only (Stage 17)
+	TypeJSON = "application/json" // RECONCILIATION_REPORT only (Stage 17)
 )
 
 // Outbox event types.

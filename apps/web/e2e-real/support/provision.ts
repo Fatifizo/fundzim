@@ -280,6 +280,9 @@ export const PERSISTENT_STAFF: { key: string; name: string; role: string }[] = [
   { key: "moderator", name: "E2E Content Moderator", role: "ADMIN" },
   { key: "reviewer", name: "Rumbi Reviewer", role: "REVIEWER" },
   { key: "compliance", name: "Farai Compliance", role: "COMPLIANCE" },
+  // Stage 17 reconciliation: maker and checker
+  { key: "finance1", name: "Tafadzwa Finance", role: "FINANCE" },
+  { key: "finance2", name: "Nyasha Finance", role: "FINANCE" },
 ];
 
 async function holdsRole(pool: StaffPool, c: StaffCred | undefined, role: string): Promise<boolean> {

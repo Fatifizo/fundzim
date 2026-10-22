@@ -539,6 +539,19 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 > repeated after one may have reached the provider; owner-facing refusals reveal no compliance or risk detail. Full review:
 > [stage-11/security-review.md](stage-11/security-review.md).
 
+## 21l. Reconciliation security (Stage 17, summary)
+
+> **Stage 17 as built ([ADR-049](adr/ADR-049-reconciliation-and-settlement-operations.md)):** statement files are hashed
+> on receipt, refused when identical, stored as C2 private evidence with an evidence record of the same hash, scanned by
+> ClamAV and re-verified before parsing; the parser is strict (canonical CSV/JSON only, digit-string minor units, no JSON
+> numbers, no unknown fields, bounded sizes, all or nothing) and no spreadsheet engine is involved; exported CSV cells that
+> a spreadsheet could evaluate are neutralised; bank account numbers are never stored (last four + HMAC); FINANCE-only
+> permissions (COMPLIANCE reads), step-up on import, approval, rules approval and export; every resolution and rule set is
+> maker-checker with linked-identity separation in Go, CHECK and trigger, bound to the proposal hash and a 24 h expiry;
+> statement evidence never moves money without a second person and never resubmits a payout; `recon` history cannot be
+> updated or deleted by the application role; production imports, settlement postings and production adjustments are
+> disabled. Full review: [stage-17/security-review.md](stage-17/security-review.md).
+
 ## 21k. Discovery security (Stage 16, summary)
 
 > **Stage 16 as built ([ADR-048](adr/ADR-048-discovery-sharing-and-referrals.md)):** discovery never decides visibility —

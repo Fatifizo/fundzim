@@ -67,7 +67,7 @@ func TestCheckContent(t *testing.T) {
 		{"too large", BucketPrivateKYC, "image/png", big, true, ErrTooLarge, RejectTooLarge, ""},
 	}
 	for _, c := range cases {
-		typ, reason, err := checkContent(c.bucket, c.declared, c.content, c.tooLarge)
+		typ, reason, err := checkContent(c.bucket, "", c.declared, c.content, c.tooLarge)
 		if c.wantErr == nil && err != nil || c.wantErr != nil && !errors.Is(err, c.wantErr) {
 			t.Errorf("%s: err = %v, want %v", c.name, err, c.wantErr)
 		}

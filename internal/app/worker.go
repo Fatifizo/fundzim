@@ -25,6 +25,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/metrics"
 	"github.com/Fatifizo/fundzim/internal/platform/outbox"
 	"github.com/Fatifizo/fundzim/internal/platform/version"
+	"github.com/Fatifizo/fundzim/internal/reconciliation"
 	"github.com/Fatifizo/fundzim/internal/storage"
 	"github.com/Fatifizo/fundzim/migrations"
 )
@@ -54,6 +55,8 @@ type WorkerDeps struct {
 	Notifications *notifications.Service
 	// Stage 16: discovery (index consumer, reconciliation, trending, maintenance)
 	Discovery *discovery.Service
+	// Stage 17: reconciliation (statement parser consumer, matching, ageing)
+	Reconciliation *reconciliation.Service
 
 	riverRunning atomic.Bool
 }
@@ -103,7 +106,8 @@ func (d *WorkerDeps) buildRiver() error {
 	relay := &outbox.Relay{Pool: d.DB, Registry: d.Registry, Metrics: d.OutboxMetrics, Logger: d.Logger,
 		// the notification fan-out (one delivery per event) runs on its own queue: it never delays media scans or payments
 		ConsumerQueues: map[string]string{notifications.ConsumerDispatch: jobs.QueueNotifications,
-			discovery.ConsumerIndex: jobs.QueueDiscovery}} // Stage 16: indexing never delays payments or notifications
+			discovery.ConsumerIndex:        jobs.QueueDiscovery,       // Stage 16: indexing never delays payments or notifications
+			reconciliation.ConsumerImports: jobs.QueueReconciliation}} // Stage 17: statement parsing on its own queue
 	river.AddWorker(workers, &outbox.RelayWorker{Relay: relay})
 	// a delivery may run a malware scan: allow the scan timeout plus margin (default 30 s otherwise)
 	river.AddWorker(workers, &outbox.DeliverWorker{Pool: d.DB, Registry: d.Registry, Logger: d.Logger,
@@ -128,7 +132,8 @@ func (d *WorkerDeps) buildRiver() error {
 	if d.Notifications != nil {
 		periodic = append(periodic, notificationJobs(workers, d.Notifications, d.Config.Notifications.SimulatorEnabled)...) // Stage 15 (ADR-047)
 	}
-	periodic = append(periodic, discoveryJobs(workers, d.Discovery)...) // Stage 16 (ADR-048)
+	periodic = append(periodic, discoveryJobs(workers, d.Discovery)...)           // Stage 16 (ADR-048)
+	periodic = append(periodic, reconciliationJobs(workers, d.Reconciliation)...) // Stage 17 (ADR-049)
 	client, err := jobs.NewWorkerClient(jobs.WorkerConfig{
 		Pool: d.DB, Logger: d.Logger, Metrics: d.JobMetrics, Workers: workers,
 		Queues: jobs.DefaultQueues(d.Worker.Concurrency), PeriodicJobs: periodic,

@@ -1,5 +1,12 @@
 # Reconciliation Schema (`recon`)
 
+> **Implemented in Stage 17** as migration `20261022090000_reconciliation` with the deviations recorded in
+> [ADR-049](../adr/ADR-049-reconciliation-and-settlement-operations.md): table names without the `reconciliation_` prefix,
+> the prompt's exception lifecycle and severity names, nullable ledger links (no settlement postings in Stage 17; post
+> first, then record, when enabled), staff-supplied canonical TEST statements only. The implementation reference is
+> [docs/stage-17/reconciliation-architecture.md](../stage-17/reconciliation-architecture.md); the rest of this page is the
+> Stage 2 design.
+
 **Stage 2 — design only.** Draft SQL: [`design/sql/0017_reconciliation.sql`](../../design/sql/0017_reconciliation.sql),
 tests [`design/sql/tests/reconciliation_test.sql`](../../design/sql/tests/reconciliation_test.sql) (in-memory PGlite
 only). Settlement matching is built with the ledger (Stage 10/11); full reconciliation in Stage 17

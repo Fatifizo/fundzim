@@ -117,6 +117,8 @@ tags:
   description: Outside `/api/v1`. Liveness and readiness for the platform; not routed publicly in production.
 - name: Discovery (Stage 16)
   description: 'Search, categories, locations, featured, trending, recommendations, referral codes, aggregate analytics (ADR-048).'
+- name: Reconciliation (Stage 17)
+  description: 'Statement imports (TEST), matching runs, exceptions, maker-checker resolutions, settlement, payout, ledger and fee reconciliation views, reports (ADR-049).'
 paths:
   /auth/session:
     parameters:
@@ -16958,675 +16960,6 @@ paths:
       - PERMISSION_DENIED
       - REPORT_NOT_FOUND
       - REPORT_NOT_READY
-  /admin/reconciliation/sources:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Reconciliation (staff)
-      operationId: listReconciliationSources
-      summary: Reconciliation sources
-      description: '**REC-01** · Auth: staff + MFA · Authorization: `reconciliation.run`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReconciliationSourcePage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-01
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: reconciliation.run
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-  /admin/reconciliation/imports:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Reconciliation (staff)
-      operationId: createReconciliationImport
-      summary: Register an uploaded provider file (dedupe by hash)
-      description: '**REC-02** · Auth: staff + MFA · Authorization: `reconciliation.run`.
-
-
-        Idempotency: required · Rate-limit class: `RL-STAFF-WRITE` · Audit: reconciliation.import.created (new)'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReconciliationImportCreate'
-      responses:
-        '201':
-          description: 'Success. Idempotent replays return the stored response with `Idempotent-Replayed: true`.'
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReconciliationImportEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-02
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: reconciliation.run
-      x-fundzim-idempotency: required
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: reconciliation.import.created (new)
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - IDEMPOTENCY_KEY_INVALID
-      - IDEMPOTENCY_KEY_REQUIRED
-      - IDEMPOTENCY_KEY_REUSED
-      - IDEMPOTENCY_REQUEST_IN_PROGRESS
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-      - RECONCILIATION_IMPORT_DUPLICATE
-      - UPLOAD_NOT_READY
-      - UPLOAD_REJECTED
-      - VALIDATION_FAILED
-  /admin/reconciliation/imports/{import_id}:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Reconciliation (staff)
-      operationId: getReconciliationImport
-      summary: Get import
-      description: '**REC-03** · Auth: staff + MFA · Authorization: `reconciliation.run`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - name: import_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReconciliationImportEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-03
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: reconciliation.run
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-      - RECONCILIATION_IMPORT_NOT_FOUND
-  /admin/reconciliation/runs:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Reconciliation (staff)
-      operationId: startReconciliationRun
-      summary: Start a run
-      description: '**REC-04** · Auth: staff + MFA · Authorization: `reconciliation.run`.
-
-
-        Idempotency: required · Rate-limit class: `RL-STAFF-WRITE` · Audit: reconciliation.run.started (new)'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReconciliationRunCreate'
-      responses:
-        '202':
-          description: 'Success. Idempotent replays return the stored response with `Idempotent-Replayed: true`.'
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReconciliationRunEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-04
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: reconciliation.run
-      x-fundzim-idempotency: required
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: reconciliation.run.started (new)
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - IDEMPOTENCY_KEY_INVALID
-      - IDEMPOTENCY_KEY_REQUIRED
-      - IDEMPOTENCY_KEY_REUSED
-      - IDEMPOTENCY_REQUEST_IN_PROGRESS
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-      - VALIDATION_FAILED
-    get:
-      tags:
-      - Reconciliation (staff)
-      operationId: listReconciliationRuns
-      summary: List runs
-      description: '**REC-05** · Auth: staff + MFA · Authorization: `reconciliation.run`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      - name: provider
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 64
-        description: Allow-listed filter.
-      - name: currency
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Currency'
-        description: Allow-listed filter.
-      - name: status
-        in: query
-        required: false
-        schema:
-          type: string
-          description: Comma-separated allow-listed status values (OR).
-        description: Allow-listed filter.
-      - name: sort
-        in: query
-        required: false
-        description: Allow-listed sort key; `-` prefix = descending.
-        schema:
-          type: string
-          enum:
-          - -started_at
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReconciliationRunPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-05
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: reconciliation.run
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
-      - INVALID_FILTER
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-  /admin/reconciliation/runs/{run_id}:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Reconciliation (staff)
-      operationId: getReconciliationRun
-      summary: Get run
-      description: '**REC-06** · Auth: staff + MFA · Authorization: `reconciliation.run`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - name: run_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReconciliationRunEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-06
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: reconciliation.run
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-      - RECONCILIATION_RUN_NOT_FOUND
-  /admin/reconciliation/discrepancies:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Reconciliation (staff)
-      operationId: listDiscrepancies
-      summary: List discrepancies
-      description: '**REC-07** · Auth: staff + MFA · Authorization: `reconciliation.resolve`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - $ref: '#/components/parameters/Limit'
-      - $ref: '#/components/parameters/Cursor'
-      - name: status
-        in: query
-        required: false
-        schema:
-          type: string
-          description: Comma-separated allow-listed status values (OR).
-        description: Allow-listed filter.
-      - name: severity
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 64
-        description: Allow-listed filter.
-      - name: kind
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 64
-        description: Allow-listed filter.
-      - name: provider
-        in: query
-        required: false
-        schema:
-          type: string
-          maxLength: 64
-        description: Allow-listed filter.
-      - name: currency
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Currency'
-        description: Allow-listed filter.
-      - name: run_id
-        in: query
-        required: false
-        schema:
-          $ref: '#/components/schemas/Uuid'
-        description: Allow-listed filter.
-      - name: sort
-        in: query
-        required: false
-        description: Allow-listed sort key; `-` prefix = descending.
-        schema:
-          type: string
-          enum:
-          - -detected_at
-          - severity
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DiscrepancyPage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-07
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: reconciliation.resolve
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - INVALID_CURSOR
-      - INVALID_FILTER
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-  /admin/reconciliation/discrepancies/{discrepancy_id}:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    get:
-      tags:
-      - Reconciliation (staff)
-      operationId: getDiscrepancy
-      summary: Get discrepancy
-      description: '**REC-08** · Auth: staff + MFA · Authorization: `reconciliation.resolve`.
-
-
-        Idempotency: n/a · Rate-limit class: `RL-STAFF-READ` · Audit: —'
-      security:
-      - staffSession: []
-      parameters:
-      - name: discrepancy_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      responses:
-        '200':
-          description: Success.
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DiscrepancyEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-08
-      x-fundzim-auth: staff+MFA
-      x-fundzim-permission: reconciliation.resolve
-      x-fundzim-idempotency: n/a
-      x-fundzim-rate-limit-class: RL-STAFF-READ
-      x-fundzim-audit: —
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - DISCREPANCY_NOT_FOUND
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-  /admin/reconciliation/discrepancies/{discrepancy_id}/resolutions:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Reconciliation (staff)
-      operationId: createDiscrepancyResolution
-      summary: Propose/apply a resolution (state- or money-changing → PENDING_APPROVAL)
-      description: '**REC-09** · Auth: staff + MFA + step-up · Authorization: `reconciliation.resolve`; evidence required.
-
-
-        Idempotency: required · Rate-limit class: `RL-STAFF-WRITE` · Audit: reconciliation.mismatch.resolved (J) / resolution.proposed (new, J)'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - name: discrepancy_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ResolutionCreate'
-      responses:
-        '201':
-          description: 'Success. Idempotent replays return the stored response with `Idempotent-Replayed: true`.'
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ResolutionEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-09
-      x-fundzim-auth: staff+MFA+step-up
-      x-fundzim-permission: reconciliation.resolve
-      x-fundzim-step-up: true
-      x-fundzim-maker-checker: maker when state/money changes
-      x-fundzim-idempotency: required
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: reconciliation.mismatch.resolved (J) / resolution.proposed (new, J)
-      x-fundzim-error-codes:
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - DISCREPANCY_NOT_FOUND
-      - EVIDENCE_REQUIRED
-      - IDEMPOTENCY_KEY_INVALID
-      - IDEMPOTENCY_KEY_REQUIRED
-      - IDEMPOTENCY_KEY_REUSED
-      - IDEMPOTENCY_REQUEST_IN_PROGRESS
-      - JUSTIFICATION_REQUIRED
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-      - STEP_UP_REQUIRED
-      - VALIDATION_FAILED
-  /admin/reconciliation/resolutions/{resolution_id}/approve:
-    parameters:
-    - $ref: '#/components/parameters/RequestId'
-    post:
-      tags:
-      - Reconciliation (staff)
-      operationId: approveDiscrepancyResolution
-      summary: Approve a resolution (checker); may resolve UNKNOWN payment/payout
-      description: '**REC-10** · Auth: staff + MFA + step-up · Authorization: `reconciliation.resolve`; ≠ maker.
-
-
-        Idempotency: required · Rate-limit class: `RL-STAFF-WRITE` · Audit: reconciliation.mismatch.resolved (J); payment/payout.state.changed
-        (RECON)'
-      security:
-      - staffSession: []
-        csrfToken: []
-      parameters:
-      - name: resolution_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/Uuid'
-      - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/StaffActionRequest'
-      responses:
-        '200':
-          description: 'Success. Idempotent replays return the stored response with `Idempotent-Replayed: true`.'
-          headers:
-            X-Request-ID:
-              $ref: '#/components/headers/XRequestId'
-            Idempotent-Replayed:
-              $ref: '#/components/headers/IdempotentReplayed'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ResolutionEnvelope'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-      x-fundzim-endpoint-id: REC-10
-      x-fundzim-auth: staff+MFA+step-up
-      x-fundzim-permission: reconciliation.resolve
-      x-fundzim-step-up: true
-      x-fundzim-maker-checker: checker
-      x-fundzim-idempotency: required
-      x-fundzim-rate-limit-class: RL-STAFF-WRITE
-      x-fundzim-audit: reconciliation.mismatch.resolved (J); payment/payout.state.changed (RECON)
-      x-fundzim-error-codes:
-      - APPROVAL_EXPIRED
-      - APPROVER_CONFLICT
-      - AUTHENTICATION_REQUIRED
-      - CSRF_TOKEN_INVALID
-      - IDEMPOTENCY_KEY_INVALID
-      - IDEMPOTENCY_KEY_REQUIRED
-      - IDEMPOTENCY_KEY_REUSED
-      - IDEMPOTENCY_REQUEST_IN_PROGRESS
-      - INVARIANT_CHECK_FAILED
-      - MFA_REQUIRED
-      - PERMISSION_DENIED
-      - RESOLUTION_NOT_FOUND
-      - STEP_UP_REQUIRED
-      - VALIDATION_FAILED
   /admin/settlement-batches:
     parameters:
     - $ref: '#/components/parameters/RequestId'
@@ -43176,6 +42509,2123 @@ paths:
       x-fundzim-permission: '`discovery.operate` + fresh step-up'
       x-fundzim-step-up: true
       x-fundzim-idempotency: n/a
+  /admin/reconciliation/overview:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: getReconciliationOverview
+      summary: Reconciliation dashboard
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. Sources and their freshness
+        (NEVER until a statement is parsed), imports, lines per currency and match status, open exceptions by severity and type, oldest open exception age,
+        resolutions waiting, settlement batches, unknown-outcome evidence, worker heartbeats, recent runs and the production gates (BLOCKED). Every figure
+        is TEST_ONLY; currencies are never summed together.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconOverviewEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/sources:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: listReconciliationSources
+      summary: Statement sources
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. Configured TEST sources (provider
+        transaction report, provider settlement report, FundZim operating bank) with their authority rank.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconSourceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/imports:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: listReconciliationImports
+      summary: Statement imports
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. Newest first.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: source
+        in: query
+        required: false
+        description: Source code.
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        description: RECEIVED, PARSING, PARSED, FAILED or SUPERSEDED.
+        schema:
+          type: string
+      - name: currency
+        in: query
+        required: false
+        description: ISO 4217 code.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: 1–200 (default 50).
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconImportList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: uploadReconciliationStatement
+      summary: Import a TEST statement (canonical CSV or JSON)
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.import` (step-up). Multipart: `source`,
+        optional `supersedes_import_id` (a corrected re-issue of a PARSED import of the same source) and one `file` part with Content-Type `text/csv` or `application/json`
+        in FundZim''s canonical format (docs/stage-17/settlement-management.md §3; never a provider format). The file is hashed, deduplicated by hash (409
+        DUPLICATE_IMPORT; filenames are never an identity), stored as C2 private evidence, scanned and parsed asynchronously, all or nothing. Refused in production
+        (PRODUCTION_IMPORTS_DISABLED).
+
+
+
+
+        Idempotency: by content hash · Audit: reconciliation.import.received · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                source:
+                  type: string
+                supersedes_import_id:
+                  type: string
+                  format: uuid
+                file:
+                  type: string
+                  format: binary
+              required:
+              - source
+              - file
+      responses:
+        '202':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconImportEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.import
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: by content hash
+  /admin/reconciliation/imports/sandbox:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: generateSandboxStatement
+      summary: Generate a TEST statement from the simulator
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.import` (step-up). Builds a canonical
+        JSON statement from the sandbox simulator''s own payments and payouts in a period and imports it like a file (origin SANDBOX_GENERATOR). Not available
+        where the sandbox is disabled (SANDBOX_UNAVAILABLE) and never in production. Reports no fees.
+
+
+
+
+        Idempotency: required · Audit: reconciliation.import.received · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconSandboxInput'
+      responses:
+        '202':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconImportEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.import
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: required
+  /admin/reconciliation/imports/{import_id}:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: getReconciliationImport
+      summary: Import detail
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. The import (hash, evidence
+        record, validation report), its lines with their active match and explanation, and exceptions on those lines.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: import_id
+        in: path
+        required: true
+        description: Import id.
+        schema:
+          type: string
+          format: uuid
+      - name: match_status
+        in: query
+        required: false
+        description: Filter lines.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: Lines (1–500).
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconImportDetailEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/runs:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: listReconciliationRuns
+      summary: Matching runs
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. Newest first.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: source
+        in: query
+        required: false
+        description: Source code.
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        description: Run status.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: 1–200.
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRunList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: requestReconciliationRun
+      summary: Queue a run or a replay
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.run`. Queues an ON_DEMAND run for
+        (source, currency) over the parsed statements'' window, or a REPLAY of an earlier run''s scope (`replay_of_run_id`). Reason required. Fails closed
+        without an ACTIVE rule set (NO_ACTIVE_RULE_SET); one active run per scope (RUN_ACTIVE). A run never posts to the ledger and never changes a payment,
+        payout or reservation.
+
+
+
+
+        Idempotency: required · Audit: reconciliation.run.queued · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconRunInput'
+      responses:
+        '202':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRunEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.run
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: required
+  /admin/reconciliation/runs/{run_id}:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: getReconciliationRun
+      summary: Run detail
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. Counts, rule set version,
+        matcher version and the decisions hash.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        description: Run id.
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRunEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/exceptions:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: listReconciliationExceptions
+      summary: Exception queue
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. Most severe, then oldest first.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        description: Status.
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - ASSIGNED
+          - INVESTIGATING
+          - AWAITING_EVIDENCE
+          - PENDING_APPROVAL
+          - RESOLVED
+          - REOPENED
+          - CLOSED
+      - name: type
+        in: query
+        required: false
+        description: Exception type.
+        schema:
+          type: string
+      - name: severity
+        in: query
+        required: false
+        description: Severity.
+        schema:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+      - name: source
+        in: query
+        required: false
+        description: Source code.
+        schema:
+          type: string
+      - name: currency
+        in: query
+        required: false
+        description: ISO 4217 code.
+        schema:
+          type: string
+      - name: assigned_to
+        in: query
+        required: false
+        description: Assignee id.
+        schema:
+          type: string
+      - name: open
+        in: query
+        required: false
+        description: '`true`: exclude RESOLVED and CLOSED.'
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: 1–200.
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconExceptionList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/exceptions/{exception_id}:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: getReconciliationException
+      summary: Exception detail
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. The exception, its statement
+        line and match, its append-only history and its resolutions.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: exception_id
+        in: path
+        required: true
+        description: Exception id.
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconExceptionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/exceptions/{exception_id}/assign:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: reconciliationExceptionAssign
+      summary: Assign an investigator
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.investigate`. OPEN/REOPENED → ASSIGNED,
+        or reassign. The assignee must hold reconciliation.investigate. Optional due date (set by the assigner; no SLA is configured). Optimistic concurrency
+        through `version` (STALE_VERSION).
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.exception.assign · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: exception_id
+        in: path
+        required: true
+        description: Exception id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconActionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconExceptionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.investigate
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/exceptions/{exception_id}/start:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: reconciliationExceptionStart
+      summary: Start the investigation
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.investigate`. ASSIGNED → INVESTIGATING
+        (the assignee only). Optimistic concurrency through `version` (STALE_VERSION).
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.exception.start · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: exception_id
+        in: path
+        required: true
+        description: Exception id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconActionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconExceptionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.investigate
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/exceptions/{exception_id}/await-evidence:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: reconciliationExceptionAwaitEvidence
+      summary: Wait for evidence
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.investigate`. INVESTIGATING → AWAITING_EVIDENCE.
+        Optimistic concurrency through `version` (STALE_VERSION).
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.exception.await_evidence · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: exception_id
+        in: path
+        required: true
+        description: Exception id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconActionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconExceptionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.investigate
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/exceptions/{exception_id}/resume:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: reconciliationExceptionResume
+      summary: Resume the investigation
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.investigate`. AWAITING_EVIDENCE →
+        INVESTIGATING. Optimistic concurrency through `version` (STALE_VERSION).
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.exception.resume · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: exception_id
+        in: path
+        required: true
+        description: Exception id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconActionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconExceptionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.investigate
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/exceptions/{exception_id}/comment:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: reconciliationExceptionComment
+      summary: Comment or attach an evidence reference
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.investigate`. Appends a COMMENT or
+        EVIDENCE_ADDED event (evidence references are ids, never files). Optimistic concurrency through `version` (STALE_VERSION).
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.exception.comment · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: exception_id
+        in: path
+        required: true
+        description: Exception id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconActionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconExceptionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.investigate
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/exceptions/{exception_id}/close:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: reconciliationExceptionClose
+      summary: Close a resolved exception
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.investigate`. RESOLVED → CLOSED.
+        Optimistic concurrency through `version` (STALE_VERSION).
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.exception.close · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: exception_id
+        in: path
+        required: true
+        description: Exception id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconActionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconExceptionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.investigate
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/exceptions/{exception_id}/reopen:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: reconciliationExceptionReopen
+      summary: Reopen a resolved exception
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.investigate`. RESOLVED → REOPENED
+        (late or contradicting evidence). Optimistic concurrency through `version` (STALE_VERSION).
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.exception.reopen · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: exception_id
+        in: path
+        required: true
+        description: Exception id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconActionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconExceptionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.investigate
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/exceptions/{exception_id}/resolutions:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: proposeReconciliationResolution
+      summary: Propose a resolution (maker)
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.investigate`. INVESTIGATING → PENDING_APPROVAL.
+        Types: EXPLAINED_NO_ACTION, PROVIDER_CORRECTION_CONFIRMED, ESCALATED_TO_CASE, MANUAL_MATCH, PROVIDER_OUTCOME_APPLIED, LEDGER_ADJUSTMENT. Justification
+        (≥ 20 characters) and 1–10 evidence references required. MANUAL_MATCH links equal evidence only; PROVIDER_OUTCOME_APPLIED is for UNKNOWN_*_OUTCOME
+        exceptions and is applied by the owning module''s state machine (source RECON); LEDGER_ADJUSTMENT files a ledger adjustment request with a named rule
+        (SETTLEMENT_DISCREPANCY_RESOLVED, ADJUSTMENT, WRITE_OFF) in the TEST ledger only. Expires after 24 h.
+
+
+
+
+        Idempotency: required · Audit: reconciliation.resolution.proposed · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: exception_id
+        in: path
+        required: true
+        description: Exception id.
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconProposalInput'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconResolutionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.investigate
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: required
+  /admin/reconciliation/resolutions:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: listPendingReconciliationResolutions
+      summary: Resolutions waiting for a checker
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. Oldest first.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        description: 1–200.
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconResolutionList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/resolutions/{resolution_id}/approve:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: approveReconciliationResolution
+      summary: Approve and execute (checker)
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.resolve` (step-up). Never the proposer
+        or a linked account (SELF_DECISION_FORBIDDEN; Go, CHECK and trigger). `proposal_sha256` must equal the stored proposal hash (PROPOSAL_CHANGED); an
+        expired proposal cannot be approved (RESOLUTION_EXPIRED). Executes idempotently.
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.resolution.approve, reconciliation.resolution.executed · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: resolution_id
+        in: path
+        required: true
+        description: Resolution id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconDecisionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconResolutionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.resolve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/resolutions/{resolution_id}/reject:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: rejectReconciliationResolution
+      summary: Reject (checker)
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.resolve` (step-up). PENDING_REVIEW
+        → REJECTED; the exception returns to INVESTIGATING; a linked ledger adjustment request is rejected.
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.resolution.reject · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: resolution_id
+        in: path
+        required: true
+        description: Resolution id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconDecisionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconResolutionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.resolve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/resolutions/{resolution_id}/cancel:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: cancelReconciliationResolution
+      summary: Cancel (the proposer)
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.investigate`. PENDING_REVIEW → CANCELLED;
+        a linked ledger adjustment request is withdrawn.
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.resolution.cancel · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: resolution_id
+        in: path
+        required: true
+        description: Resolution id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconDecisionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconResolutionEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.investigate
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/settlements:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: listReconciliationSettlementBatches
+      summary: Settlement batches
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. Header totals, FundZim''s
+        expected net, line counts and status.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        description: RECEIVED, MATCHED, DISCREPANCY or SUPERSEDED.
+        schema:
+          type: string
+      - name: currency
+        in: query
+        required: false
+        description: ISO 4217.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: 1–200.
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconSettlementList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/settlements/{batch_id}:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: getReconciliationSettlementBatch
+      summary: Settlement batch detail
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. The batch and its lines.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: batch_id
+        in: path
+        required: true
+        description: Batch id.
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconSettlementEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/payouts:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: getPayoutReconciliation
+      summary: Payout reconciliation
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. Payouts in flight or UNKNOWN
+        with attempt history, reservation status and open exceptions (retry-budget halts flagged), payout matches by ledger status and payout-related reconciliation
+        exceptions. Reconciliation never resubmits a payout or releases a reservation.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconPayoutViewEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/ledger:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: getLedgerReconciliation
+      summary: Ledger reconciliation
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. The ledger''s latest integrity
+        checks, trial balance per currency (debits = credits), open ledger reconciliation exceptions, matches by ledger status and open MISSING_LEDGER_ENTRY
+        exceptions. Settlement postings are BLOCKED in Stage 17.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconLedgerViewEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/fees:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: getFeeReconciliation
+      summary: Fee reconciliation
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. Matches by fee status, FEE_MISMATCH
+        exceptions and the fee module''s latest recompute run. Provider fee evidence stays SYNTHETIC/UNVERIFIED; no revenue is recognised from reconciliation.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconFeeViewEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/reports:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: getReconciliationReport
+      summary: Report
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. Bounded to 5 000 rows (`truncated`);
+        TEST_ONLY.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - &id001
+        name: kind
+        in: query
+        required: false
+        description: daily_summary, settlement_summary, unmatched_lines, payout_exceptions, fee_discrepancies, ledger_integrity or exception_ageing.
+        schema:
+          type: string
+      - &id002
+        name: from
+        in: query
+        required: false
+        description: 'RFC 3339 (default: 30 days before `to`).'
+        schema:
+          type: string
+      - &id003
+        name: to
+        in: query
+        required: false
+        description: 'RFC 3339 (default: now).'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconReportEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/reports/export:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: exportReconciliationReport
+      summary: Export a report as CSV
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.report.export` (step-up). Same report
+        as CSV; every cell that a spreadsheet could evaluate (leading =, +, -, @, tab, CR) is neutralised with an apostrophe. Audited.
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.report.exported · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            text/csv:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.report.export
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/rule-sets:
+    get:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: listReconciliationRuleSets
+      summary: Matching rule sets
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.view`. Newest version first. None
+        is seeded: matching fails closed until one is ACTIVE.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSetList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: proposeReconciliationRuleSet
+      summary: Propose a rule set (maker)
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.rules.request`. Closed, bounded keys;
+        hashed and immutable once proposed; one pending at a time (RULE_SET_PENDING).
+
+
+
+
+        Idempotency: required · Audit: reconciliation.rule_set.proposed · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconRuleSetInput'
+      responses:
+        '201':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSetEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.rules.request
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: required
+  /admin/reconciliation/rule-sets/{rule_set_id}/approve:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: approveReconciliationRuleSet
+      summary: Approve a rule set
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.rules.approve` (step-up). Checker
+        (never the proposer or a linked account); `config_sha256` must match when given. The previous ACTIVE set is retired; earlier decisions keep their
+        version.
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.rule_set.approve · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: rule_set_id
+        in: path
+        required: true
+        description: Rule set id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconRuleDecisionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSetEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.rules.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/rule-sets/{rule_set_id}/reject:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: rejectReconciliationRuleSet
+      summary: Reject a rule set
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.rules.approve` (step-up). Checker.
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.rule_set.reject · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: rule_set_id
+        in: path
+        required: true
+        description: Rule set id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconRuleDecisionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSetEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.rules.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/rule-sets/{rule_set_id}/retire:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: retireReconciliationRuleSet
+      summary: Retire a rule set
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.rules.approve` (step-up). Retires
+        the ACTIVE set (matching then fails closed).
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.rule_set.retire · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: rule_set_id
+        in: path
+        required: true
+        description: Rule set id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconRuleDecisionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSetEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.rules.approve
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/reconciliation/rule-sets/{rule_set_id}/withdraw:
+    post:
+      tags:
+      - Reconciliation (Stage 17)
+      operationId: withdrawReconciliationRuleSet
+      summary: Withdraw a rule set
+      description: '**Stage 17 · IMPLEMENTED · TEST evidence only** · Auth: staff + MFA · Authorization: `reconciliation.rules.request`. The proposer only.
+
+
+
+
+        Idempotency: n/a · Audit: reconciliation.rule_set.withdraw · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: rule_set_id
+        in: path
+        required: true
+        description: Rule set id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconRuleDecisionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconRuleSetEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 17
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: reconciliation.rules.request
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
 components:
   securitySchemes:
     session:
@@ -48041,248 +49491,6 @@ components:
       - created_at
       - download_url
       - download_expires_at
-    ReconciliationSource:
-      type: object
-      description: Reconciliation source.
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        provider:
-          type: string
-        kind:
-          type: string
-          enum:
-          - SETTLEMENT_REPORT
-          - TRANSACTION_REPORT
-          - STATUS_API
-          - BANK_STATEMENT
-        currency:
-          $ref: '#/components/schemas/Currency'
-        last_import_at:
-          oneOf:
-          - $ref: '#/components/schemas/Timestamp'
-          - type: 'null'
-      required:
-      - id
-      - provider
-      - kind
-      - currency
-      - last_import_at
-    ReconciliationImportCreate:
-      type: object
-      description: Register an uploaded provider file.
-      properties:
-        source_id:
-          $ref: '#/components/schemas/Uuid'
-        upload_session_id:
-          $ref: '#/components/schemas/Uuid'
-        period_from:
-          $ref: '#/components/schemas/Timestamp'
-        period_to:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - source_id
-      - upload_session_id
-      - period_from
-      - period_to
-      additionalProperties: false
-    ReconciliationImport:
-      type: object
-      description: Import record.
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        source_id:
-          $ref: '#/components/schemas/Uuid'
-        sha256:
-          type: string
-        status:
-          type: string
-          enum:
-          - RECEIVED
-          - PARSED
-          - FAILED
-        item_count:
-          type: integer
-        created_at:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - id
-      - source_id
-      - sha256
-      - status
-      - item_count
-      - created_at
-    ReconciliationRunCreate:
-      type: object
-      description: Start a reconciliation run.
-      properties:
-        provider:
-          type: string
-        currency:
-          $ref: '#/components/schemas/Currency'
-        period_from:
-          $ref: '#/components/schemas/Timestamp'
-        period_to:
-          $ref: '#/components/schemas/Timestamp'
-        import_ids:
-          type: array
-          items:
-            $ref: '#/components/schemas/Uuid'
-      required:
-      - provider
-      - currency
-      - period_from
-      - period_to
-      additionalProperties: false
-    ReconciliationRun:
-      type: object
-      description: Run record.
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        provider:
-          type: string
-        currency:
-          $ref: '#/components/schemas/Currency'
-        status:
-          type: string
-          enum:
-          - QUEUED
-          - RUNNING
-          - COMPLETED
-          - FAILED
-        matched_count:
-          type: integer
-        discrepancy_count:
-          type: integer
-        started_at:
-          oneOf:
-          - $ref: '#/components/schemas/Timestamp'
-          - type: 'null'
-        finished_at:
-          oneOf:
-          - $ref: '#/components/schemas/Timestamp'
-          - type: 'null'
-      required:
-      - id
-      - provider
-      - currency
-      - status
-      - matched_count
-      - discrepancy_count
-      - started_at
-      - finished_at
-    Discrepancy:
-      type: object
-      description: Reconciliation discrepancy.
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        run_id:
-          $ref: '#/components/schemas/Uuid'
-        kind:
-          type: string
-          enum:
-          - MISSING_IN_PROVIDER
-          - MISSING_IN_FUNDZIM
-          - AMOUNT_MISMATCH
-          - STATUS_MISMATCH
-          - UNKNOWN_RESOLVABLE
-          - UNMATCHED_OUTGOING
-        severity:
-          type: string
-          enum:
-          - SEV1
-          - SEV2
-          - SEV3
-        currency:
-          $ref: '#/components/schemas/Currency'
-        fundzim_amount:
-          $ref: '#/components/schemas/Money'
-        provider_amount:
-          $ref: '#/components/schemas/Money'
-        payment_id:
-          $ref: '#/components/schemas/Uuid'
-        payout_request_id:
-          $ref: '#/components/schemas/Uuid'
-        status:
-          type: string
-          enum:
-          - OPEN
-          - RESOLUTION_PENDING
-          - RESOLVED
-        detected_at:
-          $ref: '#/components/schemas/Timestamp'
-      required:
-      - id
-      - run_id
-      - kind
-      - severity
-      - currency
-      - status
-      - detected_at
-    ResolutionCreate:
-      type: object
-      description: Propose a discrepancy resolution. Money-moving or state-changing resolutions need a checker.
-      properties:
-        resolution_type:
-          type: string
-          enum:
-          - MATCH_MANUAL
-          - CONFIRM_PAYMENT_OUTCOME
-          - CONFIRM_PAYOUT_OUTCOME
-          - LEDGER_ADJUSTMENT_LINKED
-          - PROVIDER_ERROR_ACKNOWLEDGED
-          - NO_ACTION
-        confirmed_status:
-          type: string
-        evidence_record_ids:
-          type: array
-          items:
-            $ref: '#/components/schemas/Uuid'
-          minItems: 1
-        justification:
-          type: string
-          minLength: 10
-          maxLength: 2000
-        ledger_adjustment_id:
-          $ref: '#/components/schemas/Uuid'
-      required:
-      - resolution_type
-      - evidence_record_ids
-      - justification
-      additionalProperties: false
-    Resolution:
-      type: object
-      description: Resolution record.
-      properties:
-        id:
-          $ref: '#/components/schemas/Uuid'
-        discrepancy_id:
-          $ref: '#/components/schemas/Uuid'
-        resolution_type:
-          type: string
-        status:
-          type: string
-          enum:
-          - APPLIED
-          - PENDING_APPROVAL
-          - REJECTED
-          - EXPIRED
-        proposed_by:
-          $ref: '#/components/schemas/ActorRef'
-        approved_by:
-          oneOf:
-          - $ref: '#/components/schemas/ActorRef'
-          - type: 'null'
-      required:
-      - id
-      - discrepancy_id
-      - resolution_type
-      - status
-      - proposed_by
-      - approved_by
     SettlementBatch:
       type: object
       description: Settlement batch.
@@ -49553,89 +50761,6 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/ReportJob'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    ReconciliationSourcePage:
-      type: object
-      description: Standard envelope (cursor page) for `ReconciliationSource`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/ReconciliationSource'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
-    ReconciliationImportEnvelope:
-      type: object
-      description: Standard envelope for `ReconciliationImport`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/ReconciliationImport'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    ReconciliationRunEnvelope:
-      type: object
-      description: Standard envelope for `ReconciliationRun`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/ReconciliationRun'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    ReconciliationRunPage:
-      type: object
-      description: Standard envelope (cursor page) for `ReconciliationRun`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/ReconciliationRun'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
-    DiscrepancyPage:
-      type: object
-      description: Standard envelope (cursor page) for `Discrepancy`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/Discrepancy'
-        meta:
-          $ref: '#/components/schemas/PageMeta'
-    DiscrepancyEnvelope:
-      type: object
-      description: Standard envelope for `Discrepancy`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/Discrepancy'
-        meta:
-          $ref: '#/components/schemas/ResponseMeta'
-    ResolutionEnvelope:
-      type: object
-      description: Standard envelope for `Resolution`.
-      required:
-      - data
-      - meta
-      properties:
-        data:
-          $ref: '#/components/schemas/Resolution'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
     SettlementBatchPage:
@@ -67983,6 +69108,1125 @@ components:
           - checked
           - reindexed
           - failed
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconCount:
+      type: object
+      properties:
+        key: &id001
+          type: string
+        value: &id002
+          type: integer
+        nature:
+          type: string
+          enum:
+          - TEST_ONLY
+      required:
+      - key
+      - value
+      - nature
+    ReconValidationError:
+      type: object
+      properties:
+        locator: *id001
+        field: *id001
+        code: *id001
+      required:
+      - locator
+      - code
+    ReconSource:
+      type: object
+      properties:
+        id: &id003
+          type: string
+          format: uuid
+        code: *id001
+        source_kind:
+          type: string
+          enum:
+          - PROVIDER_TRANSACTION_REPORT
+          - PROVIDER_SETTLEMENT_REPORT
+          - BANK_STATEMENT
+        provider_code: &id004
+          type:
+          - string
+          - 'null'
+        authority_rank: *id002
+        format:
+          type: string
+          enum:
+          - FUNDZIM_CANONICAL_V1
+        environment:
+          type: string
+          enum:
+          - TEST
+        description: *id001
+        enabled:
+          type: boolean
+    ReconSourceList:
+      type: object
+      description: Sources.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconSource'
+          required:
+          - items
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconImport:
+      type: object
+      properties:
+        id: *id003
+        source_id: *id003
+        source_code: *id001
+        source_kind: *id001
+        origin:
+          type: string
+          enum:
+          - STAFF_UPLOAD
+          - SANDBOX_GENERATOR
+        content_sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        size_bytes: *id002
+        media_type:
+          type: string
+          enum:
+          - text/csv
+          - application/json
+        original_filename: *id004
+        stored_object_id: *id003
+        evidence_record_id: *id003
+        statement_ref: *id004
+        period_start: &id005
+          type:
+          - string
+          - 'null'
+          format: date-time
+        period_end: *id005
+        currency: *id004
+        opening_balance_minor: &id006
+          type:
+          - string
+          - 'null'
+          pattern: ^-?[0-9]{1,19}$
+        closing_balance_minor: *id006
+        account_ref_hint:
+          type:
+          - string
+          - 'null'
+          description: Last four characters only (bank statements).
+        declared_lines:
+          type:
+          - integer
+          - 'null'
+        lines_parsed: *id002
+        lines_duplicate: *id002
+        lines_conflicting: *id002
+        batches_parsed: *id002
+        status:
+          type: string
+          enum:
+          - RECEIVED
+          - PARSING
+          - PARSED
+          - FAILED
+          - SUPERSEDED
+        failure_code: *id004
+        validation_report:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconValidationError'
+        supersedes_import_id: &id007
+          type:
+          - string
+          - 'null'
+          format: uuid
+        environment:
+          type: string
+          enum:
+          - TEST
+        uploaded_by: *id007
+        received_at: &id008
+          type: string
+          format: date-time
+        parsed_at: *id005
+        label:
+          type: string
+          enum:
+          - TEST_ONLY
+      required:
+      - id
+      - source_code
+      - content_sha256
+      - status
+      - environment
+      - label
+    ReconImportEnvelope:
+      type: object
+      description: An import.
+      properties:
+        data:
+          $ref: '#/components/schemas/ReconImport'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconImportList:
+      type: object
+      description: Imports.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconImport'
+          required:
+          - items
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconMatch:
+      type: object
+      properties:
+        id: *id003
+        run_id: *id007
+        subject_type:
+          type: string
+          enum:
+          - PAYMENT
+          - PAYOUT
+          - FEE_REMITTANCE_LINE
+        subject_id: *id003
+        confidence:
+          type: string
+          enum:
+          - EXACT_MATCH
+          - RULE_BASED_MATCH
+          - MANUAL
+        rule_code: *id001
+        rule_set_version:
+          type:
+          - integer
+          - 'null'
+        matcher_version: *id001
+        matched_amount_minor: &id009
+          type: string
+          pattern: ^-?[0-9]{1,19}$
+          description: Integer minor units as a string (never a float).
+        ledger_status:
+          type: string
+          enum:
+          - POSTED
+          - NOT_POSTED_TEST_PAYMENT
+          - MISSING
+          - NOT_APPLICABLE
+        ledger_transaction_id: *id007
+        fee_status:
+          type: string
+          enum:
+          - MATCHED
+          - MISMATCH
+          - NOT_REPORTED
+          - NO_EXPECTATION
+          - NOT_APPLICABLE
+        explanation:
+          type: object
+          description: Compared keys, rule and matcher versions, day gap, fee basis.
+        created_at: *id008
+    ReconLine:
+      type: object
+      properties:
+        id: *id003
+        import_id: *id003
+        external_line_id: *id001
+        revision: *id002
+        line_number: *id002
+        item_kind: *id001
+        direction:
+          type: string
+          enum:
+          - CREDIT
+          - DEBIT
+        line_status: *id001
+        amount_minor: *id009
+        fee_minor: *id006
+        net_minor: *id006
+        currency: &id010
+          type: string
+          pattern: ^[A-Z]{3}$
+        raw_currency_code: *id001
+        provider_ref: *id004
+        merchant_ref: *id004
+        batch_ref: *id004
+        settlement_batch_id: *id007
+        counterparty_ref: *id004
+        value_date: *id004
+        booked_at: *id008
+        raw_line_sha256: *id001
+        raw_line_locator: *id001
+        match_status:
+          type: string
+          enum:
+          - UNMATCHED
+          - MATCHED
+          - EXCEPTION
+          - CONFLICT
+          - SUPERSEDED
+          - IGNORED
+        match:
+          oneOf:
+          - $ref: '#/components/schemas/ReconMatch'
+          - type: 'null'
+    ReconExceptionEvent:
+      type: object
+      properties:
+        id: *id003
+        event_type: *id001
+        from_status: *id004
+        to_status: *id004
+        actor_type:
+          type: string
+          enum:
+          - SYSTEM
+          - STAFF
+        actor_id: *id007
+        run_id: *id007
+        resolution_id: *id007
+        note: *id004
+        evidence_ref: *id004
+        created_at: *id008
+    ReconResolution:
+      type: object
+      properties:
+        id: *id003
+        exception_id: *id003
+        resolution_type:
+          type: string
+          enum: &id011
+          - EXPLAINED_NO_ACTION
+          - PROVIDER_CORRECTION_CONFIRMED
+          - ESCALATED_TO_CASE
+          - MANUAL_MATCH
+          - PROVIDER_OUTCOME_APPLIED
+          - LEDGER_ADJUSTMENT
+        status:
+          type: string
+          enum:
+          - PENDING_REVIEW
+          - APPROVED
+          - EXECUTED
+          - REJECTED
+          - CANCELLED
+          - EXPIRED
+        proposal:
+          type: object
+        proposal_sha256: *id001
+        justification: *id001
+        evidence_refs:
+          type: array
+          items: *id001
+        proposed_by: *id003
+        proposed_at: *id008
+        expires_at: *id008
+        decided_by: *id007
+        decided_at: *id005
+        decision_note: *id004
+        ledger_adjustment_id: *id007
+        executed_at: *id005
+        execution_result:
+          type:
+          - object
+          - 'null'
+        last_error: *id004
+        version: *id002
+    ReconException:
+      type: object
+      properties:
+        id: *id003
+        exception_type:
+          type: string
+          enum:
+          - MISSING_PAYMENT
+          - MISSING_SETTLEMENT
+          - MISSING_PAYOUT
+          - MISSING_LEDGER_ENTRY
+          - MISSING_BANK_CREDIT
+          - AMOUNT_MISMATCH
+          - CURRENCY_MISMATCH
+          - FEE_MISMATCH
+          - PAYOUT_MISMATCH
+          - STATUS_MISMATCH
+          - DUPLICATE_TRANSACTION
+          - AMBIGUOUS_MATCH
+          - UNKNOWN_PAYMENT_OUTCOME
+          - UNKNOWN_PAYOUT_OUTCOME
+          - UNMATCHED_BANK_ENTRY
+          - POSSIBLE_DONOR_FUNDS_IN_OPERATING_ACCOUNT
+          - SETTLEMENT_SHORT
+          - SETTLEMENT_OVER
+          - CONFLICTING_EVIDENCE
+          - PROVIDER_ADJUSTMENT
+          - STALE_RECONCILIATION
+        severity:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+        status:
+          type: string
+          enum:
+          - OPEN
+          - ASSIGNED
+          - INVESTIGATING
+          - AWAITING_EVIDENCE
+          - PENDING_APPROVAL
+          - RESOLVED
+          - REOPENED
+          - CLOSED
+        source_code: *id001
+        source_kind: *id001
+        currency: *id010
+        occurrences: *id002
+        generation: *id002
+        item_id: *id007
+        subject_type: *id004
+        subject_id: *id007
+        settlement_batch_id: *id007
+        ledger_transaction_id: *id007
+        expected_amount_minor: *id006
+        actual_amount_minor: *id006
+        actual_currency_raw: *id004
+        detail:
+          type: object
+        detected_at: *id008
+        last_seen_at: *id008
+        age_hours: *id002
+        assigned_to: *id007
+        assigned_at: *id005
+        due_at: *id005
+        escalated_at: *id005
+        resolved_at: *id005
+        closed_at: *id005
+        close_reason: *id004
+        reopen_count: *id002
+        version: *id002
+        label:
+          type: string
+          enum:
+          - TEST_ONLY
+        item:
+          $ref: '#/components/schemas/ReconLine'
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconExceptionEvent'
+        resolutions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconResolution'
+      required:
+      - id
+      - exception_type
+      - severity
+      - status
+      - version
+    ReconExceptionEnvelope:
+      type: object
+      description: An exception.
+      properties:
+        data:
+          $ref: '#/components/schemas/ReconException'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconExceptionList:
+      type: object
+      description: Exceptions.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconException'
+          required:
+          - items
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconImportDetailEnvelope:
+      type: object
+      description: Import detail.
+      properties:
+        data:
+          type: object
+          properties:
+            import:
+              $ref: '#/components/schemas/ReconImport'
+            lines:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconLine'
+            exceptions:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconException'
+          required:
+          - import
+          - lines
+          - exceptions
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconRun:
+      type: object
+      properties:
+        id: *id003
+        source_code: *id001
+        source_kind: *id001
+        currency: *id010
+        window_start: *id008
+        window_end: *id008
+        run_kind:
+          type: string
+          enum:
+          - SCHEDULED
+          - ON_DEMAND
+          - REPLAY
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - RUNNING
+          - COMPLETED
+          - FAILED
+          - CANCELLED
+        rule_set_id: *id007
+        rule_set_version:
+          type:
+          - integer
+          - 'null'
+        matcher_version: *id001
+        replay_of_run_id: *id007
+        reason: *id004
+        triggered_by_type:
+          type: string
+          enum:
+          - SYSTEM
+          - STAFF
+        triggered_by: *id007
+        items_considered: *id002
+        items_matched: *id002
+        exceptions_opened: *id002
+        exceptions_seen: *id002
+        exceptions_closed: *id002
+        decisions_sha256: *id004
+        failure_code: *id004
+        queued_at: *id008
+        started_at: *id005
+        finished_at: *id005
+        duration_ms:
+          type:
+          - integer
+          - 'null'
+        label:
+          type: string
+          enum:
+          - TEST_ONLY
+    ReconRunEnvelope:
+      type: object
+      description: A run.
+      properties:
+        data:
+          $ref: '#/components/schemas/ReconRun'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconRunList:
+      type: object
+      description: Runs.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconRun'
+          required:
+          - items
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconRunInput:
+      type: object
+      properties:
+        source: *id001
+        currency: *id010
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 500
+        replay_of_run_id: *id003
+      required:
+      - reason
+      additionalProperties: false
+    ReconSandboxInput:
+      type: object
+      properties:
+        source:
+          type: string
+          enum:
+          - sandbox_transactions_test
+          - sandbox_settlement_test
+        currency: *id010
+        period_start: *id008
+        period_end: *id008
+      required:
+      - source
+      - currency
+      - period_start
+      - period_end
+      additionalProperties: false
+    ReconActionInput:
+      type: object
+      properties:
+        version:
+          type: integer
+          description: 'Expected version (0: skip the check).'
+        note:
+          type: string
+          maxLength: 2000
+          description: Required (≥ 5 characters) except for assign.
+        assignee_id: *id003
+        due_at: *id008
+        evidence_ref:
+          type: string
+          pattern: ^(import|item|run|evidence|batch|payment|payout|ledger_transaction|document):[A-Za-z0-9_.:/-]{1,180}$
+      additionalProperties: false
+    ReconProposalInput:
+      type: object
+      properties:
+        resolution_type:
+          type: string
+          enum: *id011
+        justification:
+          type: string
+          minLength: 20
+          maxLength: 2000
+        evidence_refs:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items: *id001
+        version: *id002
+        subject_type:
+          type: string
+          enum:
+          - PAYMENT
+          - PAYOUT
+          - FEE_REMITTANCE_LINE
+        subject_id: *id003
+        case_ref:
+          type: string
+          maxLength: 100
+        posting_rule:
+          type: string
+          enum:
+          - SETTLEMENT_DISCREPANCY_RESOLVED
+          - ADJUSTMENT
+          - WRITE_OFF
+        lines:
+          type: array
+          minItems: 2
+          maxItems: 20
+          items:
+            type: object
+            properties:
+              account_code: *id001
+              direction:
+                type: string
+                enum:
+                - DEBIT
+                - CREDIT
+              amount_minor: *id009
+            required:
+            - account_code
+            - direction
+            - amount_minor
+      required:
+      - resolution_type
+      - justification
+      - evidence_refs
+      additionalProperties: false
+    ReconDecisionInput:
+      type: object
+      properties:
+        note:
+          type: string
+          minLength: 5
+          maxLength: 2000
+        proposal_sha256:
+          type: string
+          description: 'Required to approve: the hash of the proposal you reviewed.'
+      required:
+      - note
+      additionalProperties: false
+    ReconResolutionEnvelope:
+      type: object
+      description: A resolution.
+      properties:
+        data:
+          $ref: '#/components/schemas/ReconResolution'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconResolutionList:
+      type: object
+      description: Resolutions.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconResolution'
+          required:
+          - items
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconSettlementBatch:
+      type: object
+      properties:
+        id: *id003
+        import_id: *id003
+        source_code: *id001
+        provider_code: *id001
+        currency: *id010
+        batch_ref: *id001
+        settlement_date: *id001
+        gross_credits_minor: *id009
+        gross_debits_minor: *id009
+        fees_minor: *id009
+        net_minor: *id009
+        expected_net_minor: *id006
+        declared_lines:
+          type:
+          - integer
+          - 'null'
+        lines: *id002
+        lines_settled: *id002
+        status:
+          type: string
+          enum:
+          - RECEIVED
+          - MATCHED
+          - DISCREPANCY
+          - SUPERSEDED
+        last_run_id: *id007
+        created_at: *id008
+        label:
+          type: string
+          enum:
+          - TEST_ONLY
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconLine'
+    ReconSettlementEnvelope:
+      type: object
+      description: A settlement batch.
+      properties:
+        data:
+          $ref: '#/components/schemas/ReconSettlementBatch'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconSettlementList:
+      type: object
+      description: Settlement batches.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconSettlementBatch'
+          required:
+          - items
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconRuleSetConfig:
+      type: object
+      properties:
+        date_window_days:
+          type: integer
+          minimum: 0
+          maximum: 14
+        settlement_horizon_days:
+          type: integer
+          minimum: 1
+          maximum: 60
+        stale_after_hours:
+          type: integer
+          minimum: 1
+          maximum: 2160
+        escalate_after_hours:
+          type: integer
+          minimum: 1
+          maximum: 2160
+      required:
+      - date_window_days
+      - settlement_horizon_days
+      - stale_after_hours
+      additionalProperties: false
+    ReconRuleSet:
+      type: object
+      properties:
+        id: *id003
+        version_no: *id002
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - ACTIVE
+          - REJECTED
+          - WITHDRAWN
+          - RETIRED
+        config:
+          $ref: '#/components/schemas/ReconRuleSetConfig'
+        config_sha256: *id001
+        change_reason: *id001
+        proposed_by: *id003
+        proposed_at: *id008
+        decided_by: *id007
+        decided_at: *id005
+        decision_note: *id004
+        effective_from: *id005
+        retired_at: *id005
+        version: *id002
+    ReconRuleSetEnvelope:
+      type: object
+      description: A rule set.
+      properties:
+        data:
+          $ref: '#/components/schemas/ReconRuleSet'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconRuleSetList:
+      type: object
+      description: Rule sets.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconRuleSet'
+          required:
+          - items
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconRuleSetInput:
+      type: object
+      properties:
+        config:
+          $ref: '#/components/schemas/ReconRuleSetConfig'
+        change_reason:
+          type: string
+          minLength: 10
+          maxLength: 1000
+      required:
+      - config
+      - change_reason
+      additionalProperties: false
+    ReconRuleDecisionInput:
+      type: object
+      properties:
+        note:
+          type: string
+          minLength: 5
+          maxLength: 1000
+        config_sha256: *id001
+      required:
+      - note
+      additionalProperties: false
+    ReconOverviewEnvelope:
+      type: object
+      description: Dashboard.
+      properties:
+        data:
+          type: object
+          properties:
+            environment:
+              type: string
+              enum:
+              - TEST
+            nature:
+              type: string
+              enum:
+              - TEST_ONLY
+            production:
+              type: object
+              additionalProperties: *id001
+            active_rule_set:
+              oneOf:
+              - $ref: '#/components/schemas/ReconRuleSet'
+              - type: 'null'
+            rule_set_status:
+              type: string
+              enum:
+              - ACTIVE
+              - NOT_CONFIGURED
+            sources:
+              type: array
+              items:
+                type: object
+                properties:
+                  code: *id001
+                  source_kind: *id001
+                  authority_rank: *id002
+                  environment: *id001
+                  last_received_at: *id005
+                  last_parsed_at: *id005
+                  last_completed_run_at: *id005
+                  open_lines: *id002
+                  freshness:
+                    type: string
+                    enum:
+                    - NEVER
+                    - FRESH
+                    - STALE
+                    - UNKNOWN
+            imports: &id012
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconCount'
+            lines: *id012
+            exceptions_open_by_severity: *id012
+            exceptions_open_by_type: *id012
+            oldest_open_exception_hours:
+              type:
+              - integer
+              - 'null'
+            resolutions_pending: *id002
+            settlement_batches: *id012
+            unknown_outcomes_open: *id002
+            workers:
+              type: array
+              items:
+                type: object
+                properties:
+                  job_kind: *id001
+                  last_started_at: *id005
+                  last_succeeded_at: *id005
+                  last_failed_at: *id005
+                  last_error_code: *id004
+                  consecutive_failures: *id002
+                  status:
+                    type: string
+                    enum:
+                    - HEALTHY
+                    - DEGRADED
+                    - UNKNOWN
+            recent_runs:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconRun'
+            generated_at: *id008
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconPayoutViewEnvelope:
+      type: object
+      description: Payout reconciliation.
+      properties:
+        data:
+          type: object
+          properties:
+            nature: *id001
+            queue:
+              type: array
+              items:
+                type: object
+            unknown: *id002
+            retry_halted: *id002
+            matches_by_ledger_status: *id012
+            exceptions:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconException'
+            resubmission_rules:
+              type: array
+              items: *id001
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconLedgerViewEnvelope:
+      type: object
+      description: Ledger reconciliation.
+      properties:
+        data:
+          type: object
+          properties:
+            nature: *id001
+            settlement_posting: *id001
+            integrity:
+              type: array
+              items:
+                type: object
+            trial_balance:
+              type: array
+              items:
+                type: object
+                properties:
+                  currency: *id010
+                  total_debit_minor: *id009
+                  total_credit_minor: *id009
+                  difference_minor: *id009
+                  balanced:
+                    type: boolean
+            ledger_exceptions_open:
+              type: array
+              items:
+                type: object
+            matches_by_ledger_status: *id012
+            missing_ledger_entries:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconException'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconFeeViewEnvelope:
+      type: object
+      description: Fee reconciliation.
+      properties:
+        data:
+          type: object
+          properties:
+            nature: *id001
+            provider_fee_evidence: *id001
+            matches_by_fee_status: *id012
+            fee_mismatches:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReconException'
+            fee_recompute_latest_run:
+              type:
+              - object
+              - 'null'
+            revenue_recognition: *id001
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    ReconReportEnvelope:
+      type: object
+      description: A report.
+      properties:
+        data:
+          type: object
+          properties:
+            kind: *id001
+            nature:
+              type: string
+              enum:
+              - TEST_ONLY
+            from: *id008
+            to: *id008
+            generated_at: *id008
+            columns:
+              type: array
+              items: *id001
+            rows:
+              type: array
+              items:
+                type: array
+                items: *id001
+            truncated:
+              type: boolean
+          required:
+          - kind
+          - nature
+          - columns
+          - rows
+          - truncated
         meta:
           $ref: '#/components/schemas/ResponseMeta'
       required:

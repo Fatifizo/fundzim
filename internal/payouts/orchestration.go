@@ -58,14 +58,15 @@ func (s *Service) submitRetry() (int, jobs.Backoff) {
 	return budget, b
 }
 
-// notSentSinceResume counts the payout's DEFINITELY_NOT_SENT submissions since its budget was last renewed (the
+// notSentSinceResume counts the payout's DEFINITELY_NOT_SENT and RATE_LIMITED submissions (both refused before processing:
+// psp.CategoryRetry AFTER_BACKOFF; KI-S17-01) since its budget was last renewed (the
 // latest resolution of a SUBMISSION_RETRIES_EXHAUSTED exception; the payout's whole history before any).
 func notSentSinceResume(ctx context.Context, q interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }, id string) (int, error) {
 	var n int
 	err := q.QueryRow(ctx, `SELECT count(*) FROM app.payout_attempts a WHERE a.payout_request_id = $1 AND a.operation = 'CREATE_PAYOUT'
-		AND a.classification = 'DEFINITELY_NOT_SENT' AND a.started_at > coalesce((SELECT max(x.resolved_at) FROM app.payout_exceptions x
+		AND a.classification IN ('DEFINITELY_NOT_SENT', 'RATE_LIMITED') AND a.started_at > coalesce((SELECT max(x.resolved_at) FROM app.payout_exceptions x
 		  WHERE x.payout_request_id = $1 AND x.exception_type = 'SUBMISSION_RETRIES_EXHAUSTED' AND x.status = 'RESOLVED'), '-infinity')`, id).Scan(&n)
 	return n, err
 }
@@ -427,7 +428,7 @@ func (s *Service) SubmitApproved(ctx context.Context, id string) (bool, error) {
 }
 
 // DispatchDue sends the provider instruction for SUBMITTED payouts whose in-transit journal has committed and that
-// no earlier CREATE_PAYOUT may have reached (first send, or a same-reference retry after DEFINITELY_NOT_SENT).
+// no earlier CREATE_PAYOUT may have reached (first send, or a same-reference retry after DEFINITELY_NOT_SENT or RATE_LIMITED).
 func (s *Service) DispatchDue(ctx context.Context, limit int) (int, error) {
 	if s.ExecEnv != ExecLocalSimulator {
 		return 0, nil
@@ -435,7 +436,7 @@ func (s *Service) DispatchDue(ctx context.Context, limit int) (int, error) {
 	rows, err := s.Pool.Query(ctx, `SELECT p.id FROM app.payout_requests p JOIN app.payout_reservations r ON r.payout_request_id = p.id
 		WHERE p.status = 'SUBMITTED' AND r.ledger_submit_txn_id IS NOT NULL AND (p.next_poll_at IS NULL OR p.next_poll_at <= $1)
 		  AND NOT EXISTS (SELECT 1 FROM app.payout_attempts a WHERE a.payout_request_id = p.id AND a.operation = 'CREATE_PAYOUT'
-		                   AND a.classification <> 'DEFINITELY_NOT_SENT')
+		                   AND a.classification NOT IN ('DEFINITELY_NOT_SENT', 'RATE_LIMITED'))
 		  AND NOT EXISTS (SELECT 1 FROM app.payout_exceptions x WHERE x.payout_request_id = p.id
 		                   AND x.exception_type = 'SUBMISSION_RETRIES_EXHAUSTED' AND x.status <> 'RESOLVED')
 		ORDER BY p.submitted_at LIMIT $2`, s.now(), limit)
@@ -764,7 +765,7 @@ func (s *Service) PollDue(ctx context.Context, limit int) (int, error) {
 	}
 	rows, err := s.Pool.Query(ctx, `SELECT p.id FROM app.payout_requests p WHERE p.status IN ('PROCESSING','UNKNOWN','SUBMITTED')
 		AND p.next_poll_at <= $1 AND (p.status <> 'SUBMITTED' OR EXISTS (SELECT 1 FROM app.payout_attempts a WHERE a.payout_request_id = p.id
-		  AND a.operation = 'CREATE_PAYOUT' AND a.classification NOT IN ('DEFINITELY_NOT_SENT','IN_FLIGHT')))
+		  AND a.operation = 'CREATE_PAYOUT' AND a.classification NOT IN ('DEFINITELY_NOT_SENT','RATE_LIMITED','IN_FLIGHT')))
 		ORDER BY p.next_poll_at LIMIT $2`, s.now(), limit)
 	if err != nil {
 		return 0, err

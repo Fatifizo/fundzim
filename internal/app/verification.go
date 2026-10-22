@@ -240,7 +240,7 @@ func NewVerificationModules(ctx context.Context, d VerificationDeps) (*Verificat
 // uploadExemptions lets the document upload route exceed the global JSON body limit (S stream).
 func uploadExemptions(cfg config.Config) []httpx.BodyLimitExemption {
 	return append([]httpx.BodyLimitExemption{{Pattern: "POST /api/v1/verification/documents", Max: cfg.Verification.UploadMaxBytes + 64<<10}},
-		campaignMediaExemptions(cfg)...) // Stage 6 stream M
+		append(campaignMediaExemptions(cfg), reconciliationExemptions(cfg)...)...) // Stage 6 stream M; Stage 17 statements
 }
 
 // registerVerificationRoutes registers the Stage 5 routes (contract §7). Object-level authorisation is in the

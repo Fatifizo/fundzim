@@ -122,6 +122,20 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    id: "reconciliation",
+    label: "Reconciliation (TEST)",
+    items: [
+      { href: "/admin/reconciliation", label: "Reconciliation overview", permission: "reconciliation.view", exact: true },
+      { href: "/admin/reconciliation/batches", label: "Statement imports and runs", permission: "reconciliation.view" },
+      { href: "/admin/reconciliation/exceptions", label: "Reconciliation exceptions", permission: "reconciliation.view" },
+      { href: "/admin/reconciliation/settlements", label: "Settlement batches", permission: "reconciliation.view" },
+      { href: "/admin/reconciliation/payouts", label: "Payout reconciliation", permission: "reconciliation.view" },
+      { href: "/admin/reconciliation/ledger", label: "Ledger and fee checks", permission: "reconciliation.view" },
+      { href: "/admin/reconciliation/reports", label: "Reconciliation reports", permission: "reconciliation.view" },
+      { href: "/admin/reconciliation/rules", label: "Matching rules", permission: "reconciliation.view" },
+    ],
+  },
+  {
     id: "ledger",
     label: "Ledger (TEST)",
     items: [

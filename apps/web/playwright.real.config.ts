@@ -35,11 +35,12 @@ export default defineConfig({
     // Staff moderation mutates shared state and runs once (desktop). Listed first so its UI sign-ins are reused
     // by the later projects (support/browser.ts staffPage signs in again when a saved session is gone). No
     // `dependencies`: a staff failure must not hide the public results.
-    { name: "staff-desktop", use: { ...devices["Desktop Chrome"] }, testMatch: ["staff-moderation.spec.ts", "staff-ledger.spec.ts"] },
+    { name: "staff-desktop", use: { ...devices["Desktop Chrome"] }, testMatch: ["staff-moderation.spec.ts", "staff-ledger.spec.ts", "staff-reconciliation.spec.ts"] },
     {
       name: "desktop-chromium",
       use: { ...devices["Desktop Chrome"] },
-      testMatch: ["public.spec.ts", "a11y.spec.ts", "featured.spec.ts", "report.spec.ts"],
+      // discovery.spec.ts: Stage 16's real-stack spec, wired in Stage 17 (it had been left out of every project)
+      testMatch: ["public.spec.ts", "a11y.spec.ts", "featured.spec.ts", "report.spec.ts", "discovery.spec.ts"],
     },
     { name: "mobile-chromium", use: { ...devices["Pixel 7"] }, testMatch: ["public.spec.ts", "a11y.spec.ts"] },
   ],

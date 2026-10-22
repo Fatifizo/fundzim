@@ -21,6 +21,7 @@ production). Limits: USD 1.00 – 10 000.00 to ECOCASH, ONEMONEY, BANK_TRANSFER 
 | 10 | PARTIAL_PROVIDER_RESPONSE | created; malformed answer (⇒ UNKNOWN); `completed` after 2 s |
 | 11 | FAILURE_AFTER_PROCESSING | accepted; `failed` webhook after 1 s |
 | 12 | RETURNED_AFTER_COMPLETION | `completed` at 1 s, `returned` at 4 s |
+| 13 | RATE_LIMITED (Stage 17, KI-S17-01) | the create is refused with 429 before processing (nothing created); the same reference is retried within the retry budget, then SUBMISSION_RETRIES_EXHAUSTED halts it |
 | — | WORKER_RESTART | not a provider behaviour: a CREATE_PAYOUT left IN_FLIGHT by a dead worker |
 
 ## Results (TestPayoutSimulatorScenarios, 2026-10-14, local stack)

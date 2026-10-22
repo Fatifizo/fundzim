@@ -56,6 +56,10 @@ var allowedImports = map[string][]string{
 	// Stage 16 (ADR-048): discovery reads campaigns through the campaigns service (cards, eligibility, snapshots); linked
 	// identities and feature flags arrive through interfaces implemented in internal/app
 	"discovery": {"platform", "audit", "campaigns"},
+	// Stage 17 (ADR-049, implementing ADR-030; baseline §3 layer 8): reconciliation reads payments, payouts, fees and the
+	// ledger through their services, stores statements through storage and uses the sandbox's statement generator (psp);
+	// no module imports reconciliation
+	"reconciliation": {"platform", "audit", "storage", "payments", "payouts", "fees", "ledger", "psp"},
 }
 
 // ownedTables is design-baseline §5 (plus the Stage 4 additions recorded in docs/stage-4/implementation.md:
@@ -126,6 +130,9 @@ var ownedTables = map[string][]string{
 	"fees": {"app.fee_policies", "app.fee_policy_versions", "app.fee_provider_schedules", "app.fee_calculations", "app.fee_components",
 		"app.fee_quotes", "app.fee_assessments", "app.fee_adjustments", "app.fee_accounting_references", "app.fee_provider_reports",
 		"app.fee_reconciliation_runs", "app.fee_reconciliation_references", "app.fee_audit_events"},
+	// Stage 17 (ADR-049): the whole recon schema
+	"reconciliation": {"recon.sources", "recon.matching_rule_sets", "recon.imports", "recon.settlement_batches", "recon.items", "recon.runs",
+		"recon.matches", "recon.exceptions", "recon.exception_events", "recon.resolutions", "recon.worker_heartbeats"},
 }
 
 // moduleOf maps a repository-relative directory to its module ("" = not a constrained module).

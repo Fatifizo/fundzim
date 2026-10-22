@@ -2,8 +2,10 @@ package storage
 
 import (
 	"bytes"
+	"encoding/json"
 	"mime"
 	"strings"
+	"unicode/utf8"
 )
 
 // sniffWindow is how far browsers look when content-sniffing; markup inside it is refused in images.
@@ -82,16 +84,19 @@ func NormalizeDeclaredType(declared string) string {
 
 // checkContent applies the upload content rules for bucket: non-empty, ≤ max, sniffed type on the class's
 // allow-list, declared type equal to the sniffed one. It returns the sniffed type or a reject reason + error.
-func checkContent(bucket, declared string, content []byte, tooLarge bool) (sniffed, reason string, err error) {
+func checkContent(bucket, purpose, declared string, content []byte, tooLarge bool) (sniffed, reason string, err error) {
 	if tooLarge {
 		return "", RejectTooLarge, ErrTooLarge
 	}
 	if len(content) == 0 {
 		return "", RejectEmpty, ErrEmptyFile
 	}
-	allowed := allowedTypes[bucket]
+	allowed := allowedFor(bucket, purpose)
 	d := NormalizeDeclaredType(declared)
 	sniffed = Sniff(content)
+	if sniffed == "" && purposeText[purpose] {
+		sniffed = SniffText(content)
+	}
 	if sniffed == "" || !allowed[sniffed] {
 		return "", RejectUnsupported, ErrUnsupportedType
 	}
@@ -103,4 +108,52 @@ func checkContent(bucket, declared string, content []byte, tooLarge bool) (sniff
 		return "", RejectTypeMismatch, ErrTypeMismatch
 	}
 	return sniffed, "", nil
+}
+
+// purposeText: purposes that also accept plain-text statement files (Stage 17, ADR-049 §2: canonical CSV/JSON
+// reconciliation statements). Every other purpose keeps the image/PDF allow-list.
+var purposeText = map[string]bool{"RECONCILIATION_REPORT": true}
+
+// allowedFor is the bucket's allow-list plus, for a text purpose, CSV and JSON.
+func allowedFor(bucket, purpose string) map[string]bool {
+	base := allowedTypes[bucket]
+	if !purposeText[purpose] || bucket != BucketPrivateEvidence {
+		return base
+	}
+	out := make(map[string]bool, len(base)+2)
+	for k := range base {
+		out[k] = true
+	}
+	out[TypeCSV], out[TypeJSON] = true, true
+	return out
+}
+
+// SniffText recognises a statement file: valid UTF-8 without NUL bytes or control characters other than tab, CR and LF,
+// no markup in the browser sniffing window; a JSON object (validated) is application/json, anything else with a comma in
+// its first line is text/csv. It returns "" otherwise.
+func SniffText(content []byte) string {
+	body := bytes.TrimPrefix(content, []byte{0xEF, 0xBB, 0xBF})
+	if len(body) == 0 || !utf8.Valid(body) || hasMarkup(body) {
+		return ""
+	}
+	for _, b := range body {
+		if b < 0x20 && b != '\t' && b != '\r' && b != '\n' {
+			return ""
+		}
+	}
+	trimmed := bytes.TrimLeft(body, " \t\r\n")
+	if len(trimmed) > 0 && trimmed[0] == '{' {
+		if json.Valid(body) {
+			return TypeJSON
+		}
+		return ""
+	}
+	first := body
+	if i := bytes.IndexByte(body, '\n'); i >= 0 {
+		first = body[:i]
+	}
+	if bytes.IndexByte(first, ',') >= 0 {
+		return TypeCSV
+	}
+	return ""
 }

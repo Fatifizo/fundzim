@@ -47,6 +47,7 @@ const (
 	PoPartialResponse     = "PARTIAL_PROVIDER_RESPONSE"
 	PoFailureAsync        = "FAILURE_AFTER_PROCESSING"
 	PoReturned            = "RETURNED_AFTER_COMPLETION"
+	PoRateLimited         = "RATE_LIMITED" // Stage 17 (KI-S17-01): refused with 429 before processing
 )
 
 // PayoutScenario is a deterministic simulator payout behaviour.
@@ -71,6 +72,7 @@ var payoutScenarios = map[int64]PayoutScenario{
 	10: {Name: PoPartialResponse, Webhooks: []Hook{{Status: "completed", After: 2 * time.Second}}},
 	11: {Name: PoFailureAsync, Webhooks: []Hook{{Status: "failed", After: time.Second}}},
 	12: {Name: PoReturned, Webhooks: []Hook{{Status: "completed", After: time.Second}, {Status: "returned", After: 4 * time.Second}}},
+	13: {Name: PoRateLimited},
 }
 
 // PayoutScenarioFor selects the scenario: an explicit metadata name (non-production only), else the amount's last
@@ -156,6 +158,9 @@ func (a *Adapter) CreatePayout(ctx context.Context, m psp.CallMeta, r psp.Create
 	case PoProviderUnavailable:
 		// connection refused before the request was written: nothing reached the simulated provider
 		return finish(psp.Observation{Class: psp.ClassRetryableBeforeSend})
+	case PoRateLimited:
+		// the simulated provider answered 429 without creating anything: the same reference may be retried after a backoff
+		return finish(psp.Observation{Class: psp.ClassRateLimited, HTTPStatus: 429})
 	case PoUnknown:
 		// the call timed out and the simulated provider never created the payout: only a status query can tell
 		return finish(psp.Observation{Class: psp.ClassIndeterminate, UnknownReason: psp.UnknownTimeout})

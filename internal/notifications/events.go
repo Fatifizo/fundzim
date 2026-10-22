@@ -46,7 +46,8 @@ var (
 		"identity.account_suspended", "auth.staff_link_confirmed", "payouts.destination_created", "payouts.destination_changed",
 		"payments.payment_status_changed", "payments.payment_succeeded", "payouts.requested", "payouts.status_changed", "payouts.exception_opened",
 		"payments.refund_requested", "fees.adjustment_requested", "risk.rule_version_changed", "risk.case_opened", "risk.case_escalated",
-		"compliance.case_opened", EvSupportCaseOpened, EvSupportCaseAssigned, EvSupportCaseStatusChanged, EvIncidentDeclared}
+		"compliance.case_opened", EvSupportCaseOpened, EvSupportCaseAssigned, EvSupportCaseStatusChanged, EvIncidentDeclared,
+		EvReconExceptionOpened, EvReconExceptionAssigned, EvReconImportFailed, EvReconResolutionRequested, EvReconUnknownOutcome}
 )
 
 // Operations events added in Stage 15 (written by internal/operations in the same transaction as the change).
@@ -55,6 +56,15 @@ const (
 	EvSupportCaseAssigned      = "operations.support_case_assigned"       // {case_id, case_number, assigned_to}
 	EvSupportCaseStatusChanged = "operations.support_case_status_changed" // {case_id, case_number, requester_user_id?, from, to}
 	EvIncidentDeclared         = "operations.incident_declared"           // {incident_id, incident_number, severity, affected_module}
+)
+
+// Reconciliation events added in Stage 17 (written by internal/reconciliation; staff, in-app, always TEST evidence).
+const (
+	EvReconExceptionOpened     = "reconciliation.exception_opened"          // {exception_id, exception_type, severity}
+	EvReconExceptionAssigned   = "reconciliation.exception_assigned"        // {exception_id, exception_type, severity, assignee_id, actor_id}
+	EvReconImportFailed        = "reconciliation.import_failed"             // {import_id, failure_code, source}
+	EvReconResolutionRequested = "reconciliation.resolution_requested"      // {resolution_id, exception_id, resolution_type, actor_id}
+	EvReconUnknownOutcome      = "reconciliation.unknown_outcome_escalated" // {exception_id, exception_type, severity}
 )
 
 // EventTypes lists every event type the engine consumes.
@@ -237,6 +247,39 @@ func (s *Service) intentsFor(ctx context.Context, d outbox.Delivery) ([]Intent, 
 		return one(Intent{TemplateKey: "PAYOUT_EXCEPTION_OPENED", Category: CatAdmin, Staff: true, Synthetic: true,
 			Variables: map[string]string{"exception_type": p.str("exception_type"), "severity": p.str("severity")},
 			DeepLink:  "/admin/finance/payouts/exceptions"}, r, err)
+	case EvReconExceptionOpened:
+		if sev := p.str("severity"); sev != "HIGH" && sev != "CRITICAL" {
+			return nil, nil // lower severities wait in the queue; no notification noise
+		}
+		r, err := s.staff(ctx, "reconciliation.investigate")
+		return one(Intent{TemplateKey: "RECON_EXCEPTION_OPENED", Category: CatAdmin, Staff: true, Synthetic: true,
+			Variables: map[string]string{"exception_type": p.str("exception_type"), "severity": p.str("severity")},
+			DeepLink:  "/admin/reconciliation/exceptions/" + p.str("exception_id")}, r, err)
+	case EvReconExceptionAssigned:
+		r, err := s.staff(ctx, "reconciliation.investigate")
+		var to []string
+		for _, id := range r {
+			if id == p.str("assignee_id") && id != p.str("actor_id") {
+				to = append(to, id) // the assignee only, while still an investigator, and never for a self-assignment
+			}
+		}
+		return one(Intent{TemplateKey: "RECON_EXCEPTION_ASSIGNED", Category: CatAdmin, Staff: true, Synthetic: true,
+			Variables: map[string]string{"exception_type": p.str("exception_type"), "severity": p.str("severity")},
+			DeepLink:  "/admin/reconciliation/exceptions/" + p.str("exception_id")}, to, err)
+	case EvReconImportFailed:
+		r, err := s.staff(ctx, "reconciliation.import")
+		return one(Intent{TemplateKey: "RECON_IMPORT_FAILED", Category: CatAdmin, Staff: true, Synthetic: true,
+			Variables: map[string]string{"failure_code": p.str("failure_code")}, DeepLink: "/admin/reconciliation/batches/" + p.str("import_id")}, r, err)
+	case EvReconResolutionRequested:
+		r, err := s.staff(ctx, "reconciliation.resolve", p.str("actor_id"))
+		return one(Intent{TemplateKey: "RECON_RESOLUTION_AWAITING_APPROVAL", Category: CatAdmin, Staff: true, Synthetic: true,
+			Variables: map[string]string{"resolution_type": p.str("resolution_type")},
+			DeepLink:  "/admin/reconciliation/exceptions/" + p.str("exception_id")}, r, err)
+	case EvReconUnknownOutcome:
+		r, err := s.staff(ctx, "reconciliation.resolve")
+		return one(Intent{TemplateKey: "RECON_UNKNOWN_OUTCOME_ESCALATED", Category: CatAdmin, Staff: true, Synthetic: true, Priority: "HIGH",
+			Variables: map[string]string{"exception_type": p.str("exception_type")},
+			DeepLink:  "/admin/reconciliation/exceptions/" + p.str("exception_id")}, r, err)
 	case "payments.refund_requested":
 		r, err := s.staff(ctx, "refund.approve")
 		return one(Intent{TemplateKey: "REFUND_AWAITING_APPROVAL", Category: CatAdmin, Staff: true, Synthetic: true, DeepLink: "/admin/payments/refunds"}, r, err)

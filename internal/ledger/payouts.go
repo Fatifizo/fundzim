@@ -69,6 +69,32 @@ func (s *Service) JournalByKey(ctx context.Context, key string) (JournalRef, boo
 	return j, err == nil, err
 }
 
+// JournalsByKeys looks up many journals by idempotency key in one query (Stage 17 reconciliation: a run checks the
+// expected journal of every matched subject). Keys that name no journal are absent from the map.
+func (s *Service) JournalsByKeys(ctx context.Context, keys []string) (map[string]JournalRef, error) {
+	out := make(map[string]JournalRef, len(keys))
+	if len(keys) == 0 {
+		return out, nil
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT t.idempotency_key, t.id::text, t.posting_rule, t.currency, t.environment,
+		(SELECT coalesce(sum(e.amount_minor), 0) FROM ledger.ledger_entries e WHERE e.transaction_id = t.id AND e.direction = 'DEBIT'),
+		(SELECT r.id::text FROM ledger.ledger_transactions r WHERE r.reverses_transaction_id = t.id)
+		FROM ledger.ledger_transactions t WHERE t.idempotency_key = ANY ($1::text[])`, keys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k string
+		var j JournalRef
+		if err := rows.Scan(&k, &j.TransactionID, &j.Rule, &j.Currency, &j.Environment, &j.DebitMinor, &j.ReversedBy); err != nil {
+			return nil, err
+		}
+		out[k] = j
+	}
+	return out, rows.Err()
+}
+
 // FixtureFundCampaign posts TEST_ONLY synthetic settled funds for a given campaign (capture → settlement →
 // release to campaign_payable), so payout engineering tests have something to reserve. TEST ledger and
 // SyntheticEnabled only, like every fixture; the funds are labelled TEST_ONLY and are never a donation.

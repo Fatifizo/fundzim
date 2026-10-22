@@ -40,6 +40,8 @@ func registerConsumers(ctx context.Context, d *WorkerDeps, reg *outbox.Registry)
 	registerNotificationConsumers(reg, d.Notifications) // Stage 15 (ADR-047)
 	d.Discovery = NewDiscovery(d.Config, d.DB, d.Verification, nil, d.Logger, false)
 	registerDiscoveryConsumers(reg, d.Discovery) // Stage 16 (ADR-048)
+	d.Reconciliation = NewReconciliation(d.Config, d.DB, d.Verification, a, d.Logger)
+	registerReconciliationConsumers(reg, d.Reconciliation) // Stage 17 (ADR-049)
 	return nil
 }
 
