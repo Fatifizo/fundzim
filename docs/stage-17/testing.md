@@ -2,8 +2,13 @@
 
 Every result below was produced in this session (2026-10-22) on branch `stage-17/reconciliation`, against the compose
 stack where a stack is needed, under `flock /tmp/claude-1000/fundzim-stack.lock`. No test was skipped, disabled or weakened
-to pass; skips listed are pre-existing environment skips. Remote CI: see the completion report (recorded only once
-observed).
+to pass; skips listed are pre-existing environment skips.
+
+**Remote CI (observed).** f812009: govulncheck failed (GO-2026-6809, KI-S17-17). 2c6ebb2: mobile mock E2E (KI-S17-18) and
+`TestDiscoveryEndToEnd` 429 (KI-S17-19) failed. 937f2d9: all tests passed (integration 206 passed, 0 failed), the
+destructive migration round trip failed (KI-S17-20). **3ea9738: run 39797348215 succeeded — all 8 jobs green** (Go, Web,
+Integration with the destructive round trip, mock E2E, real-stack E2E, container images, OpenAPI and SQL drafts, secret
+scanning).
 
 ## 1. Results
 
