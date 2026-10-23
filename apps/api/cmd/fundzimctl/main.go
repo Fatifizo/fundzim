@@ -6,6 +6,8 @@
 //	fundzimctl migrate version       print the applied and the embedded (expected) version
 //	fundzimctl migrate down          roll back ONE migration — development and test only
 //	fundzimctl bootstrap-admins ...  one-time, audited creation of the first two SUPER_ADMINs (see -h)
+//	fundzimctl verify audit|ledger|objects  integrity checks after a restore and in operations (verify.go)
+//	fundzimctl backup record ...     store backup / restore-drill evidence after verifying the manifest MAC (backup.go)
 //	fundzimctl version               print build information
 //	fundzimctl healthcheck [url]     exit 0 if url (default http://127.0.0.1:8080/healthz) answers 200;
 //	                                 used as the container HEALTHCHECK (the runtime image has no shell or curl)
@@ -24,6 +26,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver "pgx" for goose
 	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/lock"
 
 	"github.com/Fatifizo/fundzim/internal/app"
 	"github.com/Fatifizo/fundzim/internal/auth"
@@ -42,6 +45,8 @@ const usage = `usage: fundzimctl <command>
   migrate version    show applied and expected schema versions
   migrate down       roll back the most recent migration (development/test only)
   bootstrap-admins   one-time super-admin bootstrap ceremony (flags: -h)
+  verify ...         audit | ledger | objects integrity checks (Stage 18; JSON output)
+  backup record ...  record backup or restore-drill evidence (Stage 18; -key, -dir, -report)
   version            show build information
   healthcheck [url]  probe a health URL (container health checks)`
 
@@ -78,6 +83,10 @@ func run(args []string) error {
 		return nil
 	case "bootstrap-admins":
 		return bootstrapAdmins(args[1:])
+	case "verify":
+		return verify(args[1:])
+	case "backup":
+		return backupCmd(args[1:])
 	case "migrate":
 		if len(args) != 2 {
 			return errors.New(usage)
@@ -120,7 +129,12 @@ func migrate(cmd string) error {
 	if err := db.PingContext(ctx); err != nil {
 		return fmt.Errorf("cannot connect to the database: %w", err)
 	}
-	p, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS)
+	// Stage 18: a PostgreSQL advisory session lock serialises concurrent `migrate` runs (two deployments at once)
+	locker, err := lock.NewPostgresSessionLocker()
+	if err != nil {
+		return err
+	}
+	p, err := goose.NewProvider(goose.DialectPostgres, db, migrations.FS, goose.WithSessionLocker(locker))
 	if err != nil {
 		return err
 	}

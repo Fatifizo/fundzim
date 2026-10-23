@@ -39,7 +39,7 @@ func WithTx(ctx context.Context, pool *pgxpool.Pool, opts TxOptions, fn func(ctx
 		if err == nil || !retryable(err) || attempt >= opts.MaxRetries {
 			return err
 		}
-		backoff := time.Duration(10*(1<<attempt))*time.Millisecond + time.Duration(rand.IntN(10))*time.Millisecond
+		backoff := time.Duration(10*(1<<attempt))*time.Millisecond + time.Duration(rand.IntN(10))*time.Millisecond // #nosec G404 -- retry jitter
 		select {
 		case <-ctx.Done():
 			return errors.Join(err, ctx.Err())

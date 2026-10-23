@@ -2,7 +2,7 @@ package storage
 
 import (
 	"context"
-	"crypto/md5" //nolint:gosec // MD5 is the S3 SSE-C key checksum mandated by the protocol, not a security primitive
+	"crypto/md5" // #nosec G501 -- MD5 is the S3 SSE-C key checksum mandated by the protocol, not a security primitive
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -28,7 +28,7 @@ func (k SSEKey) headers() (alg, key, md *string, err error) {
 	if len(k) != 32 {
 		return nil, nil, nil, errors.New("storage: SSE-C key must be 32 bytes")
 	}
-	sum := md5.Sum(k) //nolint:gosec // protocol checksum
+	sum := md5.Sum(k) // #nosec G401 -- protocol checksum (SSE-C customer key MD5)
 	return aws.String("AES256"), aws.String(base64.StdEncoding.EncodeToString(k)),
 		aws.String(base64.StdEncoding.EncodeToString(sum[:])), nil
 }

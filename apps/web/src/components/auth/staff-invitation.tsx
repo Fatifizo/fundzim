@@ -107,7 +107,7 @@ export function StaffInvitation({ token, api = authApi }: { token: string | null
 
   const { invitation } = state;
   return (
-    <form ref={formRef} noValidate onSubmit={onSubmit} className="space-y-6">
+    <form method="post" ref={formRef} noValidate onSubmit={onSubmit} className="space-y-6">
       <p className="text-ink-700">
         Setting up the staff account for <strong className="break-all">{invitation.email}</strong> ({invitation.display_name}).
       </p>

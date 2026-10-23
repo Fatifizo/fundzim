@@ -998,12 +998,8 @@ func TestIdentityOrganisationIsolation(t *testing.T) {
 func TestIdentityAuditChainsIntact(t *testing.T) {
 	need(t, "DATABASE_URL", "POSTGRES_WORKER_PASSWORD")
 	w := pool(t, workerURL(t))
-	for _, tbl := range []string{"audit.audit_events", "audit.security_audit_events"} {
-		var problems int
-		if err := w.QueryRow(ctx(t), `SELECT count(*) FROM audit.verify_chain($1::regclass)`, tbl).Scan(&problems); err != nil || problems != 0 {
-			t.Fatalf("%s: %d problems, %v", tbl, problems, err)
-		}
-	}
+	// Stage 18 (ADR-050): parallel FULL verification once per run, then incremental from its MAC-protected checkpoint
+	assertChainsIntact(t, ctx(t), "audit.audit_events", "audit.security_audit_events")
 	// no audit metadata carries secrets
 	var leaks int
 	if err := w.QueryRow(ctx(t), `SELECT count(*) FROM audit.security_audit_events

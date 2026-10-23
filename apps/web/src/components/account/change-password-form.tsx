@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 
+import { StepUpCancelledError, useOptionalStepUp } from "@/components/auth/step-up";
 import { PASSWORD_MAX, PASSWORD_MIN, useFormFeedback } from "@/components/auth/use-form-feedback";
 import { FormError, FormStatus } from "@/components/forms/form-error";
 import { PasswordField } from "@/components/forms/password-field";
@@ -12,8 +13,9 @@ import { PASSWORD_RULES } from "@/lib/auth/errors";
 /** API field name (an identifier, not a credential). */
 const NEW_PASSWORD_FIELD = "new_" + "password";
 
-/** POST /me/password. The API signs out the user's other sessions on success. */
+/** POST /me/password. The API signs out the user's other sessions on success; staff confirm with a TOTP step-up first. */
 export function ChangePasswordForm({ email, api = authApi }: { email: string; api?: AuthApi }) {
+  const withStepUp = useOptionalStepUp();
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const { formError, fieldErrors, errorRef, formRef, clear, fail, failWith } = useFormFeedback();
@@ -35,10 +37,11 @@ export function ChangePasswordForm({ email, api = authApi }: { email: string; ap
     clear();
     setBusy(true);
     try {
-      await api.changePassword(current, next);
+      await withStepUp(() => api.changePassword(current, next));
       form.reset();
       setSaved(true);
     } catch (error) {
+      if (error instanceof StepUpCancelledError) return;
       failWith(error, "We couldn't change your password. Please try again.", { password: NEW_PASSWORD_FIELD });
     } finally {
       setBusy(false);
@@ -46,7 +49,7 @@ export function ChangePasswordForm({ email, api = authApi }: { email: string; ap
   }
 
   return (
-    <form ref={formRef} noValidate onSubmit={onSubmit} className="space-y-5">
+    <form method="post" ref={formRef} noValidate onSubmit={onSubmit} className="space-y-5">
       {/* Lets password managers associate the new password with the right account. */}
       <input type="email" name="username" autoComplete="username" value={email} readOnly hidden />
       <FormError ref={errorRef} message={formError} />

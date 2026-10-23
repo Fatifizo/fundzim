@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 -- reproduces the migrations' md5(seed)::uuid ids, not a security use
 	"errors"
 	"fmt"
 	"log/slog"
@@ -29,7 +29,7 @@ import (
 
 // seededID reproduces the migrations' md5('<seed>')::uuid ids.
 func seededID(seed string) string {
-	h := md5.Sum([]byte(seed))
+	h := md5.Sum([]byte(seed)) // #nosec G401 -- identifier derivation
 	return fmt.Sprintf("%x-%x-%x-%x-%x", h[0:4], h[4:6], h[6:8], h[8:10], h[10:16])
 }
 

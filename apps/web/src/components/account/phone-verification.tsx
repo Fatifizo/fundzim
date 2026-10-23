@@ -92,7 +92,7 @@ export function PhoneVerification({ phoneMasked, phoneVerified, api = authApi }:
       </p>
       {verified ? <FormStatus title="Phone number confirmed" /> : null}
       {phone ? (
-        <form ref={formRef} noValidate onSubmit={confirmCode} className="space-y-4">
+        <form method="post" ref={formRef} noValidate onSubmit={confirmCode} className="space-y-4">
           <FormError ref={errorRef} message={formError} />
           <TextField
             ref={codeRef}
@@ -122,7 +122,7 @@ export function PhoneVerification({ phoneMasked, phoneVerified, api = authApi }:
           </div>
         </form>
       ) : (
-        <form ref={formRef} noValidate onSubmit={requestCode} className="space-y-4">
+        <form method="post" ref={formRef} noValidate onSubmit={requestCode} className="space-y-4">
           <FormError ref={errorRef} message={formError} />
           <TextField
             label="Mobile phone number"

@@ -1,7 +1,7 @@
 # FundZim API image: one image, three binaries (api, worker, fundzimctl). The worker runs from the same
 # image with entrypoint /usr/local/bin/worker. Non-root, distroless, no shell.
 # Build context: repository root.  docker build -f deploy/docker/api.Dockerfile .
-FROM golang:1.27.3-alpine3.24 AS build
+FROM golang:1.27.3-alpine3.24@sha256:b8c9b82affbbb82a020bbcf998dad2ba9516944ac7e883524642a481a9505e9c AS build
 WORKDIR /src
 ENV CGO_ENABLED=0 GOFLAGS=-trimpath
 COPY go.mod go.sum ./

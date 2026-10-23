@@ -15,17 +15,40 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 )
 
 // AEAD encrypts small C3/C4 values (e.g. TOTP secrets) with AES-256-GCM. The key ID is stored next to the
-// ciphertext so keys can be rotated; production must use KMS envelope encryption (Stage 18).
+// ciphertext. Rotation (Stage 18, ADR-050): new ciphertexts always use the active key; Open also accepts the previous
+// keys (overlap) until every row has been re-encrypted, so a rotation never makes existing data unreadable. GCM
+// authenticates, so trying a previous key on a ciphertext of another key fails cleanly; it never decrypts wrongly.
 type AEAD struct {
-	keyID string
-	gcm   cipher.AEAD
+	keyID    string
+	gcm      cipher.AEAD
+	previous []cipher.AEAD
 }
 
-// NewAEAD builds an AEAD from a 32-byte hex key.
-func NewAEAD(keyID, hexKey string) (*AEAD, error) {
+// NewAEAD builds an AEAD from a 32-byte hex active key and optional previous keys (rotation overlap).
+func NewAEAD(keyID, hexKey string, previousHexKeys ...string) (*AEAD, error) {
+	gcm, err := newGCM(hexKey)
+	if err != nil {
+		return nil, err
+	}
+	a := &AEAD{keyID: keyID, gcm: gcm}
+	for _, p := range previousHexKeys {
+		if strings.EqualFold(p, hexKey) {
+			return nil, errors.New("crypto: a previous field encryption key equals the active key")
+		}
+		g, err := newGCM(p)
+		if err != nil {
+			return nil, err
+		}
+		a.previous = append(a.previous, g)
+	}
+	return a, nil
+}
+
+func newGCM(hexKey string) (cipher.AEAD, error) {
 	key, err := hex.DecodeString(hexKey)
 	if err != nil || len(key) != 32 {
 		return nil, errors.New("crypto: field encryption key must be 32 bytes of hex")
@@ -34,17 +57,16 @@ func NewAEAD(keyID, hexKey string) (*AEAD, error) {
 	if err != nil {
 		return nil, err
 	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	return &AEAD{keyID: keyID, gcm: gcm}, nil
+	return cipher.NewGCM(block)
 }
 
 // KeyID identifies the key used for new ciphertexts.
 func (a *AEAD) KeyID() string { return a.keyID }
 
-// Seal encrypts plaintext bound to aad (e.g. "mfa_methods:<id>"), returning nonce||ciphertext.
+// PreviousKeys is the number of previous keys still accepted by Open (0 when no rotation is in progress).
+func (a *AEAD) PreviousKeys() int { return len(a.previous) }
+
+// Seal encrypts plaintext bound to aad (e.g. "mfa_methods:<id>") under the active key, returning nonce||ciphertext.
 func (a *AEAD) Seal(plaintext, aad []byte) ([]byte, error) {
 	nonce := make([]byte, a.gcm.NonceSize())
 	if _, err := rand.Read(nonce); err != nil {
@@ -53,13 +75,28 @@ func (a *AEAD) Seal(plaintext, aad []byte) ([]byte, error) {
 	return a.gcm.Seal(nonce, nonce, plaintext, aad), nil
 }
 
-// Open decrypts nonce||ciphertext produced by Seal with the same aad.
+// Open decrypts nonce||ciphertext produced by Seal with the same aad, under the active key or a previous one.
 func (a *AEAD) Open(sealed, aad []byte) ([]byte, error) {
+	pt, _, err := a.OpenWithStatus(sealed, aad)
+	return pt, err
+}
+
+// OpenWithStatus is Open that also reports whether the ciphertext used a previous key (it needs re-encryption).
+func (a *AEAD) OpenWithStatus(sealed, aad []byte) (plaintext []byte, previous bool, err error) {
 	n := a.gcm.NonceSize()
 	if len(sealed) < n {
-		return nil, errors.New("crypto: ciphertext too short")
+		return nil, false, errors.New("crypto: ciphertext too short")
 	}
-	return a.gcm.Open(nil, sealed[:n], sealed[n:], aad)
+	pt, err := a.gcm.Open(nil, sealed[:n], sealed[n:], aad)
+	if err == nil {
+		return pt, false, nil
+	}
+	for _, g := range a.previous {
+		if pt, perr := g.Open(nil, sealed[:n], sealed[n:], aad); perr == nil {
+			return pt, true, nil
+		}
+	}
+	return nil, false, err
 }
 
 // Keyed computes HMAC-SHA-256 blind indexes and code hashes with a server key, so stored hashes of

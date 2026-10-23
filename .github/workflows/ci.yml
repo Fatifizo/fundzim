@@ -46,6 +46,8 @@ jobs:
           set -o pipefail
           go test -race -count=1 -v ./internal/payments/ ./internal/psp/... | grep -E '^(--- |ok|FAIL|PASS)'
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./apps/api/... ./internal/... ./migrations/...
+      - name: Static analysis (gosec; reviewed exceptions are #nosec with a justification, docs/stage-18/application-security.md)
+        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.29.0 -quiet -exclude-dir=apps/web ./apps/api/... ./internal/... ./migrations/...
 
   web:
     name: Web (lint, types, unit tests, build, audit)
@@ -227,17 +229,70 @@ jobs:
         run: docker compose down -v
 
   images:
-    name: Container images build
+    name: Container images (build, SBOM, vulnerability scan, provenance)
+    # Stage 18 (docs/stage-18/supply-chain-security.md): every image gets a CycloneDX SBOM and a Trivy scan; a CRITICAL or
+    # HIGH vulnerability with a published fix fails the build (unfixed ones are reported, never suppressed). Binaries get
+    # SHA-256 checksums and a provenance record. Artifacts are kept 30 days. Nothing is pushed or deployed.
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: docker build -f deploy/docker/api.Dockerfile -t fundzim/api:ci .
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: docker build -f deploy/docker/api.Dockerfile --build-arg VERSION=ci --build-arg COMMIT=${{ github.sha }} -t fundzim/api:ci .
       - run: docker build -f deploy/docker/web.Dockerfile -t fundzim/web:ci apps/web
       - name: Images run as non-root
         run: |
           test "$(docker image inspect fundzim/api:ci --format '{{.Config.User}}')" = "65532:65532"
           test -n "$(docker image inspect fundzim/web:ci --format '{{.Config.User}}')"
+          test "$(docker image inspect fundzim/web:ci --format '{{.Config.User}}')" != "root"
+      - name: Install syft and trivy (pinned releases, checksum-verified)
+        run: |
+          mkdir -p "$RUNNER_TEMP/tools" && cd "$RUNNER_TEMP/tools"
+          curl -fsSL -o syft.tgz https://github.com/anchore/syft/releases/download/v1.54.1/syft_1.54.1_linux_amd64.tar.gz
+          echo "c069905b391cc4c20a5ba65ad5c10be2a7ba074f8ea6ad203e24d14e303dad47  syft.tgz" | sha256sum -c -
+          curl -fsSL -o trivy.tgz https://github.com/aquasecurity/trivy/releases/download/v0.75.0/trivy_0.75.0_Linux-64bit.tar.gz
+          echo "c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f  trivy.tgz" | sha256sum -c -
+          tar -xzf syft.tgz syft && tar -xzf trivy.tgz trivy
+          echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+      - name: SBOMs (CycloneDX JSON)
+        run: |
+          mkdir -p evidence
+          syft scan docker:fundzim/api:ci -q -o cyclonedx-json=evidence/sbom-api.cdx.json
+          syft scan docker:fundzim/web:ci -q -o cyclonedx-json=evidence/sbom-web.cdx.json
+          syft scan dir:. -q --exclude './apps/web/node_modules' -o cyclonedx-json=evidence/sbom-source.cdx.json
+      - name: Image vulnerability scan (report everything; fail on fixable CRITICAL/HIGH)
+        run: |
+          for img in api web; do
+            trivy image --quiet --scanners vuln --format json -o "evidence/trivy-$img.json" "fundzim/$img:ci"
+            trivy image --quiet --scanners vuln --format table --severity CRITICAL,HIGH "fundzim/$img:ci" | tee "evidence/trivy-$img.txt"
+          done
+          trivy image --quiet --scanners vuln --ignore-unfixed --severity CRITICAL,HIGH --exit-code 1 fundzim/api:ci
+          trivy image --quiet --scanners vuln --ignore-unfixed --severity CRITICAL,HIGH --exit-code 1 fundzim/web:ci
+      - name: Binaries, checksums and provenance record
+        run: |
+          CGO_ENABLED=0 go build -trimpath -ldflags "-X github.com/Fatifizo/fundzim/internal/platform/version.Commit=${{ github.sha }}" -o bin/ ./apps/api/cmd/...
+          (cd bin && sha256sum * > ../evidence/binaries.sha256)
+          python3 - <<'PY'
+          import json, os, subprocess
+          def sh(*a): return subprocess.check_output(a, text=True).strip()
+          rec = {"repository": os.environ["GITHUB_REPOSITORY"], "commit": os.environ["GITHUB_SHA"], "ref": os.environ["GITHUB_REF"],
+                 "workflow_run_id": os.environ["GITHUB_RUN_ID"], "run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+                 "runner": os.environ.get("RUNNER_OS", ""), "go": sh("go", "version"),
+                 "images": {i: sh("docker", "image", "inspect", "--format", "{{.Id}}", f"fundzim/{i}:ci") for i in ("api", "web")},
+                 "binaries": dict(reversed(l.split("  ")) for l in open("evidence/binaries.sha256").read().splitlines()),
+                 "note": "unsigned provenance record (no signing infrastructure is configured; docs/stage-18/supply-chain-security.md)"}
+          json.dump(rec, open("evidence/provenance.json", "w"), indent=2)
+          PY
+          cat evidence/provenance.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: supply-chain-evidence-${{ github.sha }}
+          path: evidence/
+          retention-days: 30
+          if-no-files-found: error
 
   secrets:
     name: Secret scanning

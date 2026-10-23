@@ -394,11 +394,32 @@ func TestPaymentsProviderSandboxIsolation(t *testing.T) {
 	if a.Provider.Code != code || a.Provider.Simulated {
 		t.Fatalf("routed to %+v", a.Provider)
 	}
+	// Stage 18 (F-S18-08): repeated identical status answers are kept as attempts but audited once; a changed answer is
+	// audited again
+	pollAudits := func() int {
+		return p.count(t, `SELECT count(*) FROM audit.audit_events WHERE action = 'payments.provider.response_received'
+			AND target_id = $1 AND metadata->>'operation' = 'GET_STATUS'`, a.ID)
+	}
+	for i := 0; i < 3; i++ {
+		if _, err := s.d.Verification.Payments.PollPayment(ctx(t), a.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := p.count(t, `SELECT count(*) FROM app.payment_attempts WHERE payment_intent_id = $1 AND operation = 'GET_STATUS'
+		AND completed_at IS NOT NULL`, a.ID); n < 3 {
+		t.Fatalf("status polls recorded: %d", n)
+	}
+	if n := pollAudits(); n != 1 {
+		t.Fatalf("three identical pending answers audited %d times, want 1", n)
+	}
 	fake.status.Store("paid")
 	if _, err := s.d.Verification.Payments.PollPayment(ctx(t), a.ID); err != nil {
 		t.Fatal(err)
 	}
 	p.waitStatus(t, a.ID, "SUCCEEDED", 10*time.Second)
+	if n := pollAudits(); n != 2 {
+		t.Fatalf("the changed answer was not audited: %d GET_STATUS audit events", n)
+	}
 	var payload string
 	if err := p.mig.QueryRow(ctx(t), `SELECT payload::text FROM app.outbox_events WHERE event_type = 'payments.payment_succeeded'
 		AND aggregate_id = $1`, a.ID).Scan(&payload); err != nil {

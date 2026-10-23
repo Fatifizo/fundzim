@@ -30,6 +30,12 @@
 > immutable evidence, the central hold registry (enforced by campaigns, payments and payouts through `risk`'s public
 > service) and a TEST-only screening foundation ([stage-13/risk-architecture.md](stage-13/risk-architecture.md)); `risk`
 > stays a leaf module (platform, audit).
+> **Stage 18 (ADR-050):** no new module. `audit` gains chain verification in parallel ranges with MAC-protected
+> checkpoints, a verification log and the retention registry; `operations` gains persisted security alerts and backup
+> evidence, fed by a worker security scan over module snapshots (`auth.SecuritySignals`, `audit.OpsSnapshot`, the
+> existing ones); application keys may come from the secret manager at startup (`config.Security.ResolveManaged`);
+> `fundzimctl` gains `verify` and `backup record` and a migration session lock. The compose stack is segmented (`edge`
+> network for web ⇄ API) and hardened; `internal/deploytest` checks it ([stage-18/security-architecture.md](stage-18/security-architecture.md)).
 > **Stage 17 (ADR-049, implements ADR-030):** `reconciliation` (imports platform, audit, storage, payments, payouts, fees,
 > ledger, psp; nothing imports it) owns the whole `recon` schema: sources, matching rule sets (maker-checker), statement
 > imports (hashed, stored as private evidence, scanned, parsed all or nothing), settlement batches, lines, runs, matches,

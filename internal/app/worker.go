@@ -15,10 +15,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 
+	"github.com/Fatifizo/fundzim/internal/audit"
 	"github.com/Fatifizo/fundzim/internal/discovery"
 	"github.com/Fatifizo/fundzim/internal/notifications"
 	"github.com/Fatifizo/fundzim/internal/platform/clock"
 	"github.com/Fatifizo/fundzim/internal/platform/config"
+	"github.com/Fatifizo/fundzim/internal/platform/crypto"
 	"github.com/Fatifizo/fundzim/internal/platform/db"
 	"github.com/Fatifizo/fundzim/internal/platform/health"
 	"github.com/Fatifizo/fundzim/internal/platform/jobs"
@@ -64,6 +66,10 @@ type WorkerDeps struct {
 // NewWorkerDeps connects the worker's dependencies and builds the River client with every job kind,
 // queue and periodic job. The pool is lazy: a database that is down makes the worker not-ready.
 func NewWorkerDeps(ctx context.Context, cfg config.Config, wcfg WorkerConfig, logger *slog.Logger) (*WorkerDeps, error) {
+	cfg, wcfg, err := resolveWorkerKeys(ctx, cfg, wcfg)
+	if err != nil {
+		return nil, err
+	}
 	info := version.Get(cfg.App.Name)
 	if cfg.App.Version != "" {
 		info.Version = cfg.App.Version
@@ -134,6 +140,13 @@ func (d *WorkerDeps) buildRiver() error {
 	}
 	periodic = append(periodic, discoveryJobs(workers, d.Discovery)...)           // Stage 16 (ADR-048)
 	periodic = append(periodic, reconciliationJobs(workers, d.Reconciliation)...) // Stage 17 (ADR-049)
+	checkpointKey, err := crypto.NewKeyed(auditCheckpointKeyID(d.Worker.AuditCheckpointKey.Reveal()), d.Worker.AuditCheckpointKey.Reveal())
+	if err != nil {
+		return err
+	}
+	verifier := &audit.Verifier{Pool: d.DB, Key: checkpointKey, Now: d.Clock.Now, Workers: 4}
+	periodic = append(periodic, auditChainJobs(workers, verifier, d.Worker, d.Logger)...) // Stage 18 (ADR-050)
+	periodic = append(periodic, securityJobs(workers, d)...)                              // Stage 18: security alerts
 	client, err := jobs.NewWorkerClient(jobs.WorkerConfig{
 		Pool: d.DB, Logger: d.Logger, Metrics: d.JobMetrics, Workers: workers,
 		Queues: jobs.DefaultQueues(d.Worker.Concurrency), PeriodicJobs: periodic,
@@ -191,7 +204,7 @@ func WorkerInternalHandler(d *WorkerDeps, checker *health.Checker) http.Handler 
 		}{Status: "ok"}
 		for _, r := range rep.Results {
 			d.Metrics.SetDependency(r.Name, r.OK)
-			out.Checks = append(out.Checks, item{Name: r.Name, OK: r.OK, Error: errString(r.Err)})
+			out.Checks = append(out.Checks, item{Name: r.Name, OK: r.OK, Error: checkFailure(r.Err)})
 			if !r.OK {
 				d.Logger.Warn("readiness check failed", slog.String("check", r.Name),
 					slog.String("error_category", "dependency"), slog.String("error", errString(r.Err)))

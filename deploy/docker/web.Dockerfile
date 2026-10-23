@@ -17,9 +17,9 @@
 # No build args are required. Do not pass secrets as build args: anything NEXT_PUBLIC_* is compiled into
 # the public JS bundle.
 #
-# Pin by digest in CI/production (e.g. node:24.21.0-bookworm-slim@sha256:...) for reproducible builds;
-# the tag is re-pushed for OS security updates.
-ARG NODE_IMAGE=node:24.21.0-bookworm-slim
+# Pinned by digest (Stage 18, reproducible builds; scripts/ci/check-compose.py refuses an unpinned FROM). The tag is
+# re-pushed for OS security updates: refresh the digest deliberately (docs/stage-18/supply-chain-security.md §4).
+ARG NODE_IMAGE=node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
 
 # ---- deps: install exactly what the lockfile says ---------------------------------------------------
 FROM ${NODE_IMAGE} AS deps
@@ -38,6 +38,14 @@ RUN mkdir -p public && npm run build
 
 # ---- runtime: minimal, non-root --------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS runtime
+# Stage 18 (docs/stage-18/container-security.md): apply the Debian security updates published since the base image was
+# built, and remove the package managers the server never uses (npm, npx, corepack and their bundled dependencies were
+# most of the image's known vulnerabilities). The SBOM built in CI records the exact package versions of each image.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 WORKDIR /app
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \

@@ -73,6 +73,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin/staff/roles", label: "Roles and permissions", permission: "staff.view" },
       { href: "/admin/staff/access-reviews", label: "Access reviews", permission: "staff.view" },
       { href: "/admin/audit", label: "Audit log", permission: "audit.read" },
+      { href: "/admin/security", label: "Security alerts", permission: "security.alert.view" },
     ],
   },
   {
@@ -210,6 +211,7 @@ export function visibleNav(permissions: readonly string[] | undefined): NavGroup
 
 const SEGMENT_LABELS: Record<string, string> = {
   admin: "Staff",
+  security: "Security alerts",
   operations: "Operations",
   approvals: "Approvals",
   exceptions: "Exceptions",

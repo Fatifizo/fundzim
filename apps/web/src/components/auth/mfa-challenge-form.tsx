@@ -79,7 +79,7 @@ export function MfaChallengeForm({ next, api = authApi }: { next?: string | null
   }
 
   return (
-    <form ref={formRef} noValidate onSubmit={onSubmit} className="space-y-5">
+    <form method="post" ref={formRef} noValidate onSubmit={onSubmit} className="space-y-5">
       <FormError ref={errorRef} message={formError} />
       {mode === "totp" ? (
         <TextField

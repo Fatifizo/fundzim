@@ -160,7 +160,7 @@ function StepUpDialog({ api, mfaEnabled, codeOnly, onDone, onCancel }: { api: Au
         This is a sensitive change. {useCode ? "Enter a code from your authenticator app" : "Enter your password"} to
         continue.
       </p>
-      <form ref={formRef} noValidate onSubmit={onSubmit} className="mt-5 space-y-5">
+      <form method="post" ref={formRef} noValidate onSubmit={onSubmit} className="mt-5 space-y-5">
         <FormError ref={errorRef} message={formError} />
         {useCode ? (
           <TextField

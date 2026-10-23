@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Fatifizo/fundzim/internal/platform/config"
 )
@@ -17,12 +18,14 @@ func lookup(m map[string]string) config.LookupFunc {
 
 func TestLoadWorkerConfig(t *testing.T) {
 	w, err := LoadWorkerConfig(lookup(map[string]string{
-		"DATABASE_WORKER_URL": "postgres://fundzim_worker:" + apiTestPW + "@127.0.0.1:5432/fundzim?sslmode=disable",
+		"DATABASE_WORKER_URL":  "postgres://fundzim_worker:" + apiTestPW + "@127.0.0.1:5432/fundzim?sslmode=disable",
+		"AUDIT_CHECKPOINT_KEY": testCheckpointKey,
 	}), config.EnvDevelopment)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.InternalHTTPPort != 9091 || w.Concurrency != 4 || w.OutboxRetention.Hours() != 168 {
+	if w.InternalHTTPPort != 9091 || w.Concurrency != 4 || w.OutboxRetention.Hours() != 168 || w.AuditVerifyInterval != 15*time.Minute ||
+		w.AuditFullVerifyEvery != 24*time.Hour {
 		t.Fatalf("defaults %+v", w)
 	}
 
@@ -31,12 +34,15 @@ func TestLoadWorkerConfig(t *testing.T) {
 		"WORKER_INTERNAL_HTTP_PORT": "0",
 		"WORKER_CONCURRENCY":        "lots",
 		"OUTBOX_RETENTION":          "1m",
+		"AUDIT_VERIFY_INTERVAL":     "1s",
+		"AUDIT_CHECKPOINT_KEY":      "short",
 	}), config.EnvProduction)
 	if err == nil {
 		t.Fatal("expected validation errors")
 	}
 	msg := err.Error()
-	for _, want := range []string{"WORKER_INTERNAL_HTTP_PORT", "WORKER_CONCURRENCY", "OUTBOX_RETENTION", "sslmode=verify-full"} {
+	for _, want := range []string{"WORKER_INTERNAL_HTTP_PORT", "WORKER_CONCURRENCY", "OUTBOX_RETENTION", "sslmode=verify-full",
+		"AUDIT_VERIFY_INTERVAL", "AUDIT_CHECKPOINT_KEY is required"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("missing %q in %s", want, msg)
 		}
@@ -47,12 +53,23 @@ func TestLoadWorkerConfig(t *testing.T) {
 	if _, err := LoadWorkerConfig(lookup(nil), config.EnvDevelopment); err == nil || !strings.Contains(err.Error(), "DATABASE_WORKER_URL is required") {
 		t.Fatalf("missing URL: %v", err)
 	}
+	// Stage 18: the checkpoint key is never shared with another key
+	_, err = LoadWorkerConfig(lookup(map[string]string{
+		"DATABASE_WORKER_URL":  "postgres://fundzim_worker:" + apiTestPW + "@127.0.0.1:5432/fundzim?sslmode=disable",
+		"AUDIT_CHECKPOINT_KEY": testCheckpointKey, "BLIND_INDEX_KEY": strings.ToUpper(testCheckpointKey),
+	}), config.EnvDevelopment)
+	if err == nil || !strings.Contains(err.Error(), "AUDIT_CHECKPOINT_KEY must differ from BLIND_INDEX_KEY") || strings.Contains(err.Error(), testCheckpointKey) {
+		t.Fatalf("shared checkpoint key: %v", err)
+	}
 }
+
+const testCheckpointKey = "5f4dcc3b5aa765d61d8327deb882cf995f4dcc3b5aa765d61d8327deb882cf99"
 
 func TestWorkerNotReadyWithoutDatabaseOrRiver(t *testing.T) {
 	cfg := testDeps(t).Config
 	wcfg, err := LoadWorkerConfig(lookup(map[string]string{
-		"DATABASE_WORKER_URL": "postgres://fundzim_worker:" + apiTestPW + "@127.0.0.1:1/fundzim?sslmode=disable",
+		"DATABASE_WORKER_URL":  "postgres://fundzim_worker:" + apiTestPW + "@127.0.0.1:1/fundzim?sslmode=disable",
+		"AUDIT_CHECKPOINT_KEY": testCheckpointKey,
 	}), cfg.App.Env)
 	if err != nil {
 		t.Fatal(err)

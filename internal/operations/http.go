@@ -60,6 +60,14 @@ func (h *HTTP) Routes() []Route {
 		{Pattern: "POST " + ops + "/sla-targets/{target_id}/approve", Policy: perm(PermSLAApprove), Handler: h.decideSLA(true)},
 		{Pattern: "POST " + ops + "/sla-targets/{target_id}/reject", Policy: perm(PermSLAApprove), Handler: h.decideSLA(false)},
 
+		// Stage 18 security alerts (docs/stage-18/security-monitoring.md); manage requires step-up (permission flag)
+		{Pattern: "GET /api/v1/admin/security/alerts", Policy: perm(PermSecurityAlertView), Handler: h.securityAlerts},
+		{Pattern: "GET /api/v1/admin/security/alerts/{alert_id}", Policy: perm(PermSecurityAlertView), Handler: h.securityAlert},
+		{Pattern: "POST /api/v1/admin/security/alerts/{alert_id}/acknowledge", Policy: perm(PermSecurityAlertManage), Handler: h.alertAction("acknowledge")},
+		{Pattern: "POST /api/v1/admin/security/alerts/{alert_id}/escalate", Policy: perm(PermSecurityAlertManage), Handler: h.alertAction("escalate")},
+		{Pattern: "POST /api/v1/admin/security/alerts/{alert_id}/resolve", Policy: perm(PermSecurityAlertManage), Handler: h.alertAction("resolve")},
+		{Pattern: "GET /api/v1/admin/security/backups", Policy: perm(PermSecurityAlertView), Handler: h.backupEvidence},
+
 		{Pattern: "GET /api/v1/admin/approvals", Policy: dash, Handler: h.approvals},
 		{Pattern: "GET /api/v1/admin/reports", Policy: dash, Handler: h.reports},
 
@@ -302,6 +310,50 @@ func (h *HTTP) updateIncident(w http.ResponseWriter, r *http.Request) {
 	x, err := h.S.UpdateIncident(r.Context(), IncidentOp{StaffID: principal(r).UserID, IncidentID: r.PathValue("incident_id"), ExpectedVersion: in.Version,
 		To: in.To, OwnerID: in.OwnerID, Note: in.Note, Severity: in.Severity})
 	h.respond(w, r, x, err)
+}
+
+// ---- security alerts (Stage 18) ----------------------------------------------------------------------------------------
+
+func (h *HTTP) securityAlerts(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	items, err := h.S.SecurityAlerts(r.Context(), q.Get("status"), q.Get("min_severity"))
+	h.respond(w, r, map[string]any{"items": items, "next_cursor": nil,
+		"notice": "Alerts are raised by fixed rules over module snapshots; thresholds are engineering defaults, not service levels. No external notification is sent."}, err)
+}
+
+func (h *HTTP) securityAlert(w http.ResponseWriter, r *http.Request) {
+	a, hist, err := h.S.SecurityAlert(r.Context(), r.PathValue("alert_id"))
+	h.respond(w, r, map[string]any{"alert": a, "history": hist}, err)
+}
+
+func (h *HTTP) alertAction(action string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Note    string `json:"note"`
+			Version int    `json:"version"`
+		}
+		if err := decode(r, &in); err != nil {
+			h.fail(w, r, err)
+			return
+		}
+		op := AlertOp{StaffID: principal(r).UserID, ID: r.PathValue("alert_id"), Version: in.Version, Note: in.Note}
+		var a SecurityAlert
+		var err error
+		switch action {
+		case "acknowledge":
+			a, err = h.S.AcknowledgeAlert(r.Context(), op)
+		case "escalate":
+			a, err = h.S.EscalateAlert(r.Context(), op)
+		default:
+			a, err = h.S.ResolveAlert(r.Context(), op)
+		}
+		h.respond(w, r, a, err)
+	}
+}
+
+func (h *HTTP) backupEvidence(w http.ResponseWriter, r *http.Request) {
+	b, err := h.S.BackupEvidenceSummary(r.Context())
+	h.respond(w, r, b, err)
 }
 
 // ---- SLA targets --------------------------------------------------------------------------------------------------------

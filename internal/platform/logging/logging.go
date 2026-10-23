@@ -53,7 +53,46 @@ func redact(groups []string, a slog.Attr) slog.Attr {
 	if IsSensitiveKey(a.Key) {
 		return slog.String(a.Key, Redacted)
 	}
+	if freeTextKey.MatchString(a.Key) {
+		// error and panic texts come from drivers and libraries (Stage 18, F-S18-07): scrub credential-shaped fragments
+		switch a.Value.Kind() {
+		case slog.KindString:
+			return slog.String(a.Key, ScrubText(a.Value.String()))
+		case slog.KindAny:
+			if err, ok := a.Value.Any().(error); ok {
+				return slog.String(a.Key, ScrubText(err.Error()))
+			}
+			return slog.String(a.Key, ScrubText(a.Value.String()))
+		}
+	}
 	return a
+}
+
+// freeTextKey names attributes that carry library-produced text (errors, panics, stacks, causes).
+var freeTextKey = regexp.MustCompile(`(?i)^(error|err|cause|panic|stack|detail|reason)$`)
+
+var scrubbers = []struct {
+	re   *regexp.Regexp
+	with string
+}{
+	// URL user info: the password part of a URL (between "user:" and "@host") becomes [REDACTED]
+	{regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://[^\s:/@]+):[^\s@/]+@`), "$1:" + Redacted + "@"},
+	// key=value / key: value pairs whose key looks sensitive
+	{regexp.MustCompile(`(?i)\b(pass(word|wd)?|secret|token|api[_-]?key|authorization|session|otp|sslpassword)(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;&]+)`), "$1$3" + Redacted},
+	// bearer and vault tokens in headers
+	{regexp.MustCompile(`(?i)\b(bearer|x-vault-token:?)\s+[A-Za-z0-9._~+/=-]{8,}`), "$1 " + Redacted},
+	// long hex or base64url runs (keys, tokens, hashes of secrets)
+	{regexp.MustCompile(`\b[0-9a-fA-F]{40,}\b`), Redacted},
+	{regexp.MustCompile(`\b[A-Za-z0-9_-]{43,}\b`), Redacted},
+}
+
+// ScrubText removes credential-shaped fragments from free text (error messages, panic values). It is a safety net:
+// code must still never put a secret into an error.
+func ScrubText(s string) string {
+	for _, sc := range scrubbers {
+		s = sc.re.ReplaceAllString(s, sc.with)
+	}
+	return s
 }
 
 type ctxKey struct{}

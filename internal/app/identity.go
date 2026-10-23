@@ -42,7 +42,7 @@ type IdentityDeps struct {
 // NewAuthService builds the auth service and the organisations service.
 func NewAuthService(ctx context.Context, d IdentityDeps) (*auth.Service, *organisations.Service, error) {
 	cfg := d.Config
-	aead, err := crypto.NewAEAD(fieldKeyID, cfg.Security.FieldEncryptionKey.Reveal())
+	aead, err := crypto.NewAEAD(fieldKeyID, cfg.Security.FieldEncryptionKey.Reveal(), cfg.Security.FieldEncryptionPrevious.List()...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("field encryption key: %w", err)
 	}

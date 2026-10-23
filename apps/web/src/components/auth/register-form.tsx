@@ -82,7 +82,7 @@ export function RegisterForm({ api = authApi }: { api?: AuthApi }) {
   }
 
   return (
-    <form ref={formRef} noValidate onSubmit={onSubmit} className="space-y-5" aria-describedby={formError ? "register-error" : undefined}>
+    <form method="post" ref={formRef} noValidate onSubmit={onSubmit} className="space-y-5" aria-describedby={formError ? "register-error" : undefined}>
       <FormError ref={errorRef} id="register-error" message={formError} />
       <TextField
         label="Email address"

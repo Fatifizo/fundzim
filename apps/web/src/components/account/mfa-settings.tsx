@@ -171,7 +171,7 @@ export function MfaSettings({ mfaEnabled, recoveryCodesRemaining, api = authApi 
             <p>Enter the 6-digit code the app shows to finish.</p>
           </li>
         </ol>
-        <form ref={enrolFormRef} noValidate onSubmit={confirmEnrollment} className="space-y-4">
+        <form method="post" ref={enrolFormRef} noValidate onSubmit={confirmEnrollment} className="space-y-4">
           <FormError ref={enrolErrorRef} message={enrolError} />
           <TextField
             label="Code from your authenticator app"
@@ -227,7 +227,7 @@ export function MfaSettings({ mfaEnabled, recoveryCodesRemaining, api = authApi 
             <h2 id="disable-title" className="font-display text-xl font-semibold text-ink-900">
               Turn off two-step verification
             </h2>
-            <form ref={disableFormRef} noValidate onSubmit={turnOff} className="space-y-4">
+            <form method="post" ref={disableFormRef} noValidate onSubmit={turnOff} className="space-y-4">
               <FormError ref={disableErrorRef} message={disableError} />
               <TextField
                 label="Authentication or recovery code"

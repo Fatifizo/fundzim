@@ -488,8 +488,10 @@ quarantine and write access to the promoted prefix only.
 - Backups stored in a separate account/project or with write-once (object lock) retention so a compromised
   application credential cannot delete them.
 - `private-kyc` backups inherit C3 handling; no copies to developer machines.
-- **Restore tests** on a schedule (quarterly at minimum, decided Stage 18) into an isolated environment,
-  including a ledger invariant check (debits = credits per currency) after restore.
+- **Restore tests** on a schedule (quarterly at minimum; Stage 18 proposes monthly — the security scan raises
+  `RESTORE_DRILL_STALE` after 35 days — pending owner approval) into an isolated environment, including a ledger
+  invariant check (debits = credits per currency) after restore. Stage 18 implements the backup, the restore drill and
+  failure drills for the development stack ([stage-18/backup-recovery.md](stage-18/backup-recovery.md)).
 - Production data is never copied into development or staging. Test data is synthetic.
 - Backup retention vs deletion obligations: see [PRIVACY.md](PRIVACY.md) (LEGAL_REVIEW_REQUIRED, LR-012, LR-034).
 
@@ -538,6 +540,21 @@ KYC data is the highest-impact confidentiality asset. Controls (Stage 5 implemen
 > single in-flight payout and ledger row locks prevent double reservation; provider calls recorded IN_FLIGHT first and never
 > repeated after one may have reached the provider; owner-facing refusals reveal no compliance or risk detail. Full review:
 > [stage-11/security-review.md](stage-11/security-review.md).
+
+## 21m. Security hardening and recovery (Stage 18, summary)
+
+> **Stage 18 as built ([ADR-050](adr/ADR-050-security-hardening-and-recovery.md)):** outside development every application
+> key is a `secretref://` reference resolved from the secret manager at startup (no fallback; `kms` refused as not
+> implemented), with up to three previous keys for AES-GCM field keys and SSE-C masters (rotation overlap); staff need a
+> TOTP step-up to change their password and a password change never refreshes step-up; readiness endpoints report
+> categories, never driver errors; error and panic texts are scrubbed before logging; staging refuses debug logs, plain
+> HTTP secret-manager and public URLs; dependency outages answer 503; audit chains are verified in parallel ranges and
+> incrementally from checkpoints MAC'd under a worker-only key (tamper evidence; external anchoring pending); repeated
+> identical status polls are not re-audited; a worker security scan raises persisted, deduplicated alerts (gates not
+> BLOCKED, audit failures, authentication anomalies, break-glass, backups) acknowledged, escalated and resolved by
+> people with step-up; backups are encrypted under a key kept apart, MAC-manifested and proven by restore and failure
+> drills; containers drop all capabilities, run read-only and segmented, images are digest-pinned; CI adds gosec, SBOMs,
+> a Trivy gate, checksums and provenance. Findings and open conditions: [stage-18/known-issues.md](stage-18/known-issues.md).
 
 ## 21l. Reconciliation security (Stage 17, summary)
 

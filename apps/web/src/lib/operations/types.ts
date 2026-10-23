@@ -344,3 +344,40 @@ export const TRIAGE_EDGES: Record<string, readonly string[]> = {
   RESOLVED: ["CLOSED", "REOPENED"],
   CLOSED: ["REOPENED"],
 };
+
+/** Stage 18 security alert (GET /api/v1/admin/security/alerts). */
+export interface SecurityAlert {
+  id: string;
+  alert_key: string;
+  dedupe_key: string;
+  severity: "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | string;
+  source_module: string;
+  component: string;
+  title: string;
+  source: string;
+  evidence: Record<string, unknown>;
+  status: "OPEN" | "ACKNOWLEDGED" | "RESOLVED" | string;
+  condition_active: boolean;
+  occurrences: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  cleared_at: string | null;
+  acknowledged_by: string | null;
+  acknowledged_at: string | null;
+  escalation_status: "NONE" | "ESCALATED" | string;
+  incident_id: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  resolution_note: string | null;
+  version: number;
+}
+
+export const ALERT_SEVERITIES = ["INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
+export const ALERT_STATUSES = ["LIVE", "OPEN", "ACKNOWLEDGED", "RESOLVED", "ALL"] as const;
+
+export interface BackupEvidence {
+  last_backup: string | null;
+  last_failed_backup: string | null;
+  last_verified_restore: string | null;
+  runs: number;
+}

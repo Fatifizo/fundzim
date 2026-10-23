@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"strings"
 	"testing"
@@ -68,6 +69,27 @@ func TestSensitiveKeyMatching(t *testing.T) {
 	for _, k := range []string{"company", "spinner", "shipping", "request_id", "route", "status", "duration_ms"} {
 		if IsSensitiveKey(k) {
 			t.Errorf("%q should not be sensitive", k)
+		}
+	}
+}
+
+// Stage 18 (F-S18-07): error and panic texts are scrubbed of credential-shaped fragments; ordinary text is kept.
+func TestErrorTextScrubbed(t *testing.T) {
+	var buf bytes.Buffer
+	l := New(&buf, Options{Service: "t", Level: slog.LevelInfo})
+	dsnPW := "hunter" + "2-db-pass"
+	l.Error("boom",
+		slog.String("error", "failed to connect to `postgres://fundzim_app:"+dsnPW+"@db:5432/fundzim`: dial tcp: refused"),
+		slog.Any("panic", errors.New("vault: X-Vault-Token: s.abcdefghijklmnop rejected; password="+dsnPW)),
+		slog.String("cause", "key "+strings.Repeat("ab", 32)+" wrong"),
+		slog.String("detail", "campaign 0192aa00-0000-7000-8000-000000000001 not found"))
+	out := buf.String()
+	if strings.Contains(out, dsnPW) || strings.Contains(out, "s.abcdefghijklmnop") || strings.Contains(out, strings.Repeat("ab", 32)) {
+		t.Fatalf("secret survived scrubbing: %s", out)
+	}
+	for _, keep := range []string{"fundzim_app", "db:5432", "dial tcp: refused", "0192aa00-0000-7000-8000-000000000001"} {
+		if !strings.Contains(out, keep) {
+			t.Errorf("useful context %q was scrubbed: %s", keep, out)
 		}
 	}
 }

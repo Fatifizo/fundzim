@@ -166,6 +166,23 @@ So `migrate up/status/version` work without `DATABASE_URL`. `fundzimctl healthch
 | SECURITY | `FIELD_ENCRYPTION_*`, `BLIND_INDEX_KEY`, `AUDIT_HASH_CHAIN_ENABLED` | Stage 4/5 |
 | Further pools | `DATABASE_WORKER_URL`, `DATABASE_KYC_URL`, `DATABASE_COMPLIANCE_URL`, `DATABASE_READONLY_URL` (commented) | Later stages; the API opens only the `fundzim_app` pool |
 
+> **Stage 18 note.** The table above describes Stage 3. Stage 18 removed the names nothing reads
+> (`MALWARE_SCAN_ENABLED`, `PAYMENTS_SANDBOX_WEBHOOK_SECRET`, `PAYMENTS_WEBHOOK_TOLERANCE`, `SMS_API_KEY`,
+> `AUDIT_HASH_CHAIN_ENABLED`, `ERROR_REPORTING_DSN`, `FIELD_ENCRYPTION_KMS_KEY_ID`, `PAYMENTS_ENABLED_PROVIDERS`,
+> `WEBAUTHN_RP_ID`) from `.env.example` and added:
+>
+> | Variable | Purpose | Rules |
+> |---|---|---|
+> | `FIELD_ENCRYPTION_PROVIDER` | `local` (hex keys in the environment; development/test only) or `secretstore` | `secretstore` needs `SECRETS_PROVIDER=kv2`; every key variable must then be a `secretref://` reference; `kms` is refused (not implemented) |
+> | `FIELD_ENCRYPTION_PREVIOUS_KEYS`, `KYC_FIELD_ENCRYPTION_PREVIOUS_KEYS`, `COMPLIANCE_FIELD_ENCRYPTION_PREVIOUS_KEYS`, `STORAGE_SSE_C_PREVIOUS_KEYS` | rotation overlap: comma-separated retired keys still accepted for reading | ≤ 3 each; every key distinct from every other key |
+> | `AUDIT_CHECKPOINT_KEY` (worker) | HMAC key for audit chain checkpoints | required; 64 hex; distinct from every other key |
+> | `AUDIT_VERIFY_INTERVAL`, `AUDIT_FULL_VERIFY_INTERVAL` (worker) | incremental (default 15m) and full (default 24h) verification | 1m–24h; 1h–744h |
+> | `POSTGRES_BACKUP_PASSWORD` (compose) | the read-only backup role | generated |
+> | `SECRETS_KV2_ROLE_ID`, `SECRETS_KV2_SECRET_ID`, `SECRETS_KV2_CA_FILE` | AppRole and private CA for the secret manager | AppRole required in production; https required outside development/test |
+>
+> Staging now also refuses `LOG_LEVEL=debug`, plain-HTTP `SECRETS_KV2_ADDR`, `PUBLIC_SITE_URL` and (with the simulator)
+> `SANDBOX_WEBHOOK_URL`.
+
 ## 7. Development configuration
 
 1. `./scripts/dev-env-init.sh` creates `.env` from `.env.example` (mode 600) and replaces every

@@ -161,8 +161,10 @@ func TestAuditHashChainVerifiesAndIsWorkerOnly(t *testing.T) {
 	if _, err := app.Exec(ctx(t), `SELECT * FROM audit.verify_chain('audit.audit_events')`); err == nil || sqlState(err) != "42501" {
 		t.Fatalf("api role must not execute the worker-only routine: %v", err)
 	}
+	// the single-pass function over the (small) security chain; the large business chain is verified in parallel
+	// ranges by TestSecurityAuditChainVerification (Stage 18, ADR-050)
 	w := pool(t, workerURL(t))
-	rows, err := w.Query(ctx(t), `SELECT seq, problem FROM audit.verify_chain('audit.audit_events')`)
+	rows, err := w.Query(ctx(t), `SELECT seq, problem FROM audit.verify_chain('audit.security_audit_events')`)
 	if err != nil {
 		t.Fatal(err)
 	}

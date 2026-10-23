@@ -49,7 +49,7 @@ const (
 	ScUnmappedStatus     = "unmapped_status_not_guessed"
 	ScLimitsFailClosed   = "limits_unknown_method_fail_closed"
 	ScRedirectHosts      = "redirect_hosts_well_formed"
-	ScNoSecretInResponse = "no_secret_in_observation"
+	ScNoSecretInResponse = "no_secret_in_observation" // #nosec G101 -- a scenario name, not a credential
 )
 
 // Scenarios lists every scenario in report order.

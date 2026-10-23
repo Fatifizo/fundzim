@@ -1,0 +1,64 @@
+# Stage 18 — Security findings register and known issues
+
+## 1. Findings register (brief §87–§88)
+
+Severity: CRITICAL / HIGH / MEDIUM / LOW / INFO. A finding is closed only with remediation evidence (code + test or a
+recorded run). No security exception was self-approved: findings without a fix stay OPEN for an owner decision.
+
+| ID | Title | Component | Severity | Exploitability | Evidence | Root cause | Remediation | Test coverage | Residual risk | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| F-S18-01 | Staff step-up obtainable with the password alone | auth (`ChangePassword`) | HIGH | a staff session + the password refreshed step-up, bypassing "staff step up with TOTP only" for 10 min | review of `internal/auth/me.go` | password change set `step_up_at` for every account kind | staff need a fresh TOTP step-up to change the password; the change never refreshes step-up | IT `TestSecurityStaffPasswordChangeNeedsTOTPStepUp`; web `change-password-form.test.tsx` | none known | FIXED |
+| F-S18-02 | Production could not start; no key rotation | config, crypto, storage | HIGH (availability / key management) | — | `FIELD_ENCRYPTION_PROVIDER=kms` "not implemented"; one key per purpose, `Open` ignored key ids | KMS deferred to Stage 18 | `secretstore` provider (keys from the secret manager at startup, fail closed); previous-key overlap for field and SSE-C keys | config tests, `TestAEADRotationOverlap`, `TestSSEMasterRotation`, IT `TestSecurityKeysFromSecretManager` | HMAC/CSRF keys not rotatable (KI-S18-04); no KMS (KI-S18-02) | FIXED (residual tracked) |
+| F-S18-03 | No MFA reset / lost-device procedure for staff | auth | MEDIUM | a staff member who loses TOTP and recovery codes is locked out | review | not designed | procedure documented (authentication-security.md §5): suspend, re-invite a new named identity; no shortcut built | — | operational | OPEN |
+| F-S18-04 | Break-glass has no workflow API and no audit tagging | auth, audit | MEDIUM | grants exist only by database insert; uses are not tagged `break_glass` | review (`sessions.go:245`, `audit/search.go`) | partially built in Stage 4 | DB constraints unchanged (≤ 1 h, maker-checker, no role/ledger permissions); new alert `BREAK_GLASS_ACTIVE` (HIGH) whenever a grant is active | `TestSecurityFindings` | uses not tagged | OPEN |
+| F-S18-05 | Internal endpoints unauthenticated; readiness returned raw driver errors | app (internal listeners) | MEDIUM | any container on the network could read error texts (hosts, roles) | review | details returned for debugging | readiness returns categories only; web is no longer on the data network | `TestInternalReadinessHasDetailsButPublicDoesNot` | no authentication on metrics (private network only) | PARTIALLY FIXED (KI-S18-16) |
+| F-S18-06 | Staging allowed debug logs, plain-HTTP secret manager and http public URLs | config | MEDIUM | staging is production-like but was not treated so | review | rules scoped to production | refused outside development/test | `TestStagingIsProductionLike` | simulators remain allowed in staging by design | FIXED |
+| F-S18-07 | Library error texts reached logs unredacted | logging | MEDIUM | DSNs/tokens inside driver errors | review (`envelope.go`, `middleware.go`) | key deny-list only | free-text scrubber on `error`, `panic`, `cause`, `stack`, `detail`, `reason` | `TestErrorTextScrubbed` | best-effort pattern scrubbing | FIXED |
+| F-S18-08 | Audit volume and verification time (KI-S17-12) | audit, payments | MEDIUM | verification 40 s and growing 124 k rows/day | measured | every identical poll audited; single-pass verification | repeated polls not re-audited; parallel ranges; MAC checkpoints | `TestSecurityAuditChainVerification`, `…TamperDetection`, poll-dedupe assertion | tamper evidence, not tamper-proof (KI-S18-05) | FIXED |
+| F-S18-09 | Containers with all capabilities, writable roots, flat network, tag-only images | compose, Dockerfiles | MEDIUM | a compromised web container could reach PostgreSQL/OpenBao directly | review; verified after the change (web cannot resolve or reach data services) | development defaults | hardening, segmentation, digests | `internal/deploytest` (mutation-checked) | development topology only | FIXED |
+| F-S18-10 | No account lockout, no concurrent-session cap, invitation start repeatable | auth | LOW | brute force slowed by GCRA limits, not stopped | review | design choice (no lockout DoS) | recorded | existing rate-limit tests | — | OPEN (by design) |
+| F-S18-11 | Stale and misleading `.env.example` names | configuration | LOW | operators trust controls that do not exist ("production refuses to boot if false") | review | drift | removed; new variables documented | — | — | FIXED |
+| F-S18-12 | No phishing-resistant MFA (WebAuthn) for privileged staff | auth | MEDIUM | TOTP can be phished in real time | review | not built | recorded as a production condition | — | — | OPEN |
+| F-S18-13 | Credential forms fell back to GET without JavaScript | web | MEDIUM | password and email in the URL, history and server logs | ZAP 10024 (`/login?email=…&password=…`) | forms without `method` | `method="post"` on every auth/account form | `credential-forms.test.ts` | — | FIXED |
+| F-S18-14 | Next.js 16.4.0 CRITICAL advisories | web dependency | CRITICAL | GHSA-2464-fhr4-w9xw, GHSA-673q-mjm6-r5xr, CVE-2026-94482 (Trivy) | Trivy on `fundzim/web` | dependency age | Next and eslint-config-next 16.4.2 | `npm audit --omit=dev` 0; Trivy gate in CI | — | FIXED |
+| F-S18-15 | Fixable OS and bundled-npm vulnerabilities in the web image | web image | HIGH | 5 CRITICAL / 12 HIGH fixable | Trivy | base image age; unused npm in runtime | `apt-get upgrade` at build; npm/npx/corepack removed | Trivy gate (fixable CRITICAL/HIGH fail CI) | unfixed Debian CVEs remain (KI-S18-10) | FIXED (residual tracked) |
+| F-S18-16 | Pages render HTTP 500 when the API rate-limits the server render | web | LOW | crawler-induced 500s (generic page, no detail) | ZAP 90022 | unhandled `ApiError` 429 in server components | — | — | — | OPEN |
+| F-S18-17 | No COEP/CORP on web documents | web | LOW | cross-origin isolation not enabled | ZAP 90004 | share images must be embeddable by social platforms | not changed; API responses carry CORP same-origin | — | — | OPEN (owner decision) |
+| F-S18-18 | A database outage answered 500 instead of 503 | httpx | MEDIUM (availability) | clients could not tell "retry later" from "broken" | DR exercise (`public read 500`) | connection errors mapped to INTERNAL_ERROR | 503 SERVICE_UNAVAILABLE + Retry-After | `TestDependencyOutageIs503` | — | FIXED |
+| F-S18-19 | Security signals query failed (parameter typed as interval) | auth signals | MEDIUM | monitoring blind spot | caught by the scan itself (`MONITORING_SOURCE_UNAVAILABLE`) | untyped parameter | explicit `timestamptz` | IT re-run; live scan | — | FIXED |
+| F-S18-20 | LR-076 cited for retention in Stage 17 documents | documentation | LOW | wrong legal dependency | register read | copy error | corrected to LR-012 with a note | — | — | FIXED |
+| F-S18-21 | The development secret manager loses its contents on restart | local stack | INFO (development) | — | DR exercise: secret 404 after restart; re-seeded in 3.3 s | OpenBao dev mode is in memory | documented recovery; production needs a persistent HA store with its own backup | DR exercise | — | OPEN (production infrastructure) |
+| F-S18-22 | Development host exposure | development host | INFO | RDP 3389/3390 and SSH on all interfaces; no host firewall detected; docker group is root-equivalent; auditd off | `scripts/host/baseline-check.sh` | developer workstation | host owner decision; never a production host | — | — | OPEN (owner) |
+| F-S18-23 | gosec: 9 findings | Go | INFO | none (reviewed) | gosec v2.29.0 | jitter `math/rand` ×2, MD5 for SSE-C protocol checksum and seed ids ×6, scenario name ×1 | `#nosec` with a justification each; CI gate on new findings | CI step | — | CLOSED (reviewed) |
+
+No CRITICAL or HIGH finding is open. The open MEDIUM findings (F-S18-03, -04, -05 residual, -12) are production
+conditions, not engineering blockers for Stage 19.
+
+## 2. Known issues
+
+| ID | Issue | Impact | Status |
+|---|---|---|---|
+| KI-S18-01 | No production infrastructure exists: TLS-terminating proxy/WAF, network policy, managed PostgreSQL with PITR and replicas, off-host and immutable backup storage, HA secret manager, monitoring/paging, orchestrator | production impossible | EXTERNAL_BLOCKER (Stage 20 / owner) |
+| KI-S18-02 | No KMS/HSM is selected; keys live in the secret manager (`secretstore`) | key custody below an HSM | EXTERNAL decision (ADR needed) |
+| KI-S18-03 | No re-encryption job moves rows off a previous key; a previous key must stay configured until one exists | rotation cannot complete | OPEN |
+| KI-S18-04 | Blind-index (HMAC) keys, the CSRF secret, the document-ticket key and the audit checkpoint key have no overlap mode (re-index / session reset / new full verification) | rotation is disruptive | OPEN (procedure in secrets-management.md) |
+| KI-S18-05 | Audit integrity is tamper evidence inside the database; checkpoint heads are not anchored externally | a superuser could rewrite history and checkpoints together only if they also hold the worker key | OPEN |
+| KI-S18-06 | No WebAuthn; no staff MFA reset workflow (F-S18-03, F-S18-12) | privileged access depends on TOTP | OPEN (production condition) |
+| KI-S18-07 | Break-glass: no request/approve/revoke API and no audit tag (F-S18-04) | emergency access is a database operation | OPEN |
+| KI-S18-08 | Artifacts are not signed (no cosign/attestations): provenance is an unsigned record | integrity rests on CI logs and checksums | EXTERNAL (signing infrastructure) |
+| KI-S18-09 | Branch protection, required reviews and protected environments are repository settings not visible to this session | merges are not enforced by review | NOT_VERIFIED (owner) |
+| KI-S18-10 | Unfixed Debian bookworm CVEs in the web runtime image (1 CRITICAL zlib minizip CVE-2023-45853, 56 HIGH; no fix published) | residual OS risk | OPEN (rebuild on every release; reviewed by the CI report) |
+| KI-S18-11 | No independent penetration test has taken place (package prepared) | — | EXTERNAL |
+| KI-S18-12 | RPO/RTO are engineering proposals, not business-approved | — | OWNER |
+| KI-S18-13 | No retention period anywhere (LR-012, LR-074); the registry blocks invented ones | storage growth | LEGAL_REVIEW_REQUIRED |
+| KI-S18-14 | Data subject workflows (access, export, deletion) are not implemented | — | OPEN / LEGAL |
+| KI-S18-15 | Alert thresholds are engineering defaults; alerts are internal only (no paging channel) | detection depends on staff looking | OPEN |
+| KI-S18-16 | Internal metrics and readiness endpoints have no authentication (private network only) | metric exposure on a flat production network | OPEN (network policy) |
+| KI-S18-17 | Stages 0–17 not accepted, no pull requests, nothing merged into `main` | governance | EXTERNAL_BLOCKER (owner) |
+| KI-S18-18 | The development audit table keeps its historical 1.07 M poll rows (history is never deleted) | full verification stays ~13 s on 8 connections | ACCEPTED (fact) |
+| KI-S18-19 | Docker does not restart a container stopped with `docker kill`; recovery in the DR exercise was an explicit restart | production needs a supervisor with health-based restarts | INFRASTRUCTURE |
+| KI-S18-20 | Every local service is single-node; no high-availability claim is made | — | INFRASTRUCTURE |
+| KI-S18-21 | DAST was passive only (ZAP baseline and API scan in safe mode); no authenticated or active scan | — | OPEN (penetration test) |
+| KI-S18-22 | Payments in PENDING/REQUIRES_ACTION are polled every 10 minutes without a horizon (only UNKNOWN hands off to reconciliation) | load grows with stalled payments | OPEN (Stage 19 input) |
+| KI-S18-23 | The development OpenBao keeps nothing across restarts (F-S18-21) | local only | ACCEPTED (development) |
+| KI-S18-24 | `TestLedgerPeriodCloseMakerCheckerAndPriorPeriodPostings` failed once in the full run (`LEDGER_PERIOD_STATE`) and passed on rerun: accounting-period state is shared on the development database (also seen in Stage 17) | local flakiness | OPEN (test isolation) |

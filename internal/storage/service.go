@@ -48,6 +48,8 @@ type Config struct {
 	TicketKey            []byte        // DOCUMENT_TICKET_KEY (32 bytes)
 	TicketTTL            time.Duration // DOCUMENT_TICKET_TTL (default 60 s)
 	SSEKey               []byte        // STORAGE_SSE_C_KEY (32 bytes); nil = unencrypted, development/test only
+	SSEKeyManaged        bool          // the key came from the secret manager (FIELD_ENCRYPTION_PROVIDER=secretstore, ADR-050)
+	SSEPreviousKeys      [][]byte      // STORAGE_SSE_C_PREVIOUS_KEYS: objects written under them stay readable (rotation overlap)
 	MaxConcurrentUploads int           // uploads buffered at once per process (default 8; memory ≈ n × UploadMaxBytes)
 	MaxScanAttempts      int           // automatic scan attempts before an object needs an operator (default 10)
 	ScanBackoff          jobs.Backoff  // FAILED_SCAN retry delay (default 30 s doubling to 1 h)
@@ -73,7 +75,8 @@ type Service struct {
 	logger  *slog.Logger
 	metrics *Metrics
 	tickets *Tickets
-	keyID   string
+	keyID   string            // the active key (new objects)
+	masters map[string][]byte // active and previous SSE-C master keys by key id
 	slots   chan struct{}
 }
 
@@ -118,40 +121,85 @@ func New(cfg Config, d Deps) (*Service, error) {
 		return nil, ErrDevScannerInProduction
 	}
 	keyID := UnencryptedKeyID
+	masters := map[string][]byte{}
 	switch {
 	case cfg.SSEKey == nil:
 		if !isLocalEnv(cfg.AppEnv) {
 			return nil, invalidInput("STORAGE_SSE_C_KEY is required outside development and test (private documents must be encrypted at rest)")
 		}
+		if len(cfg.SSEPreviousKeys) > 0 {
+			return nil, invalidInput("STORAGE_SSE_C_PREVIOUS_KEYS needs an active STORAGE_SSE_C_KEY")
+		}
 	case len(cfg.SSEKey) != 32:
 		return nil, invalidInput("STORAGE_SSE_C_KEY must be 32 bytes")
 	default:
-		if !isLocalEnv(cfg.AppEnv) {
-			// same rule as FIELD_ENCRYPTION_PROVIDER=local: a key from the environment is not KMS (Stage 18)
-			return nil, invalidInput("a local STORAGE_SSE_C_KEY is refused outside development and test (KMS is required; Stage 18)")
+		if !isLocalEnv(cfg.AppEnv) && !cfg.SSEKeyManaged {
+			// a key typed into the environment is development-only; elsewhere it comes from the secret manager (ADR-050)
+			return nil, invalidInput("a local STORAGE_SSE_C_KEY is refused outside development and test (FIELD_ENCRYPTION_PROVIDER=secretstore)")
 		}
-		fp := sha256.Sum256(append([]byte("fundzim-sse-key-id/"), cfg.SSEKey...))
-		keyID = "sse-c/hmac-sha256/local/" + hex.EncodeToString(fp[:8])
+		keyID = sseKeyID(cfg.SSEKey, cfg.SSEKeyManaged)
+		masters[keyID] = cfg.SSEKey
+		for _, prev := range cfg.SSEPreviousKeys {
+			if len(prev) != 32 || bytes.Equal(prev, cfg.SSEKey) {
+				return nil, invalidInput("STORAGE_SSE_C_PREVIOUS_KEYS must be 32-byte keys that differ from STORAGE_SSE_C_KEY")
+			}
+			masters[sseKeyID(prev, cfg.SSEKeyManaged)] = prev
+		}
 	}
 	tickets, err := NewTickets(cfg.TicketKey, cfg.TicketTTL, d.Clock.Now)
 	if err != nil {
 		return nil, err
 	}
 	return &Service{cfg: cfg, pool: d.Pool, blobs: d.Blobs, scanner: d.Scanner, clock: d.Clock, logger: d.Logger,
-		metrics: d.Metrics, tickets: tickets, keyID: keyID, slots: make(chan struct{}, cfg.MaxConcurrentUploads)}, nil
+		metrics: d.Metrics, tickets: tickets, keyID: keyID, masters: masters, slots: make(chan struct{}, cfg.MaxConcurrentUploads)}, nil
 }
 
 // Metrics returns the service's metrics.
 func (s *Service) Metrics() *Metrics { return s.metrics }
 
-// sse returns the per-object SSE-C key for a private object (nil for public media or when unconfigured).
+// sse returns the per-object SSE-C key for a new private object under the active master (nil for public media or when
+// unconfigured).
 func (s *Service) sse(bucket, objectID string) pstorage.SSEKey {
 	if bucket == BucketPublicMedia || s.cfg.SSEKey == nil {
 		return nil
 	}
-	m := hmac.New(sha256.New, s.cfg.SSEKey)
+	return objectKey(s.cfg.SSEKey, objectID)
+}
+
+// sseFor returns the per-object key for an existing object under the master its row records (ok false: that key is not
+// configured — retired before the object was re-encrypted, or recorded unencrypted while a key is now required).
+func (s *Service) sseFor(bucket, objectID string, keyID *string) (pstorage.SSEKey, bool) {
+	if bucket == BucketPublicMedia {
+		return nil, true
+	}
+	if keyID == nil {
+		return nil, false
+	}
+	if *keyID == UnencryptedKeyID {
+		return nil, s.cfg.SSEKey == nil
+	}
+	master, ok := s.masters[*keyID]
+	if !ok {
+		return nil, false
+	}
+	return objectKey(master, objectID), true
+}
+
+func objectKey(master []byte, objectID string) pstorage.SSEKey {
+	m := hmac.New(sha256.New, master)
 	m.Write([]byte("fundzim/sse-c/v1/" + objectID))
 	return m.Sum(nil)
+}
+
+// sseKeyID names a master key by a fingerprint (never the key): "local" keys come from the environment (development
+// and test), "managed" keys from the secret manager.
+func sseKeyID(master []byte, managed bool) string {
+	fp := sha256.Sum256(append([]byte("fundzim-sse-key-id/"), master...))
+	origin := "local"
+	if managed {
+		origin = "managed"
+	}
+	return "sse-c/hmac-sha256/" + origin + "/" + hex.EncodeToString(fp[:8])
 }
 
 func (s *Service) encryptionKeyID(bucket string) any {
@@ -405,15 +453,54 @@ func (s *Service) Open(ctx context.Context, id string) (io.ReadCloser, Object, e
 	if o.Status != StatusClean || o.promoted == nil {
 		return nil, o.Object, ErrNotClean
 	}
-	if o.BucketClass != BucketPublicMedia && (o.keyID == nil || *o.keyID != s.keyID) {
-		// encrypted under another key (rotation is not implemented) or recorded as unencrypted while a key is now set
-		return nil, o.Object, errors.Join(ErrStorageUnavailable, errors.New("storage: object encryption key does not match the configured key"))
+	key, ok := s.sseFor(o.BucketClass, o.ID, o.keyID)
+	if !ok {
+		// encrypted under a key that is no longer configured, or recorded as unencrypted while a key is now set
+		return nil, o.Object, errors.Join(ErrStorageUnavailable, errors.New("storage: object encryption key is not configured"))
 	}
-	rc, err := s.blobs.GetSSE(ctx, pstorage.RefFor(platformClass(o.BucketClass), *o.promoted), s.sse(o.BucketClass, o.ID))
+	rc, err := s.blobs.GetSSE(ctx, pstorage.RefFor(platformClass(o.BucketClass), *o.promoted), key)
 	if err != nil {
 		return nil, o.Object, errors.Join(ErrStorageUnavailable, err)
 	}
 	return &verifyingReader{rc: rc, h: sha256.New(), want: o.SHA256}, o.Object, nil
+}
+
+// SampledObject is one object picked by SampleClean.
+type SampledObject struct {
+	ID            string
+	BucketClass   string
+	KeyConfigured bool // its recorded SSE-C key is one this service holds (active or previous)
+}
+
+// SampleClean returns up to n CLEAN, promoted, not deleted objects in random order (n <= 0: all) and the total number of
+// such objects. Used by restore verification (fundzimctl verify objects).
+func (s *Service) SampleClean(ctx context.Context, n int) ([]SampledObject, int64, error) {
+	var total int64
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM app.stored_objects WHERE scan_status = 'CLEAN' AND promoted_key IS NOT NULL
+		AND deleted_at IS NULL`).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	limit := int64(n)
+	if n <= 0 {
+		limit = total
+	}
+	rows, err := s.pool.Query(ctx, `SELECT id::text, bucket_class, encryption_key_id FROM app.stored_objects WHERE scan_status = 'CLEAN'
+		AND promoted_key IS NOT NULL AND deleted_at IS NULL ORDER BY random() LIMIT $1`, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var out []SampledObject
+	for rows.Next() {
+		var o SampledObject
+		var keyID *string
+		if err := rows.Scan(&o.ID, &o.BucketClass, &keyID); err != nil {
+			return nil, 0, err
+		}
+		_, o.KeyConfigured = s.sseFor(o.BucketClass, o.ID, keyID)
+		out = append(out, o)
+	}
+	return out, total, rows.Err()
 }
 
 // ErrIntegrity is returned by an Open reader whose content does not match the recorded SHA-256.

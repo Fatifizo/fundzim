@@ -134,6 +134,20 @@ Full reference (every variable, default and refusal): [development/configuration
 - `.env` and all `.env.*` (except `.env.example`) are git-ignored; `scripts/check-secrets.sh` flags any tracked
   env file. `NEXT_PUBLIC_*` variables are compiled into the browser bundle and are public — never name a
   secret `NEXT_PUBLIC_*` ([FRONTEND.md](FRONTEND.md) §8).
+- **Stage 18 variables.** Existing local `.env` files need two new values (generate them the same way as the
+  others, then recreate the containers): `AUDIT_CHECKPOINT_KEY` (64 hex; the worker refuses to start without it) and
+  `POSTGRES_BACKUP_PASSWORD` (the backup role; on an existing volume run
+  `deploy/docker/postgres/init/30-backup-role.sh` through `docker compose exec`). Optional: `AUDIT_VERIFY_INTERVAL`,
+  `AUDIT_FULL_VERIFY_INTERVAL`, `*_PREVIOUS_KEYS` (rotation overlap). Outside development and test the application
+  keys must be `secretref://` references with `FIELD_ENCRYPTION_PROVIDER=secretstore`
+  ([stage-18/secrets-management.md](stage-18/secrets-management.md)).
+- **Backups and drills (local stack only):** `scripts/backup/backup.sh`, `restore-drill.sh`, `failure-drills.sh`,
+  `scripts/dr/exercise.sh` (stops and kills containers — run it under the stack lock), `scripts/host/baseline-check.sh`
+  (read-only). Operator checks: `fundzimctl verify audit|ledger|objects`, `fundzimctl backup record`.
+- **CI (Stage 18):** the Go job runs gosec after govulncheck; the images job builds both images, writes CycloneDX SBOMs
+  (syft), scans them with Trivy (fixable CRITICAL/HIGH fail), records binary checksums and an unsigned provenance record,
+  and uploads everything as `supply-chain-evidence-<sha>` (30 days). `internal/deploytest` (part of the Go unit tests)
+  checks `compose.yaml`, the Dockerfiles and the workflow policy.
 - **Staging/production secrets** come from a secret manager and are injected at runtime. They are never
   committed, never baked into images, never printed in logs or CI output, and are rotated on staff departure
   or suspected exposure. See [SECURITY.md](SECURITY.md).

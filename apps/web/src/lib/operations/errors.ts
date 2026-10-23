@@ -6,6 +6,7 @@ const MESSAGES: Record<string, string> = {
   OPS_NOT_FOUND: "This record was not found. Reload the page.",
   OPS_STATE: "This isn't possible in the record's current status. Reload the page to see the latest state.",
   OPS_RECORD_CHANGED: "Someone else changed this record since you loaded it. Reload and try again.",
+  SECURITY_ALERT_STATE: "This alert is not in a state that allows this action (acknowledge first; an escalated alert cannot be escalated again).",
   OPS_SLA_TARGET_PENDING: "A proposed target for this metric is already waiting for a decision.",
   OPS_CONFLICT_OF_INTEREST: "You can't decide this: it concerns your own access or an account linked to yours.",
   OPS_NOT_REVIEWER: "Only the named reviewer can decide the items of this access review.",

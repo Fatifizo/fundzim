@@ -95,6 +95,9 @@ type Service struct {
 	Environment string // APP_ENV
 	// SourceTimeout bounds each source (default 3s): a slow module degrades its panel, not the page.
 	SourceTimeout time.Duration
+	// ClearScope limits which live security alerts a scan may mark cleared (by source module); nil: every alert. A scan
+	// over a subset of the sources must not clear what it did not look at (Stage 18).
+	ClearScope []string
 }
 
 func (s *Service) now() time.Time { return s.Clock.Now().UTC() }

@@ -5,13 +5,29 @@
 #                                      # web, mail (Mailpit: UI http://127.0.0.1:8025)
 #   docker compose --profile scale-test up -d fundzim-api-2   # second API replica on 127.0.0.1:8081
 #
-# Every published port binds to 127.0.0.1 only. Images are pinned to exact versions.
+# Every published port binds to 127.0.0.1 only. Images are pinned to exact versions and digests.
 # Secrets come from .env (git-ignored). Nothing here may ever point at a real payment provider.
+#
+# Stage 18 hardening (docs/stage-18/container-security.md; checked by scripts/ci/check-compose.py in CI): every
+# container drops all Linux capabilities (third-party images add back only what their entrypoint needs to switch to an
+# unprivileged user), cannot gain privileges (no-new-privileges), has memory and process limits; FundZim's own
+# containers run with a read-only root filesystem. Two networks: `edge` (web and API only) and `default` (API, worker
+# and the data services): the web container cannot reach PostgreSQL, Valkey, Garage, OpenBao or ClamAV.
 name: fundzim
 
 x-logging: &logging
   driver: json-file
   options: { max-size: "10m", max-file: "3" }
+
+x-hardened: &hardened
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  pids_limit: 512
+
+x-readonly-app: &readonly-app
+  <<: *hardened
+  read_only: true
+  tmpfs: ["/tmp:size=64m,mode=1777"]
 
 x-common-env: &common-env
   APP_ENV: development
@@ -70,8 +86,10 @@ x-common-env: &common-env
 
 services:
   fundzim-postgres:
-    image: postgres:17.11-alpine3.24
+    image: postgres:17.11-alpine3.24@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
     restart: unless-stopped
+    <<: *hardened
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]   # the entrypoint fixes data-dir ownership, then drops to postgres
     # Docker's default /dev/shm (64 MB) is too small for parallel query workers on larger development datasets
     # ("could not resize shared memory segment"); production sizing is an infrastructure decision (Stage 18)
     shm_size: 256mb
@@ -87,6 +105,7 @@ services:
       POSTGRES_COMPLIANCE_PASSWORD: ${POSTGRES_COMPLIANCE_PASSWORD:?}
       POSTGRES_READONLY_PASSWORD: ${POSTGRES_READONLY_PASSWORD:?}
       POSTGRES_LEDGER_PASSWORD: ${POSTGRES_LEDGER_PASSWORD:?run scripts/dev-env-init.sh}
+      POSTGRES_BACKUP_PASSWORD: ${POSTGRES_BACKUP_PASSWORD:?run scripts/dev-env-init.sh (Stage 18 adds POSTGRES_BACKUP_PASSWORD)}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./deploy/docker/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -101,9 +120,14 @@ services:
 
   fundzim-redis:
     # Valkey: BSD-licensed, Redis-protocol compatible. Cache/rate-limit only, never authoritative.
-    image: valkey/valkey:9.0.6-alpine3.24
+    image: valkey/valkey:9.0.6-alpine3.24@sha256:187679e3bd4036959631e3f03983ab2ba503ab21e6fd0454d508e909db2ee989
     restart: unless-stopped
-    command: ["valkey-server", "--appendonly", "no", "--save", "", "--requirepass", "${REDIS_PASSWORD:?}", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    <<: *hardened
+    user: "999:1000"   # the image's valkey user: no entrypoint privilege switching, so no capability at all
+    read_only: true
+    tmpfs: ["/data:size=16m,uid=999,gid=1000", "/run/valkey:size=1m,uid=999,gid=1000,mode=0700"]
+    # the password goes into a config file on tmpfs, never onto the command line (Stage 18, F-S18-09)
+    entrypoint: ["/bin/sh", "-ec", "umask 077; printf 'requirepass %s\\n' \"$$REDIS_PASSWORD\" > /run/valkey/auth.conf; exec valkey-server /run/valkey/auth.conf --appendonly no --save '' --maxmemory 128mb --maxmemory-policy allkeys-lru"]
     ports: ["127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"]
     healthcheck:
       test: ["CMD-SHELL", "valkey-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
@@ -117,8 +141,10 @@ services:
 
   fundzim-storage:
     # Garage: S3-compatible object storage (MinIO's community images are no longer published).
-    image: dxflrs/garage:v2.4.1
+    image: dxflrs/garage:v2.4.1@sha256:9c96caa2612d3411acc5b0e6701fb238dbfba33e533a6d7d3d811a4b12d0d020
     restart: unless-stopped
+    <<: *hardened
+    read_only: true
     environment:
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?}
       GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?}
@@ -136,8 +162,11 @@ services:
     logging: *logging
 
   fundzim-storage-init:
-    image: curlimages/curl:8.22.0
+    image: curlimages/curl:8.22.0@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
     restart: "no"
+    <<: *hardened
+    read_only: true
+    mem_limit: 64m
     depends_on:
       fundzim-storage: { condition: service_healthy }
     entrypoint: ["/bin/sh", "/init.sh"]
@@ -160,8 +189,10 @@ services:
     # Stage 9 (ADR-041): OpenBao in DEV MODE — in-memory storage, plain HTTP, a fixed root token from .env.
     # Local development and CI only; production uses a hardened OpenBao/Vault with AppRole (Stage 18/20).
     # Dev mode keeps nothing across restarts: fundzim-secrets-init re-seeds it (docker compose up re-runs it).
-    image: openbao/openbao:2.4.1
+    image: openbao/openbao:2.4.1@sha256:597f62847dd382382056a1d6704d50465908c2040038c4611832a23269a67112
     restart: unless-stopped
+    <<: *hardened
+    cap_add: [SETGID, SETUID]   # the entrypoint drops to the openbao user (SKIP_SETCAP: no IPC_LOCK in dev mode)
     command: ["server", "-dev", "-dev-listen-address=0.0.0.0:8200", "-dev-no-store-token"]
     environment:
       BAO_DEV_ROOT_TOKEN_ID: ${SECRETS_KV2_TOKEN:?run scripts/dev-env-init.sh}
@@ -178,8 +209,12 @@ services:
 
   fundzim-secrets-init:
     # Copies the simulator's generated test secrets from .env into the secret manager (stdin, never argv).
-    image: openbao/openbao:2.4.1
+    image: openbao/openbao:2.4.1@sha256:597f62847dd382382056a1d6704d50465908c2040038c4611832a23269a67112
     restart: "no"
+    <<: *hardened
+    read_only: true
+    tmpfs: ["/tmp:size=8m"]
+    mem_limit: 64m
     depends_on:
       fundzim-secrets: { condition: service_healthy }
     entrypoint:
@@ -209,6 +244,8 @@ services:
         BUILD_TIME: ${BUILD_TIME:-unknown}
     image: fundzim/api:local
     restart: "no"
+    <<: *readonly-app
+    mem_limit: 256m
     depends_on:
       fundzim-postgres: { condition: service_healthy }
     entrypoint: ["/usr/local/bin/fundzimctl", "migrate", "up"]
@@ -222,6 +259,8 @@ services:
     build: *api-build
     image: fundzim/api:local
     restart: unless-stopped
+    <<: *readonly-app
+    networks: [default, edge]
     depends_on: &api-depends
       fundzim-migrate: { condition: service_completed_successfully }
       fundzim-secrets-init: { condition: service_completed_successfully }
@@ -234,9 +273,9 @@ services:
       HTTP_PORT: "8080"
       INTERNAL_HTTP_PORT: "9090"
       REQUEST_TIMEOUT: 15s
-      # Only the web container's same-origin proxy (fixed address below) may set X-Forwarded-For.
-      # Requests from the host arrive from the Docker gateway (172.28.0.1), which is NOT trusted.
-      TRUSTED_PROXY_CIDRS: 172.28.0.10/32
+      # Only the web container's same-origin proxy (fixed address on the edge network) may set X-Forwarded-For.
+      # Requests from the host arrive from a Docker gateway, which is NOT trusted.
+      TRUSTED_PROXY_CIDRS: 172.28.1.10/32
       REDIS_URL: redis://:${REDIS_PASSWORD:?}@fundzim-redis:6379/0
       REDIS_REQUIRED: "false"
       STORAGE_ENDPOINT: http://fundzim-storage:3900
@@ -264,6 +303,8 @@ services:
     image: fundzim/api:local
     profiles: ["scale-test"]
     restart: unless-stopped
+    <<: *readonly-app
+    networks: [default, edge]
     depends_on: *api-depends
     environment: *api-env
     ports:
@@ -282,6 +323,7 @@ services:
       fundzim-secrets-init: { condition: service_completed_successfully }
       fundzim-mail: { condition: service_started }
     entrypoint: ["/usr/local/bin/worker"]
+    <<: *readonly-app
     environment:
       <<: *common-env                      # no Redis: the worker does not use it
       # malware scanning and promotion of private documents (Stage 5); campaign images (Stage 6 stream M): scanning
@@ -300,6 +342,7 @@ services:
       STORAGE_PUBLIC_SECRET_ACCESS_KEY: ${STORAGE_PUBLIC_SECRET_ACCESS_KEY:?}
       DATABASE_WORKER_URL: postgres://fundzim_worker:${POSTGRES_WORKER_PASSWORD:?}@fundzim-postgres:5432/fundzim?sslmode=disable
       WORKER_INTERNAL_HTTP_PORT: "9091"
+      AUDIT_CHECKPOINT_KEY: ${AUDIT_CHECKPOINT_KEY:?run scripts/dev-env-init.sh (Stage 18 adds AUDIT_CHECKPOINT_KEY)}
       WORKER_CONCURRENCY: "4"
       SHUTDOWN_TIMEOUT: 30s
     healthcheck:
@@ -320,6 +363,9 @@ services:
       dockerfile: ../../deploy/docker/web.Dockerfile
     image: fundzim/web:local
     restart: unless-stopped
+    <<: *hardened
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777", "/app/.next/cache:size=256m,uid=1000,gid=1000"]
     depends_on:
       fundzim-api: { condition: service_healthy }
     environment:
@@ -328,16 +374,19 @@ services:
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:-http://localhost:3000}
       SITE_INDEXING: ${SITE_INDEXING:-disallow}
     networks:
-      default:
-        ipv4_address: 172.28.0.10   # the API trusts X-Forwarded-For from this address only
+      edge:
+        ipv4_address: 172.28.1.10   # the API trusts X-Forwarded-For from this address only; no data-service access
     ports: ["127.0.0.1:${WEB_HOST_PORT:-3000}:3000"]
     mem_limit: 768m
     logging: *logging
 
   fundzim-mail:
     # Local mail catcher (Mailpit): receives all email and dev_mailpit SMS. UI/API on 127.0.0.1:8025.
-    image: axllent/mailpit:v1.31.4
+    image: axllent/mailpit:v1.31.4@sha256:b68349e3a014b90c5610bfb26b2ae36f3892d7b8cf25ee140c6c71c98d2fcf48
     restart: unless-stopped
+    <<: *hardened
+    read_only: true
+    tmpfs: ["/tmp:size=32m"]
     ports:
       - "127.0.0.1:${MAIL_UI_HOST_PORT:-8025}:8025"
       - "127.0.0.1:${MAIL_SMTP_HOST_PORT:-1025}:1025"
@@ -352,6 +401,8 @@ services:
     # signatures load. The 127.0.0.1 port exists only for host-run integration tests.
     image: clamav/clamav:1.5.3@sha256:d06c1d6a451d616e1dd79b42f44c8c8c291bba9cf4e75ebc4d0e43c1c6dd87bb
     restart: unless-stopped
+    <<: *hardened
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]   # the entrypoint prepares its directories, then drops to clamav
     environment:
       CLAMAV_NO_MILTERD: "true"
       CLAMD_STARTUP_TIMEOUT: "600"
@@ -369,13 +420,20 @@ services:
 
 networks:
   default:
+    # API, worker and data services. Not `internal`: development publishes ports to 127.0.0.1 for host-run tests
+    # (production network policy: docs/stage-18/network-security.md).
     ipam:
       config:
-        # Fixed subnet so the API can trust exactly the web container (172.28.0.10). Dynamic addresses
-        # come from the upper half, so no other container can take .10.
         - subnet: 172.28.0.0/24
-          ip_range: 172.28.0.128/25
           gateway: 172.28.0.1
+  edge:
+    # web ⇄ API only. Fixed subnet so the API can trust exactly the web container (172.28.1.10); dynamic addresses
+    # come from the upper half, so no other container can take .10.
+    ipam:
+      config:
+        - subnet: 172.28.1.0/24
+          ip_range: 172.28.1.128/25
+          gateway: 172.28.1.1
 
 volumes:
   postgres-data:

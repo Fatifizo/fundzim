@@ -106,7 +106,7 @@ export function ResetPasswordForm({ queryToken, api = authApi }: { queryToken: s
   }
 
   return (
-    <form ref={formRef} noValidate onSubmit={onSubmit} className="space-y-5">
+    <form method="post" ref={formRef} noValidate onSubmit={onSubmit} className="space-y-5">
       <FormError ref={errorRef} message={formError} />
       <PasswordField
         label="New password"

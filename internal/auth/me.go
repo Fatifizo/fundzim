@@ -124,10 +124,17 @@ type changePasswordReq struct {
 }
 
 // ChangePassword requires the current password (a fresh factor), replaces the password and revokes the
-// user's other sessions.
+// user's other sessions. Staff step up with TOTP only (StepUp), so a staff password change needs a fresh TOTP
+// step-up first and never refreshes the step-up itself (F-S18-01: a password alone must not unlock step-up routes).
 func (s *Service) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	p := authz.PrincipalFrom(ctx)
+	if p.Kind == authz.KindStaff {
+		if err := s.requireStepUp(p); err != nil {
+			httpx.WriteError(w, r, s.Logger, err)
+			return
+		}
+	}
 	var req changePasswordReq
 	if err := httpx.DecodeJSON(r, &req); err != nil {
 		httpx.WriteError(w, r, s.Logger, err)
@@ -168,8 +175,10 @@ func (s *Service) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		if _, err := s.revokeSessions(ctx, tx, p.UserID, p.SessionID, RevokePasswordChanged); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE app.sessions SET step_up_at = $2 WHERE id = $1`, p.SessionID, s.now()); err != nil {
-			return err
+		if p.Kind != authz.KindStaff { // a user may step up with the password, which was just proven
+			if _, err := tx.Exec(ctx, `UPDATE app.sessions SET step_up_at = $2 WHERE id = $1`, p.SessionID, s.now()); err != nil {
+				return err
+			}
 		}
 		if err := audit.Record(ctx, tx, audit.Event{Stream: audit.Security, Action: "auth.password.changed", TargetType: "user", TargetID: p.UserID}); err != nil {
 			return err

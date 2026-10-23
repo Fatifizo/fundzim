@@ -35,7 +35,7 @@ export function ResendVerificationForm({ api = authApi, defaultEmail }: { api?: 
   }
 
   return (
-    <form ref={formRef} noValidate onSubmit={onSubmit} className="space-y-4">
+    <form method="post" ref={formRef} noValidate onSubmit={onSubmit} className="space-y-4">
       <FormError ref={errorRef} message={formError} />
       {done ? (
         <FormStatus title="Check your email">

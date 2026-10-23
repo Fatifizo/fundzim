@@ -72,3 +72,47 @@ func TestTokensAndCodes(t *testing.T) {
 		t.Fatal("hash/equal broken")
 	}
 }
+
+// Stage 18 (ADR-050): rotation with overlap. Data sealed under the old key stays readable after the rotation, new data
+// uses the new key only, a removed key makes its data unreadable, and a ciphertext is never opened under the wrong AAD.
+func TestAEADRotationOverlap(t *testing.T) {
+	oldKey := strings.Repeat("11", 32)
+	newKey := strings.Repeat("22", 32)
+	before, err := NewAEAD("field-1", oldKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ct, _ := before.Seal([]byte("totp secret"), []byte("mfa_methods:a"))
+
+	rotated, err := NewAEAD("field-2", newKey, oldKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pt, previous, err := rotated.OpenWithStatus(ct, []byte("mfa_methods:a"))
+	if err != nil || string(pt) != "totp secret" || !previous {
+		t.Fatalf("old ciphertext after rotation: %q previous=%v %v", pt, previous, err)
+	}
+	if _, _, err := rotated.OpenWithStatus(ct, []byte("mfa_methods:b")); err == nil {
+		t.Fatal("opened under the wrong AAD")
+	}
+	fresh, _ := rotated.Seal([]byte("new secret"), []byte("x"))
+	if _, err := before.Open(fresh, []byte("x")); err == nil {
+		t.Fatal("new data must be sealed under the new key only")
+	}
+	if pt, previous, err := rotated.OpenWithStatus(fresh, []byte("x")); err != nil || previous || string(pt) != "new secret" {
+		t.Fatalf("new ciphertext: %q %v %v", pt, previous, err)
+	}
+	retired, _ := NewAEAD("field-2", newKey)
+	if _, err := retired.Open(ct, []byte("mfa_methods:a")); err == nil {
+		t.Fatal("data under a retired key must not open (re-encrypt before retiring a key)")
+	}
+	if _, err := NewAEAD("field-2", newKey, strings.ToUpper(newKey)); err == nil {
+		t.Fatal("a previous key equal to the active key must be refused")
+	}
+	if _, err := NewAEAD("field-2", newKey, "short"); err == nil {
+		t.Fatal("a malformed previous key must be refused")
+	}
+	if rotated.PreviousKeys() != 1 || retired.PreviousKeys() != 0 {
+		t.Fatal("previous key count")
+	}
+}

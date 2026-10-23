@@ -1,7 +1,9 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -97,6 +99,19 @@ func errString(err error) string {
 	return err.Error()
 }
 
+// checkFailure is what a readiness endpoint may say about a failed check (Stage 18, F-S18-05): a category, never the
+// driver's error text (which can carry hosts, roles or query fragments). The detail goes to the log only.
+func checkFailure(err error) string {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	default:
+		return "unavailable"
+	}
+}
+
 // PublicHandler wraps the router in the middleware chain (ARCHITECTURE §5 order): request ID, trusted
 // client IP, access log, panic recovery, security headers, CORS, body limit, timeout, the distributed
 // global per-IP rate limit, session resolution and CSRF. Authorization runs per route in the router;
@@ -146,7 +161,11 @@ func InternalHandler(d *Deps, checker *health.Checker) http.Handler {
 			Checks []item `json:"checks"`
 		}{Ready: rep.Ready}
 		for _, r := range rep.Results {
-			out.Checks = append(out.Checks, item{Name: r.Name, Critical: r.Critical, OK: r.OK, Error: errString(r.Err), Millis: r.Duration.Milliseconds()})
+			out.Checks = append(out.Checks, item{Name: r.Name, Critical: r.Critical, OK: r.OK, Error: checkFailure(r.Err), Millis: r.Duration.Milliseconds()})
+			if !r.OK {
+				d.Logger.Warn("readiness check failed", slog.String("check", r.Name), slog.String("error_category", "dependency"),
+					slog.String("error", errString(r.Err)))
+			}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")

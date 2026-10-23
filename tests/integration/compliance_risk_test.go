@@ -457,10 +457,7 @@ func TestComplianceMakerCheckerAndSubjectConflicts(t *testing.T) {
 	if err := w.QueryRow(c, `SELECT count(*) FROM audit.audit_events WHERE target_id = $1 AND action LIKE 'compliance.case.%'`, cs.ID).Scan(&audits); err != nil || audits < 8 {
 		t.Fatalf("audit events for the case: %d %v", audits, err)
 	}
-	var problems int
-	if err := w.QueryRow(c, `SELECT count(*) FROM audit.verify_chain('audit.audit_events')`).Scan(&problems); err != nil || problems != 0 {
-		t.Fatalf("audit chain: %d problems, %v", problems, err)
-	}
+	assertChainsIntact(t, c, "audit.audit_events") // Stage 18 (ADR-050): parallel FULL once per run, then incremental
 }
 
 func countNotes(types []string) int {

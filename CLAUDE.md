@@ -15,6 +15,31 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
+**Stage 18 — Security hardening, compliance controls, resilience & recovery (complete; awaiting acceptance; non-production;
+production BLOCKED).** Stages 1–18 are complete but their acceptance has not been recorded (never mark a stage accepted
+yourself); Stage 9 is PARTIAL. What Stage 18 built: `docs/stage-18/implementation.md` (prerequisites, security
+architecture, threat model, control register, authentication, authorization, secrets, cryptography, host, network,
+database, containers, application, API, supply chain, monitoring, incident response, backup, DR, deployment, privacy,
+compliance evidence, testing, findings and known issues, production readiness; ADR-050); Stage 19 starts from
+`docs/stage-handover/STAGE-18-TO-STAGE-19.md`. Binding Stage 18 rules: **every financial gate stays off** — the 11 Go
+constants and 20 gate CHECKs are a regression contract (`internal/archtest/financial_gates_test.go`,
+`TestSecurityFinancialGatesInDatabase`): a new gate CHECK must be added to both lists; outside development and test every
+application key is a `secretref://` reference (`FIELD_ENCRYPTION_PROVIDER=secretstore`, resolved at startup, no
+fallback) — never put key material in production configuration, never add a `kms` provider without an ADR and a selected
+KMS; a previous key (`*_PREVIOUS_KEYS`) stays configured until its data is re-encrypted; **audit verification is never
+weakened or skipped to save time** (parallel ranges and MAC checkpoints under the worker-only `AUDIT_CHECKPOINT_KEY`; only
+checkpoints under the current key count); repeated identical status polls are the only audit events not re-written;
+security alerts are raised only by the scan and acknowledged/escalated/resolved only by people (`security.alert.manage`,
+step-up; lifecycle guarded in the database); staff password changes need a TOTP step-up and never refresh it; readiness
+endpoints never return error texts; every container keeps `cap_drop: [ALL]`, `no-new-privileges`, limits, loopback-only
+ports and (FundZim's own) a read-only root, third-party images stay digest-pinned and the web container stays off the data
+network (`internal/deploytest`); CI keeps `contents: read`, SHA-pinned actions, no secrets, no deployments, the gosec gate
+and the Trivy gate on fixable CRITICAL/HIGH; backups are encrypted with a key kept outside the backup directory, never
+recorded without a verified manifest MAC, and never deleted (incomplete sets are renamed `.INCOMPLETE`); retention
+periods are never invented (`audit.retention_policies` CHECKs). Security integration tests (`TestSecurity*`) share the
+development database: the alert tests scan only their own source (`ClearScope`), migration drills use their own goose
+version tables and tamper tests run inside rolled-back transactions.
+
 **Stage 17 — Financial reconciliation & settlement operations (complete; awaiting acceptance; TEST evidence only).** Stages
 1–17 are complete but their acceptance has not been recorded (never mark a stage accepted yourself); Stage 9 is PARTIAL. What
 Stage 17 built: `docs/stage-17/implementation.md` (prerequisites, architecture, imports and settlement, matching engine,
@@ -220,7 +245,7 @@ errors are always `no-store`; a handler's `Cache-Control` must not be overwritte
 wait through `RetryAfter()`; campaign-family APIs use `{campaign_id}`, 428/412 for `If-Match` and
 `{items, next_cursor}` lists (ADR-038 §7); a public report never changes a campaign's status; analytics are
 first-party aggregate counters only. The real-stack Playwright suite (`apps/web/e2e-real`), the Go integration tests
-(including `TestPayments*`, `TestLedger*`, `TestPayout*`, `TestFee*`, `TestRisk*`, `TestOperations*`, `TestNotifications*`, `TestDiscovery*` and `TestReconciliation*`) and container rebuilds share the development database: run them under
+(including `TestPayments*`, `TestLedger*`, `TestPayout*`, `TestFee*`, `TestRisk*`, `TestOperations*`, `TestNotifications*`, `TestDiscovery*`, `TestReconciliation*` and `TestSecurity*`) and container rebuilds share the development database: run them under
 `flock /tmp/claude-1000/fundzim-stack.lock`. Never report CI as green without seeing the run. Gate on
 `kyc.Service.Level`, enforce compliance restrictions through `compliance.Service.Restrictions`, and check
 self-review with `kyc.Service.ActorIdentities` / `app.actor_identities()` (linked staff accounts). A
@@ -236,13 +261,13 @@ STOPS.
 | `apps/web/` | Next.js 16 (App Router, TypeScript, Tailwind v4). **Presentation only.** Has its own `AGENTS.md` — read it: this Next.js version differs from older training data; consult `apps/web/node_modules/next/dist/docs/` before writing Next.js code. |
 | `apps/api/` | Go entrypoints: `cmd/api` (HTTP API), `cmd/worker` (River jobs, outbox relay/delivery), `cmd/fundzimctl` (config check, migrations, `bootstrap-admins`, healthcheck). |
 | `internal/` | Go code: `app/` (composition root), `platform/` (config, logging, errs, httpx, health, db, cache, storage, metrics, money, ids, crypto, authz, clock, ratelimit, idempotency, outbox, jobs, version) and domain modules `users`, `auth`, `organisations`, `audit`, `notifications`, `storage` (documents: quarantine, ClamAV scanning, SSE-C, download tickets), `kyc` (KYC/KYB cases, identities, review engine, verification policy — `fundzim_kyc` pool only), `beneficiaries`, `payouts` (payout destinations; Stage 11: withdrawal requests, eligibility engine, reservations, approvals, orchestration, reconciliation — TEST payouts only), `fees` (Stage 12: fee policies, provider fee evidence, pure calculation engine, quotes, assessments, adjustments, TEST fee journals through the ledger service, reconciliation, revenue reporting — TEST fees only), `risk` (signals, versioned model v1, routing decisions; Stage 13: configurable explainable rule engine, risk cases with immutable evidence, the central hold registry, TEST screening foundation and simulator, monitoring, reconciliation), `compliance` (compliance cases and the subject-restriction projection — `fundzim_compliance` pool only), `operations` (Stage 14: operations portal read models over per-module `OpsSnapshot`s, support cases, incidents, exception triage, access reviews, internal SLA targets — `app.ops_*` only), `verification` (HTTP orchestration; owns no tables) and `campaigns` (core: lifecycle, eligibility, review, publication, public read/search; subpackages `campaigns/media` — image upload, scan, re-encode, serving — and `campaigns/updates` — owner updates and moderation; no financial state), `ledger` (Stage 10: double-entry ledger, posting engine, adjustments, periods, integrity, reconciliation — `fundzim_ledger` pool only), `discovery` (Stage 16: search projection and indexing, featured placements, trending, recommendations, referral codes, engagement analytics, sitemap source — candidates only; campaigns re-checks every card), `reconciliation` (Stage 17: the `recon` schema — TEST statement imports, matching engine, settlement batches, exceptions, maker-checker resolutions, reports; changes payments/payouts/ledger only through their services), `psp` (Stage 8: provider registry, routing, webhook inbox, health, sandbox simulator in `psp/sandbox`; Stage 9:
-execution environments, startup gate, error categories, derived health, adapter conformance suite in `psp/psptest`) and `payments` (Stage 8: donation intents, payments, state machine, refund requests, reconciliation references; no balances or postings). `archtest/` enforces the module import graph and table ownership — register every new module there. One Go module (`github.com/Fatifizo/fundzim`) rooted at repo root. |
+execution environments, startup gate, error categories, derived health, adapter conformance suite in `psp/psptest`) and `payments` (Stage 8: donation intents, payments, state machine, refund requests, reconciliation references; no balances or postings). `archtest/` enforces the module import graph and table ownership — register every new module there; `deploytest/` (Stage 18) checks `compose.yaml`, the Dockerfiles and the CI workflow. One Go module (`github.com/Fatifizo/fundzim`) rooted at repo root. |
 | `migrations/` | Executable goose SQL migrations, embedded and run by `fundzimctl migrate` as `fundzim_migrator` (`docs/development/migrations.md`). |
 | `docs/` | Specifications. `docs/adr/` holds Architecture Decision Records. |
 | `api/openapi/` | OpenAPI 3.1 contract for `/api/v1` (source of truth, ADR-026). |
 | `design/sql/` | Stage 2 **non-executable** schema drafts + in-memory validation harness. Not migrations. |
 | `deploy/` | `deploy/docker/`: API and web Dockerfiles, local Postgres role init, Garage (S3) config and init. The local stack is the root `compose.yaml`. |
-| `scripts/`, `tests/` | `dev-env-init.sh` (local `.env` with generated secrets), `check-secrets.sh`; `tests/integration/` (build tag `integration`, runs against the local stack). |
+| `scripts/`, `tests/` | `dev-env-init.sh` (local `.env` with generated secrets), `check-secrets.sh`; Stage 18: `backup/` (encrypted backup, manifest MAC, restore and failure drills), `dr/exercise.sh` (local DR exercise), `host/baseline-check.sh` (read-only host check); `tests/integration/` (build tag `integration`, runs against the local stack). |
 
 ## Before you change anything
 

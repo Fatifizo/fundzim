@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -160,6 +161,159 @@ func TestProductionOtherwiseValidRefusedOnlyForMissingKMS(t *testing.T) {
 	var v *ValidationError
 	if !errors.As(err, &v) || len(v.Problems) != 1 || !strings.Contains(v.Problems[0], "kms is not implemented") {
 		t.Fatalf("expected exactly the KMS refusal, got %v", err)
+	}
+}
+
+// prodBase is a hardened production configuration (Stage 18: keys come from the secret manager).
+func prodBase() map[string]string {
+	m := map[string]string{
+		"APP_ENV":               "production",
+		"DATABASE_URL":          "postgres://u:" + localTestPW + "@db:5432/fundzim?sslmode=verify-full",
+		"STORAGE_ENDPOINT":      "https://s3.example.invalid",
+		"STORAGE_PUBLIC_BUCKET": "pub", "STORAGE_PUBLIC_ACCESS_KEY_ID": "a", "STORAGE_PUBLIC_SECRET_ACCESS_KEY": "b",
+		"STORAGE_KYC_BUCKET": "priv", "STORAGE_KYC_ACCESS_KEY_ID": "c", "STORAGE_KYC_SECRET_ACCESS_KEY": "d",
+		"STORAGE_EVIDENCE_BUCKET": "evid", "STORAGE_EVIDENCE_ACCESS_KEY_ID": "e", "STORAGE_EVIDENCE_SECRET_ACCESS_KEY": "f",
+		"CORS_ALLOWED_ORIGINS":      "https://partner.example.invalid",
+		"APP_PUBLIC_URL":            "https://fundzim.example",
+		"CSRF_SECRET":               testKeys["CSRF_SECRET"],
+		"BLIND_INDEX_KEY":           testKeys["BLIND_INDEX_KEY"],
+		"FIELD_ENCRYPTION_PROVIDER": "kms",
+		"KYC_BLIND_INDEX_KEY":       testKeys["KYC_BLIND_INDEX_KEY"],
+		"DOCUMENT_TICKET_KEY":       testKeys["DOCUMENT_TICKET_KEY"],
+		"DATABASE_KYC_URL":          "postgres://k:" + localTestPW + "@db:5432/fundzim?sslmode=verify-full",
+		"DATABASE_COMPLIANCE_URL":   "postgres://c:" + localTestPW + "@db:5432/fundzim?sslmode=verify-full",
+		"DATABASE_LEDGER_URL":       "postgres://l:" + localTestPW + "@db:5432/fundzim?sslmode=verify-full",
+		"MALWARE_SCANNER":           "clamd",
+		"CLAMAV_ADDR":               "clamav.internal:3310",
+		"SMTP_HOST":                 "smtp.example.com",
+		"SMTP_TLS":                  "starttls",
+		"EMAIL_FROM":                "FundZim <no-reply@fundzim.example>",
+		"SMS_PROVIDER":              "disabled",
+		"SECRETS_PROVIDER":          "kv2",
+		"SECRETS_KV2_ADDR":          "https://secrets.internal:8200",
+		"SECRETS_KV2_ROLE_ID":       "fundzim-api",
+		"SECRETS_KV2_SECRET_ID":     "approle-secret-id",
+	}
+	m["FIELD_ENCRYPTION_PROVIDER"] = "secretstore"
+	for k := range testKeys {
+		if k != "CSRF_SECRET" {
+			m[k] = "secretref://fundzim/production/keys/" + strings.ToLower(k)
+		}
+	}
+	m["STORAGE_SSE_C_KEY"] = "secretref://fundzim/production/keys/storage_sse_c_key"
+	return m
+}
+
+// Stage 18 (ADR-050): with keys in the secret manager a hardened production configuration validates (the financial
+// gates still block every live operation); key material typed into the environment is refused.
+func TestProductionKeysFromSecretManager(t *testing.T) {
+	c, err := Load(env(prodBase()))
+	if err != nil {
+		t.Fatalf("hardened production configuration refused: %v", err)
+	}
+	if !c.Security.Managed {
+		t.Fatal("secretstore provider not marked managed")
+	}
+	m := prodBase()
+	m["BLIND_INDEX_KEY"] = testKeys["BLIND_INDEX_KEY"]
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "BLIND_INDEX_KEY must be secretref://") ||
+		strings.Contains(err.Error(), testKeys["BLIND_INDEX_KEY"]) {
+		t.Fatalf("literal key under secretstore: %v", err)
+	}
+	m = prodBase()
+	m["SECRETS_PROVIDER"] = "env"
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "requires SECRETS_PROVIDER=kv2") {
+		t.Fatalf("secretstore without kv2: %v", err)
+	}
+	m = prodBase()
+	delete(m, "STORAGE_SSE_C_KEY")
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "STORAGE_SSE_C_KEY is required") {
+		t.Fatalf("missing SSE key: %v", err)
+	}
+	m = prodBase()
+	m["FIELD_ENCRYPTION_PROVIDER"] = "local"
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "FIELD_ENCRYPTION_PROVIDER=local is refused") {
+		t.Fatalf("local provider in production: %v", err)
+	}
+}
+
+func TestResolveManagedKeys(t *testing.T) {
+	values := map[string]string{}
+	i := 0
+	for _, k := range []string{"FIELD_ENCRYPTION_LOCAL_KEY", "BLIND_INDEX_KEY", "KYC_FIELD_ENCRYPTION_LOCAL_KEY", "KYC_BLIND_INDEX_KEY",
+		"COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY", "DOCUMENT_TICKET_KEY", "STORAGE_SSE_C_KEY"} {
+		values["secretref://fundzim/production/keys/"+strings.ToLower(k)] = fmt.Sprintf("%064x", 1000+i)
+		i++
+	}
+	resolver := func(vals map[string]string) func(context.Context, string) ([]byte, error) {
+		return func(_ context.Context, ref string) ([]byte, error) {
+			v, ok := vals[ref]
+			if !ok {
+				return nil, errors.New("not found")
+			}
+			return []byte(v + "\n"), nil
+		}
+	}
+	c, err := Load(env(prodBase()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sec := c.Security
+	if err := sec.ResolveManaged(context.Background(), resolver(values)); err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if sec.BlindIndexKey.Reveal() != values["secretref://fundzim/production/keys/blind_index_key"] {
+		t.Fatal("resolved value not applied (or not trimmed)")
+	}
+	// a missing key stops startup; the error names the variable only
+	missing := map[string]string{}
+	for k, v := range values {
+		missing[k] = v
+	}
+	delete(missing, "secretref://fundzim/production/keys/document_ticket_key")
+	sec = c.Security
+	err = sec.ResolveManaged(context.Background(), resolver(missing))
+	if err == nil || !strings.Contains(err.Error(), "DOCUMENT_TICKET_KEY") || strings.Contains(err.Error(), "secretref://") {
+		t.Fatalf("missing key: %v", err)
+	}
+	// the same key stored for two purposes is refused after resolution
+	dup := map[string]string{}
+	for k, v := range values {
+		dup[k] = v
+	}
+	dup["secretref://fundzim/production/keys/kyc_blind_index_key"] = dup["secretref://fundzim/production/keys/blind_index_key"]
+	sec = c.Security
+	if err := sec.ResolveManaged(context.Background(), resolver(dup)); err == nil || !strings.Contains(err.Error(), "must differ") {
+		t.Fatalf("duplicate keys: %v", err)
+	}
+	bad := map[string]string{}
+	for k, v := range values {
+		bad[k] = v
+	}
+	bad["secretref://fundzim/production/keys/field_encryption_local_key"] = "not-hex"
+	sec = c.Security
+	if err := sec.ResolveManaged(context.Background(), resolver(bad)); err == nil || strings.Contains(err.Error(), "not-hex") {
+		t.Fatalf("malformed key: %v", err)
+	}
+}
+
+func TestPreviousKeysValidated(t *testing.T) {
+	m := localEnv()
+	m["FIELD_ENCRYPTION_PREVIOUS_KEYS"] = strings.Repeat("99", 32) + "," + strings.Repeat("98", 32)
+	c, err := Load(env(m))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Security.FieldEncryptionPrevious.List(); len(got) != 2 {
+		t.Fatalf("previous keys %v", got)
+	}
+	m["FIELD_ENCRYPTION_PREVIOUS_KEYS"] = testKeys["BLIND_INDEX_KEY"]
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "must differ") {
+		t.Fatalf("previous key reused for another purpose: %v", err)
+	}
+	m["FIELD_ENCRYPTION_PREVIOUS_KEYS"] = strings.Repeat("91", 32) + "," + strings.Repeat("92", 32) + "," + strings.Repeat("93", 32) + "," + strings.Repeat("94", 32)
+	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "at most three") {
+		t.Fatalf("too many previous keys: %v", err)
 	}
 }
 
@@ -385,7 +539,7 @@ func TestSecretsManagerRules(t *testing.T) {
 	m["SECRETS_KV2_ADDR"] = "http://bao:8200"
 	m["SECRETS_KV2_TOKEN"] = "t"
 	_, err := Load(env(m))
-	for _, want := range []string{"must use https in production", "requires AppRole authentication"} {
+	for _, want := range []string{"must use https outside development and test", "requires AppRole authentication"} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("want %q, got %v", want, err)
 		}
@@ -484,5 +638,29 @@ func TestPayoutSubmitRetryConfig(t *testing.T) {
 	m["PAYOUTS_SUBMIT_RETRY_BASE"], m["PAYOUTS_SUBMIT_RETRY_MAX"] = "5m", "1m"
 	if _, err := Load(env(m)); err == nil || !strings.Contains(err.Error(), "PAYOUTS_SUBMIT_RETRY_MAX must not be shorter") {
 		t.Fatalf("max < base accepted: %v", err)
+	}
+}
+
+// Stage 18 (F-S18-06): staging is production-like for transport and logging.
+func TestStagingIsProductionLike(t *testing.T) {
+	m := prodBase()
+	m["APP_ENV"] = "staging"
+	m["LOG_LEVEL"] = "debug"
+	m["SECRETS_KV2_ADDR"] = "http://secrets.internal:8200"
+	m["PUBLIC_SITE_URL"] = "http://fundzim.example"
+	_, err := Load(env(m))
+	if err == nil {
+		t.Fatal("staging accepted debug logging and plain HTTP")
+	}
+	for _, want := range []string{"LOG_LEVEL=debug is not allowed outside development and test",
+		"SECRETS_KV2_ADDR must use https outside development and test", "PUBLIC_SITE_URL must use https outside development and test"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("missing %q in %v", want, err)
+		}
+	}
+	m = prodBase()
+	m["APP_ENV"] = "staging"
+	if _, err := Load(env(m)); err != nil {
+		t.Fatalf("hardened staging configuration refused: %v", err)
 	}
 }

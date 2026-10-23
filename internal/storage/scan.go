@@ -48,6 +48,7 @@ type claim struct {
 	uploadedBy             *string
 	attempt                int
 	sha                    []byte
+	keyID                  *string // encryption_key_id recorded at upload (the key may have rotated since)
 }
 
 // ScanObject runs one scan attempt for id. It is idempotent and safe to call concurrently: the claim
@@ -68,8 +69,8 @@ func (s *Service) ScanObject(ctx context.Context, id string) error {
 	err := s.pool.QueryRow(ctx, `
 		UPDATE app.stored_objects SET scan_status = 'SCANNING', scan_attempts = scan_attempts + 1, scan_started_at = $2
 		 WHERE id = $1 AND (scan_status = 'QUARANTINED' OR (scan_status = 'FAILED_SCAN' AND next_scan_at <= $2))
-		RETURNING bucket_class, purpose, owner_module, uploaded_by_user_id, scan_attempts, content_sha256`, id, now).
-		Scan(&c.bucket, &c.purpose, &c.owner, &c.uploadedBy, &c.attempt, &c.sha)
+		RETURNING bucket_class, purpose, owner_module, uploaded_by_user_id, scan_attempts, content_sha256, encryption_key_id`, id, now).
+		Scan(&c.bucket, &c.purpose, &c.owner, &c.uploadedBy, &c.attempt, &c.sha, &c.keyID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -114,7 +115,11 @@ func (s *Service) ScanObject(ctx context.Context, id string) error {
 func (s *Service) runScan(ctx context.Context, id string, c claim) ScanOutcome {
 	sctx, cancel := context.WithTimeout(ctx, s.cfg.ScanTimeout)
 	defer cancel()
-	rc, err := s.blobs.GetSSE(sctx, pstorage.RefFor(platformClass(c.bucket), quarantineKey(id)), s.sse(c.bucket, id))
+	key, ok := s.sseFor(c.bucket, id, c.keyID)
+	if !ok {
+		return ScanOutcome{Status: StatusFailedScan, Code: ScanErrStorage}
+	}
+	rc, err := s.blobs.GetSSE(sctx, pstorage.RefFor(platformClass(c.bucket), quarantineKey(id)), key)
 	if err != nil {
 		return ScanOutcome{Status: StatusFailedScan, Code: ScanErrStorage}
 	}
@@ -145,7 +150,11 @@ func sumEquals(h hash.Hash, want []byte) bool {
 // so a retried promotion is safe.
 func (s *Service) promote(ctx context.Context, id string, c claim) error {
 	class := platformClass(c.bucket)
-	return s.blobs.CopySSE(ctx, pstorage.RefFor(class, quarantineKey(id)), pstorage.RefFor(class, promotedKey(id)), s.sse(c.bucket, id))
+	key, ok := s.sseFor(c.bucket, id, c.keyID)
+	if !ok {
+		return errors.Join(ErrStorageUnavailable, errors.New("storage: object encryption key is not configured"))
+	}
+	return s.blobs.CopySSE(ctx, pstorage.RefFor(class, quarantineKey(id)), pstorage.RefFor(class, promotedKey(id)), key)
 }
 
 // recordOutcome writes the outcome fenced by (SCANNING, attempt). committed=false means the attempt lost

@@ -26,4 +26,4 @@ account numbers or personal data (the never-embed list applies).
 ## 3. Retention
 
 No retention period is set: statement evidence, lines, matches and exceptions are financial records whose retention is
-LEGAL_REVIEW_REQUIRED (LR-012, LR-076). Nothing is purged (KI-S17-06).
+LEGAL_REVIEW_REQUIRED (LR-012; the earlier LR-076 reference was wrong — LR-076 is pool funding). Nothing is purged (KI-S17-06).

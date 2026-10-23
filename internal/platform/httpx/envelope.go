@@ -5,9 +5,12 @@ package httpx
 import (
 	"encoding/json"
 	"errors"
+	"github.com/jackc/pgx/v5/pgconn"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
@@ -54,6 +57,11 @@ func WriteData(w http.ResponseWriter, r *http.Request, status int, data any) {
 // WriteError renders err as an error envelope. Internal details (the cause) are logged with the
 // request-scoped logger and never sent to the client.
 func WriteError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err error) {
+	var known *errs.Error
+	if !errors.As(err, &known) && dependencyDown(err) {
+		// a dependency outage is a 503 the client may retry, not an internal error (Stage 18 DR exercise)
+		err = errs.Wrap(err, errs.Unavailable, errs.CodeServiceUnavailable, "The service is temporarily unavailable. Please try again shortly.")
+	}
 	e := errs.As(err)
 	status := e.Kind.Status()
 	l := logging.FromContext(r.Context(), logger)
@@ -82,4 +90,18 @@ func WriteError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err
 		Error: errorObject{Code: e.Code, Message: e.Message, Retryable: e.Retryable, Details: e.Details},
 		Meta:  Meta{RequestID: RequestID(r.Context())},
 	})
+}
+
+// dependencyDown reports a failure to reach a dependency (database connect errors, refused or failed dials): the request
+// did not fail because of its content, so it is answered 503 with Retry-After.
+func dependencyDown(err error) bool {
+	var ce *pgconn.ConnectError
+	if errors.As(err, &ce) {
+		return true
+	}
+	if errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EHOSTUNREACH) {
+		return true
+	}
+	var op *net.OpError
+	return errors.As(err, &op) && op.Op == "dial"
 }

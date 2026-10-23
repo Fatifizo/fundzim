@@ -120,6 +120,16 @@ func decodeKey(v config.Secret) []byte {
 	return b
 }
 
+// decodeKeys decodes a comma-separated list of hex keys (validated by config).
+func decodeKeys(v config.Secret) [][]byte {
+	var out [][]byte
+	for _, k := range v.List() {
+		b, _ := hex.DecodeString(k)
+		out = append(out, b)
+	}
+	return out
+}
+
 // relations implements compliance.Relations on the app pool.
 type relations struct {
 	pool *pgxpool.Pool
@@ -180,12 +190,12 @@ func NewVerificationModules(ctx context.Context, d VerificationDeps) (*Verificat
 	}
 	m.Storage, err = storage.New(storage.Config{AppEnv: string(cfg.App.Env), UploadMaxBytes: cfg.Verification.UploadMaxBytes, UploadTTL: cfg.Verification.UploadTTL,
 		ScanTimeout: cfg.Verification.ScanTimeout, TicketKey: decodeKey(cfg.Security.DocumentTicketKey), TicketTTL: cfg.Verification.DocumentTicketTTL,
-		SSEKey: decodeKey(cfg.Security.StorageSSEKey)},
+		SSEKey: decodeKey(cfg.Security.StorageSSEKey), SSEKeyManaged: cfg.Security.Managed, SSEPreviousKeys: decodeKeys(cfg.Security.StorageSSEPrevious)},
 		storage.Deps{Pool: d.AppPool, Blobs: blobs, Scanner: scanner, Clock: d.Clock, Logger: d.Logger, Metrics: storage.NewMetrics(d.Registry)})
 	if err != nil {
 		return fail(err)
 	}
-	kycAEAD, err := crypto.NewAEAD(kycFieldKeyID, cfg.Security.KYCFieldKey.Reveal())
+	kycAEAD, err := crypto.NewAEAD(kycFieldKeyID, cfg.Security.KYCFieldKey.Reveal(), cfg.Security.KYCFieldPrevious.List()...)
 	if err != nil {
 		return fail(fmt.Errorf("kyc field key: %w", err))
 	}
@@ -193,7 +203,7 @@ func NewVerificationModules(ctx context.Context, d VerificationDeps) (*Verificat
 	if err != nil {
 		return fail(fmt.Errorf("kyc blind index key: %w", err))
 	}
-	appAEAD, err := crypto.NewAEAD(fieldKeyID, cfg.Security.FieldEncryptionKey.Reveal())
+	appAEAD, err := crypto.NewAEAD(fieldKeyID, cfg.Security.FieldEncryptionKey.Reveal(), cfg.Security.FieldEncryptionPrevious.List()...)
 	if err != nil {
 		return fail(err)
 	}
@@ -201,7 +211,7 @@ func NewVerificationModules(ctx context.Context, d VerificationDeps) (*Verificat
 	if err != nil {
 		return fail(err)
 	}
-	notesAEAD, err := crypto.NewAEAD(complianceNotesKeyID, cfg.Security.ComplianceFieldKey.Reveal())
+	notesAEAD, err := crypto.NewAEAD(complianceNotesKeyID, cfg.Security.ComplianceFieldKey.Reveal(), cfg.Security.ComplianceFieldPrevious.List()...)
 	if err != nil {
 		return fail(fmt.Errorf("compliance key: %w", err))
 	}

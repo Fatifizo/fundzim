@@ -35,4 +35,4 @@ Scope: `internal/reconciliation`, the payments/payouts/fees/ledger/storage/psp a
 ## 3. Privacy
 
 Statement files may contain personal data in real use (payer names, MSISDNs); the canonical format has no field for them
-and the parser refuses unknown fields. Retention of statements and lines is LEGAL_REVIEW_REQUIRED (LR-012, LR-076).
+and the parser refuses unknown fields. Retention of statements and lines is LEGAL_REVIEW_REQUIRED (LR-012; corrected in Stage 18: LR-076 is pool funding, not retention).

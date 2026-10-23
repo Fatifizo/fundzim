@@ -73,7 +73,9 @@ var ownedTables = map[string][]string{
 		"app.staff_link_requests"},
 	"organisations": {"app.organisations", "app.organisation_roles", "app.organisation_members", "app.organisation_invitations",
 		"app.organisation_verifications"},
-	"audit": {"audit.audit_events", "audit.security_audit_events", "audit.evidence_records", "audit.evidence_holds"},
+	"audit": {"audit.audit_events", "audit.security_audit_events", "audit.evidence_records", "audit.evidence_holds",
+		"audit.chain_checkpoints", "audit.chain_verifications", "audit.retention_policies", // Stage 18 (ADR-050)
+		"audit.chain_head", "audit.verify_chain_range"}, // Stage 18 verification routines (audit-owned)
 	"notifications": {"app.notification_templates", "app.notification_template_versions", "app.notification_events", "app.notifications",
 		"app.notification_deliveries", "app.notification_attempts", "app.notification_provider_events", "app.notification_webhook_rejections",
 		"app.notification_preferences", "app.notification_preference_events", "app.communication_consents", "app.communication_consent_events",
@@ -125,7 +127,8 @@ var ownedTables = map[string][]string{
 		"ledger.v_pool_integrity", "ledger.database_environment", "ledger.fold_deferred_balances"},
 	// Stage 14 (ADR-046)
 	"operations": {"app.ops_support_cases", "app.ops_support_events", "app.ops_incidents", "app.ops_incident_events", "app.ops_exception_assignments",
-		"app.ops_exception_events", "app.ops_access_reviews", "app.ops_access_review_items", "app.ops_sla_targets"},
+		"app.ops_exception_events", "app.ops_access_reviews", "app.ops_access_review_items", "app.ops_sla_targets",
+		"app.ops_security_alerts", "app.ops_security_alert_events", "app.ops_backup_runs"}, // Stage 18 (ADR-050)
 	// Stage 12 (ADR-044)
 	"fees": {"app.fee_policies", "app.fee_policy_versions", "app.fee_provider_schedules", "app.fee_calculations", "app.fee_components",
 		"app.fee_quotes", "app.fee_assessments", "app.fee_adjustments", "app.fee_accounting_references", "app.fee_provider_reports",

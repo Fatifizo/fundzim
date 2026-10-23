@@ -119,6 +119,8 @@ tags:
   description: 'Search, categories, locations, featured, trending, recommendations, referral codes, aggregate analytics (ADR-048).'
 - name: Reconciliation (Stage 17)
   description: 'Statement imports (TEST), matching runs, exceptions, maker-checker resolutions, settlement, payout, ledger and fee reconciliation views, reports (ADR-049).'
+- name: Security operations (Stage 18)
+  description: 'Security alerts raised by the worker security scan, their lifecycle, and backup and restore evidence (ADR-050).'
 paths:
   /auth/session:
     parameters:
@@ -44626,6 +44628,357 @@ paths:
       x-fundzim-permission: reconciliation.rules.request
       x-fundzim-step-up: false
       x-fundzim-idempotency: n/a
+  /admin/security/alerts:
+    get:
+      tags:
+      - Security operations (Stage 18)
+      operationId: listSecurityAlerts
+      summary: Security alerts
+      description: '**Stage 18 · IMPLEMENTED · non-production** · Auth: staff + MFA · Authorization: `security.alert.view`. Live alerts (OPEN, ACKNOWLEDGED)
+        by default, most severe and most recent first; bounded to 500. Raised by the worker''s security scan from module snapshots; thresholds are engineering
+        defaults.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        description: LIVE (default), OPEN, ACKNOWLEDGED, RESOLVED or ALL.
+        schema:
+          type: string
+          enum:
+          - LIVE
+          - OPEN
+          - ACKNOWLEDGED
+          - RESOLVED
+          - ALL
+      - name: min_severity
+        in: query
+        required: false
+        description: Lowest severity to include.
+        schema:
+          type: string
+          enum:
+          - INFO
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityAlertPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 18
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: security.alert.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/security/alerts/{alert_id}:
+    get:
+      tags:
+      - Security operations (Stage 18)
+      operationId: getSecurityAlert
+      summary: Security alert detail
+      description: '**Stage 18 · IMPLEMENTED · non-production** · Auth: staff + MFA · Authorization: `security.alert.view`. The alert and its append-only
+        history.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        description: Alert id.
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityAlertDetailEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 18
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: security.alert.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
+  /admin/security/alerts/{alert_id}/acknowledge:
+    post:
+      tags:
+      - Security operations (Stage 18)
+      operationId: acknowledgeSecurityAlert
+      summary: Acknowledge an alert
+      description: '**Stage 18 · IMPLEMENTED · non-production** · Auth: staff + MFA · Authorization: `security.alert.manage` (step-up). OPEN → ACKNOWLEDGED.
+        Optional note. Optimistic concurrency through `version`.
+
+
+
+
+        Idempotency: n/a · Audit: operations.security_alert.acknowledged · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        description: Alert id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecurityAlertActionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityAlertEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 18
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: security.alert.manage
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/security/alerts/{alert_id}/escalate:
+    post:
+      tags:
+      - Security operations (Stage 18)
+      operationId: escalateSecurityAlert
+      summary: Escalate to an incident
+      description: '**Stage 18 · IMPLEMENTED · non-production** · Auth: staff + MFA · Authorization: `security.alert.manage` (step-up). ACKNOWLEDGED alert
+        → declares (or links the open) operations incident. Note 5–2 000 characters. Optimistic concurrency through `version`.
+
+
+
+
+        Idempotency: n/a · Audit: operations.security_alert.escalated · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        description: Alert id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecurityAlertActionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityAlertEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 18
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: security.alert.manage
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/security/alerts/{alert_id}/resolve:
+    post:
+      tags:
+      - Security operations (Stage 18)
+      operationId: resolveSecurityAlert
+      summary: Resolve an alert
+      description: '**Stage 18 · IMPLEMENTED · non-production** · Auth: staff + MFA · Authorization: `security.alert.manage` (step-up). ACKNOWLEDGED → RESOLVED
+        with a note (5–2 000). A condition still present opens a new alert at the next scan. Optimistic concurrency through `version`.
+
+
+
+
+        Idempotency: n/a · Audit: operations.security_alert.resolved · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+        csrfToken: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        description: Alert id.
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SecurityAlertActionInput'
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecurityAlertEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 18
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: security.alert.manage
+      x-fundzim-step-up: true
+      x-fundzim-idempotency: n/a
+  /admin/security/backups:
+    get:
+      tags:
+      - Security operations (Stage 18)
+      operationId: getBackupEvidence
+      summary: Backup and restore evidence
+      description: '**Stage 18 · IMPLEMENTED · non-production** · Auth: staff + MFA · Authorization: `security.alert.view`. Latest successful backup, latest
+        failed backup and latest verified restore drill recorded with `fundzimctl backup record`.
+
+
+
+
+        Idempotency: n/a · Audit: — · Cache-Control: private, no-store'
+      security:
+      - staffSession: []
+      responses:
+        '200':
+          description: Success.
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: '`private, no-store`.'
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupEvidenceEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      x-fundzim-status: IMPLEMENTED
+      x-fundzim-stage: 18
+      x-fundzim-auth: staff+MFA
+      x-fundzim-permission: security.alert.view
+      x-fundzim-step-up: false
+      x-fundzim-idempotency: n/a
 components:
   securitySchemes:
     session:
@@ -70227,6 +70580,186 @@ components:
           - columns
           - rows
           - truncated
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    SecurityAlert:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        alert_key: &id001
+          type: string
+        dedupe_key: *id001
+        severity:
+          type: string
+          enum:
+          - INFO
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+        source_module: *id001
+        component: *id001
+        title: *id001
+        source: *id001
+        evidence:
+          type: object
+          description: Counts, statuses and metric keys only (no personal data, no secrets).
+        status:
+          type: string
+          enum:
+          - OPEN
+          - ACKNOWLEDGED
+          - RESOLVED
+        condition_active:
+          type: boolean
+        occurrences:
+          type: integer
+        first_seen_at: &id002
+          type: string
+          format: date-time
+        last_seen_at: *id002
+        cleared_at: &id003
+          type:
+          - string
+          - 'null'
+          format: date-time
+        acknowledged_by: &id004
+          type:
+          - string
+          - 'null'
+          format: uuid
+        acknowledged_at: *id003
+        escalation_status:
+          type: string
+          enum:
+          - NONE
+          - ESCALATED
+        incident_id: *id004
+        resolved_by: *id004
+        resolved_at: *id003
+        resolution_note:
+          type:
+          - string
+          - 'null'
+        version:
+          type: integer
+      required:
+      - id
+      - alert_key
+      - severity
+      - status
+      - condition_active
+      - occurrences
+      - first_seen_at
+      - last_seen_at
+      - version
+    SecurityAlertHistoryEntry:
+      type: object
+      properties:
+        event_type:
+          type: string
+          enum:
+          - RAISED
+          - RECURRED
+          - CONDITION_CLEARED
+          - ACKNOWLEDGED
+          - ESCALATED
+          - RESOLVED
+        actor_id: *id001
+        note: *id001
+        occurred_at: *id002
+      required:
+      - event_type
+      - occurred_at
+    SecurityAlertPage:
+      type: object
+      description: Security alerts.
+      properties:
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/SecurityAlert'
+            next_cursor:
+              type:
+              - string
+              - 'null'
+            notice: *id001
+          required:
+          - items
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    SecurityAlertEnvelope:
+      type: object
+      description: A security alert.
+      properties:
+        data:
+          $ref: '#/components/schemas/SecurityAlert'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    SecurityAlertDetailEnvelope:
+      type: object
+      description: An alert and its history.
+      properties:
+        data:
+          type: object
+          properties:
+            alert:
+              $ref: '#/components/schemas/SecurityAlert'
+            history:
+              type: array
+              items:
+                $ref: '#/components/schemas/SecurityAlertHistoryEntry'
+          required:
+          - alert
+          - history
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+      required:
+      - data
+      - meta
+      additionalProperties: false
+    SecurityAlertActionInput:
+      type: object
+      properties:
+        note:
+          type: string
+          maxLength: 2000
+        version:
+          type: integer
+      additionalProperties: false
+    BackupEvidence:
+      type: object
+      properties:
+        last_backup: *id003
+        last_failed_backup: *id003
+        last_verified_restore: *id003
+        runs:
+          type: integer
+      required:
+      - runs
+    BackupEvidenceEnvelope:
+      type: object
+      description: Backup evidence.
+      properties:
+        data:
+          $ref: '#/components/schemas/BackupEvidence'
         meta:
           $ref: '#/components/schemas/ResponseMeta'
       required:

@@ -6,6 +6,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -204,15 +205,37 @@ type SMS struct {
 }
 
 // Security holds application-level key material (DATA-CLASSIFICATION, data-protection-architecture).
+//
+// Stage 18 (ADR-050): FieldEncryptionProvider is local (development/test: hex keys in the environment) or secretstore
+// (every key variable holds a secretref:// reference resolved from the secret manager at startup by ResolveManaged;
+// required outside development and test). The *Previous lists keep retired keys readable during a rotation (overlap):
+// new data always uses the active key.
 type Security struct {
-	FieldEncryptionProvider string // local (development/test only) | kms (not implemented yet)
+	FieldEncryptionProvider string // local | secretstore (kms is not implemented: no KMS is selected)
+	Managed                 bool   // provider secretstore: the values below were references until ResolveManaged
 	FieldEncryptionKey      Secret // hex, 32 bytes, AES-256-GCM key for C3/C4 fields (TOTP secrets)
 	BlindIndexKey           Secret // hex, 32 bytes, HMAC key for tokens, OTP codes, recovery codes
 	KYCFieldKey             Secret // hex, 32 bytes, AES-256-GCM key for KYC identity data (kyc module only, ADR-035)
 	KYCBlindIndexKey        Secret // hex, 32 bytes, HMAC key for KYC blind indexes (ID numbers, account numbers)
 	ComplianceFieldKey      Secret // hex, 32 bytes, AES-256-GCM key for compliance notes
 	DocumentTicketKey       Secret // hex, 32 bytes, HMAC key for document access tickets
-	StorageSSEKey           Secret // hex, 32 bytes, optional: SSE-C master key for private objects (refused outside dev/test until KMS)
+	StorageSSEKey           Secret // hex, 32 bytes: SSE-C master key for private objects (optional in development/test)
+
+	FieldEncryptionPrevious Secret // comma-separated previous keys (FIELD_ENCRYPTION_PREVIOUS_KEYS)
+	KYCFieldPrevious        Secret // KYC_FIELD_ENCRYPTION_PREVIOUS_KEYS
+	ComplianceFieldPrevious Secret // COMPLIANCE_FIELD_ENCRYPTION_PREVIOUS_KEYS
+	StorageSSEPrevious      Secret // STORAGE_SSE_C_PREVIOUS_KEYS
+}
+
+// List splits a comma-separated list of keys or references (empty: none).
+func (s Secret) List() []string {
+	var out []string
+	for _, v := range strings.Split(string(s), ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 type App struct {
@@ -528,8 +551,8 @@ func Load(get LookupFunc) (Config, error) {
 	switch strings.ToLower(l.str("LOG_LEVEL", "info")) {
 	case "debug":
 		c.Log.Level = slog.LevelDebug
-		if env == EnvProduction {
-			l.fail("LOG_LEVEL=debug is not allowed in production")
+		if !env.IsLocal() { // Stage 18 (F-S18-06): staging is production-like
+			l.fail("LOG_LEVEL=debug is not allowed outside development and test")
 		}
 	case "info":
 		c.Log.Level = slog.LevelInfo
@@ -557,6 +580,9 @@ func Load(get LookupFunc) (Config, error) {
 	loadVerification(l, &c, env)
 	loadPayments(l, &c, env)
 	loadSecrets(l, &c, env)
+	if c.Security.Managed && c.Secrets.Provider != "kv2" {
+		l.fail("FIELD_ENCRYPTION_PROVIDER=secretstore requires SECRETS_PROVIDER=kv2")
+	}
 	c.Ledger = Ledger{SyntheticFixturesEnabled: l.boolean("LEDGER_SYNTHETIC_FIXTURES_ENABLED", false)}
 	if c.Ledger.SyntheticFixturesEnabled && env == EnvProduction {
 		l.fail("LEDGER_SYNTHETIC_FIXTURES_ENABLED is refused in production (synthetic fixtures are TEST_ONLY)")
@@ -785,56 +811,130 @@ func loadSecurity(l *loader, c *Config, env Env) {
 		ComplianceFieldKey:      Secret(l.str("COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY", "")),
 		DocumentTicketKey:       Secret(l.str("DOCUMENT_TICKET_KEY", "")),
 		StorageSSEKey:           Secret(l.str("STORAGE_SSE_C_KEY", "")),
-	}
-	if s.StorageSSEKey != "" && !hex32(s.StorageSSEKey.Reveal()) {
-		l.fail("STORAGE_SSE_C_KEY must be 64 hex characters (32 bytes)")
+		FieldEncryptionPrevious: Secret(l.str("FIELD_ENCRYPTION_PREVIOUS_KEYS", "")),
+		KYCFieldPrevious:        Secret(l.str("KYC_FIELD_ENCRYPTION_PREVIOUS_KEYS", "")),
+		ComplianceFieldPrevious: Secret(l.str("COMPLIANCE_FIELD_ENCRYPTION_PREVIOUS_KEYS", "")),
+		StorageSSEPrevious:      Secret(l.str("STORAGE_SSE_C_PREVIOUS_KEYS", "")),
 	}
 	switch s.FieldEncryptionProvider {
 	case "local":
 		if !env.IsLocal() {
-			l.fail("FIELD_ENCRYPTION_PROVIDER=local is refused outside development and test (KMS envelope encryption is required; not implemented yet)")
+			l.fail("FIELD_ENCRYPTION_PROVIDER=local is refused outside development and test (use secretstore: keys from the secret manager, ADR-050)")
 		}
-		if !hex32(s.FieldEncryptionKey.Reveal()) {
-			l.fail("FIELD_ENCRYPTION_LOCAL_KEY must be 64 hex characters (32 bytes)")
+		for _, p := range s.keyProblems() {
+			l.fail("%s", p)
+		}
+	case "secretstore":
+		s.Managed = true
+		for _, k := range s.keyVars() {
+			for _, v := range k.values() {
+				if !strings.HasPrefix(v, "secretref://") {
+					l.fail("%s must be secretref:// references when FIELD_ENCRYPTION_PROVIDER=secretstore (never key material)", k.name)
+					break
+				}
+			}
+		}
+		if !env.IsLocal() && s.StorageSSEKey == "" {
+			l.fail("STORAGE_SSE_C_KEY is required outside development and test (private documents must be encrypted at rest)")
 		}
 	case "kms":
-		l.fail("FIELD_ENCRYPTION_PROVIDER=kms is not implemented yet (Stage 18)")
+		l.fail("FIELD_ENCRYPTION_PROVIDER=kms is not implemented (no KMS is selected): use secretstore (ADR-050)")
 	default:
-		l.fail("FIELD_ENCRYPTION_PROVIDER must be local or kms")
-	}
-	if !hex32(s.BlindIndexKey.Reveal()) {
-		l.fail("BLIND_INDEX_KEY must be 64 hex characters (32 bytes)")
-	}
-	if s.BlindIndexKey != "" && s.BlindIndexKey == s.FieldEncryptionKey {
-		l.fail("BLIND_INDEX_KEY and FIELD_ENCRYPTION_LOCAL_KEY must differ")
-	}
-	keys := []struct {
-		name string
-		v    Secret
-	}{{"FIELD_ENCRYPTION_LOCAL_KEY", s.FieldEncryptionKey}, {"BLIND_INDEX_KEY", s.BlindIndexKey},
-		{"KYC_FIELD_ENCRYPTION_LOCAL_KEY", s.KYCFieldKey}, {"KYC_BLIND_INDEX_KEY", s.KYCBlindIndexKey},
-		{"COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY", s.ComplianceFieldKey}, {"DOCUMENT_TICKET_KEY", s.DocumentTicketKey},
-		{"STORAGE_SSE_C_KEY", s.StorageSSEKey}}
-	seen := map[Secret]string{}
-	for _, k := range keys[2:6] {
-		local := k.name == "KYC_FIELD_ENCRYPTION_LOCAL_KEY" || k.name == "COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY"
-		if local && s.FieldEncryptionProvider != "local" {
-			continue // KMS-managed in production (Stage 18)
-		}
-		if !hex32(k.v.Reveal()) {
-			l.fail("%s must be 64 hex characters (32 bytes)", k.name)
-		}
-	}
-	for _, k := range keys {
-		if k.v == "" {
-			continue
-		}
-		if other, dup := seen[k.v]; dup {
-			l.fail("%s and %s must differ (one key per purpose)", k.name, other)
-		}
-		seen[k.v] = k.name
+		l.fail("FIELD_ENCRYPTION_PROVIDER must be local or secretstore")
 	}
 	c.Security = s
+}
+
+type keyVar struct {
+	name     string
+	v        *Secret
+	required bool
+	list     bool
+}
+
+func (k keyVar) values() []string {
+	if k.list {
+		return k.v.List()
+	}
+	if *k.v == "" {
+		return nil
+	}
+	return []string{string(*k.v)}
+}
+
+func (s *Security) keyVars() []keyVar {
+	return []keyVar{
+		{"FIELD_ENCRYPTION_LOCAL_KEY", &s.FieldEncryptionKey, true, false},
+		{"BLIND_INDEX_KEY", &s.BlindIndexKey, true, false},
+		{"KYC_FIELD_ENCRYPTION_LOCAL_KEY", &s.KYCFieldKey, true, false},
+		{"KYC_BLIND_INDEX_KEY", &s.KYCBlindIndexKey, true, false},
+		{"COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY", &s.ComplianceFieldKey, true, false},
+		{"DOCUMENT_TICKET_KEY", &s.DocumentTicketKey, true, false},
+		{"STORAGE_SSE_C_KEY", &s.StorageSSEKey, false, false},
+		{"FIELD_ENCRYPTION_PREVIOUS_KEYS", &s.FieldEncryptionPrevious, false, true},
+		{"KYC_FIELD_ENCRYPTION_PREVIOUS_KEYS", &s.KYCFieldPrevious, false, true},
+		{"COMPLIANCE_FIELD_ENCRYPTION_PREVIOUS_KEYS", &s.ComplianceFieldPrevious, false, true},
+		{"STORAGE_SSE_C_PREVIOUS_KEYS", &s.StorageSSEPrevious, false, true},
+	}
+}
+
+// keyProblems checks resolved key material: 32 bytes of hex each, required keys present, at most three previous keys per
+// purpose, and no key used for two purposes (one key per purpose, including previous keys). Problems name variables only.
+func (s *Security) keyProblems() []string {
+	var problems []string
+	seen := map[string]string{}
+	for _, k := range s.keyVars() {
+		vals := k.values()
+		if k.required && len(vals) == 0 {
+			problems = append(problems, k.name+" must be 64 hex characters (32 bytes)")
+			continue
+		}
+		if k.list && len(vals) > 3 {
+			problems = append(problems, k.name+" holds at most three previous keys (re-encrypt, then retire)")
+		}
+		for _, v := range vals {
+			if !hex32(v) {
+				problems = append(problems, k.name+" must be 64 hex characters (32 bytes)")
+				continue
+			}
+			norm := strings.ToLower(v)
+			if other, dup := seen[norm]; dup {
+				problems = append(problems, k.name+" and "+other+" must differ (one key per purpose)")
+			}
+			seen[norm] = k.name
+		}
+	}
+	return problems
+}
+
+// ResolveManaged replaces the secretref:// references of a secretstore configuration with the values from the secret
+// manager and validates them like local keys. It is called once at startup, before any service is built; a reference
+// that cannot be resolved stops the process (never a fallback). Errors name variables, never values or references.
+func (s *Security) ResolveManaged(ctx context.Context, resolve func(ctx context.Context, ref string) ([]byte, error)) error {
+	if !s.Managed {
+		return nil
+	}
+	var problems []string
+	for _, k := range s.keyVars() {
+		refs := k.values()
+		vals := make([]string, 0, len(refs))
+		for _, ref := range refs {
+			v, err := resolve(ctx, ref)
+			if err != nil {
+				problems = append(problems, k.name+": the secret manager did not return the referenced key")
+				continue
+			}
+			vals = append(vals, strings.TrimSpace(string(v)))
+		}
+		*k.v = Secret(strings.Join(vals, ","))
+	}
+	if len(problems) == 0 {
+		problems = s.keyProblems()
+	}
+	if len(problems) > 0 {
+		return &ValidationError{Problems: problems}
+	}
+	return nil
 }
 
 func hex32(v string) bool {
@@ -925,9 +1025,13 @@ func loadPayments(l *loader, c *Config, env Env) {
 	}
 	if u, err := url.Parse(p.SandboxWebhookURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		l.fail("SANDBOX_WEBHOOK_URL must be an http(s) URL")
+	} else if p.SandboxEnabled && !env.IsLocal() && u.Scheme != "https" {
+		l.fail("SANDBOX_WEBHOOK_URL must use https outside development and test")
 	}
 	if u, err := url.Parse(p.PublicSiteURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		l.fail("PUBLIC_SITE_URL must be an http(s) origin")
+	} else if !env.IsLocal() && u.Scheme != "https" {
+		l.fail("PUBLIC_SITE_URL must use https outside development and test")
 	}
 	c.Payments = p
 }
@@ -963,8 +1067,8 @@ func loadSecrets(l *loader, c *Config, env Env) {
 		switch {
 		case s.KV2Addr == "" || err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https"):
 			l.fail("SECRETS_KV2_ADDR must be an http(s) URL when SECRETS_PROVIDER=kv2")
-		case env == EnvProduction && u.Scheme != "https":
-			l.fail("SECRETS_KV2_ADDR must use https in production")
+		case !env.IsLocal() && u.Scheme != "https":
+			l.fail("SECRETS_KV2_ADDR must use https outside development and test")
 		}
 		if !regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`).MatchString(s.KV2Mount) {
 			l.fail("SECRETS_KV2_MOUNT must be a mount name such as secret")

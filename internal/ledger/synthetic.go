@@ -2,7 +2,7 @@ package ledger
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 -- deterministic fixture ids matching SQL md5()::uuid, not a security use
 	"fmt"
 
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
@@ -18,7 +18,7 @@ import (
 var SyntheticProviderID = uuidFromSeed("ledger:synthetic_provider")
 
 func uuidFromSeed(seed string) string {
-	h := md5.Sum([]byte(seed))
+	h := md5.Sum([]byte(seed)) // #nosec G401 -- identifier derivation
 	return fmt.Sprintf("%x-%x-%x-%x-%x", h[0:4], h[4:6], h[6:8], h[8:10], h[10:16])
 }
 

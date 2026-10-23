@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -337,4 +340,24 @@ func TestPermissionPolicyNeedsName(t *testing.T) {
 		}
 	}()
 	NewRouter(quietLogger(nil)).HandleFunc("GET /x", Permission(""), func(http.ResponseWriter, *http.Request) {})
+}
+
+// Stage 18: a dependency that cannot be reached is a retryable 503, never a 500 (and never leaks the dial target).
+func TestDependencyOutageIs503(t *testing.T) {
+	for _, cause := range []error{
+		fmt.Errorf("query: %w", &net.OpError{Op: "dial", Net: "tcp", Err: syscall.ECONNREFUSED}),
+		fmt.Errorf("pool: %w", syscall.ECONNREFUSED),
+	} {
+		rec := httptest.NewRecorder()
+		WriteError(rec, httptest.NewRequest("GET", "/x", nil), slog.New(slog.DiscardHandler), cause)
+		if rec.Code != 503 || rec.Header().Get("Retry-After") == "" || !strings.Contains(rec.Body.String(), "SERVICE_UNAVAILABLE") ||
+			strings.Contains(rec.Body.String(), "dial") {
+			t.Fatalf("%v → %d %s", cause, rec.Code, rec.Body.String())
+		}
+	}
+	rec := httptest.NewRecorder()
+	WriteError(rec, httptest.NewRequest("GET", "/x", nil), slog.New(slog.DiscardHandler), errors.New("boom"))
+	if rec.Code != 500 {
+		t.Fatalf("an ordinary failure must stay 500, got %d", rec.Code)
+	}
 }

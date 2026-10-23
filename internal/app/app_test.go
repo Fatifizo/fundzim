@@ -131,6 +131,11 @@ func TestInternalReadinessHasDetailsButPublicDoesNot(t *testing.T) {
 	if rec.Code != 503 || !strings.Contains(rec.Body.String(), `"name":"database"`) {
 		t.Fatalf("internal readiness: %d %s", rec.Code, rec.Body.String())
 	}
+	// Stage 18 (F-S18-05): a failed check reports a category, never the driver's error text
+	if !strings.Contains(rec.Body.String(), `"error":"unavailable"`) && !strings.Contains(rec.Body.String(), `"error":"timeout"`) ||
+		strings.Contains(rec.Body.String(), "127.0.0.1") || strings.Contains(rec.Body.String(), "dial") {
+		t.Fatalf("internal readiness leaks error details: %s", rec.Body.String())
+	}
 	rec = httptest.NewRecorder()
 	InternalHandler(d, d.Checker()).ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "fundzim_build_info") {

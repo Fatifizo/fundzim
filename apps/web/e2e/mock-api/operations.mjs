@@ -5,20 +5,20 @@
 import { randomUUID } from "node:crypto";
 
 export const ROLE_PERMISSIONS = {
-  ADMIN: ["ops.dashboard.view", "ops.exception.work", "ops.incident.manage", "ops.incident.view", "ops.sla.request"],
+  ADMIN: ["ops.dashboard.view", "ops.exception.work", "ops.incident.manage", "ops.incident.view", "ops.sla.request", "security.alert.view", "security.alert.manage"],
   BUSINESS_APPROVER: ["ops.dashboard.view", "ops.sla.approve"],
   COMPLIANCE: ["audit.export", "audit.read", "ops.dashboard.view", "ops.exception.work", "ops.incident.view", "ops.sla.request", "ops.support.view"],
   FINANCE: ["audit.read", "ops.dashboard.view", "ops.exception.work", "ops.incident.view", "ops.support.view"],
   KYC_REVIEWER: ["ops.dashboard.view", "ops.support.view"],
   REVIEWER: ["ops.dashboard.view", "ops.support.view"],
   SECURITY_ADMIN: ["access.review.certify", "access.review.run", "ops.dashboard.view", "ops.exception.work", "ops.incident.manage", "ops.incident.view",
-    "security_audit.read", "session.revoke", "staff.invite", "staff.suspend", "staff.view"],
+    "security_audit.read", "session.revoke", "staff.invite", "staff.suspend", "staff.view", "security.alert.view", "security.alert.manage"],
   SUPER_ADMIN: ["access.review.certify", "audit.export", "audit.read", "ops.dashboard.view", "ops.incident.view", "role.assign.approve", "role.assign.request",
-    "security_audit.read", "staff.invite", "staff.view"],
+    "security_audit.read", "staff.invite", "staff.view", "security.alert.view"],
   SUPPORT: ["ops.dashboard.view", "ops.incident.view", "ops.support.view", "ops.support.work", "user.view"],
 };
 const STEP_UP = new Set(["ops.support.work", "ops.exception.work", "ops.incident.manage", "access.review.certify", "access.review.run", "audit.export", "ops.sla.request",
-  "ops.sla.approve", "session.revoke", "role.assign.approve"]);
+  "ops.sla.approve", "session.revoke", "role.assign.approve", "security.alert.manage"]);
 const OTHER_STAFF = "0192a000-0000-7000-8000-00000000f102";
 const iso = (msAgo = 0) => new Date(Date.now() - msAgo).toISOString();
 const SUPPORT_EDGES = { OPEN: ["TRIAGE"], REOPENED: ["TRIAGE"], TRIAGE: ["IN_PROGRESS", "ESCALATED", "RESOLVED"], IN_PROGRESS: ["WAITING_FOR_CUSTOMER", "ESCALATED", "RESOLVED"],
@@ -39,6 +39,19 @@ export function createOperationsMock({ send, err, stepUpTtlMs, staffUsers, permi
   const reviews = new Map();
   const roleRequests = new Map();
   const revokedStaff = new Set();
+  // Stage 18 security alerts (shapes as internal/operations/security.go)
+  const secAlerts = new Map();
+  const secEvents = [];
+  const secAlert = (o) => ({ id: randomUUID(), dedupe_key: `${o.alert_key}:${o.component}`, source: "mock", evidence: { metric: o.component, value: 1 },
+    status: "OPEN", condition_active: true, occurrences: 1, first_seen_at: iso(3600_000), last_seen_at: iso(), cleared_at: null, acknowledged_by: null,
+    acknowledged_at: null, escalation_status: "NONE", incident_id: null, resolved_by: null, resolved_at: null, resolution_note: null, version: 1, ...o });
+  for (const a of [secAlert({ alert_key: "FINANCIAL_GATE_NOT_BLOCKED", severity: "CRITICAL", source_module: "payments", component: "payments.live_execution",
+    title: "A production financial gate is not reported as blocked: Live donations" }),
+    secAlert({ alert_key: "ACCOUNT_TARGETED", severity: "MEDIUM", source_module: "identity_security", component: "auth.security.accounts_targeted_15m",
+      title: "Accounts with ten or more failed sign-ins in 15 minutes", condition_active: false })]) {
+    secAlerts.set(a.id, a);
+    secEvents.push({ alert_id: a.id, event_type: "RAISED", actor_id: "", note: "", occurred_at: a.first_seen_at });
+  }
   const audit = Array.from({ length: 120 }, (_, i) => ({ id: randomUUID(), seq: 1000 + i, occurred_at: iso((120 - i) * 60_000), actor_type: "staff", actor_id: OTHER_STAFF,
     actor_role: "COMPLIANCE", action: i % 2 ? "risk.case.assigned" : "campaign.review.decided", target_type: "risk_case", target_id: randomUUID(), outcome: "success",
     request_id: randomUUID(), correlation_id: i % 10 === 0 ? "0192a000-0000-7000-8000-0000000c0001" : null, reason: null, justification: null, metadata: {}, break_glass: false,
@@ -111,6 +124,14 @@ export function createOperationsMock({ send, err, stepUpTtlMs, staffUsers, permi
     roles: u.roles ?? [], mfa_confirmed: true, last_activity_at: iso(60_000), active_sessions: revokedStaff.has(u.id) ? 0 : 1 });
 
   async function control(path, body, res) {
+    if (path === "/api/v1/__mock/ops/seed-security-alert") {
+      const ref = randomUUID().slice(0, 8);
+      const a = secAlert({ alert_key: "BREAK_GLASS_ACTIVE", severity: "HIGH", source_module: "identity_security", component: `auth.security.break_glass_active.${ref}`,
+        title: `A break-glass grant is active (${ref})` });
+      secAlerts.set(a.id, a);
+      secEvents.push({ alert_id: a.id, event_type: "RAISED", actor_id: "", note: "", occurred_at: a.first_seen_at });
+      return send(res, 201, { id: a.id, title: a.title }), true;
+    }
     if (path === "/api/v1/__mock/ops/seed-exception") {
       const ref = randomUUID();
       const e = { id: `risk:screening_error:${ref}`, source_module: "risk", source_ref: ref, severity: "SEV2", category: "SCREENING_PROVIDER_ERROR",
@@ -131,7 +152,7 @@ export function createOperationsMock({ send, err, stepUpTtlMs, staffUsers, permi
   async function handle({ res, method, path, url, user, session, body }) {
     const ours = path.startsWith("/api/v1/admin/operations") || path.startsWith("/api/v1/admin/approvals") || path.startsWith("/api/v1/admin/reports") ||
       path.startsWith("/api/v1/admin/support") || path.startsWith("/api/v1/admin/staff") || path.startsWith("/api/v1/admin/access-reviews") ||
-      path.startsWith("/api/v1/admin/audit") || path.startsWith("/api/v1/admin/role-assignment-requests");
+      path.startsWith("/api/v1/admin/audit") || path.startsWith("/api/v1/admin/role-assignment-requests") || path.startsWith("/api/v1/admin/security");
     if (!ours) return false;
     if (!user) return err(res, 401, "AUTHENTICATION_REQUIRED"), true;
     if (user.account_kind !== "STAFF") return err(res, 404, "ROUTE_NOT_FOUND"), true;
@@ -145,6 +166,52 @@ export function createOperationsMock({ send, err, stepUpTtlMs, staffUsers, permi
     const q = url.searchParams;
     const O = "/api/v1/admin/operations";
     let m;
+    // ---- Stage 18 security alerts ----
+    const SA = "/api/v1/admin/security";
+    if (method === "GET" && path === `${SA}/alerts`) {
+      if (!need("security.alert.view")) return true;
+      const st = q.get("status") || "LIVE";
+      const rank = ["INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
+      const min = rank.indexOf(q.get("min_severity") || "INFO");
+      const all = [...secAlerts.values()].filter((a) => (st === "ALL" || (st === "LIVE" ? a.status !== "RESOLVED" : a.status === st)) && rank.indexOf(a.severity) >= min)
+        .sort((a, b) => rank.indexOf(b.severity) - rank.indexOf(a.severity));
+      return send(res, 200, { items: all, next_cursor: null, notice: "mock" }), true;
+    }
+    if (method === "GET" && path === `${SA}/backups`) {
+      return need("security.alert.view") && send(res, 200, { last_backup: iso(2 * 3600_000), last_failed_backup: null, last_verified_restore: iso(3 * 3600_000), runs: 2 }), true;
+    }
+    if ((m = new RegExp(`^${SA}/alerts/([0-9a-f-]{36})(?:/(acknowledge|escalate|resolve))?$`).exec(path))) {
+      const a = secAlerts.get(m[1]);
+      if (!m[2] && method === "GET") {
+        if (!need("security.alert.view")) return true;
+        if (!a) return err(res, 404, "OPS_NOT_FOUND"), true;
+        return send(res, 200, { alert: a, history: secEvents.filter((e) => e.alert_id === a.id) }), true;
+      }
+      if (method !== "POST" || !m[2]) return false;
+      if (!need("security.alert.manage")) return true;
+      if (!a) return err(res, 404, "OPS_NOT_FOUND"), true;
+      if (body.version && body.version !== a.version) return err(res, 409, "OPS_RECORD_CHANGED"), true;
+      const note = typeof body.note === "string" ? body.note.trim() : "";
+      if (m[2] !== "acknowledge" && [...note].length < 5) return err(res, 422, "VALIDATION_FAILED", { details: [{ field: "note", code: "INVALID_LENGTH" }] }), true;
+      const ev = (type) => secEvents.push({ alert_id: a.id, event_type: type, actor_id: user.id, note, occurred_at: iso() });
+      if (m[2] === "acknowledge") {
+        if (a.status !== "OPEN") return err(res, 409, "SECURITY_ALERT_STATE"), true;
+        Object.assign(a, { status: "ACKNOWLEDGED", acknowledged_by: user.id, acknowledged_at: iso() });
+      } else if (m[2] === "escalate") {
+        if (a.status !== "ACKNOWLEDGED" || a.escalation_status === "ESCALATED") return err(res, 409, "SECURITY_ALERT_STATE"), true;
+        const inc = { id: randomUUID(), incident_number: incidents.size + 1, title: `Security alert: ${a.title}`.slice(0, 200), severity: "SEV1",
+          affected_module: a.source_module, status: "DETECTED", owner_id: null, started_at: iso(), detected_by: "ALERT", alert_key: `SEC_${a.alert_key}`,
+          resolution: null, post_incident_notes: null, created_by: user.id, version: 1 };
+        incidents.set(inc.id, inc);
+        Object.assign(a, { escalation_status: "ESCALATED", incident_id: inc.id });
+      } else {
+        if (a.status !== "ACKNOWLEDGED") return err(res, 409, "SECURITY_ALERT_STATE"), true;
+        Object.assign(a, { status: "RESOLVED", resolved_by: user.id, resolved_at: iso(), resolution_note: note });
+      }
+      a.version += 1;
+      ev({ acknowledge: "ACKNOWLEDGED", escalate: "ESCALATED", resolve: "RESOLVED" }[m[2]]);
+      return send(res, 200, a), true;
+    }
     // ---- command center ----
     if (method === "GET" && path === `${O}/overview`) {
       if (!need("ops.dashboard.view")) return true;

@@ -68,7 +68,7 @@ type Backoff struct {
 
 // Delay returns the wait before the retry that follows failed attempt number attempt (1-based).
 func (b Backoff) Delay(attempt int) time.Duration {
-	return b.delay(attempt, 0.8+0.4*rand.Float64())
+	return b.delay(attempt, 0.8+0.4*rand.Float64()) // #nosec G404 -- retry jitter, not a secret or an identifier
 }
 
 func (b Backoff) delay(attempt int, jitter float64) time.Duration {

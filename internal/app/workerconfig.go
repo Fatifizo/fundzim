@@ -19,6 +19,11 @@ type WorkerConfig struct {
 	Concurrency      int           // WORKER_CONCURRENCY (default 4): workers on the default and outbox queues
 	OutboxRetention  time.Duration // OUTBOX_RETENTION (default 168h): dispatched outbox rows kept this long
 	MaxConns         int32         // WORKER_DATABASE_MAX_CONNS (default 10)
+	// Stage 18 (ADR-050): audit chain verification. The checkpoint MAC key is the worker's alone (hex, 32 bytes) and must
+	// differ from every other key, so a database-level rewrite of history cannot also forge a verified checkpoint.
+	AuditCheckpointKey   config.Secret // AUDIT_CHECKPOINT_KEY
+	AuditVerifyInterval  time.Duration // AUDIT_VERIFY_INTERVAL (default 15m): incremental verification from the last checkpoint
+	AuditFullVerifyEvery time.Duration // AUDIT_FULL_VERIFY_INTERVAL (default 24h): full recomputation of both chains
 }
 
 // LoadWorkerConfig reads and validates the worker settings. env is the deployment environment from the
@@ -49,6 +54,39 @@ func LoadWorkerConfig(get config.LookupFunc, env config.Env) (WorkerConfig, erro
 		Concurrency:      integer("WORKER_CONCURRENCY", 4, 1, 100),
 		MaxConns:         int32(integer("WORKER_DATABASE_MAX_CONNS", 10, 2, 200)),
 		OutboxRetention:  7 * 24 * time.Hour,
+
+		AuditCheckpointKey:   config.Secret(str("AUDIT_CHECKPOINT_KEY")),
+		AuditVerifyInterval:  15 * time.Minute,
+		AuditFullVerifyEvery: 24 * time.Hour,
+	}
+	duration := func(k string, lo, hi time.Duration, into *time.Duration) {
+		raw := str(k)
+		if raw == "" {
+			return
+		}
+		d, err := time.ParseDuration(raw)
+		if err != nil || d < lo || d > hi {
+			problems = append(problems, k+" must be a duration between "+lo.String()+" and "+hi.String())
+			return
+		}
+		*into = d
+	}
+	duration("AUDIT_VERIFY_INTERVAL", time.Minute, 24*time.Hour, &w.AuditVerifyInterval)
+	duration("AUDIT_FULL_VERIFY_INTERVAL", time.Hour, 31*24*time.Hour, &w.AuditFullVerifyEvery)
+	if str("FIELD_ENCRYPTION_PROVIDER") == "secretstore" {
+		// resolved at startup with the application keys (resolveWorkerKeys)
+		if !strings.HasPrefix(w.AuditCheckpointKey.Reveal(), "secretref://") {
+			problems = append(problems, "AUDIT_CHECKPOINT_KEY must be a secretref:// reference when FIELD_ENCRYPTION_PROVIDER=secretstore")
+		}
+	} else {
+		others := map[string]string{}
+		for _, n := range []string{"BLIND_INDEX_KEY", "FIELD_ENCRYPTION_LOCAL_KEY", "KYC_BLIND_INDEX_KEY", "KYC_FIELD_ENCRYPTION_LOCAL_KEY",
+			"COMPLIANCE_FIELD_ENCRYPTION_LOCAL_KEY", "DOCUMENT_TICKET_KEY", "STORAGE_SSE_C_KEY", "CSRF_SECRET"} {
+			others[n] = str(n)
+		}
+		if p := checkpointKeyProblem(w.AuditCheckpointKey.Reveal(), others); p != "" {
+			problems = append(problems, p)
+		}
 	}
 	if raw := str("OUTBOX_RETENTION"); raw != "" {
 		d, err := time.ParseDuration(raw)
@@ -75,4 +113,9 @@ func LoadWorkerConfig(get config.LookupFunc, env config.Env) (WorkerConfig, erro
 		return WorkerConfig{}, &config.ValidationError{Problems: problems}
 	}
 	return w, nil
+}
+
+func sortedStrings(v []string) []string {
+	sort.Strings(v)
+	return v
 }

@@ -21,6 +21,9 @@ import (
 func NewOperations(d *Deps) *operations.Service {
 	m := d.Verification
 	s := &operations.Service{Pool: d.DB, Clock: clock.System, Logger: d.Logger, Environment: string(d.Config.App.Env)}
+	if d.DB != nil {
+		s.Sources = append(s.Sources, securitySources(d.DB, clock.System)...) // Stage 18: identity signals, audit verification
+	}
 	if d.Auth != nil {
 		s.Perms, s.Revoker, s.StaffRoles = d.Auth, d.Auth, d.Auth
 		s.Sources = append(s.Sources, operations.Source{Module: "identity", Snapshot: d.Auth.OpsSnapshot})

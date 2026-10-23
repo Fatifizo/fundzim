@@ -31,6 +31,9 @@ export function createOpsApi(api: ApiClient = browserApi) {
     revokeSessions: (staffId: string, reason: string) => post<unknown>(`/api/v1/admin/staff/${enc(staffId)}/sessions/revoke`, { reason }),
     decideRoleRequest: (id: string, approve: boolean, reason: string) =>
       post<unknown>(`/api/v1/admin/role-assignment-requests/${enc(id)}/${approve ? "approve" : "reject"}`, { reason }),
+    // Stage 18 security alerts (security.alert.manage, step-up)
+    alertAction: (id: string, action: "acknowledge" | "escalate" | "resolve", body: Record<string, unknown>) =>
+      post<unknown>(`/api/v1/admin/security/alerts/${enc(id)}/${action}`, body),
   };
 }
 

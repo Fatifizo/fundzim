@@ -37,7 +37,7 @@ export function ProfileForm({ displayName, api = authApi }: { displayName: strin
   }
 
   return (
-    <form ref={formRef} noValidate onSubmit={onSubmit} className="space-y-5">
+    <form method="post" ref={formRef} noValidate onSubmit={onSubmit} className="space-y-5">
       <FormError ref={errorRef} message={formError} />
       {saved ? <FormStatus title="Display name saved" /> : null}
       <TextField

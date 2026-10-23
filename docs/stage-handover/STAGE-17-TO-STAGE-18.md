@@ -26,7 +26,7 @@ NOT_RECORDED). Stage 18 must not start until the owner asks for it. This documen
 | Container security | non-root images, read-only filesystems, image scanning, base image updates |
 | Infrastructure hardening | network policy, TLS everywhere, database roles per environment, backups of the ledger and recon schemas, WAF/rate limits at the edge |
 | Backup and disaster recovery | append-only financial tables (ledger, recon, audit) need point-in-time recovery and restore drills; RPO/RTO are owner decisions |
-| Audit retention | no retention period is set for ledger, recon, audit or notification records (LR-012, LR-076): never purge until decided |
+| Audit retention | no retention period is set for ledger, recon, audit or notification records (LR-012; Stage 18 correction: LR-076 concerns pool funding): never purge until decided |
 | Security monitoring | alerting on worker heartbeats, CRITICAL reconciliation exceptions, ledger integrity failures, step-up failures, upload rejections |
 | Compliance evidence | map controls to evidence (operational-controls.md, audit-evidence-model.md); no compliance claim without evidence |
 | Provider dependencies | ADR-040 deferred: no provider, no statement format, no settlement schedule, no fee evidence (PCR-007, PCR-016, PCR-045, PCR-051) |

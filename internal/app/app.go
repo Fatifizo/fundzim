@@ -67,6 +67,10 @@ type Deps struct {
 // down at startup makes the service not-ready instead of crashing it. A required Redis that is
 // unreachable is a startup error.
 func NewDeps(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Deps, error) {
+	cfg, err := resolveManagedKeys(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
 	info := version.Get(cfg.App.Name)
 	if cfg.App.Version != "" {
 		info.Version = cfg.App.Version

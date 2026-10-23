@@ -574,6 +574,15 @@ Notes on ordering:
   remediated or risk-accepted with owner.
 - **Acceptance criteria:** No open critical/high findings; DR restore tested; incident runbooks exist.
   No security certification is claimed.
+- **Stage 18 as delivered (2026-10-23, awaiting acceptance):** application keys from the secret manager
+  (`secretstore`) with rotation overlap; parallel and MAC-checkpointed incremental audit verification (KI-S17-12 fixed);
+  repeated identical status polls no longer re-audited; persisted security alerts (worker scan, guarded lifecycle,
+  incident escalation); encrypted backups with MAC manifests, a restore drill (PASSED) and failure drills; DR exercises;
+  hardened, read-only, segmented, digest-pinned containers with mechanical checks; gosec, CycloneDX SBOMs, Trivy gate,
+  checksums and an unsigned provenance record in CI; passive DAST (ZAP); fixes: staff step-up bypass, Next.js CRITICAL
+  advisories, credential forms, readiness detail, log scrubbing, staging rules, 503 on outages. **Not done:** external
+  penetration test, WAF/DDoS, IaC, production infrastructure, WebAuthn, artifact signing, approved RPO/RTO
+  (docs/stage-18/known-issues.md). No open CRITICAL/HIGH finding; production BLOCKED.
 
 ## Stage 19 — Financial Validation, Concurrency & Failure Testing
 

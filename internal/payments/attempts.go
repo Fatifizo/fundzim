@@ -371,6 +371,10 @@ func initiatedEvent(env string) string {
 
 // completeCall records a call's result exactly once (app.attempt_complete_once) with its normalised error
 // category, and audits PROVIDER_RESPONSE_RECEIVED (no payload; classification, category and timing only).
+// A status poll whose result repeats the previous completed poll of the same payment (same classification,
+// provider status, error category and HTTP status) is kept in app.payment_attempts but not audited again: the
+// unchanged answers of a long-pending payment were most of the audit trail (Stage 18, F-S18-08). The first poll,
+// every change of answer and every other operation are audited.
 func (s *Service) completeCall(ctx context.Context, tx pgx.Tx, attemptID string, obs psp.Observation) error {
 	cl, ok := classification[obs.Class]
 	if !ok {
@@ -410,6 +414,21 @@ func (s *Service) completeCall(ctx context.Context, tx pgx.Tx, attemptID string,
 	}
 	if err != nil {
 		return err
+	}
+	if op == "GET_STATUS" {
+		var repeated bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM (
+				SELECT classification, provider_status_raw, error_category, http_status FROM app.payment_attempts
+				WHERE payment_intent_id = $1 AND operation = 'GET_STATUS' AND id <> $2 AND completed_at IS NOT NULL
+				ORDER BY completed_at DESC, id DESC LIMIT 1) prev
+			WHERE prev.classification = $3 AND prev.provider_status_raw IS NOT DISTINCT FROM nullif($4, '')
+			  AND prev.error_category IS NOT DISTINCT FROM nullif($5, '') AND prev.http_status IS NOT DISTINCT FROM $6)`,
+			paymentID, attemptID, cl, raw, cat, http).Scan(&repeated); err != nil {
+			return err
+		}
+		if repeated {
+			return nil
+		}
 	}
 	provider := providerID
 	if pr, err := s.PSP.ProviderForDisplay(ctx, providerID); err == nil {
