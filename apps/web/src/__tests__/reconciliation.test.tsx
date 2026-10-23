@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -90,8 +90,9 @@ describe("reconciliation forms", () => {
     expect(screen.getByText("Write 20 to 2,000 characters.")).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText(/Justification/), "The TEST statement line reports success at the provider.");
     await userEvent.click(screen.getByRole("button", { name: "Propose resolution" }));
-    expect(propose).toHaveBeenCalledWith(EXC.id, expect.objectContaining({ resolution_type: "PROVIDER_OUTCOME_APPLIED", version: 4,
-      evidence_refs: [`item:${EXC.item_id}`] }), expect.any(String));
+    // the submission goes through the (async) step-up wrapper
+    await waitFor(() => expect(propose).toHaveBeenCalledWith(EXC.id, expect.objectContaining({ resolution_type: "PROVIDER_OUTCOME_APPLIED", version: 4,
+      evidence_refs: [`item:${EXC.item_id}`] }), expect.any(String)));
   });
 
   it("the proposal confirmation stays after the refresh closes the form", async () => {
@@ -119,8 +120,8 @@ describe("reconciliation forms", () => {
     await userEvent.clear(screen.getByLabelText("Journal lines"));
     await userEvent.type(screen.getByLabelText("Journal lines"), "suspense:settlement_discrepancy:x, debit, 1250{enter}asset:psp_settled:x, CREDIT, 1250");
     await userEvent.click(screen.getByRole("button", { name: "Propose resolution" }));
-    expect(propose).toHaveBeenCalledWith(EXC.id, expect.objectContaining({ posting_rule: "SETTLEMENT_DISCREPANCY_RESOLVED", lines: [
+    await waitFor(() => expect(propose).toHaveBeenCalledWith(EXC.id, expect.objectContaining({ posting_rule: "SETTLEMENT_DISCREPANCY_RESOLVED", lines: [
       { account_code: "suspense:settlement_discrepancy:x", direction: "DEBIT", amount_minor: "1250" },
-      { account_code: "asset:psp_settled:x", direction: "CREDIT", amount_minor: "1250" }] }), expect.any(String));
+      { account_code: "asset:psp_settled:x", direction: "CREDIT", amount_minor: "1250" }] }), expect.any(String)));
   });
 });
