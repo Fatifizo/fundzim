@@ -6,7 +6,10 @@
 #  - api/openapi/fundzim-v1.yaml: an example Idempotency-Key (a UUID), not a credential.
 #  - docs/stage-8/testing.md:33 (Stage 8) is prose describing the sandbox signature tests ("key slots, missing/forged
 #    signatures"); reworded afterwards so it no longer matches.
+#  - internal/app/worker_test.go:66 (Stage 18, commit 57e95e5) was a fake 64-hex test value for AUDIT_CHECKPOINT_KEY in a
+#    unit test; replaced by a value built at run time so it no longer matches.
 fe9cfa71e783a043d04308558523402613e622e8:docs/architecture/observability.md:generic-api-key:73
 fe9cfa71e783a043d04308558523402613e622e8:design/sql/tests/payments_test.sql:stripe-access-token:196
 fe9cfa71e783a043d04308558523402613e622e8:api/openapi/fundzim-v1.yaml:generic-api-key:17488
 1129a6ebd3ee06079d533bcf029a5d3cfb637be1:docs/stage-8/testing.md:generic-api-key:33
+57e95e57e4193924d7c3bb12322cff57d22c66c4:internal/app/worker_test.go:generic-api-key:66

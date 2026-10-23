@@ -63,7 +63,8 @@ func TestLoadWorkerConfig(t *testing.T) {
 	}
 }
 
-const testCheckpointKey = "5f4dcc3b5aa765d61d8327deb882cf995f4dcc3b5aa765d61d8327deb882cf99"
+// testCheckpointKey is a test-only value (not a credential): 64 hex characters built at run time.
+var testCheckpointKey = strings.Repeat("c0ffee11", 8)
 
 func TestWorkerNotReadyWithoutDatabaseOrRiver(t *testing.T) {
 	cfg := testDeps(t).Config
