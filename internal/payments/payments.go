@@ -69,6 +69,16 @@ const (
 	// UnknownHorizon is the default resolution horizon for UNKNOWN when the provider documents none (PCR-010):
 	// 72 h, flagged in docs/stage-8/known-issues.md.
 	UnknownHorizon = 72 * time.Hour
+	// PollHorizon bounds routine status polling of a payment that is still CREATED, PENDING, REQUIRES_ACTION or
+	// AUTHORISED, measured from its creation (Stage 19, KI-S18-22). An internal safety default equal to
+	// UnknownHorizon — not a provider-documented or approved value (PCR-010). Reaching it is not evidence of failure.
+	PollHorizon = 72 * time.Hour
+	// MaxStatusPolls bounds the status queries one payment receives (routine and staff); with the backoff
+	// (5 s doubling to 10 min) the horizon is reached first (~440 polls in 72 h), so this is a second, independent stop.
+	MaxStatusPolls = 500
+	// PollJitter spreads routine polls by ±20 % so that payments made due together (e.g. after an outage) do not
+	// poll the provider in lockstep.
+	PollJitter = 0.2
 	// SessionTTL bounds a payment session when the provider gives no expiry.
 	SessionTTL = 30 * time.Minute
 )

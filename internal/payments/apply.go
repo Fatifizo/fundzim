@@ -3,6 +3,7 @@ package payments
 import (
 	"context"
 	"errors"
+	"math/rand/v2"
 	"strconv"
 	"time"
 
@@ -225,7 +226,7 @@ func (s *Service) transition(ctx context.Context, tx pgx.Tx, p *payRow, o Obs) (
 			set.failure = &f
 		}
 	default: // PENDING, REQUIRES_ACTION, AUTHORISED: safety-net polling behind the webhooks
-		n := now.Add(pollDelay(0))
+		n := now.Add(nextPollDelay(0))
 		set.nextPoll = &n
 	}
 	src := o.Source
@@ -273,7 +274,7 @@ func (s *Service) transition(ctx context.Context, tx pgx.Tx, p *payRow, o Obs) (
 	if terminal(to) {
 		if _, err := tx.Exec(ctx, `UPDATE app.payment_reconciliation_references SET status = 'RESOLVED_BY_PROVIDER_STATUS', resolved_at = $2,
 			resolution_note = $3, version = version + 1 WHERE payment_intent_id = $1 AND status <> 'RESOLVED_BY_PROVIDER_STATUS'
-			AND reason IN ('UNKNOWN_HORIZON_EXCEEDED','NOT_FOUND_AFTER_HORIZON')`, p.ID, now,
+			AND reason IN ('UNKNOWN_HORIZON_EXCEEDED','NOT_FOUND_AFTER_HORIZON','POLL_BUDGET_EXHAUSTED')`, p.ID, now,
 			"Authoritative provider status "+to+" ("+o.Source+"); settlement not reconciled (Stage 17)."); err != nil {
 			return Outcome{}, err
 		}
@@ -438,6 +439,15 @@ func (s *Service) notApplied(ctx context.Context, tx pgx.Tx, p *payRow, o Obs, t
 	s.m.notApplied.WithLabelValues(reason).Inc()
 	return s.insertEvent(ctx, tx, eventRow{subject: "PAYMENT_INTENT", donationID: p.DonationIntentID, paymentID: p.ID, from: p.Status,
 		to: to, applied: false, notApplied: reason, obs: o})
+}
+
+// jitterFn returns a value in [0, 1) (math/rand/v2; tests replace it).
+var jitterFn = rand.Float64
+
+// nextPollDelay is pollDelay spread by ±PollJitter.
+func nextPollDelay(attempt int) time.Duration {
+	d := pollDelay(attempt)
+	return d + time.Duration((jitterFn()*2-1)*PollJitter*float64(d))
 }
 
 func pollDelay(attempt int) time.Duration {

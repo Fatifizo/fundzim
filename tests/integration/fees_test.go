@@ -925,27 +925,40 @@ func TestFeeReconciliationAndRevenueReport(t *testing.T) {
 	if r.field(t, "settlement_reconciliation") != "NOT_PERFORMED" {
 		t.Fatalf("run: %s", string(r.Data))
 	}
-	items, err := f.fs.ReconItems(ctx(t), "OPEN", 500)
-	if err != nil {
-		t.Fatal(err)
-	}
-	found := map[string]string{}
-	for _, it := range items {
-		if it.AssessmentID != nil && (*it.AssessmentID == plat || *it.AssessmentID == proc) {
-			found[it.Kind] = it.ID
+	// this test's own items (Stage 19: the shared development database holds thousands of other OPEN items — e.g. every
+	// load-test donation's UNRECONCILED_PROVIDER_FEE — so the first page of the queue need not contain them)
+	own := func() map[string]string {
+		rows, err := f.mig.Query(ctx(t), `SELECT kind, id::text FROM app.fee_reconciliation_references WHERE status = 'OPEN'
+			AND assessment_id = ANY($1::uuid[])`, []string{plat, proc})
+		if err != nil {
+			t.Fatal(err)
 		}
+		defer rows.Close()
+		m := map[string]string{}
+		for rows.Next() {
+			var k, id string
+			_ = rows.Scan(&k, &id)
+			m[k] = id
+		}
+		return m
 	}
+	ownCount := func() int {
+		var n int
+		_ = f.mig.QueryRow(ctx(t), `SELECT count(*) FROM app.fee_reconciliation_references WHERE status = 'OPEN' AND assessment_id = ANY($1::uuid[])`,
+			[]string{plat, proc}).Scan(&n)
+		return n
+	}
+	found := own()
 	if found[fees.RecAmountMismatch] == "" || found[fees.RecRoundingMismatch] == "" {
 		t.Fatalf("expected AMOUNT_MISMATCH (provider report) and ROUNDING_MISMATCH (tampered calculation): %v", found)
 	}
 	// a rerun does not duplicate open items; resolving records a note and changes nothing else
-	before := len(items)
+	before := ownCount()
 	if _, err := f.fs.Reconcile(ctx(t), "it-rerun"); err != nil {
 		t.Fatal(err)
 	}
-	again, _ := f.fs.ReconItems(ctx(t), "OPEN", 500)
-	if len(again) > before {
-		t.Fatalf("rerun duplicated items: %d → %d", before, len(again))
+	if again := ownCount(); again != before {
+		t.Fatalf("rerun duplicated items: %d → %d", before, again)
 	}
 	f.act(t, f.f.finance1, "POST", "/admin/fees/reconciliation/"+found[fees.RecAmountMismatch]+"/resolve", map[string]any{"note": "IT: provider report reviewed"}, 200, "")
 	f.act(t, f.f.finance1, "POST", "/admin/fees/reconciliation/"+found[fees.RecAmountMismatch]+"/resolve", map[string]any{"note": "again"}, 409, "FEE_RECONCILIATION_STATE")

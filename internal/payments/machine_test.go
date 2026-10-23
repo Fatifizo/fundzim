@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Fatifizo/fundzim/internal/psp"
 	"github.com/Fatifizo/fundzim/migrations"
@@ -149,6 +150,39 @@ func TestPollBackoffIsBounded(t *testing.T) {
 		}
 		prev = d
 	}
+}
+
+// Stage 19 (KI-S18-22): routine polls are spread by ±PollJitter around the bounded backoff.
+func TestPollJitterStaysWithinBounds(t *testing.T) {
+	defer func(f func() float64) { jitterFn = f }(jitterFn)
+	for _, r := range []float64{0, 0.25, 0.5, 0.75, 0.999999} {
+		jitterFn = func() float64 { return r }
+		for i := 0; i < 40; i++ {
+			d, base := nextPollDelay(i), pollDelay(i)
+			lo, hi := time.Duration(float64(base)*(1-PollJitter)), time.Duration(float64(base)*(1+PollJitter))
+			if d < lo || d > hi {
+				t.Fatalf("attempt %d r=%v: %s outside [%s, %s]", i, r, d, lo, hi)
+			}
+		}
+	}
+	jitterFn = func() float64 { return 0.5 }
+	if nextPollDelay(3) != pollDelay(3) {
+		t.Fatal("the midpoint is the unjittered delay")
+	}
+}
+
+// The budget stops before the attempt cap under the normal backoff: the horizon is the binding bound.
+func TestPollBudgetHorizonBindsBeforeAttemptCap(t *testing.T) {
+	var elapsed time.Duration
+	n := 0
+	for elapsed < PollHorizon {
+		elapsed += pollDelay(n)
+		n++
+	}
+	if n >= MaxStatusPolls {
+		t.Fatalf("%d polls fit in the horizon; the attempt cap (%d) would bind first", n, MaxStatusPolls)
+	}
+	t.Logf("polls within %s at the unjittered backoff: %d (cap %d)", PollHorizon, n, MaxStatusPolls)
 }
 
 func TestSafeRedirect(t *testing.T) {

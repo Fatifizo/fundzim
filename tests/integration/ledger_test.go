@@ -554,9 +554,21 @@ func TestLedgerAccountFreezeVersusConcurrentPostings(t *testing.T) {
 
 func TestLedgerPeriodCloseMakerCheckerAndPriorPeriodPostings(t *testing.T) {
 	l := newLedgerIT(t)
-	// a dedicated past period (unique per run): a random month in 1900–1999
+	// a dedicated past period (unique per run): a random month in 1900–1999 that no earlier run has used. Stage 19
+	// (KI-S18-24): the development database keeps every period an earlier run closed, so a month drawn again was
+	// already CLOSED and the close request failed with LEDGER_PERIOD_STATE (19 of 1 200 months were used by then)
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	month := time.Date(1900+r.Intn(100), time.Month(1+r.Intn(12)), 1, 0, 0, 0, 0, time.UTC)
+	var month time.Time
+	for {
+		month = time.Date(1900+r.Intn(100), time.Month(1+r.Intn(12)), 1, 0, 0, 0, 0, time.UTC)
+		var used bool
+		if err := l.lp.QueryRow(ctx(t), `SELECT EXISTS (SELECT 1 FROM ledger.ledger_periods WHERE code = $1)`, month.Format("2006-01")).Scan(&used); err != nil {
+			t.Fatal(err)
+		}
+		if !used {
+			break
+		}
+	}
 	if err := l.svc.EnsurePeriod(ctx(t), month); err != nil {
 		t.Fatal(err)
 	}

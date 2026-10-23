@@ -65,8 +65,11 @@ func (s *Service) Circuit(ctx context.Context, providerID, op, currency string) 
 func (s *Service) ProviderCircuit(ctx context.Context, providerID string) string {
 	worst := CircuitClosed
 	for _, op := range []string{OpCreatePayment, OpGetPayment} {
+		// only currencies that ever had a circuit event can be anything but CLOSED (Circuit returns CLOSED without one);
+		// enumerating them from ix_provider_health_events_circuit instead of every call event keeps this independent of
+		// the call history's size (Stage 19: a full scan of 1.26 M events per payout eligibility check)
 		rows, err := s.Pool.Query(ctx, `SELECT DISTINCT coalesce(currency, '') FROM app.provider_health_events
-			WHERE provider_id = $1 AND operation = $2`, providerID, op)
+			WHERE provider_id = $1 AND operation = $2 AND event_kind LIKE 'CIRCUIT_%'`, providerID, op)
 		if err != nil {
 			return worst
 		}

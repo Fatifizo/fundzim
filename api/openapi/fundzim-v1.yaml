@@ -57368,6 +57368,8 @@ components:
           - DUPLICATE_SUCCESS
           - PARKED_DEADLINE_EXCEEDED
           - UNMAPPED_STATUS
+          - CONTRADICTORY_EVIDENCE
+          - POLL_BUDGET_EXHAUSTED
         status:
           type: string
           enum:

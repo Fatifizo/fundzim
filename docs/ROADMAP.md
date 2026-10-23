@@ -595,6 +595,17 @@ Notes on ordering:
 - **Testing expectations:** Every scenario passes repeatedly; ledger invariant holds after every run.
 - **Acceptance criteria:** Zero invariant violations across runs; documented capacity limits; alerting
   verified.
+- **Stage 19 as delivered (2026-10-23, awaiting acceptance):** deterministic row-lock interleavings and
+  connection-loss injection (`TestFinancial*`), worker-kill, load tiers (c = 1–16) and two 30-minute endurance runs on
+  the local stack, ledger volume tiers to 10⁵ journals on scratch databases. Fixed: KI-S18-25 (reconciliation settles a
+  pending ledger sync before judging), KI-S18-22 (bounded, jittered, per-environment payment polling;
+  POLL_BUDGET_EXHAUSTED), ledger lock-order deadlocks (F-S19-01, HIGH), payout attempt deadlocks and duplicate attempt
+  numbers (F-S19-12, HIGH), duplicate history events, an O(history) provider-health query on every payout eligibility
+  check, KI-S18-24 (docs/stage-19/known-issues.md; ADR-051). Zero invariant violations and zero duplicate financial
+  effects in every run. Capacity limits documented for this host only (audit chain lock, single 4-way worker,
+  sequential payout reconciliation); no approved target exists. **Not done:** Redis/DB *failover* chaos (single node,
+  no failover topology; outages covered in Stage 18), invariant monitors in staging (no staging environment), alert
+  delivery (no paging channel). Production BLOCKED.
 
 ## Stage 20 — Production/Pilot Certification
 

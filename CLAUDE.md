@@ -15,6 +15,30 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
+**Stage 19 — Financial concurrency, load, failure & integrity validation (complete; awaiting acceptance; non-production;
+production BLOCKED).** Stages 1–19 are complete but their acceptance has not been recorded (never mark a stage accepted
+yourself); Stage 9 is PARTIAL. What Stage 19 built: `docs/stage-19/README.md` (preflight, invariants, transition
+matrices, KI-S18-25, KI-S18-22, concurrency plan, load plan, fault injection, database contention, results,
+benchmarks, failure analysis, known issues, security regression, final report; ADR-051); Stage 20 starts from
+`docs/stage-handover/STAGE-19-TO-STAGE-20.md`. Binding Stage 19 rules: **the ledger follows the payout state** — payout
+reconciliation re-reads each candidate and settles a pending ledger sync through `syncLedger` (the Recover path) before
+judging; never report the completion → consumption window as a mismatch and never hide a sync the ledger refuses
+(`ledger_sync = FAILED`); history events come only from the writer whose UPDATE changed the row (never insert an event
+for a link another writer set); **a ledger posting locks every SYNC balance row it touches in ascending account id
+before writing entries** — never lock a subset first; DEFERRED hot rows are never locked by postings; payout attempts
+are numbered and recorded with the **payout row locked first** (`startAttempt`, `recordObservation`, the attempts guard)
+and a status query is skipped while another of the same payout is in flight; **payment polling
+is bounded** (`payments.PollHorizon` 72 h from creation, `UnknownHorizon`, `MaxStatusPolls` 500; ±20 % jitter; due
+re-check under the row lock; a process sweeps only its own execution environment): an exhausted budget keeps the status,
+opens POLL_BUDGET_EXHAUSTED and is never evidence of failure — never resubmit or fail a payment to resolve it; the 72 h /
+500 values are internal defaults, not provider values (PCR-010). Stage 19 tests (`TestFinancial*`) use row-lock barriers
+on their own records and `pg_terminate_backend` only on backends blocked by those locks (local superuser from `.env`);
+`TestFinancialWorkerCrashMidFlight` and `TestFinancialLoad` are opt-in and run only against the local disposable stack;
+ledger volume tiers run only on scratch databases named `fundzim_perf*`. Windowed reconciliations read the newest records
+(never the oldest N); a failure or shutdown is recorded with a non-cancelled context. `TestFinancialLoad` on the shared
+development database leaves thousands of sandbox payments without statement lines in Stage 17's window (KI-S19-17) —
+prefer a disposable compose project for load runs.
+
 **Stage 18 — Security hardening, compliance controls, resilience & recovery (complete; awaiting acceptance; non-production;
 production BLOCKED).** Stages 1–18 are complete but their acceptance has not been recorded (never mark a stage accepted
 yourself); Stage 9 is PARTIAL. What Stage 18 built: `docs/stage-18/implementation.md` (prerequisites, security
@@ -245,7 +269,7 @@ errors are always `no-store`; a handler's `Cache-Control` must not be overwritte
 wait through `RetryAfter()`; campaign-family APIs use `{campaign_id}`, 428/412 for `If-Match` and
 `{items, next_cursor}` lists (ADR-038 §7); a public report never changes a campaign's status; analytics are
 first-party aggregate counters only. The real-stack Playwright suite (`apps/web/e2e-real`), the Go integration tests
-(including `TestPayments*`, `TestLedger*`, `TestPayout*`, `TestFee*`, `TestRisk*`, `TestOperations*`, `TestNotifications*`, `TestDiscovery*`, `TestReconciliation*` and `TestSecurity*`) and container rebuilds share the development database: run them under
+(including `TestPayments*`, `TestLedger*`, `TestPayout*`, `TestFee*`, `TestRisk*`, `TestOperations*`, `TestNotifications*`, `TestDiscovery*`, `TestReconciliation*`, `TestSecurity*` and `TestFinancial*`) and container rebuilds share the development database: run them under
 `flock /tmp/claude-1000/fundzim-stack.lock`. Never report CI as green without seeing the run. Gate on
 `kyc.Service.Level`, enforce compliance restrictions through `compliance.Service.Restrictions`, and check
 self-review with `kyc.Service.ActorIdentities` / `app.actor_identities()` (linked staff accounts). A

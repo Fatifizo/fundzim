@@ -23,6 +23,8 @@ const (
 	reconDuplicateSuccess = "DUPLICATE_SUCCESS"
 	reconParkedDeadline   = "PARKED_DEADLINE_EXCEEDED"
 	reconUnmapped         = "UNMAPPED_STATUS"
+	// reconPollBudget: routine polling stopped at PollHorizon / MaxStatusPolls with the outcome still open (Stage 19).
+	reconPollBudget = "POLL_BUDGET_EXHAUSTED"
 )
 
 // openRecon opens (at most one open reference per payment and reason) a reconciliation reference and flags

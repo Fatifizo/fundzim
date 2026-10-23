@@ -314,7 +314,11 @@ func (s *Service) ExecuteRun(ctx context.Context, runID string) error {
 		if errors.As(err, &e) {
 			code = e.Code
 		}
-		if _, ferr := s.Pool.Exec(ctx, `UPDATE recon.runs SET status = 'FAILED', failure_code = $2, finished_at = $3, version = version + 1
+		// recorded even when the run failed because its context ended (deadline, shutdown): with the caller's context the
+		// update failed too and the run stayed RUNNING, blocking its scope until the reaper (Stage 19)
+		fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		if _, ferr := s.Pool.Exec(fctx, `UPDATE recon.runs SET status = 'FAILED', failure_code = $2, finished_at = $3, version = version + 1
 			WHERE id = $1 AND status = 'RUNNING'`, runID, code, s.now()); ferr != nil {
 			return errors.Join(err, ferr)
 		}

@@ -75,7 +75,7 @@ func (s *Service) Post(ctx context.Context, tx pgx.Tx, p Posting) (Result, error
 			return Result{}, ErrAccountFrozen
 		}
 	}
-	// 3. lock non-negative (SYNC) accounts this journal decreases, ascending id, and check sufficiency
+	// 3. lock every SYNC projection row this journal touches, ascending id, and check sufficiency of the decreased ones
 	if err := lockAndCheck(ctx, tx, accts, p.Lines); err != nil {
 		return Result{}, err
 	}
@@ -256,12 +256,22 @@ func (s *Service) ensureAccounts(ctx context.Context, tx pgx.Tx, env, ccy string
 	return out, nil
 }
 
-// lockAndCheck locks, in ascending account id, the SYNC rows of non-negative accounts whose net movement in this
-// journal is a decrease, and checks that the balance covers it (the CHECK is the backstop).
+// lockAndCheck locks, in ascending account id, the projection rows of every SYNC account the journal touches and
+// checks that the balance of each non-negative account it decreases covers the decrease (the CHECK is the backstop).
+//
+// Stage 19 (ADR-051): every SYNC row is locked here, not only the decreased ones. The entry triggers update all of
+// the journal's SYNC rows in account-id order; locking only the decreased rows first let two journals moving funds
+// between the same two accounts in opposite directions (CAMPAIGN_FROZEN / CAMPAIGN_UNFROZEN, RELEASE / RESERVE_*)
+// take their locks in opposite orders and deadlock. With the full set locked up front in one global order, postings
+// never wait on each other in a cycle. DEFERRED (platform-wide hot) rows are still never locked by postings.
 func lockAndCheck(ctx context.Context, tx pgx.Tx, accts map[string]account, lines []Line) error {
 	net := map[string]int64{} // account id → net change in normal-balance terms
+	sync := map[string]bool{}
 	for _, l := range lines {
 		a := accts[l.Account.Code()]
+		if a.Mode != "DEFERRED" {
+			sync[a.ID] = true
+		}
 		if !a.NonNegative {
 			continue
 		}
@@ -271,19 +281,17 @@ func lockAndCheck(ctx context.Context, tx pgx.Tx, accts map[string]account, line
 			net[a.ID] -= l.Amount
 		}
 	}
-	var dec []string
-	for id, n := range net {
-		if n < 0 {
-			dec = append(dec, id)
-		}
+	rows := make([]string, 0, len(sync))
+	for id := range sync {
+		rows = append(rows, id)
 	}
-	sort.Strings(dec)
-	for _, id := range dec {
+	sort.Strings(rows)
+	for _, id := range rows {
 		var bal int64
 		if err := tx.QueryRow(ctx, `SELECT balance_minor FROM ledger.ledger_balances WHERE account_id = $1 FOR UPDATE`, id).Scan(&bal); err != nil {
 			return mapDBError(err)
 		}
-		if bal+net[id] < 0 {
+		if n := net[id]; n < 0 && bal+n < 0 {
 			return ErrInsufficientFunds
 		}
 	}

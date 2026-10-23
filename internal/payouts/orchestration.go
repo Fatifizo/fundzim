@@ -505,7 +505,12 @@ func (s *Service) dispatch(ctx context.Context, id string) (bool, error) {
 		if strings.Contains(err.Error(), "automatic submission") {
 			return false, nil // halted by an exhaustion exception another worker opened: nothing to do
 		}
-		if strings.Contains(err.Error(), "resubmission forbidden") || strings.Contains(err.Error(), "in-transit journal") {
+		if strings.Contains(err.Error(), "in-transit journal") {
+			// the ledger has not recorded the submission yet (syncLedger failed and opened LEDGER_POSTING_FAILED): nothing
+			// is sent; DispatchDue picks the payout up once Recover has posted the journal. Not a duplicate submission.
+			return false, nil
+		}
+		if strings.Contains(err.Error(), "resubmission forbidden") {
 			return false, s.tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
 				if err := s.insertEvent(ctx, tx, p.ID, event{Type: "DUPLICATE_SUBMISSION_BLOCKED", Reason: "database refused CREATE_PAYOUT"}); err != nil {
 					return err
@@ -522,9 +527,29 @@ func (s *Service) dispatch(ctx context.Context, id string) (bool, error) {
 	return true, s.recordObservation(ctx, p.ID, attemptID, "CREATE_PAYOUT", obs, "SYNC")
 }
 
+// errStatusInFlight: another status query of the payout is in flight; its answer will be applied.
+var errStatusInFlight = errors.New("payouts: a status query is already in flight")
+
+// startAttempt commits an IN_FLIGHT attempt before the provider is called. Stage 19 (ADR-051): it locks the payout row
+// first — the order of the attempts guard trigger and of recordObservation — so attempt numbers cannot collide and the
+// two cannot deadlock (64 concurrent status queries of one payout: 39 duplicate numbers, deadlocks and a stranded
+// IN_FLIGHT attempt before); a status query is skipped while another of the same payout is in flight.
 func (s *Service) startAttempt(ctx context.Context, p Payout, op string) (string, error) {
 	id := ids.New()
 	err := s.tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM app.payout_requests WHERE id = $1 FOR UPDATE`, p.ID); err != nil {
+			return err
+		}
+		if op == "GET_STATUS" {
+			var busy bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM app.payout_attempts WHERE payout_request_id = $1 AND operation = 'GET_STATUS'
+				AND classification = 'IN_FLIGHT' AND started_at > $2)`, p.ID, s.now().Add(-crashedAttemptAge)).Scan(&busy); err != nil {
+				return err
+			}
+			if busy {
+				return errStatusInFlight
+			}
+		}
 		var n int
 		if err := tx.QueryRow(ctx, `SELECT coalesce(max(attempt_no), 0) + 1 FROM app.payout_attempts WHERE payout_request_id = $1`, p.ID).Scan(&n); err != nil {
 			return err
@@ -577,14 +602,15 @@ func (s *Service) recordObservation(ctx context.Context, id, attemptID, op strin
 		if o.HTTPStatus > 0 {
 			http = o.HTTPStatus
 		}
+		// payout row first, then the attempt (the order of startAttempt and the attempts guard)
+		p, err := s.payout(ctx, tx, id, true)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `UPDATE app.payout_attempts SET completed_at = $2, classification = $3, unknown_reason = $4, http_status = $5,
 			provider_status_raw = $6, provider_reference_returned = $7, failure_code = $8, latency_ms = $9 WHERE id = $1`,
 			attemptID, s.now(), cls, nilIfEmpty(reason), http, nilIfEmpty(o.RawStatus), nilIfEmpty(o.ProviderRef), nilIfEmpty(o.FailureCode),
 			int(o.Latency.Milliseconds())); err != nil {
-			return err
-		}
-		p, err := s.payout(ctx, tx, id, true)
-		if err != nil {
 			return err
 		}
 		if err := s.insertEvent(ctx, tx, p.ID, event{Type: "PROVIDER_RESPONSE_RECEIVED", Source: source, AttemptID: attemptID, RawStatus: o.RawStatus,
@@ -796,6 +822,9 @@ func (s *Service) StatusQuery(ctx context.Context, id string) error {
 		return err
 	}
 	attemptID, err := s.startAttempt(ctx, p, "GET_STATUS")
+	if errors.Is(err, errStatusInFlight) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -923,8 +952,9 @@ func (s *Service) syncLedger(ctx context.Context, id string) error {
 				q += `, status = $3`
 				args = append(args, newStatus)
 			}
-			if _, err := tx.Exec(ctx, q+` WHERE id = $1 AND `+col+` IS NULL`, args...); err != nil {
-				return err
+			tag, err := tx.Exec(ctx, q+` WHERE id = $1 AND `+col+` IS NULL`, args...)
+			if err != nil || tag.RowsAffected() == 0 {
+				return err // linked by a concurrent sync (Recover, reconciliation, another worker): its event is the record
 			}
 			return s.insertEvent(ctx, tx, p.ID, event{Type: evType, LedgerTxIDs: []string{txID}})
 		})

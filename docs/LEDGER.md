@@ -499,6 +499,12 @@ never edited.
 
   Two concurrent payout requests on the same campaign therefore serialise, and the second sees the reduced
   balance.
+- **Stage 19 (ADR-051):** a posting locks the projection rows of **every** SYNC account it touches — not only the
+  decreased ones — in ascending account id before inserting entries (`lockAndCheck`). Locking only the decreased rows
+  first let journals that move funds between the same two accounts in opposite directions (freeze/unfreeze, reserve/
+  release on one campaign) take their locks in opposite orders: 5 deadlocks and 109 lock timeouts in 200 concurrent
+  postings before the change, none after (docs/stage-19/database-contention.md). DEFERRED (platform-wide hot) rows are
+  still never locked by postings.
 - Postings that only **increase** a liability (donations) also update the projection row under a row lock.
   For a viral campaign, this row becomes a hot spot. Mitigations, in order:
   1. keep transactions short;

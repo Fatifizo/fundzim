@@ -161,12 +161,14 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconcileR
 		from = SourcePayments
 	}
 
-	// 1. journals sourced from payments
+	// 1. journals sourced from payments — the newest 10 000 (Stage 19: this read the oldest 10 000, so once the
+	// ledger held more, every new journal fell outside the window and was never compared with its payment; journals are
+	// immutable, so older ones were checked by earlier runs; full-history incremental runs are KI-S19-09)
 	rows, err := s.Pool.Query(ctx, `SELECT t.id, t.source_id::text, t.currency, coalesce(t.provider_reference, ''),
 		(SELECT coalesce(sum(e.amount_minor) FILTER (WHERE e.direction = 'DEBIT'), 0) FROM ledger.ledger_entries e
 		  JOIN ledger.ledger_accounts a ON a.id = e.account_id WHERE e.transaction_id = t.id AND a.account_class = 'asset:psp_clearing')
 		FROM ledger.ledger_transactions t WHERE t.source_system = $1 AND t.source_type = 'payment' AND t.posting_rule = 'DONATION_CAPTURED'
-		ORDER BY t.posted_at LIMIT 10000`, from)
+		ORDER BY t.posted_at DESC LIMIT 10000`, from)
 	if err != nil {
 		return rep, err
 	}

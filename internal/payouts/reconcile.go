@@ -22,6 +22,14 @@ import (
 // immutable app.payout_reconciliation_references row and opens (at most one unresolved per payout) a
 // RECONCILIATION_MISMATCH exception. Settlement of disbursements against provider statements is NOT_PERFORMED:
 // no statement source exists (PCR-007, PCR-016; Stage 17).
+//
+// Stage 19 (KI-S18-25, ADR-051): the ledger follows the payout's committed state in separate transactions
+// (syncLedger: the journal on the ledger pool, then the reservation link), so a payout can be COMPLETED with its
+// reservation not yet CONSUMED. The run's list only proposes candidates: each payout is re-read, and when its state
+// requires a journal or reservation transition that is not linked yet, reconciliation first runs the same idempotent
+// recovery as the Recover job and then evaluates the state as it is. A transition still in flight therefore settles
+// (or is waited for at its row lock) instead of being reported; a payout the ledger cannot settle is reported with
+// the ledger's refusal (detail ledger_sync = FAILED, error_code). Nothing is classified as transient by assumption.
 
 // DefaultReconGrace skips payouts changed more recently than this (their journals may still be posting).
 const DefaultReconGrace = 5 * time.Minute
@@ -56,16 +64,24 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRepor
 	if err != nil {
 		return rep, err
 	}
-	for _, p := range list {
-		rep.Checked++
-		ms, err := s.reconcileOne(ctx, p)
+	cutoff := s.now().Add(-s.reconGrace())
+	for _, cand := range list {
+		p, ms, err := s.reconcileFresh(ctx, cand.ID, cutoff)
 		if err != nil {
 			return rep, err
 		}
+		if p == nil {
+			continue // changed since the run started: the next run checks it past its own grace period
+		}
+		rep.Checked++
 		if len(ms) == 0 {
 			continue
 		}
 		err = s.tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+			// one recorder per payout at a time: concurrent runs (job and staff) never duplicate its references
+			if _, err := tx.Exec(ctx, `SELECT 1 FROM app.payout_requests WHERE id = $1 FOR UPDATE`, p.ID); err != nil {
+				return err
+			}
 			var open bool
 			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM app.payout_exceptions WHERE payout_request_id = $1
 				AND exception_type = 'RECONCILIATION_MISMATCH' AND status <> 'RESOLVED')`, p.ID).Scan(&open); err != nil || open {
@@ -98,7 +114,7 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRepor
 			if err := s.insertEvent(ctx, tx, p.ID, event{Type: "RECONCILIATION_REQUIRED", Source: "SYSTEM", Reason: strings.Join(types, ",")}); err != nil {
 				return err
 			}
-			return s.openException(ctx, tx, "RECONCILIATION_MISMATCH", sev, "RECONCILIATION", &p, "", map[string]any{"mismatch_types": types,
+			return s.openException(ctx, tx, "RECONCILIATION_MISMATCH", sev, "RECONCILIATION", p, "", map[string]any{"mismatch_types": types,
 				"run": rep.RunID}, first)
 		})
 		if err != nil {
@@ -125,6 +141,65 @@ func nonNil(m map[string]any) map[string]any {
 		return map[string]any{}
 	}
 	return m
+}
+
+// reconcileFresh re-reads one candidate (nil when it changed after cutoff), lets the ledger catch up with its state
+// when a required link is missing (syncLedger, the Recover job's path; idempotent keys, links only where NULL), and
+// lists the mismatches of the state as it is afterwards. A recovery that fails is part of the evidence.
+func (s *Service) reconcileFresh(ctx context.Context, id string, cutoff time.Time) (*Payout, []mismatch, error) {
+	p, err := s.payout(ctx, s.Pool, id, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !p.UpdatedAt.Before(cutoff) {
+		return nil, nil, nil
+	}
+	syncCode := ""
+	if ledgerSyncPending(p) {
+		if serr := s.syncLedger(ctx, id); serr != nil {
+			if ctx.Err() != nil {
+				return nil, nil, serr
+			}
+			syncCode = "LEDGER_ERROR"
+			if e := errs.As(serr); e != nil {
+				syncCode = e.Code
+			}
+		}
+		if p, err = s.payout(ctx, s.Pool, id, false); err != nil {
+			return nil, nil, err
+		}
+	}
+	ms, err := s.reconcileOne(ctx, p)
+	if err != nil {
+		return nil, nil, err
+	}
+	if syncCode != "" {
+		for i := range ms {
+			if ms[i].typ == "LEDGER_MISMATCH" || ms[i].typ == "RESERVATION_MISMATCH" {
+				ms[i].detail = nonNil(ms[i].detail)
+				ms[i].detail["ledger_sync"], ms[i].detail["error_code"] = "FAILED", syncCode
+			}
+		}
+	}
+	return &p, ms, nil
+}
+
+// ledgerSyncPending: the payout's state requires a journal (and reservation transition) syncLedger has not linked yet
+// — the same condition the Recover job selects.
+func ledgerSyncPending(p Payout) bool {
+	r := p.Reservation
+	if r == nil {
+		return false
+	}
+	switch {
+	case p.SubmittedAt != nil && r.LedgerSubmitTxnID == nil:
+		return true
+	case (p.Status == StCompleted || p.Status == StReversed) && r.LedgerConsumeTxnID == nil:
+		return true
+	case (p.Status == StFailed || p.Status == StRejected || p.Status == StCancelled) && r.LedgerReleaseTxnID == nil:
+		return true
+	}
+	return false
 }
 
 // reconcileOne lists the mismatches of one payout.

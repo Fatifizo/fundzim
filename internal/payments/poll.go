@@ -21,7 +21,18 @@ var errBusy = errors.New("payments: payment is being processed")
 // PollPayment runs one authenticated status query by OUR reference and applies the answer (source POLL). It never
 // writes FAILED on a timeout or an error; NOT_FOUND becomes FAILED only with documented finality; after the
 // UNKNOWN horizon the payment needs reconciliation and automatic polling stops.
+//
+// Stage 19 (KI-S18-22, ADR-051): polling is bounded for every awaiting status. A payment still CREATED, PENDING,
+// REQUIRES_ACTION or AUTHORISED past PollHorizon (from creation), or any payment that has had MaxStatusPolls status
+// queries, keeps its status — an exhausted budget is not evidence of failure — gets a POLL_BUDGET_EXHAUSTED
+// reconciliation reference (needs_reconciliation) and is not polled again; a later webhook or reconciliation
+// evidence still resolves it through apply(). PollPayment is the explicit query (staff, tests): it runs whenever the
+// budget allows; the sweep's routine poll also re-checks under the row lock that the payment is still due.
 func (s *Service) PollPayment(ctx context.Context, paymentID string) (string, error) {
+	return s.poll(ctx, paymentID, false)
+}
+
+func (s *Service) poll(ctx context.Context, paymentID string, routine bool) (string, error) {
 	var p payRow
 	var callID string
 	var skip bool
@@ -45,6 +56,10 @@ func (s *Service) PollPayment(ctx context.Context, paymentID string) (string, er
 			skip = true
 			return err
 		}
+		if routine && (p.NextPollAt == nil || p.NextPollAt.After(now)) {
+			skip = true // another worker polled it (or it stopped) after the sweep listed it: never a second query
+			return nil
+		}
 		if p.Status == psp.StatusUnknown && p.PollHorizonAt != nil && now.After(*p.PollHorizonAt) {
 			skip = true
 			reason := reconUnknownHorizon
@@ -55,6 +70,19 @@ func (s *Service) PollPayment(ctx context.Context, paymentID string) (string, er
 				reason = reconNotFoundHorizon
 			}
 			if err := s.openRecon(ctx, tx, &p, reason, Obs{Correlation: p.Correlation}); err != nil {
+				return err
+			}
+			_, err := tx.Exec(ctx, `UPDATE app.payment_intents SET next_poll_at = NULL WHERE id = $1`, p.ID)
+			return err
+		}
+		var polls int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM app.payment_attempts WHERE payment_intent_id = $1 AND operation = 'GET_STATUS'`,
+			p.ID).Scan(&polls); err != nil {
+			return err
+		}
+		if polls >= MaxStatusPolls || (p.Status != psp.StatusUnknown && now.After(p.CreatedAt.Add(PollHorizon))) {
+			skip = true
+			if err := s.openRecon(ctx, tx, &p, reconPollBudget, Obs{Correlation: p.Correlation}); err != nil {
 				return err
 			}
 			_, err := tx.Exec(ctx, `UPDATE app.payment_intents SET next_poll_at = NULL WHERE id = $1`, p.ID)
@@ -126,7 +154,7 @@ func (s *Service) PollPayment(ctx context.Context, paymentID string) (string, er
 			// keep watching non-terminal payments; FAILED/EXPIRED/CANCELLED stop (a late success arrives by webhook)
 			var next *time.Time
 			if !terminal(cur.Status) {
-				n := s.now().Add(pollDelay(cur.PollAttempts))
+				n := s.now().Add(nextPollDelay(cur.PollAttempts))
 				next = &n
 			}
 			if _, err := tx.Exec(ctx, `UPDATE app.payment_intents SET next_poll_at = $2 WHERE id = $1`, cur.ID, next); err != nil {
@@ -228,8 +256,11 @@ func (s *Service) Sweep(ctx context.Context) error {
 	if err := s.sweepInFlight(ctx); err != nil {
 		return fmt.Errorf("in-flight: %w", err)
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT id FROM app.payment_intents WHERE next_poll_at <= $1
-		AND status IN ('CREATED','UNKNOWN','PENDING','REQUIRES_ACTION','AUTHORISED') ORDER BY next_poll_at LIMIT 25`, s.now())
+	// routine polls only for payments of this process's execution environment (Stage 9: one environment per process;
+	// Stage 19: a process without that environment's adapters would spend the payment's poll budget on queries it
+	// cannot send)
+	rows, err := s.Pool.Query(ctx, `SELECT id FROM app.payment_intents WHERE next_poll_at <= $1 AND execution_environment = $2
+		AND status IN ('CREATED','UNKNOWN','PENDING','REQUIRES_ACTION','AUTHORISED') ORDER BY next_poll_at LIMIT 25`, s.now(), s.ExecEnv())
 	if err != nil {
 		return err
 	}
@@ -238,7 +269,7 @@ func (s *Service) Sweep(ctx context.Context) error {
 		return err
 	}
 	for _, id := range due {
-		if _, err := s.PollPayment(ctx, id); err != nil && !errors.Is(err, errBusy) {
+		if _, err := s.poll(ctx, id, true); err != nil && !errors.Is(err, errBusy) {
 			s.Logger.Warn("payments: status poll failed", "payment_id", id, "err", err)
 		}
 	}
