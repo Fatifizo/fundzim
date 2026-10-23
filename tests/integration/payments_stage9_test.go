@@ -616,10 +616,12 @@ func TestPaymentsErrorCategoriesAndAuditEvents(t *testing.T) {
 		t.Fatal("PAYMENT_STATUS_RECONCILED not audited")
 	}
 	// WEBHOOK_VERIFIED for stored deliveries; WEBHOOK_REJECTED for a bad signature against a known provider
-	if p.count(t, `SELECT count(*) FROM audit.audit_events e JOIN app.provider_webhook_inbox i ON i.id = e.target_id
-		WHERE e.action = 'psp.webhook.verified' AND i.our_reference = $1`, tmo.ID) < 1 {
-		t.Fatal("WEBHOOK_VERIFIED not audited")
-	}
+	// audited when the worker first claims the delivery (psp/inbox.go), which can come after a poll already resolved the
+	// payment: wait for it rather than count it at once
+	waitFor(t, 30*time.Second, "WEBHOOK_VERIFIED audited", func() bool {
+		return p.count(t, `SELECT count(*) FROM audit.audit_events e JOIN app.provider_webhook_inbox i ON i.id = e.target_id
+			WHERE e.action = 'psp.webhook.verified' AND i.our_reference = $1`, tmo.ID) >= 1
+	})
 	body, sig := signedWebhook(t, "current", []byte("not-the-key-not-the-key-not-the-key-0000"), time.Now(), sandbox.Payload{
 		ID: "sbx_evt_" + strings.ReplaceAll(ids.New(), "-", "")[:20], Type: "payment.paid", Created: time.Now().Unix(), Simulated: true,
 		Data: sandbox.PayloadData{PaymentReference: tmo.ID, ProviderPaymentID: "x", Status: "paid"}})
