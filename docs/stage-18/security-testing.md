@@ -9,7 +9,9 @@ performance samples and environment-dependent tests that were skipped before Sta
 `internal/app/worker_test.go`; replaced by a value built at run time and the historical fingerprint recorded in
 `.gitleaksignore` with a justification. **`7ae778f`: run 39961618431 succeeded — all 8 jobs** (Go incl. gosec and
 deploytest, Web, mock E2E, real-stack E2E, integration incl. the destructive migration round trip, container images
-with SBOMs, Trivy gate and provenance — artifact `supply-chain-evidence-7ae778f…`, contracts, secret scanning).
+with SBOMs, Trivy gate and provenance — artifact `supply-chain-evidence-7ae778f…`, contracts, secret scanning). `7fd002e` (documentation only): run 39965210148 — 7 jobs passed, integration failed in
+`TestPayoutReconciliationAndExceptionWorkflow` (transient RESERVATION_MISMATCH between payout completion and reservation
+consumption, KI-S18-25); the test now waits for settlement; the final run is in the completion report.
 
 ## 1. Suites
 

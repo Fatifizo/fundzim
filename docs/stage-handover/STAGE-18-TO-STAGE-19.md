@@ -27,7 +27,7 @@ NOT_RECORDED). Stage 19 must not start until the owner asks for it. This documen
 | Worker crashes | kill workers mid-transaction and mid-provider-call; River lease recovery; in-flight sweepers | DR exercise (restart 0.3 s); no mid-call kill test yet |
 | Database failover | connection loss during postings and submissions; retry safety; pool behaviour | DR: pools reconnect in 0.6 s; no failover topology exists (single node) |
 | Transaction isolation | anomalies under REPEATABLE READ/serialisable where used; advisory-lock coverage | per-module locks (fees quotes, scan locks) |
-| Reservation consistency | reserved ≤ available, released/consumed exactly once | payout reservation machine |
+| Reservation consistency | reserved ≤ available, released/consumed exactly once | payout reservation machine; KI-S18-25: completion is committed before the reservation is consumed, so payout reconciliation can raise a transient SEV1 RESERVATION_MISMATCH |
 | High volume | payments, payouts, notifications and reconciliation at 10⁵–10⁶ records | Stage 17: 100 k statement lines 71 s; audit write 553/s at 8 writers (one chain lock) |
 | Failure recovery | crash + restart + replay produce no duplicates | outbox exactly-once creation |
 | Invariant verification | ledger L1–L15, audit chains, recon totals, fee recomputation after every scenario | `fundzimctl verify audit|ledger|objects` (Stage 18) |

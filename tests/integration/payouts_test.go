@@ -890,6 +890,13 @@ func TestPayoutReconciliationAndExceptionWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.drive(t, 30*time.Second, "completed", status(payouts.StCompleted), id)
+	// Completion is committed before the ledger journal and the reservation consumption (they follow the state through
+	// syncLedger on the ledger pool, ADR-043): wait until the payout has settled, so the injected provider change below is
+	// the only mismatch (a reconciliation inside that window reports a transient RESERVATION_MISMATCH; KI-S18-25).
+	waitFor(t, 30*time.Second, "reservation consumed after completion", func() bool {
+		got := p.payout(t, id)
+		return got.Reservation != nil && got.Reservation.Status == payouts.ResConsumed
+	})
 	// the simulated provider now says something else: reconciliation must surface it (SEV1)
 	if _, err := p.mig.Exec(ctx(t), `UPDATE app.sandbox_provider_payouts SET raw_status = 'failed' WHERE our_reference = $1`, id); err != nil {
 		t.Fatal(err)
