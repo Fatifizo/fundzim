@@ -88,6 +88,8 @@ describe("reconciliation forms", () => {
     await userEvent.click(screen.getByRole("button", { name: "Propose resolution" }));
     expect(propose).not.toHaveBeenCalled();
     expect(screen.getByText("Write 20 to 2,000 characters.")).toBeInTheDocument();
+    // the error summary takes focus in an effect: let it land before typing, or keystrokes go to the summary
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveFocus());
     await userEvent.type(screen.getByLabelText(/Justification/), "The TEST statement line reports success at the provider.");
     await userEvent.click(screen.getByRole("button", { name: "Propose resolution" }));
     // the submission goes through the (async) step-up wrapper
@@ -117,6 +119,7 @@ describe("reconciliation forms", () => {
     await userEvent.type(screen.getByLabelText("Journal lines"), "suspense:settlement_discrepancy:x, debit, 12.50{enter}asset:psp_settled:x, CREDIT, 1250");
     await userEvent.click(screen.getByRole("button", { name: "Propose resolution" }));
     expect(propose).not.toHaveBeenCalled(); // "12.50" is not minor units
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveFocus());
     await userEvent.clear(screen.getByLabelText("Journal lines"));
     await userEvent.type(screen.getByLabelText("Journal lines"), "suspense:settlement_discrepancy:x, debit, 1250{enter}asset:psp_settled:x, CREDIT, 1250");
     await userEvent.click(screen.getByRole("button", { name: "Propose resolution" }));
