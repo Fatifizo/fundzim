@@ -3,7 +3,13 @@
 Every result below was produced in this session (2026-10-23) on branch `stage-18/security-hardening` on the development
 host (16 vCPU Xeon 8160, 30 GiB, Ubuntu 25.10, Docker; compose PostgreSQL 17.11), integration and real-stack runs under
 `flock /tmp/claude-1000/fundzim-stack.lock`. No test was skipped, disabled or weakened to pass; skips listed are opt-in
-performance samples and environment-dependent tests that were skipped before Stage 18. Remote CI: completion report.
+performance samples and environment-dependent tests that were skipped before Stage 18.
+
+**Remote CI (observed).** `57e95e5`: secret scanning failed — gitleaks flagged a fake 64-hex test value in
+`internal/app/worker_test.go`; replaced by a value built at run time and the historical fingerprint recorded in
+`.gitleaksignore` with a justification. **`7ae778f`: run 39961618431 succeeded — all 8 jobs** (Go incl. gosec and
+deploytest, Web, mock E2E, real-stack E2E, integration incl. the destructive migration round trip, container images
+with SBOMs, Trivy gate and provenance — artifact `supply-chain-evidence-7ae778f…`, contracts, secret scanning).
 
 ## 1. Suites
 
