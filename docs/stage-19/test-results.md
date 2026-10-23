@@ -56,4 +56,5 @@ numbers); `TestFinancialReconciliationVolumeSample` (opt-in) — PASS (23 612 ex
 
 ## 3. Remote CI
 
-Recorded after push (§3 is completed in the final report with the observed run).
+Run **40031324294** on `16429d2`: all 8 jobs succeeded (observed; details in stage-19-final-report.md §C), including the
+integration job where `TestReconciliationPaymentsEndToEnd` passes on a fresh database.
