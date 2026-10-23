@@ -12,7 +12,9 @@ deploytest, Web, mock E2E, real-stack E2E, integration incl. the destructive mig
 with SBOMs, Trivy gate and provenance — artifact `supply-chain-evidence-7ae778f…`, contracts, secret scanning). `7fd002e` (documentation only): run 39965210148 — 7 jobs passed, integration failed in
 `TestPayoutReconciliationAndExceptionWorkflow` (transient RESERVATION_MISMATCH between payout completion and reservation
 consumption, KI-S18-25); the test now waits for settlement. `03347f7`: run 39968952623 — 7 jobs passed (integration included), web unit tests failed
-on a Stage 17 test asserting an async call synchronously (KI-S18-26, fixed). The final run is in the completion report.
+on a Stage 17 test asserting an async call synchronously (KI-S18-26, fixed). `df11957`: run 39973068802 — 7 jobs passed,
+the real-stack copy-link test missed the 800 ms referral budget once (KI-S18-27, fixed). The final run is in the
+completion report.
 
 ## 1. Suites
 

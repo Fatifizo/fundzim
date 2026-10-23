@@ -120,9 +120,16 @@ test("copy link puts the canonical URL (plus an anonymous referral code, Stage 1
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: WEB_URL });
   const slug = slugOf(run().campaigns.pubDetail);
   await page.goto(`/campaigns/${slug}`);
-  await page.getByRole("button", { name: "Copy link" }).click();
-  await expect(page.getByRole("status").filter({ hasText: "Link copied" })).toBeVisible();
-  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  // The referral request has an 800 ms budget so sharing never waits (REFERRAL_TIMEOUT_MS); on a loaded runner the first,
+  // cold request can miss it and the plain canonical URL is copied (by design). Copy again (a code, once issued, is
+  // reused); the copied link must still carry exactly one well-formed referral code.
+  let copied = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.getByRole("button", { name: "Copy link" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Link copied" })).toBeVisible();
+    copied = await page.evaluate(() => navigator.clipboard.readText());
+    if (new URL(copied).searchParams.has("ref")) break;
+  }
   const u = new URL(copied);
   expect(`${u.origin}${u.pathname}`).toBe(`${SITE}/campaigns/${slug}`);
   expect([...u.searchParams.keys()]).toEqual(["ref"]); // nothing else: no session, no personal data
