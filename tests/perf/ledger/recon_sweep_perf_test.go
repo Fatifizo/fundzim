@@ -138,6 +138,7 @@ func TestLedgerReconciliationSweepVolume(t *testing.T) {
 			dupPlanted = true
 		}
 		load := time.Since(t0)
+		t.Logf("scale %d: loaded in %s", scale, load.Round(time.Millisecond))
 
 		run := ledger.New(pool, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		run.ReconcileJournalsFrom = ledger.SourceSynthetic
@@ -188,11 +189,14 @@ func TestLedgerReconciliationSweepVolume(t *testing.T) {
 		if completedExamined != int64(journals) {
 			t.Fatalf("scale %d: the journal cycle examined %d of %d journals", scale, completedExamined, journals)
 		}
-		// interruption and recovery: deadlines inside batches until the next cycle completes
+		t.Logf("scale %d: full cycle %d runs, %s, slowest run %s", scale, runs, wall.Round(time.Millisecond), maxRun.Round(time.Millisecond))
+		// interruption and recovery: deadlines from 1/8 to 8/8 of the slowest uninterrupted run, so they expire inside
+		// batches. A deadline shorter than one batch never advances the checkpoint (safe, but no progress: the first
+		// attempt with fixed 50–449 ms deadlines never completed at this volume — the worker's job timeouts are 10 min).
 		interrupted, rs := 0, time.Now()
 		jDone := false
-		for i := 0; !jDone && i < 100000; i++ {
-			c, cancel := context.WithTimeout(ctx, time.Duration(50+i%400)*time.Millisecond)
+		for i := 0; !jDone && i < 10000 && time.Since(rs) < 30*time.Minute; i++ {
+			c, cancel := context.WithTimeout(ctx, maxRun*time.Duration(1+i%8)/8)
 			rep, err := run.Reconcile(c, "perf-interrupted")
 			cancel()
 			if err != nil {
@@ -219,8 +223,9 @@ func TestLedgerReconciliationSweepVolume(t *testing.T) {
 		f("| one full cycle of both sweeps | %d runs, %s wall, slowest run %s |\n", runs, wall.Round(time.Millisecond), maxRun.Round(time.Millisecond))
 		f("| records examined in that cycle (journals + facts) | %d (%.0f records/s) |\n", examined, float64(examined)/wall.Seconds())
 		f("| planted old AMOUNT_MISMATCH, cross-batch DUPLICATE_POSTING, oldest NOT_EVALUATED | found, once each |\n")
-		f("| next cycle under random deadlines (50–449 ms) | %d interrupted runs, completed in %s, examined %d = %d journals |\n\n",
+		f("| next cycle under deadlines of 1/8 … 8/8 of the slowest run | %d interrupted runs, completed in %s, examined %d = %d journals |\n\n",
 			interrupted, recovery.Round(time.Millisecond), completedExamined, journals)
+		t.Logf("scale %d: interrupted cycle completed in %s (%d interrupted runs)", scale, recovery.Round(time.Millisecond), interrupted)
 	}
 	out := os.Getenv("FUNDZIM_PERF_OUT")
 	if out == "" {

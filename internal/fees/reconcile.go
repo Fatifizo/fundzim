@@ -240,7 +240,7 @@ func (s *Service) sourceGroup(ctx context.Context, a Assessment) ([]Assessment, 
 
 // sweepNext lists the next assessments in id order.
 func (s *Service) sweepNext(ctx context.Context, after string, limit int) ([]string, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT id::text FROM app.fee_assessments WHERE id > $1::uuid ORDER BY id LIMIT $2`, reconsweep.After(after), limit)
+	rows, err := s.Pool.Query(ctx, `SELECT a.id::text FROM app.fee_assessments a WHERE a.id > $1::uuid ORDER BY a.id LIMIT $2`, reconsweep.After(after), limit)
 	if err != nil {
 		return nil, err
 	}

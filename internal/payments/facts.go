@@ -56,7 +56,7 @@ func (s *Service) PaymentFactsInStatus(ctx context.Context, status string, befor
 
 // PaymentFactIDsAfter lists the ids of payments in one of the statuses with an id greater than after, in id order.
 func (s *Service) PaymentFactIDsAfter(ctx context.Context, after string, statuses []string, limit int) ([]string, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT id::text FROM app.payment_intents WHERE id > $1::uuid AND status = ANY($2::text[]) ORDER BY id LIMIT $3`,
+	rows, err := s.Pool.Query(ctx, `SELECT p.id::text FROM app.payment_intents p WHERE p.id > $1::uuid AND p.status = ANY($2::text[]) ORDER BY p.id LIMIT $3`,
 		after, statuses, limit)
 	if err != nil {
 		return nil, err

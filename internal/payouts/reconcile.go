@@ -140,8 +140,8 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRepor
 
 // sweepNext lists the next payouts of the coverage scope in id order.
 func (s *Service) sweepNext(ctx context.Context, after string, limit int) ([]string, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT id::text FROM app.payout_requests WHERE id > $1::uuid AND status <> 'PAYOUT_REQUESTED'
-		ORDER BY id LIMIT $2`, reconsweep.After(after), limit)
+	rows, err := s.Pool.Query(ctx, `SELECT p.id::text FROM app.payout_requests p WHERE p.id > $1::uuid AND p.status <> 'PAYOUT_REQUESTED'
+		ORDER BY p.id LIMIT $2`, reconsweep.After(after), limit)
 	if err != nil {
 		return nil, err
 	}

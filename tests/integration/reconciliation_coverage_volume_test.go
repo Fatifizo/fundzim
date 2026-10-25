@@ -113,14 +113,16 @@ func TestReconciliationCoverageVolume(t *testing.T) {
 		t.Errorf("fee cycle examined %d of %d", examined, assessments)
 	}
 
-	// query plans of the keyset reads at this volume
+	// query plans of the keyset reads at this volume (the production statements, from the 101st key). F-R1-06: the first
+	// version ordered by the text output column (`SELECT id::text … ORDER BY id`), a full sort per batch whose agreement with
+	// the uuid WHERE depended on the collation — a sort on the text key must not come back.
 	for _, q := range []string{
-		`EXPLAIN (ANALYZE, BUFFERS, COSTS OFF) SELECT id::text FROM app.payout_requests WHERE id > (SELECT id FROM app.payout_requests ORDER BY id OFFSET 1000 LIMIT 1)
-		  AND status <> 'PAYOUT_REQUESTED' ORDER BY id LIMIT 200`,
-		`EXPLAIN (ANALYZE, BUFFERS, COSTS OFF) SELECT id::text FROM app.fee_assessments WHERE id > (SELECT id FROM app.fee_assessments ORDER BY id OFFSET 1000 LIMIT 1)
-		  ORDER BY id LIMIT 500`,
-		`EXPLAIN (ANALYZE, BUFFERS, COSTS OFF) SELECT id::text FROM app.payment_intents WHERE id > (SELECT id FROM app.payment_intents ORDER BY id OFFSET 1000 LIMIT 1)
-		  AND status = ANY('{SUCCEEDED,UNKNOWN}'::text[]) ORDER BY id LIMIT 1000`,
+		`EXPLAIN (ANALYZE, BUFFERS, COSTS OFF) SELECT p.id::text FROM app.payout_requests p WHERE p.id > (SELECT id FROM app.payout_requests ORDER BY id OFFSET 100 LIMIT 1)
+		  AND p.status <> 'PAYOUT_REQUESTED' ORDER BY p.id LIMIT 200`,
+		`EXPLAIN (ANALYZE, BUFFERS, COSTS OFF) SELECT a.id::text FROM app.fee_assessments a WHERE a.id > (SELECT id FROM app.fee_assessments ORDER BY id OFFSET 100 LIMIT 1)
+		  ORDER BY a.id LIMIT 500`,
+		`EXPLAIN (ANALYZE, BUFFERS, COSTS OFF) SELECT p.id::text FROM app.payment_intents p WHERE p.id > (SELECT id FROM app.payment_intents ORDER BY id OFFSET 10 LIMIT 1)
+		  AND p.status = ANY('{SUCCEEDED,UNKNOWN}'::text[]) ORDER BY p.id LIMIT 1000`,
 	} {
 		rows, err := p.mig.Query(ctx(t), q)
 		if err != nil {
@@ -130,6 +132,9 @@ func TestReconciliationCoverageVolume(t *testing.T) {
 		for rows.Next() {
 			var line string
 			_ = rows.Scan(&line)
+			if strings.Contains(line, "Sort Key:") && strings.Contains(line, "::text") {
+				t.Errorf("keyset read sorts on the text key: %s", line)
+			}
 			f("%s\n", line)
 		}
 		rows.Close()

@@ -298,8 +298,8 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconcileR
 	}
 	var sweepErr error
 	jr, err := reconsweep.Run(ctx, store, opts(SweepPaymentJournals), func(ctx context.Context, after string, limit int) ([]string, error) {
-		rows, err := s.Pool.Query(ctx, `SELECT id::text FROM ledger.ledger_transactions WHERE id > $1::uuid AND source_system = $2
-			AND source_type = 'payment' AND posting_rule = 'DONATION_CAPTURED' ORDER BY id LIMIT $3`, reconsweep.After(after), from, limit)
+		rows, err := s.Pool.Query(ctx, `SELECT t.id::text FROM ledger.ledger_transactions t WHERE t.id > $1::uuid AND t.source_system = $2
+			AND t.source_type = 'payment' AND t.posting_rule = 'DONATION_CAPTURED' ORDER BY t.id LIMIT $3`, reconsweep.After(after), from, limit)
 		if err != nil {
 			return nil, err
 		}
