@@ -14,6 +14,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/audit"
 	"github.com/Fatifizo/fundzim/internal/ledger"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
+	"github.com/Fatifizo/fundzim/internal/platform/reconsweep"
 )
 
 // Fee reconciliation (ADR-044; brief §41). For each assessment it compares: the stored calculation recomputed from
@@ -33,10 +34,19 @@ const (
 	RecUnreconciledFee  = "UNRECONCILED_PROVIDER_FEE"
 	RecMissingPosting   = "MISSING_POSTING"
 	DefaultReconGrace   = 15 * time.Minute
-	reconScanLimit      = 5000
-	recStatusOpen       = "OPEN"
-	recStatusResolved   = "RESOLVED"
+	// DefaultReconWindow is the recency pass (newest assessments); the coverage sweep below covers the rest.
+	DefaultReconWindow = 5000
+	SweepDetector      = "FEE_ASSESSMENTS"
+	sweepTable         = "app.fee_reconciliation_sweeps"
+	recStatusOpen      = "OPEN"
+	recStatusResolved  = "RESOLVED"
 )
+
+// DefaultReconSweep bounds one run of the coverage sweep (KI-S19-09, ADR-052): every assessment in id order, a
+// bounded batch per run, resumable from a checkpoint in app.fee_reconciliation_sweeps. Engineering defaults, not
+// capacity targets (D-05, D-06).
+var DefaultReconSweep = reconsweep.Config{Scope: reconsweep.DefaultScope, BatchSize: 500, MaxRecords: 5000, MaxDuration: 3 * time.Minute,
+	MaxDeferred: 10000}
 
 // ReconRun is the result of one reconciliation run.
 type ReconRun struct {
@@ -48,6 +58,9 @@ type ReconRun struct {
 	Matched                  int        `json:"matched"`
 	Mismatches               int        `json:"mismatches"`
 	SettlementReconciliation string     `json:"settlement_reconciliation"`
+	// Sweep and Coverage are the coverage sweep's evidence (Checked/Matched count the recency pass; Mismatches both).
+	Sweep    *reconsweep.Report   `json:"sweep,omitempty"`
+	Coverage *reconsweep.Coverage `json:"coverage,omitempty"`
 }
 
 // ReconItem is a detected mismatch.
@@ -93,7 +106,11 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRun, 
 		run.ID, triggeredBy, now); err != nil {
 		return run, err
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT `+assessmentCols+` FROM app.fee_assessments a ORDER BY a.assessed_at DESC LIMIT $1`, reconScanLimit)
+	window := s.ReconWindow
+	if window <= 0 {
+		window = DefaultReconWindow
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT `+assessmentCols+` FROM app.fee_assessments a ORDER BY a.assessed_at DESC LIMIT $1`, window)
 	if err != nil {
 		return run, err
 	}
@@ -124,23 +141,17 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRun, 
 		findings = append(findings, fs...)
 		sources[a.SourceType+":"+a.SourceID+":"+a.CalculationID] = append(sources[a.SourceType+":"+a.SourceID+":"+a.CalculationID], a)
 	}
-	// MISSING_FEE: an assessable component of a calculation behind a source has no assessment
-	for _, group := range sources {
-		cs, err := components(ctx, s.Pool, group[0].CalculationID)
+	for _, part := range sources {
+		// judge the whole group (it may extend beyond the window), keyed by its first assessment like the sweep
+		group, err := s.sourceGroup(ctx, part[0])
 		if err != nil {
 			return run, err
 		}
-		have := map[string]bool{}
-		for _, a := range group {
-			have[a.Category] = true
+		fs, err := s.missingFees(ctx, group)
+		if err != nil {
+			return run, err
 		}
-		for _, c := range cs {
-			if c.Basis != BasisNotConfigured && !have[c.Category] {
-				findings = append(findings, finding{kind: RecMissingFee, severity: "SEV2", assessmentID: group[0].ID, currency: group[0].Currency,
-					detail:   "the calculation has a " + c.Category + " component but no assessment exists for it",
-					expected: map[string]any{"category": c.Category, "amount_minor": amtP(c.Amount)}, observed: map[string]any{"assessment": nil}})
-			}
-		}
+		findings = append(findings, fs...)
 	}
 	for _, f := range findings {
 		inserted, err := s.recordFinding(ctx, run.ID, f, now)
@@ -151,11 +162,126 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRun, 
 			run.Mismatches++
 		}
 	}
+	// coverage sweep: every assessment, a bounded batch per run, resumable
+	store := reconsweep.SQLStore{Pool: s.Pool, Table: sweepTable}
+	cfg := s.ReconSweep.Or(DefaultReconSweep)
+	sweep, sweepErr := reconsweep.Run(ctx, store, reconsweep.Options{Config: cfg, Detector: SweepDetector, RunID: run.ID, Now: s.now},
+		s.sweepNext, func(ctx context.Context, id string) (reconsweep.Outcome, error) {
+			n, err := s.sweepExamine(ctx, run.ID, id)
+			run.Mismatches += n
+			return reconsweep.Outcome{Exceptions: n}, err
+		})
+	run.Sweep = &sweep
+	// the run is closed even when the sweep stopped on an error (non-cancelled context)
+	actx := context.WithoutCancel(ctx)
+	if cov, err := store.Coverage(actx, SweepDetector, cfg.Scope); err == nil {
+		run.Coverage = &cov
+	}
 	fin := s.now()
 	run.FinishedAt = &fin
-	_, err = s.Pool.Exec(ctx, `UPDATE app.fee_reconciliation_runs SET finished_at = $2, checked = $3, matched = $4, mismatches = $5 WHERE id = $1`,
+	_, err = s.Pool.Exec(actx, `UPDATE app.fee_reconciliation_runs SET finished_at = $2, checked = $3, matched = $4, mismatches = $5 WHERE id = $1`,
 		run.ID, fin, run.Checked, run.Matched, run.Mismatches)
+	if sweepErr != nil {
+		return run, sweepErr
+	}
 	return run, err
+}
+
+// missingFees reports MISSING_FEE: an assessable component of the calculation behind a source with no assessment.
+// group holds every assessment of one (source, calculation) that the caller knows.
+func (s *Service) missingFees(ctx context.Context, group []Assessment) ([]finding, error) {
+	cs, err := components(ctx, s.Pool, group[0].CalculationID)
+	if err != nil {
+		return nil, err
+	}
+	have := map[string]bool{}
+	members := make([]string, 0, len(group))
+	for _, a := range group {
+		have[a.Category] = true
+		members = append(members, a.ID)
+	}
+	// an OPEN finding for the same missing category on any member already reports it (Stage 12 keyed it by the
+	// newest member of the window; the group's first member is used from ADR-052 on)
+	rows, err := s.Pool.Query(ctx, `SELECT DISTINCT expected->>'category' FROM app.fee_reconciliation_references
+		WHERE kind = 'MISSING_FEE' AND status = 'OPEN' AND assessment_id = ANY($1::uuid[])`, members)
+	if err != nil {
+		return nil, err
+	}
+	open, err := pgx.CollectRows(rows, pgx.RowTo[*string])
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range open {
+		if c != nil {
+			have[*c] = true
+		}
+	}
+	var out []finding
+	for _, c := range cs {
+		if c.Basis != BasisNotConfigured && !have[c.Category] {
+			out = append(out, finding{kind: RecMissingFee, severity: "SEV2", assessmentID: group[0].ID, currency: group[0].Currency,
+				detail:   "the calculation has a " + c.Category + " component but no assessment exists for it",
+				expected: map[string]any{"category": c.Category, "amount_minor": amtP(c.Amount)}, observed: map[string]any{"assessment": nil}})
+		}
+	}
+	return out, nil
+}
+
+// sourceGroup returns every assessment of a's source and calculation, in id order (group[0] carries the group's
+// MISSING_FEE finding in both passes, so their dedupe keys agree).
+func (s *Service) sourceGroup(ctx context.Context, a Assessment) ([]Assessment, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT `+assessmentCols+` FROM app.fee_assessments a WHERE a.source_type = $1 AND a.source_id = $2
+		AND a.calculation_id = $3 ORDER BY a.id`, a.SourceType, a.SourceID, a.CalculationID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Assessment, error) { return scanAssessment(r) })
+}
+
+// sweepNext lists the next assessments in id order.
+func (s *Service) sweepNext(ctx context.Context, after string, limit int) ([]string, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT id::text FROM app.fee_assessments WHERE id > $1::uuid ORDER BY id LIMIT $2`, reconsweep.After(after), limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// sweepExamine checks one assessment in its current state, and the completeness of its source's calculation (every
+// assessment of that source and calculation is read, so a group split across batches is judged whole), and records
+// the findings. Returns the number of new findings.
+func (s *Service) sweepExamine(ctx context.Context, runID, id string) (int, error) {
+	now := s.now()
+	a, err := s.Assessment(ctx, id)
+	if err != nil {
+		return 0, err
+	}
+	fs, err := s.checkAssessment(ctx, a, now)
+	if err != nil {
+		return 0, err
+	}
+	group, err := s.sourceGroup(ctx, a)
+	if err != nil {
+		return 0, err
+	}
+	if len(group) > 0 && group[0].ID == a.ID { // one completeness judgement per group: by its first assessment
+		mf, err := s.missingFees(ctx, group)
+		if err != nil {
+			return 0, err
+		}
+		fs = append(fs, mf...)
+	}
+	n := 0
+	for _, f := range fs {
+		inserted, err := s.recordFinding(ctx, runID, f, now)
+		if err != nil {
+			return n, err
+		}
+		if inserted {
+			n++
+		}
+	}
+	return n, nil
 }
 
 func (s *Service) checkAssessment(ctx context.Context, a Assessment, now time.Time) ([]finding, error) {

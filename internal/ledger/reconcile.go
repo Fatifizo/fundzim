@@ -14,6 +14,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
 	"github.com/Fatifizo/fundzim/internal/platform/outbox"
+	"github.com/Fatifizo/fundzim/internal/platform/reconsweep"
 )
 
 // PaymentFact is what the payments module knows about one payment (no personal data).
@@ -30,8 +31,11 @@ type PaymentFact struct {
 // PaymentFacts is implemented over the payments module by the composition root (ledger never reads payment tables).
 type PaymentFacts interface {
 	Payment(ctx context.Context, id string) (PaymentFact, bool, error)
-	// Payments returns payments in a status updated before the cut-off (oldest first, at most limit).
+	// PaymentsInStatus returns payments in a status updated before the cut-off (newest first, at most limit).
 	PaymentsInStatus(ctx context.Context, status string, updatedBefore time.Time, limit int) ([]PaymentFact, error)
+	// PaymentIDsAfter returns the ids of payments in one of the statuses with an id greater than after, in id order
+	// (at most limit): the key source of the PAYMENT_FACTS coverage sweep.
+	PaymentIDsAfter(ctx context.Context, after string, statuses []string, limit int) ([]string, error)
 }
 
 // Ledger posting eligibility of a payment execution environment: only PRODUCTION payments may ever be posted, and
@@ -120,13 +124,16 @@ const (
 
 // ReconcileReport summarises one run.
 type ReconcileReport struct {
-	RunID                    string         `json:"run_id"`
-	Environment              string         `json:"environment"`
-	StartedAt                time.Time      `json:"started_at"`
-	Checked                  map[string]int `json:"checked"`
-	NewExceptions            int            `json:"new_exceptions"`
-	ByType                   map[string]int `json:"by_type"`
-	SettlementReconciliation string         `json:"settlement_reconciliation"`
+	RunID         string         `json:"run_id"`
+	Environment   string         `json:"environment"`
+	StartedAt     time.Time      `json:"started_at"`
+	Checked       map[string]int `json:"checked"`
+	NewExceptions int            `json:"new_exceptions"`
+	ByType        map[string]int `json:"by_type"`
+	// Sweeps and Coverage are the coverage sweeps' evidence (KI-S19-09, ADR-052); Checked counts the windowed passes.
+	Sweeps                   map[string]reconsweep.Report   `json:"sweeps"`
+	Coverage                 map[string]reconsweep.Coverage `json:"coverage"`
+	SettlementReconciliation string                         `json:"settlement_reconciliation"`
 }
 
 type exception struct {
@@ -138,6 +145,33 @@ type exception struct {
 
 // UnknownOutcomeAge is how long a payment may stay UNKNOWN before reconciliation reports it.
 const UnknownOutcomeAge = time.Hour
+
+// Recency windows and the coverage sweeps (KI-S19-09, ADR-052). The windowed passes read the newest records only;
+// two sweeps walk every record in id order, a bounded batch per run, with checkpoints in
+// ledger.ledger_reconciliation_sweeps advanced only after their batch was examined and recorded:
+//   - PAYMENT_JOURNALS: every payment-sourced DONATION_CAPTURED journal of the reconciled source system (journals are
+//     immutable, but the payment facts they are compared with can change);
+//   - PAYMENT_FACTS: every SUCCEEDED or UNKNOWN payment (a payment inside its grace period is carried as a deferral).
+//
+// Limits are engineering defaults, not capacity targets (D-05, D-06).
+const (
+	DefaultReconJournalWindow = 10000
+	DefaultReconFactsWindow   = 5000
+	DefaultReconUnknownWindow = 1000
+	SweepPaymentJournals      = "PAYMENT_JOURNALS"
+	SweepPaymentFacts         = "PAYMENT_FACTS"
+	sweepTable                = "ledger.ledger_reconciliation_sweeps"
+	succeededGrace            = 5 * time.Minute
+)
+
+// DefaultReconSweep bounds one run of each ledger coverage sweep.
+var DefaultReconSweep = reconsweep.Config{Scope: reconsweep.DefaultScope, BatchSize: 1000, MaxRecords: 10000, MaxDuration: 3 * time.Minute,
+	MaxDeferred: 10000}
+
+type paymentJournal struct {
+	id, payment, ccy, ref string
+	gross                 int64
+}
 
 // Reconcile compares operational payment facts, ledger source references and ledger journals:
 //   - journals from payments whose payment is missing (orphan), or whose amount/currency/provider reference differ;
@@ -154,31 +188,28 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconcileR
 		return ReconcileReport{}, err
 	}
 	rep := ReconcileReport{RunID: "recon:" + ids.New(), Environment: env, StartedAt: s.now(), Checked: map[string]int{}, ByType: map[string]int{},
+		Sweeps: map[string]reconsweep.Report{}, Coverage: map[string]reconsweep.Coverage{},
 		SettlementReconciliation: "NOT_PERFORMED: no provider settlement evidence (PCR-007, PCR-016; Stage 17)"}
 	var found []exception
-	from := s.ReconcileJournalsFrom
-	if from == "" {
-		from = SourcePayments
+	from := s.journalSource()
+	jw, fw, uw := DefaultReconJournalWindow, DefaultReconFactsWindow, DefaultReconUnknownWindow
+	if s.ReconWindow > 0 {
+		jw, fw, uw = s.ReconWindow, s.ReconWindow, s.ReconWindow
 	}
 
-	// 1. journals sourced from payments — the newest 10 000 (Stage 19: this read the oldest 10 000, so once the
-	// ledger held more, every new journal fell outside the window and was never compared with its payment; journals are
-	// immutable, so older ones were checked by earlier runs; full-history incremental runs are KI-S19-09)
+	// 1. journals sourced from payments — the newest window (Stage 19: this read the oldest 10 000, F-S19-13); the
+	// PAYMENT_JOURNALS sweep covers the rest
 	rows, err := s.Pool.Query(ctx, `SELECT t.id, t.source_id::text, t.currency, coalesce(t.provider_reference, ''),
 		(SELECT coalesce(sum(e.amount_minor) FILTER (WHERE e.direction = 'DEBIT'), 0) FROM ledger.ledger_entries e
 		  JOIN ledger.ledger_accounts a ON a.id = e.account_id WHERE e.transaction_id = t.id AND a.account_class = 'asset:psp_clearing')
 		FROM ledger.ledger_transactions t WHERE t.source_system = $1 AND t.source_type = 'payment' AND t.posting_rule = 'DONATION_CAPTURED'
-		ORDER BY t.posted_at DESC LIMIT 10000`, from)
+		ORDER BY t.posted_at DESC LIMIT $2`, from, jw)
 	if err != nil {
 		return rep, err
 	}
-	type pj struct {
-		id, payment, ccy, ref string
-		gross                 int64
-	}
-	var journals []pj
+	var journals []paymentJournal
 	for rows.Next() {
-		var j pj
+		var j paymentJournal
 		if err := rows.Scan(&j.id, &j.payment, &j.ccy, &j.ref, &j.gross); err != nil {
 			rows.Close()
 			return rep, err
@@ -186,6 +217,9 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconcileR
 		journals = append(journals, j)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return rep, err
+	}
 	perPayment := map[string]int{}
 	for _, j := range journals {
 		rep.Checked["payment_journals"]++
@@ -193,57 +227,28 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconcileR
 		if perPayment[j.payment] == 2 {
 			found = append(found, exception{typ: ExDuplicatePosting, sourceType: "payment", sourceID: j.payment, txID: j.id, currency: j.ccy})
 		}
-		if s.Facts == nil {
-			continue
-		}
-		f, ok, err := s.Facts.Payment(ctx, j.payment)
+		ex, err := s.checkPaymentJournal(ctx, j)
 		if err != nil {
 			return rep, err
 		}
-		g := j.gross
-		switch {
-		case !ok:
-			found = append(found, exception{typ: ExOrphanPosting, sourceType: "payment", sourceID: j.payment, txID: j.id, currency: j.ccy})
-		case f.Currency != j.ccy:
-			found = append(found, exception{typ: ExCurrencyMismatch, sourceType: "payment", sourceID: j.payment, txID: j.id, currency: j.ccy,
-				detail: map[string]any{"payment_currency": f.Currency}})
-		case f.AmountMinor != j.gross:
-			a := f.AmountMinor
-			found = append(found, exception{typ: ExAmountMismatch, sourceType: "payment", sourceID: j.payment, txID: j.id, currency: j.ccy,
-				expected: &a, actual: &g})
-		case j.ref != "" && f.ProviderReference != "" && j.ref != f.ProviderReference:
-			found = append(found, exception{typ: ExUnmatchedRef, sourceType: "payment", sourceID: j.payment, txID: j.id, currency: j.ccy})
-		}
+		found = append(found, ex...)
 	}
 
-	// 2. succeeded payments: evaluated by the consumer? posted when eligible?
+	// 2. succeeded payments (newest window): evaluated by the consumer? posted when eligible? and long-UNKNOWN payments
 	if s.Facts != nil {
-		grace := s.now().Add(-5 * time.Minute)
-		facts, err := s.Facts.PaymentsInStatus(ctx, "SUCCEEDED", grace, 5000)
+		facts, err := s.Facts.PaymentsInStatus(ctx, "SUCCEEDED", s.now().Add(-succeededGrace), fw)
 		if err != nil {
 			return rep, err
 		}
 		for _, f := range facts {
 			rep.Checked["succeeded_payments"]++
-			var decision string
-			err := s.Pool.QueryRow(ctx, `SELECT decision FROM ledger.ledger_source_references WHERE source_system = $2
-				AND source_type = 'payment' AND source_id = $1 AND posting_rule = 'DONATION_CAPTURED' ORDER BY created_at LIMIT 1`, f.ID, from).Scan(&decision)
-			if errors.Is(err, pgx.ErrNoRows) {
-				a := f.AmountMinor
-				found = append(found, exception{typ: ExMissingPosting, sourceType: "payment", sourceID: f.ID, currency: f.Currency, expected: &a,
-					detail: map[string]any{"reason": "NOT_EVALUATED_BY_LEDGER"}})
-				continue
-			}
+			ex, err := s.checkSucceededPayment(ctx, f, env, from)
 			if err != nil {
 				return rep, err
 			}
-			if eligibleForLedger(f.ExecutionEnvironment, env) && decision != "POSTED" {
-				a := f.AmountMinor
-				found = append(found, exception{typ: ExMissingPosting, sourceType: "payment", sourceID: f.ID, currency: f.Currency, expected: &a,
-					detail: map[string]any{"reason": "ELIGIBLE_NOT_POSTED", "decision": decision}})
-			}
+			found = append(found, ex...)
 		}
-		unknown, err := s.Facts.PaymentsInStatus(ctx, "UNKNOWN", s.now().Add(-UnknownOutcomeAge), 1000)
+		unknown, err := s.Facts.PaymentsInStatus(ctx, "UNKNOWN", s.now().Add(-UnknownOutcomeAge), uw)
 		if err != nil {
 			return rep, err
 		}
@@ -254,7 +259,7 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconcileR
 		}
 	}
 
-	// 3. suspense balances
+	// 3. suspense balances (every suspense account: no window)
 	srows, err := s.Pool.Query(ctx, `SELECT a.id, a.currency, b.balance_minor FROM ledger.ledger_accounts a
 		JOIN ledger.v_balances_current b ON b.account_id = a.id WHERE a.kind = 'SUSPENSE' AND b.balance_minor <> 0`)
 	if err != nil {
@@ -272,9 +277,185 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconcileR
 		found = append(found, exception{typ: ExSuspenseBalance, sourceType: "ledger_account", sourceID: id, accountID: id, currency: ccy, actual: &b})
 	}
 	srows.Close()
+	if err := s.recordReconExceptions(ctx, env, &rep, found); err != nil {
+		return rep, err
+	}
 
-	// record new exceptions (one unresolved reference per type and source)
-	err = db.WithTx(ctx, s.Pool, db.TxOptions{}, func(ctx context.Context, tx pgx.Tx) error {
+	// 4. coverage sweeps
+	store := reconsweep.SQLStore{Pool: s.Pool, Table: sweepTable}
+	cfg := s.ReconSweep.Or(DefaultReconSweep)
+	if from != SourcePayments {
+		// a run over another source system (tests over synthetic fixtures) never moves the payments checkpoints
+		cfg.Scope += "." + from
+	}
+	opts := func(detector string) reconsweep.Options {
+		return reconsweep.Options{Config: cfg, Detector: detector, RunID: rep.RunID, Now: s.now}
+	}
+	record := func(ctx context.Context, ex []exception) (reconsweep.Outcome, error) {
+		before := rep.NewExceptions
+		err := s.recordReconExceptions(ctx, env, &rep, ex)
+		return reconsweep.Outcome{Exceptions: rep.NewExceptions - before}, err
+	}
+	var sweepErr error
+	jr, err := reconsweep.Run(ctx, store, opts(SweepPaymentJournals), func(ctx context.Context, after string, limit int) ([]string, error) {
+		rows, err := s.Pool.Query(ctx, `SELECT id::text FROM ledger.ledger_transactions WHERE id > $1::uuid AND source_system = $2
+			AND source_type = 'payment' AND posting_rule = 'DONATION_CAPTURED' ORDER BY id LIMIT $3`, reconsweep.After(after), from, limit)
+		if err != nil {
+			return nil, err
+		}
+		return pgx.CollectRows(rows, pgx.RowTo[string])
+	}, func(ctx context.Context, id string) (reconsweep.Outcome, error) {
+		ex, err := s.sweepPaymentJournal(ctx, id, from)
+		if err != nil {
+			return reconsweep.Outcome{}, err
+		}
+		return record(ctx, ex)
+	})
+	rep.Sweeps[SweepPaymentJournals] = jr
+	sweepErr = err
+	if sweepErr == nil && s.Facts != nil {
+		fr, err := reconsweep.Run(ctx, store, opts(SweepPaymentFacts), func(ctx context.Context, after string, limit int) ([]string, error) {
+			return s.Facts.PaymentIDsAfter(ctx, reconsweep.After(after), []string{"SUCCEEDED", "UNKNOWN"}, limit)
+		}, func(ctx context.Context, id string) (reconsweep.Outcome, error) {
+			ex, out, err := s.sweepPaymentFact(ctx, id, env, from)
+			if err != nil || out.Deferred || out.OutOfScope {
+				return out, err
+			}
+			return record(ctx, ex)
+		})
+		rep.Sweeps[SweepPaymentFacts] = fr
+		sweepErr = err
+	}
+
+	// the run's evidence is recorded even when a sweep stopped on an error (non-cancelled context)
+	actx := context.WithoutCancel(ctx)
+	for _, d := range []string{SweepPaymentJournals, SweepPaymentFacts} {
+		if c, err := store.Coverage(actx, d, cfg.Scope); err == nil {
+			rep.Coverage[d] = c
+		}
+	}
+	err = db.WithTx(actx, s.Pool, db.TxOptions{}, func(ctx context.Context, tx pgx.Tx) error {
+		_, err := audit.RecordGateway(ctx, tx, audit.Event{Action: "ledger.reconciliation.run", ActorType: "system", TargetType: "ledger_reconciliation",
+			Metadata: map[string]any{"run": rep.RunID, "environment": env, "new_exceptions": rep.NewExceptions, "triggered_by": triggeredBy,
+				"settlement": "NOT_PERFORMED", "sweeps": rep.Sweeps}})
+		return err
+	})
+	if sweepErr != nil {
+		return rep, sweepErr
+	}
+	return rep, err
+}
+
+func (s *Service) journalSource() string {
+	if s.ReconcileJournalsFrom == "" {
+		return SourcePayments
+	}
+	return s.ReconcileJournalsFrom
+}
+
+// checkPaymentJournal compares one capture journal with its payment's facts.
+func (s *Service) checkPaymentJournal(ctx context.Context, j paymentJournal) ([]exception, error) {
+	if s.Facts == nil {
+		return nil, nil
+	}
+	f, ok, err := s.Facts.Payment(ctx, j.payment)
+	if err != nil {
+		return nil, err
+	}
+	g := j.gross
+	switch {
+	case !ok:
+		return []exception{{typ: ExOrphanPosting, sourceType: "payment", sourceID: j.payment, txID: j.id, currency: j.ccy}}, nil
+	case f.Currency != j.ccy:
+		return []exception{{typ: ExCurrencyMismatch, sourceType: "payment", sourceID: j.payment, txID: j.id, currency: j.ccy,
+			detail: map[string]any{"payment_currency": f.Currency}}}, nil
+	case f.AmountMinor != j.gross:
+		a := f.AmountMinor
+		return []exception{{typ: ExAmountMismatch, sourceType: "payment", sourceID: j.payment, txID: j.id, currency: j.ccy, expected: &a, actual: &g}}, nil
+	case j.ref != "" && f.ProviderReference != "" && j.ref != f.ProviderReference:
+		return []exception{{typ: ExUnmatchedRef, sourceType: "payment", sourceID: j.payment, txID: j.id, currency: j.ccy}}, nil
+	}
+	return nil, nil
+}
+
+// sweepPaymentJournal examines one capture journal by id: duplicates across the whole ledger, then its payment facts.
+func (s *Service) sweepPaymentJournal(ctx context.Context, id, from string) ([]exception, error) {
+	var j paymentJournal
+	var n int
+	err := s.Pool.QueryRow(ctx, `SELECT t.id, t.source_id::text, t.currency, coalesce(t.provider_reference, ''),
+		(SELECT coalesce(sum(e.amount_minor) FILTER (WHERE e.direction = 'DEBIT'), 0) FROM ledger.ledger_entries e
+		  JOIN ledger.ledger_accounts a ON a.id = e.account_id WHERE e.transaction_id = t.id AND a.account_class = 'asset:psp_clearing'),
+		(SELECT count(*) FROM ledger.ledger_transactions d WHERE d.source_type = 'payment' AND d.source_id = t.source_id
+		  AND d.source_system = t.source_system AND d.posting_rule = 'DONATION_CAPTURED')
+		FROM ledger.ledger_transactions t WHERE t.id = $1 AND t.source_system = $2`, id, from).Scan(&j.id, &j.payment, &j.ccy, &j.ref, &j.gross, &n)
+	if err != nil {
+		return nil, err // journals are never deleted: a key from the walk always exists
+	}
+	var out []exception
+	if n > 1 {
+		out = append(out, exception{typ: ExDuplicatePosting, sourceType: "payment", sourceID: j.payment, txID: j.id, currency: j.ccy,
+			detail: map[string]any{"capture_journals": n}})
+	}
+	ex, err := s.checkPaymentJournal(ctx, j)
+	return append(out, ex...), err
+}
+
+// checkSucceededPayment: evaluated by the ledger consumer, and posted when eligible for this ledger.
+func (s *Service) checkSucceededPayment(ctx context.Context, f PaymentFact, env, from string) ([]exception, error) {
+	var decision string
+	err := s.Pool.QueryRow(ctx, `SELECT decision FROM ledger.ledger_source_references WHERE source_system = $2
+		AND source_type = 'payment' AND source_id = $1 AND posting_rule = 'DONATION_CAPTURED' ORDER BY created_at LIMIT 1`, f.ID, from).Scan(&decision)
+	a := f.AmountMinor
+	if errors.Is(err, pgx.ErrNoRows) {
+		return []exception{{typ: ExMissingPosting, sourceType: "payment", sourceID: f.ID, currency: f.Currency, expected: &a,
+			detail: map[string]any{"reason": "NOT_EVALUATED_BY_LEDGER"}}}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if eligibleForLedger(f.ExecutionEnvironment, env) && decision != "POSTED" {
+		return []exception{{typ: ExMissingPosting, sourceType: "payment", sourceID: f.ID, currency: f.Currency, expected: &a,
+			detail: map[string]any{"reason": "ELIGIBLE_NOT_POSTED", "decision": decision}}}, nil
+	}
+	return nil, nil
+}
+
+// sweepPaymentFact examines one payment by id in its current state. A payment changed within its grace period
+// (succeeded less than 5 minutes ago; UNKNOWN for less than UnknownOutcomeAge) is deferred, not passed.
+func (s *Service) sweepPaymentFact(ctx context.Context, id, env, from string) ([]exception, reconsweep.Outcome, error) {
+	f, ok, err := s.Facts.Payment(ctx, id)
+	if err != nil {
+		return nil, reconsweep.Outcome{}, err
+	}
+	if !ok {
+		return nil, reconsweep.Outcome{OutOfScope: true}, nil
+	}
+	switch f.Status {
+	case "SUCCEEDED":
+		if !f.UpdatedAt.Before(s.now().Add(-succeededGrace)) {
+			return nil, reconsweep.Outcome{Deferred: true}, nil
+		}
+		ex, err := s.checkSucceededPayment(ctx, f, env, from)
+		return ex, reconsweep.Outcome{}, err
+	case "UNKNOWN":
+		if !f.UpdatedAt.Before(s.now().Add(-UnknownOutcomeAge)) {
+			return nil, reconsweep.Outcome{Deferred: true}, nil
+		}
+		a := f.AmountMinor
+		return []exception{{typ: ExUnknownOutcome, sourceType: "payment", sourceID: f.ID, currency: f.Currency, expected: &a}}, reconsweep.Outcome{}, nil
+	}
+	return nil, reconsweep.Outcome{OutOfScope: true}, nil
+}
+
+// recordReconExceptions records new exceptions (one unresolved reference per type and source) in one transaction.
+func (s *Service) recordReconExceptions(ctx context.Context, env string, rep *ReconcileReport, found []exception) error {
+	if len(found) == 0 {
+		return nil
+	}
+	var newIDs []string
+	var newTypes []string
+	err := db.WithTx(ctx, s.Pool, db.TxOptions{}, func(ctx context.Context, tx pgx.Tx) error {
+		newIDs, newTypes = nil, nil
 		for _, e := range found {
 			d, _ := json.Marshal(nonNilAny(e.detail))
 			id := ids.New()
@@ -293,20 +474,23 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconcileR
 			if tag.RowsAffected() == 0 {
 				continue
 			}
-			rep.NewExceptions++
-			rep.ByType[e.typ]++
+			newIDs, newTypes = append(newIDs, id), append(newTypes, e.typ)
 			if _, err := outbox.WriteGateway(ctx, tx, outbox.Event{AggregateType: "ledger_reconciliation_reference", AggregateID: id,
 				EventType: EvReconciliationException, Payload: map[string]any{"reference_id": id, "exception_type": e.typ, "source_type": e.sourceType,
 					"source_ref": e.sourceID, "environment": env}, OccurredAt: s.now()}); err != nil {
 				return err
 			}
 		}
-		_, err := audit.RecordGateway(ctx, tx, audit.Event{Action: "ledger.reconciliation.run", ActorType: "system", TargetType: "ledger_reconciliation",
-			Metadata: map[string]any{"run": rep.RunID, "environment": env, "new_exceptions": rep.NewExceptions, "triggered_by": triggeredBy,
-				"settlement": "NOT_PERFORMED"}})
-		return err
+		return nil
 	})
-	return rep, err
+	if err != nil {
+		return err
+	}
+	rep.NewExceptions += len(newIDs)
+	for _, t := range newTypes {
+		rep.ByType[t]++
+	}
+	return nil
 }
 
 func nonNilAny(m map[string]any) map[string]any {

@@ -42,6 +42,10 @@ func (a paymentFacts) PaymentsInStatus(ctx context.Context, status string, befor
 	return out, err
 }
 
+func (a paymentFacts) PaymentIDsAfter(ctx context.Context, after string, statuses []string, limit int) ([]string, error) {
+	return a.p.PaymentFactIDsAfter(ctx, after, statuses, limit)
+}
+
 func newLedger(ctx context.Context, m *VerificationModules, d VerificationDeps) error {
 	cfg := d.Config
 	pool, err := db.NewPool(ctx, db.Options{URL: cfg.Database.LedgerURL.Reveal(), MaxConns: 8, ConnectTimeout: cfg.Database.ConnectTimeout,

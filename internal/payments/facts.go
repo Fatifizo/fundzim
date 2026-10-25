@@ -43,13 +43,25 @@ func (s *Service) PaymentFact(ctx context.Context, id string) (Fact, bool, error
 	return f, err == nil, err
 }
 
-// PaymentFactsInStatus lists payments in a status last updated before the cut-off, oldest first.
+// PaymentFactsInStatus lists payments in a status last updated before the cut-off, newest first (a window of the
+// newest records: reading the oldest N would never reach new payments once more than N exist — KI-S19-09, F-R1-01;
+// the ledger's PAYMENT_FACTS coverage sweep covers the rest through PaymentFactIDsAfter).
 func (s *Service) PaymentFactsInStatus(ctx context.Context, status string, before time.Time, limit int) ([]Fact, error) {
-	rows, err := s.Pool.Query(ctx, factSelect+` WHERE status = $1 AND updated_at < $2 ORDER BY updated_at, id LIMIT $3`, status, before, limit)
+	rows, err := s.Pool.Query(ctx, factSelect+` WHERE status = $1 AND updated_at < $2 ORDER BY updated_at DESC, id DESC LIMIT $3`, status, before, limit)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Fact, error) { return scanFact(r) })
+}
+
+// PaymentFactIDsAfter lists the ids of payments in one of the statuses with an id greater than after, in id order.
+func (s *Service) PaymentFactIDsAfter(ctx context.Context, after string, statuses []string, limit int) ([]string, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT id::text FROM app.payment_intents WHERE id > $1::uuid AND status = ANY($2::text[]) ORDER BY id LIMIT $3`,
+		after, statuses, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
 
 // OpenRefundExposure is the total of the campaign's refund requests in one currency that are not yet terminal

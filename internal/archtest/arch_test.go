@@ -102,7 +102,8 @@ var ownedTables = map[string][]string{
 	"payouts": {"app.payout_destinations", "app.payout_destination_checks", "app.payout_destination_events",
 		// Stage 11 (ADR-043)
 		"app.payout_requests", "app.payout_reservations", "app.payout_approvals", "app.payout_attempts", "app.payout_events",
-		"app.payout_eligibility_decisions", "app.payout_exceptions", "app.payout_exception_events", "app.payout_reconciliation_references"},
+		"app.payout_eligibility_decisions", "app.payout_exceptions", "app.payout_exception_events", "app.payout_reconciliation_references",
+		"app.payout_reconciliation_sweeps"},
 	"verification": {},
 	// Stage 6 (interface-contracts §1): core (lead), campaign_media (stream M), campaign updates (stream U)
 	"campaigns": {"app.campaign_categories", "app.campaign_policies", "app.campaigns", "app.campaign_goals", "app.campaign_versions",
@@ -123,7 +124,7 @@ var ownedTables = map[string][]string{
 	"ledger": {"ledger.ledger_accounts", "ledger.ledger_transactions", "ledger.ledger_entries", "ledger.ledger_balances",
 		"ledger.ledger_posting_rules", "ledger.ledger_posting_rule_lines", "ledger.ledger_posting_batches", "ledger.ledger_adjustments",
 		"ledger.ledger_periods", "ledger.ledger_invariant_runs", "ledger.ledger_environment", "ledger.ledger_source_references",
-		"ledger.ledger_reconciliation_references", "ledger.v_trial_balance", "ledger.v_balances_current", "ledger.v_balance_drift",
+		"ledger.ledger_reconciliation_references", "ledger.ledger_reconciliation_sweeps", "ledger.v_trial_balance", "ledger.v_balances_current", "ledger.v_balance_drift",
 		"ledger.v_pool_integrity", "ledger.database_environment", "ledger.fold_deferred_balances"},
 	// Stage 14 (ADR-046)
 	"operations": {"app.ops_support_cases", "app.ops_support_events", "app.ops_incidents", "app.ops_incident_events", "app.ops_exception_assignments",
@@ -132,7 +133,8 @@ var ownedTables = map[string][]string{
 	// Stage 12 (ADR-044)
 	"fees": {"app.fee_policies", "app.fee_policy_versions", "app.fee_provider_schedules", "app.fee_calculations", "app.fee_components",
 		"app.fee_quotes", "app.fee_assessments", "app.fee_adjustments", "app.fee_accounting_references", "app.fee_provider_reports",
-		"app.fee_reconciliation_runs", "app.fee_reconciliation_references", "app.fee_audit_events"},
+		"app.fee_reconciliation_runs", "app.fee_reconciliation_references", "app.fee_audit_events",
+		"app.fee_reconciliation_sweeps"},
 	// Stage 17 (ADR-049): the whole recon schema
 	"reconciliation": {"recon.sources", "recon.matching_rule_sets", "recon.imports", "recon.settlement_batches", "recon.items", "recon.runs",
 		"recon.matches", "recon.exceptions", "recon.exception_events", "recon.resolutions", "recon.worker_heartbeats"},

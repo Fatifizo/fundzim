@@ -36,6 +36,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/httpx"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
 	"github.com/Fatifizo/fundzim/internal/platform/outbox"
+	"github.com/Fatifizo/fundzim/internal/platform/reconsweep"
 	"github.com/Fatifizo/fundzim/internal/psp"
 	"github.com/Fatifizo/fundzim/internal/risk"
 )
@@ -87,6 +88,10 @@ type Service struct {
 	StepUpMaxAge time.Duration
 	// ReconGrace overrides DefaultReconGrace (tests).
 	ReconGrace time.Duration
+	// ReconWindow overrides DefaultReconWindow, the recency pass (tests).
+	ReconWindow int
+	// ReconSweep bounds the coverage sweep (zero values: DefaultReconSweep; tests use their own Scope).
+	ReconSweep reconsweep.Config
 	// Fees estimates payout fees at request time and assesses them on completion (Stage 12; nil: no fee records).
 	Fees PayoutFees
 	// SubmitRetryBudget, SubmitRetryBase, SubmitRetryMax bound automatic same-reference resubmissions after

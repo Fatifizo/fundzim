@@ -2,8 +2,10 @@ package ledger
 
 import (
 	"context"
+	"strings"
 
 	"github.com/Fatifizo/fundzim/internal/platform/opsview"
+	"github.com/Fatifizo/fundzim/internal/platform/reconsweep"
 )
 
 // OpsSnapshot is the ledger's contribution to the operations portal (Stage 14, ADR-046): adjustments awaiting a
@@ -43,6 +45,16 @@ func (s *Service) OpsSnapshot(ctx context.Context) (opsview.Snapshot, error) {
 	snap.Metrics = append(snap.Metrics, adj, rec, integrity, opsview.Metric{Key: "ledger.production_posting", Label: "Production ledger posting",
 		Module: m, Nature: opsview.Blocked, Status: opsview.StatusBlocked, Permission: view,
 		Source: "ledger.ProductionPostingEnabled = false; ledger database designated TEST (ADR-042)"})
+	store, scope := reconsweep.SQLStore{Pool: s.Pool, Table: sweepTable}, s.ReconSweep.Or(DefaultReconSweep).Scope
+	for _, d := range []string{SweepPaymentJournals, SweepPaymentFacts} {
+		cov, err := store.Coverage(ctx, d, scope)
+		cm := cov.Metric(m, "ledger.reconciliation.coverage_age_seconds."+strings.ToLower(d), "Seconds since the last complete "+d+" reconciliation sweep began",
+			view, "ledger.ledger_reconciliation_sweeps, last COMPLETED cycle (ADR-052)", s.now())
+		if err != nil {
+			cm.Value, cm.Status = nil, opsview.Unavailable
+		}
+		snap.Metrics = append(snap.Metrics, cm)
+	}
 	rows, err := s.Pool.Query(ctx, `SELECT id::text, kind, currency, requested_by::text, requested_at, status FROM ledger.ledger_adjustments
 		WHERE status = 'PENDING_APPROVAL' AND expires_at > now() ORDER BY requested_at LIMIT 200`)
 	if err != nil {

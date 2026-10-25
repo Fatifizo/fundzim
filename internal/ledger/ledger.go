@@ -32,6 +32,7 @@ import (
 
 	"github.com/Fatifizo/fundzim/internal/platform/clock"
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
+	"github.com/Fatifizo/fundzim/internal/platform/reconsweep"
 )
 
 // ProductionPostingEnabled gates every PRODUCTION posting. It is a constant on purpose: enabling real accounting
@@ -231,6 +232,10 @@ type Service struct {
 	// SourcePayments (the default when empty). Tests of the reconciliation logic in a TEST ledger set
 	// SourceSynthetic, because a TEST ledger can hold no payments-sourced journal.
 	ReconcileJournalsFrom string
+	// ReconWindow overrides the windowed passes' sizes (tests); ReconSweep bounds the coverage sweeps (zero values:
+	// DefaultReconSweep; tests use their own Scope so they never move the worker's checkpoints).
+	ReconWindow int
+	ReconSweep  reconsweep.Config
 
 	envMu sync.RWMutex
 	env   string

@@ -24,6 +24,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/db"
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
+	"github.com/Fatifizo/fundzim/internal/platform/reconsweep"
 )
 
 // ProductionFeesEnabled gates every production fee path. It is a constant on purpose: charging real fees or
@@ -84,6 +85,10 @@ type Service struct {
 	UsableCurrencies func(ctx context.Context) ([]string, error)
 	// ReconGrace overrides DefaultReconGrace (tests).
 	ReconGrace time.Duration
+	// ReconWindow overrides DefaultReconWindow, the recency pass (tests).
+	ReconWindow int
+	// ReconSweep bounds the coverage sweep (zero values: DefaultReconSweep; tests use their own Scope).
+	ReconSweep reconsweep.Config
 }
 
 func (s *Service) now() time.Time { return s.Clock.Now().UTC() }

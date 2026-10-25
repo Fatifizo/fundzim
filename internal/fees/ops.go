@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/Fatifizo/fundzim/internal/platform/opsview"
+	"github.com/Fatifizo/fundzim/internal/platform/reconsweep"
 )
 
 // OpsSnapshot is the fee module's contribution to the operations portal (Stage 14, ADR-046): fee changes and manual
@@ -36,6 +37,13 @@ func (s *Service) OpsSnapshot(ctx context.Context) (opsview.Snapshot, error) {
 		opsview.Metric{Key: "fees.production", Label: "Production fee charging and revenue recognition", Module: m, Nature: opsview.Blocked,
 			Status: opsview.StatusBlocked, Permission: view, Source: "fees.ProductionFeesEnabled = false (ADR-044); no fee model (PD-01)"},
 	)
+	cov, err := reconsweep.SQLStore{Pool: s.Pool, Table: sweepTable}.Coverage(ctx, SweepDetector, s.ReconSweep.Or(DefaultReconSweep).Scope)
+	cm := cov.Metric(m, "fees.reconciliation.coverage_age_seconds", "Seconds since the last complete fee reconciliation sweep began", view,
+		"app.fee_reconciliation_sweeps, last COMPLETED cycle (ADR-052)", s.now())
+	if err != nil {
+		cm.Value, cm.Status = nil, opsview.Unavailable
+	}
+	snap.Metrics = append(snap.Metrics, cm)
 	rows, err := s.Pool.Query(ctx, `
 		SELECT 'policy_version:' || v.id, v.id::text, 'FEE_POLICY_VERSION_APPROVAL', 'Fee policy ' || p.code || ' v' || v.version_no, coalesce(v.submitted_by::text, ''),
 		       coalesce(v.submitted_at, v.created_at), 'fee.config.approve', ARRAY[v.created_by::text, coalesce(v.submitted_by::text, '')], '/admin/finance/fees/policies/' || p.id

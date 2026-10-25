@@ -59857,6 +59857,134 @@ components:
       - detected_at
       - detected_by_run
       additionalProperties: false
+    ReconSweepReport:
+      type: object
+      description: Coverage sweep evidence of one reconciliation run (remediation phase 1, ADR-052). The checkpoint advances only
+        after every record of a batch was examined and recorded; deferred records are carried, never skipped.
+      properties:
+        detector:
+          type: string
+          enum:
+          - PAYOUTS
+          - FEE_ASSESSMENTS
+          - PAYMENT_JOURNALS
+          - PAYMENT_FACTS
+        scope:
+          type: string
+        cycle:
+          type: integer
+        cycle_started_at:
+          $ref: '#/components/schemas/Timestamp'
+        cursor_from:
+          type: string
+        cursor_to:
+          type: string
+        examined:
+          type: integer
+        out_of_scope:
+          type: integer
+        deferred_new:
+          type: integer
+        deferrals_retried:
+          type: integer
+        deferrals_resolved:
+          type: integer
+        deferred_carried:
+          type: integer
+        oldest_deferral_since:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        exceptions:
+          type: integer
+        batches:
+          type: integer
+        checkpoint_advanced:
+          type: boolean
+        cycle_completed:
+          type: boolean
+        stopped_by:
+          type: string
+          enum:
+          - ''
+          - CYCLE_COMPLETED
+          - RECORD_BUDGET
+          - TIME_BUDGET
+          - CHECKPOINT_CONFLICT
+          - DEFERRAL_LIMIT
+          - ERROR
+        error:
+          type: string
+      required:
+      - detector
+      - scope
+      - cycle
+      - cycle_started_at
+      - cursor_from
+      - cursor_to
+      - examined
+      - out_of_scope
+      - deferred_new
+      - deferrals_retried
+      - deferrals_resolved
+      - deferred_carried
+      - oldest_deferral_since
+      - exceptions
+      - batches
+      - checkpoint_advanced
+      - cycle_completed
+      - stopped_by
+      additionalProperties: false
+    ReconCoverage:
+      type: object
+      description: What a detector's checkpoints prove (ADR-052). `last_completed_cycle_started_at` is the coverage watermark; null
+        means no cycle has completed and coverage is NOT established.
+      properties:
+        detector:
+          type: string
+        scope:
+          type: string
+        last_completed_cycle_started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        last_completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        last_completed_examined:
+          type: integer
+        running_cycle:
+          type: integer
+        running_started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        running_examined:
+          type: integer
+        deferred_outstanding:
+          type: integer
+        oldest_deferral_since:
+          type:
+          - string
+          - 'null'
+          format: date-time
+      required:
+      - detector
+      - scope
+      - last_completed_cycle_started_at
+      - last_completed_at
+      - last_completed_examined
+      - running_cycle
+      - running_started_at
+      - running_examined
+      - deferred_outstanding
+      - oldest_deferral_since
+      additionalProperties: false
     PayoutReconRunS11:
       type: object
       properties:
@@ -59870,6 +59998,14 @@ components:
           type: object
           additionalProperties:
             type: integer
+        open_exception_evidence:
+          type: integer
+          description: Mismatch references added under an exception that was already open (a mismatch type not referenced since it
+            opened; ADR-052).
+        sweep:
+          $ref: '#/components/schemas/ReconSweepReport'
+        coverage:
+          $ref: '#/components/schemas/ReconCoverage'
         settlement_reconciliation:
           type: string
       required:
@@ -59877,6 +60013,9 @@ components:
       - checked
       - new_mismatches
       - by_type
+      - open_exception_evidence
+      - sweep
+      - coverage
       - settlement_reconciliation
       additionalProperties: false
     PayoutProviderCapabilityS11:
@@ -61951,6 +62090,10 @@ components:
           type: string
           enum:
           - NOT_PERFORMED
+        sweep:
+          $ref: '#/components/schemas/ReconSweepReport'
+        coverage:
+          $ref: '#/components/schemas/ReconCoverage'
       required:
       - id
       - triggered_by

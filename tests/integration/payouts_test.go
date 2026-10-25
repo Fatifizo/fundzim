@@ -72,6 +72,11 @@ func newPayoutIT(t *testing.T) *payoutIT {
 	}
 	m.Sandbox.WebhookURL = s.srv.URL + "/api/v1/webhooks/payments/sandbox"
 	m.Payouts.ReconGrace = time.Nanosecond
+	// the tests' reconciliation runs walk their own coverage checkpoints, never the worker's (ADR-052)
+	m.Payouts.ReconSweep = itSweep("payouts")
+	if m.Ledger != nil {
+		m.Ledger.ReconSweep = itSweep("ledger")
+	}
 	f := staffFixture(t, s)
 	p := &payoutIT{s: s, f: f, mig: pool(t, os.Getenv("DATABASE_MIGRATION_URL")), app: pool(t, os.Getenv("DATABASE_URL")), po: m.Payouts, led: m.Ledger}
 	poOnce.Do(func() {
@@ -675,6 +680,9 @@ func TestPayoutApprovalSeparationOfDutiesAndInvalidation(t *testing.T) {
 	if err := p.po.SetSuspended(ctx(t), p.dest, p.f.rev2.id, "SUSPECTED_TAKEOVER", true); err != nil {
 		t.Fatal(err)
 	}
+	// the shared fixture destination is reinstated even when an assertion below fails, so a failure here never cascades
+	// into later payout tests (KI-R1-07); a no-op when the test reinstates it itself
+	t.Cleanup(func() { _ = p.po.SetSuspended(context.Background(), p.dest, p.f.rev2.id, "REVIEW_CLEARED", false) })
 	po := p.payout(t, id)
 	if po.Status != payouts.StReview || po.ApprovalRound != 2 {
 		t.Fatalf("after destination suspension: %s round %d", po.Status, po.ApprovalRound)

@@ -37,6 +37,7 @@ func newFeeIT(t *testing.T, fund int64) *feeIT {
 		t.Fatal("fees module not wired")
 	}
 	fs.ReconGrace = time.Nanosecond
+	fs.ReconSweep = itSweep("fees")
 	return &feeIT{payoutIT: p, fs: fs, camp: p.campaign(t, fund)}
 }
 

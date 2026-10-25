@@ -18,6 +18,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -52,6 +53,7 @@ func newLedgerIT(t *testing.T) *ledgerIT {
 	if err := l.svc.EnsureCurrentPeriods(ctx(t)); err != nil {
 		t.Fatal(err)
 	}
+	l.svc.ReconSweep = itSweep("ledger")
 	return l
 }
 
@@ -637,12 +639,36 @@ func (f fakeFacts) Payment(_ context.Context, id string) (ledger.PaymentFact, bo
 	p, ok := f.m[id]
 	return p, ok, nil
 }
-func (f fakeFacts) PaymentsInStatus(_ context.Context, status string, _ time.Time, _ int) ([]ledger.PaymentFact, error) {
+func (f fakeFacts) PaymentIDsAfter(_ context.Context, after string, statuses []string, limit int) ([]string, error) {
+	var out []string
+	for id, p := range f.m {
+		if id > after && slices.Contains(statuses, p.Status) {
+			out = append(out, id)
+		}
+	}
+	slices.Sort(out)
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (f fakeFacts) PaymentsInStatus(_ context.Context, status string, before time.Time, limit int) ([]ledger.PaymentFact, error) {
 	var out []ledger.PaymentFact
 	for _, p := range f.m {
-		if p.Status == status {
+		if p.Status == status && p.UpdatedAt.Before(before) {
 			out = append(out, p)
 		}
+	}
+	// newest first, at most limit (the window semantics of payments.PaymentFactsInStatus)
+	slices.SortFunc(out, func(a, b ledger.PaymentFact) int {
+		if c := b.UpdatedAt.Compare(a.UpdatedAt); c != 0 {
+			return c
+		}
+		return strings.Compare(b.ID, a.ID)
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
 	}
 	return out, nil
 }
@@ -669,6 +695,7 @@ func TestLedgerReconciliationFindsExceptionsAndWorkflow(t *testing.T) {
 	paymentJournal(orphan, 700)    // no such payment
 	svc := ledger.New(l.lp, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	svc.ReconcileJournalsFrom = ledger.SourceSynthetic
+	svc.ReconSweep = itSweep("ledger-fake-facts")
 	svc.Facts = fakeFacts{m: map[string]ledger.PaymentFact{
 		mismatch: {ID: mismatch, Status: "SUCCEEDED", AmountMinor: 1500, Currency: "USD", ExecutionEnvironment: "LOCAL_SIMULATOR"},
 		missing:  {ID: missing, Status: "SUCCEEDED", AmountMinor: 900, Currency: "USD", ExecutionEnvironment: "LOCAL_SIMULATOR"},

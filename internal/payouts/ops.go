@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/Fatifizo/fundzim/internal/platform/opsview"
+	"github.com/Fatifizo/fundzim/internal/platform/reconsweep"
 )
 
 // OpsSnapshot is the payouts module's contribution to the operations portal (Stage 14, ADR-046): TEST withdrawal
@@ -40,6 +41,13 @@ func (s *Service) OpsSnapshot(ctx context.Context) (opsview.Snapshot, error) {
 		opsview.Metric{Key: "payouts.live_execution", Label: "Real payout execution", Module: m, Nature: opsview.Blocked, Status: opsview.StatusBlocked,
 			Source: "payouts.LiveExecutionEnabled = false; no payout provider confirmed (ADR-040, ADR-043)", Permission: view},
 	)
+	cov, err := reconsweep.SQLStore{Pool: s.Pool, Table: sweepTable}.Coverage(ctx, SweepDetector, s.ReconSweep.Or(DefaultReconSweep).Scope)
+	cm := cov.Metric(m, "payouts.reconciliation.coverage_age_seconds", "Seconds since the last complete payout reconciliation sweep began", view,
+		"app.payout_reconciliation_sweeps, last COMPLETED cycle (ADR-052)", s.now())
+	if err != nil {
+		cm.Value, cm.Status = nil, opsview.Unavailable
+	}
+	snap.Metrics = append(snap.Metrics, cm)
 	rows, err := s.Pool.Query(ctx, `SELECT p.id::text, p.requested_by::text, p.updated_at, p.status, p.approval_policy, p.currency, p.amount_minor,
 		ARRAY(SELECT a.approver_id::text FROM app.payout_approvals a WHERE a.payout_request_id = p.id AND a.approval_round = p.approval_round)
 		FROM app.payout_requests p WHERE p.status = 'PENDING_REVIEW' ORDER BY p.updated_at LIMIT 200`)

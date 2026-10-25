@@ -3,6 +3,7 @@ package payouts
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -13,6 +14,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
 	"github.com/Fatifizo/fundzim/internal/platform/httpx"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
+	"github.com/Fatifizo/fundzim/internal/platform/reconsweep"
 	"github.com/Fatifizo/fundzim/internal/psp"
 )
 
@@ -34,13 +36,35 @@ import (
 // DefaultReconGrace skips payouts changed more recently than this (their journals may still be posting).
 const DefaultReconGrace = 5 * time.Minute
 
+// Remediation of KI-S19-09 (ADR-052). A run has two passes. The recency pass re-checks the newest DefaultReconWindow
+// payouts (fast detection after recent transitions; it guarantees nothing about older payouts). The coverage sweep
+// (internal/platform/reconsweep) walks every payout past PAYOUT_REQUESTED in id order, a bounded batch per run, with
+// a checkpoint in app.payout_reconciliation_sweeps advanced only after its batch was examined and recorded; a cycle
+// re-examines every payout in its current state, so a payout that becomes inconsistent after leaving the recency
+// window (e.g. a later provider-side change) is found by the next cycle. A payout inside the grace period is carried
+// as a deferral, never passed. The sweep's limits are engineering defaults, not capacity targets (D-05, D-06).
+const (
+	DefaultReconWindow = 5000
+	SweepDetector      = "PAYOUTS"
+	sweepTable         = "app.payout_reconciliation_sweeps"
+)
+
+// DefaultReconSweep bounds one run of the coverage sweep (each submitted payout costs a provider status query).
+var DefaultReconSweep = reconsweep.Config{Scope: reconsweep.DefaultScope, BatchSize: 200, MaxRecords: 2000, MaxDuration: 3 * time.Minute,
+	MaxDeferred: 10000}
+
 // ReconReport summarises a run.
 type ReconReport struct {
-	RunID                    string         `json:"run_id"`
-	Checked                  int            `json:"checked"`
-	NewMismatches            int            `json:"new_mismatches"`
-	ByType                   map[string]int `json:"by_type"`
-	SettlementReconciliation string         `json:"settlement_reconciliation"`
+	RunID         string         `json:"run_id"`
+	Checked       int            `json:"checked"` // recency pass
+	NewMismatches int            `json:"new_mismatches"`
+	ByType        map[string]int `json:"by_type"`
+	// OpenExceptionEvidence counts mismatch references added under an exception that was already open (a changed
+	// discrepancy: a mismatch type not referenced since the exception opened).
+	OpenExceptionEvidence    int                 `json:"open_exception_evidence"`
+	Sweep                    reconsweep.Report   `json:"sweep"`
+	Coverage                 reconsweep.Coverage `json:"coverage"`
+	SettlementReconciliation string              `json:"settlement_reconciliation"`
 }
 
 type mismatch struct {
@@ -55,8 +79,12 @@ type mismatch struct {
 func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconReport, error) {
 	rep := ReconReport{RunID: "payout-recon:" + ids.New(), ByType: map[string]int{},
 		SettlementReconciliation: "NOT_PERFORMED: no provider disbursement statements (PCR-007, PCR-016; Stage 17)"}
+	window := s.ReconWindow
+	if window <= 0 {
+		window = DefaultReconWindow
+	}
 	rows, err := s.Pool.Query(ctx, `SELECT `+payoutCols+payoutFrom+` WHERE p.status <> 'PAYOUT_REQUESTED' AND p.updated_at < $1
-		ORDER BY p.created_at DESC LIMIT 5000`, s.now().Add(-s.reconGrace()))
+		ORDER BY p.created_at DESC LIMIT $2`, s.now().Add(-s.reconGrace()), window)
 	if err != nil {
 		return rep, err
 	}
@@ -71,62 +99,130 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRepor
 			return rep, err
 		}
 		if p == nil {
-			continue // changed since the run started: the next run checks it past its own grace period
+			continue // changed since the run started: the sweep carries it as a deferral when it reaches it
 		}
 		rep.Checked++
-		if len(ms) == 0 {
-			continue
-		}
-		err = s.tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
-			// one recorder per payout at a time: concurrent runs (job and staff) never duplicate its references
-			if _, err := tx.Exec(ctx, `SELECT 1 FROM app.payout_requests WHERE id = $1 FOR UPDATE`, p.ID); err != nil {
-				return err
-			}
-			var open bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM app.payout_exceptions WHERE payout_request_id = $1
-				AND exception_type = 'RECONCILIATION_MISMATCH' AND status <> 'RESOLVED')`, p.ID).Scan(&open); err != nil || open {
-				return err // already under investigation: a rerun does not duplicate
-			}
-			var first string
-			types := []string{}
-			for _, m := range ms {
-				id := ids.New()
-				d, _ := json.Marshal(nonNil(m.detail))
-				if _, err := tx.Exec(ctx, `INSERT INTO app.payout_reconciliation_references (id, payout_request_id, mismatch_type, expected_amount_minor,
-					actual_amount_minor, currency, provider_reference, ledger_transaction_id, detail, detected_at, detected_by_run)
-					VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, id, p.ID, m.typ, m.expected, m.actual, p.Currency, nilIfEmpty(m.providerRef),
-					nilIfEmpty(m.ledgerTx), d, s.now(), rep.RunID); err != nil {
-					return err
-				}
-				if first == "" {
-					first = id
-				}
-				types = append(types, m.typ)
-				rep.NewMismatches++
-				rep.ByType[m.typ]++
-			}
-			sev := "SEV2"
-			for _, t := range types {
-				if t == "LEDGER_MISMATCH" || t == "AMOUNT_MISMATCH" || t == "DUPLICATE_PAYOUT_REFERENCE" || t == "PROVIDER_STATUS_MISMATCH" {
-					sev = "SEV1"
-				}
-			}
-			if err := s.insertEvent(ctx, tx, p.ID, event{Type: "RECONCILIATION_REQUIRED", Source: "SYSTEM", Reason: strings.Join(types, ",")}); err != nil {
-				return err
-			}
-			return s.openException(ctx, tx, "RECONCILIATION_MISMATCH", sev, "RECONCILIATION", p, "", map[string]any{"mismatch_types": types,
-				"run": rep.RunID}, first)
-		})
-		if err != nil {
+		if _, err := s.recordMismatches(ctx, p, ms, &rep); err != nil {
 			return rep, err
 		}
 	}
-	err = s.tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+	// coverage sweep: every payout, a bounded batch per run, resumable
+	store := reconsweep.SQLStore{Pool: s.Pool, Table: sweepTable}
+	cfg := s.ReconSweep.Or(DefaultReconSweep)
+	rep.Sweep, err = reconsweep.Run(ctx, store, reconsweep.Options{Config: cfg, Detector: SweepDetector, RunID: rep.RunID, Now: s.now},
+		s.sweepNext, func(ctx context.Context, id string) (reconsweep.Outcome, error) {
+			p, ms, err := s.reconcileFresh(ctx, id, s.now().Add(-s.reconGrace()))
+			switch {
+			case err != nil:
+				return reconsweep.Outcome{}, err
+			case p == nil:
+				return reconsweep.Outcome{Deferred: true}, nil
+			case p.Status == StRequested:
+				return reconsweep.Outcome{OutOfScope: true}, nil
+			}
+			n, err := s.recordMismatches(ctx, p, ms, &rep)
+			return reconsweep.Outcome{Exceptions: n}, err
+		})
+	// the run's evidence is recorded even when the sweep stopped on an error (non-cancelled context)
+	actx := context.WithoutCancel(ctx)
+	rep.Coverage, _ = store.Coverage(actx, SweepDetector, cfg.Scope)
+	aerr := s.tx(actx, func(ctx context.Context, tx pgx.Tx) error {
 		return audit.Record(ctx, tx, audit.Event{Action: "payout.reconciliation.run", ActorType: "system", TargetType: "payout_reconciliation",
 			Metadata: map[string]any{"run": rep.RunID, "checked": rep.Checked, "new_mismatches": rep.NewMismatches, "triggered_by": triggeredBy,
-				"settlement": "NOT_PERFORMED"}})
+				"open_exception_evidence": rep.OpenExceptionEvidence, "settlement": "NOT_PERFORMED", "sweep": rep.Sweep,
+				"coverage_watermark": rep.Coverage.LastCompletedCycleStartedAt}})
 	})
-	return rep, err
+	if err != nil {
+		return rep, err
+	}
+	return rep, aerr
+}
+
+// sweepNext lists the next payouts of the coverage scope in id order.
+func (s *Service) sweepNext(ctx context.Context, after string, limit int) ([]string, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT id::text FROM app.payout_requests WHERE id > $1::uuid AND status <> 'PAYOUT_REQUESTED'
+		ORDER BY id LIMIT $2`, reconsweep.After(after), limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// recordMismatches records one payout's mismatches: immutable references plus (at most one unresolved per payout) a
+// RECONCILIATION_MISMATCH exception. When an exception is already open, a repeated mismatch is not recorded again,
+// but a mismatch type not referenced since the exception opened is (a changed discrepancy stays visible); no second
+// exception is opened. Returns the number of references inserted.
+func (s *Service) recordMismatches(ctx context.Context, p *Payout, ms []mismatch, rep *ReconReport) (int, error) {
+	if len(ms) == 0 {
+		return 0, nil
+	}
+	var inserted []string
+	underOpen := false
+	err := s.tx(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		inserted, underOpen = nil, false
+		// one recorder per payout at a time: concurrent runs (job and staff) never duplicate its references
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM app.payout_requests WHERE id = $1 FOR UPDATE`, p.ID); err != nil {
+			return err
+		}
+		var since *time.Time
+		if err := tx.QueryRow(ctx, `SELECT coalesce((SELECT r.detected_at FROM app.payout_reconciliation_references r
+			WHERE r.id = e.reconciliation_reference_id), e.detected_at) FROM app.payout_exceptions e WHERE e.payout_request_id = $1
+			AND e.exception_type = 'RECONCILIATION_MISMATCH' AND e.status <> 'RESOLVED'`, p.ID).Scan(&since); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		var first string
+		types := []string{}
+		for _, m := range ms {
+			if since != nil {
+				var seen bool
+				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM app.payout_reconciliation_references WHERE payout_request_id = $1
+					AND mismatch_type = $2 AND detected_at >= $3)`, p.ID, m.typ, *since).Scan(&seen); err != nil {
+					return err
+				}
+				if seen {
+					continue // already under investigation: a rerun does not duplicate
+				}
+			}
+			id := ids.New()
+			d, _ := json.Marshal(nonNil(m.detail))
+			if _, err := tx.Exec(ctx, `INSERT INTO app.payout_reconciliation_references (id, payout_request_id, mismatch_type, expected_amount_minor,
+				actual_amount_minor, currency, provider_reference, ledger_transaction_id, detail, detected_at, detected_by_run)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, id, p.ID, m.typ, m.expected, m.actual, p.Currency, nilIfEmpty(m.providerRef),
+				nilIfEmpty(m.ledgerTx), d, s.now(), rep.RunID); err != nil {
+				return err
+			}
+			if first == "" {
+				first = id
+			}
+			types = append(types, m.typ)
+		}
+		inserted, underOpen = types, since != nil
+		if len(types) == 0 || since != nil {
+			return nil // nothing new, or evidence added to the exception already open
+		}
+		sev := "SEV2"
+		for _, t := range types {
+			if t == "LEDGER_MISMATCH" || t == "AMOUNT_MISMATCH" || t == "DUPLICATE_PAYOUT_REFERENCE" || t == "PROVIDER_STATUS_MISMATCH" {
+				sev = "SEV1"
+			}
+		}
+		if err := s.insertEvent(ctx, tx, p.ID, event{Type: "RECONCILIATION_REQUIRED", Source: "SYSTEM", Reason: strings.Join(types, ",")}); err != nil {
+			return err
+		}
+		return s.openException(ctx, tx, "RECONCILIATION_MISMATCH", sev, "RECONCILIATION", p, "", map[string]any{"mismatch_types": types,
+			"run": rep.RunID}, first)
+	})
+	if err != nil {
+		return 0, err
+	}
+	rep.NewMismatches += len(inserted)
+	for _, t := range inserted {
+		rep.ByType[t]++
+	}
+	if underOpen {
+		rep.OpenExceptionEvidence += len(inserted)
+	}
+	return len(inserted), nil
 }
 
 func (s *Service) reconGrace() time.Duration {
