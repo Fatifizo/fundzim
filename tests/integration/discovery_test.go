@@ -158,6 +158,9 @@ func TestDiscoveryEndToEnd(t *testing.T) {
 	f := staffFixture(t, s)
 	mig := pool(t, os.Getenv("DATABASE_MIGRATION_URL"))
 	tok := discoWord()
+	for tok[4] == tok[5] { // the typo below swaps letters 5 and 6: equal letters would leave the token unchanged (KI-R1-08)
+		tok = discoWord()
+	}
 	uA, idA, slugA := discoCampaign(t, s, f, "disco-a", tok, "TOWN_MUTARE")
 	uB, idB, slugB := discoCampaign(t, s, f, "disco-b", tok+" bursary", "PROVINCE_HARARE")
 
