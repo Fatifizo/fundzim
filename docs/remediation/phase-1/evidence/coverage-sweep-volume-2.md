@@ -1,0 +1,99 @@
+## Coverage sweep volume — payouts and fees (ADR-052)
+
+started 2026-10-25T16:12:17Z UTC; GOMAXPROCS=16; NumCPU=16; PostgreSQL 17.11; disposable compose project
+
+### Payouts (45 in scope, 33 submitted → one provider status query each)
+
+| measure | value |
+|---|---|
+| runs for one cycle (budget 2000 records/run, batch 200) | 1 |
+| examined (runs) / examined (completed checkpoint) | 45 / 45 |
+| cycle wall time (runs back to back, incl. recency pass of 5 000) | 410ms |
+| slowest run | 405ms |
+| sweep records/s (examined ÷ wall) | 110 |
+| test-process heap allocated during the cycle | 2.2 MiB total (8.6 MiB live after) |
+| sessions waiting on a lock, max sampled after each run | 0 |
+
+### Fee assessments (75)
+
+| measure | value |
+|---|---|
+| runs for one cycle (budget 5000 records/run, batch 500) | 1 |
+| examined | 75 |
+| cycle wall time (incl. recency pass of 5 000) | 584ms |
+| slowest run | 582ms |
+| sweep records/s | 128 |
+| sessions waiting on a lock, max sampled | 0 |
+
+```
+Limit (actual time=0.182..0.183 rows=0 loops=1)
+  Buffers: shared hit=9
+  InitPlan 1
+    ->  Limit (actual time=0.096..0.097 rows=0 loops=1)
+          Buffers: shared hit=6
+          ->  Index Only Scan using uq_payout_requests_key on payout_requests (actual time=0.076..0.093 rows=45 loops=1)
+                Heap Fetches: 26
+                Buffers: shared hit=6
+  ->  Sort (actual time=0.181..0.181 rows=0 loops=1)
+        Sort Key: p.id
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=9
+        ->  Index Only Scan using ix_payout_requests_status on payout_requests p (actual time=0.120..0.120 rows=0 loops=1)
+              Index Cond: (id > (InitPlan 1).col1)
+              Filter: (status <> 'PAYOUT_REQUESTED'::text)
+              Heap Fetches: 0
+              Buffers: shared hit=6
+Planning:
+  Buffers: shared hit=13
+Planning Time: 0.529 ms
+Execution Time: 0.293 ms
+```
+
+```
+Limit (actual time=0.100..0.101 rows=0 loops=1)
+  Buffers: shared hit=9
+  InitPlan 1
+    ->  Limit (actual time=0.077..0.077 rows=0 loops=1)
+          Buffers: shared hit=9
+          ->  Sort (actual time=0.067..0.072 rows=75 loops=1)
+                Sort Key: fee_assessments.id
+                Sort Method: quicksort  Memory: 25kB
+                Buffers: shared hit=9
+                ->  Seq Scan on fee_assessments (actual time=0.011..0.033 rows=75 loops=1)
+                      Buffers: shared hit=9
+  ->  Index Only Scan using pk_fee_assessments on fee_assessments a (actual time=0.100..0.100 rows=0 loops=1)
+        Index Cond: (id > (InitPlan 1).col1)
+        Heap Fetches: 0
+        Buffers: shared hit=9
+Planning:
+  Buffers: shared hit=18
+Planning Time: 0.477 ms
+Execution Time: 0.174 ms
+```
+
+```
+Limit (actual time=0.175..0.182 rows=19 loops=1)
+  Buffers: shared hit=8
+  InitPlan 1
+    ->  Limit (actual time=0.082..0.083 rows=1 loops=1)
+          Buffers: shared hit=4
+          ->  Sort (actual time=0.080..0.081 rows=11 loops=1)
+                Sort Key: payment_intents.id
+                Sort Method: top-N heapsort  Memory: 24kB
+                Buffers: shared hit=4
+                ->  Seq Scan on payment_intents (actual time=0.004..0.054 rows=41 loops=1)
+                      Buffers: shared hit=4
+  ->  Sort (actual time=0.174..0.177 rows=19 loops=1)
+        Sort Key: p.id
+        Sort Method: quicksort  Memory: 27kB
+        Buffers: shared hit=8
+        ->  Seq Scan on payment_intents p (actual time=0.112..0.144 rows=19 loops=1)
+              Filter: ((id > (InitPlan 1).col1) AND (status = ANY ('{SUCCEEDED,UNKNOWN}'::text[])))
+              Rows Removed by Filter: 22
+              Buffers: shared hit=8
+Planning:
+  Buffers: shared hit=286
+Planning Time: 4.769 ms
+Execution Time: 0.269 ms
+```
+
