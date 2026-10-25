@@ -8,7 +8,7 @@ These measurements come from one development host only:
 **No capacity target exists, and none is invented here.** The figures are inputs for the owner's coverage freshness decision
 (D-06) and volume decision (D-05). Anything below labelled *arithmetic* is the configured budgets applied to the measured
 rates. It is not a measurement and not a capacity claim. The raw reports are in `evidence/ledger-recon-sweep.md` and
-`it-coverage-volume*.log` / `coverage-sweep-volume-2.md` in `evidence/`.
+`it-coverage-volume*.log.txt` / `coverage-sweep-volume-2.md` in `evidence/`.
 
 ## 1. Run budgets (engineering defaults, not targets)
 

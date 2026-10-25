@@ -1,0 +1,61 @@
+commit 97b8a709180674987f7738f0a3a8e6e7cf939b43
+gofmt:
+vet:
+vet-ok
+?   	github.com/Fatifizo/fundzim/apps/api/cmd/api	[no test files]
+?   	github.com/Fatifizo/fundzim/apps/api/cmd/fundzimctl	[no test files]
+?   	github.com/Fatifizo/fundzim/apps/api/cmd/worker	[no test files]
+ok  	github.com/Fatifizo/fundzim/internal/app	6.156s
+ok  	github.com/Fatifizo/fundzim/internal/archtest	4.824s
+?   	github.com/Fatifizo/fundzim/internal/audit	[no test files]
+ok  	github.com/Fatifizo/fundzim/internal/auth	1.141s
+ok  	github.com/Fatifizo/fundzim/internal/auth/passwords	1.516s
+ok  	github.com/Fatifizo/fundzim/internal/beneficiaries	1.075s
+ok  	github.com/Fatifizo/fundzim/internal/campaigns	1.114s
+ok  	github.com/Fatifizo/fundzim/internal/campaigns/media	9.447s
+ok  	github.com/Fatifizo/fundzim/internal/campaigns/updates	1.095s
+ok  	github.com/Fatifizo/fundzim/internal/compliance	1.057s
+ok  	github.com/Fatifizo/fundzim/internal/deploytest	1.122s
+ok  	github.com/Fatifizo/fundzim/internal/discovery	1.145s
+ok  	github.com/Fatifizo/fundzim/internal/fees	3.130s
+ok  	github.com/Fatifizo/fundzim/internal/kyc	1.081s
+ok  	github.com/Fatifizo/fundzim/internal/ledger	2.503s
+ok  	github.com/Fatifizo/fundzim/internal/notifications	1.466s
+ok  	github.com/Fatifizo/fundzim/internal/operations	1.127s
+ok  	github.com/Fatifizo/fundzim/internal/organisations	1.028s
+ok  	github.com/Fatifizo/fundzim/internal/payments	1.062s
+ok  	github.com/Fatifizo/fundzim/internal/payouts	1.136s
+?   	github.com/Fatifizo/fundzim/internal/platform/authz	[no test files]
+?   	github.com/Fatifizo/fundzim/internal/platform/cache	[no test files]
+?   	github.com/Fatifizo/fundzim/internal/platform/clock	[no test files]
+ok  	github.com/Fatifizo/fundzim/internal/platform/config	1.041s
+ok  	github.com/Fatifizo/fundzim/internal/platform/crypto	1.058s
+?   	github.com/Fatifizo/fundzim/internal/platform/db	[no test files]
+?   	github.com/Fatifizo/fundzim/internal/platform/errs	[no test files]
+ok  	github.com/Fatifizo/fundzim/internal/platform/featureflags	1.021s
+ok  	github.com/Fatifizo/fundzim/internal/platform/health	1.059s
+ok  	github.com/Fatifizo/fundzim/internal/platform/httpx	1.045s
+ok  	github.com/Fatifizo/fundzim/internal/platform/idempotency	1.033s
+ok  	github.com/Fatifizo/fundzim/internal/platform/ids	1.036s
+ok  	github.com/Fatifizo/fundzim/internal/platform/jobs	1.037s
+ok  	github.com/Fatifizo/fundzim/internal/platform/logging	1.036s
+?   	github.com/Fatifizo/fundzim/internal/platform/metrics	[no test files]
+ok  	github.com/Fatifizo/fundzim/internal/platform/money	1.107s
+?   	github.com/Fatifizo/fundzim/internal/platform/opsview	[no test files]
+ok  	github.com/Fatifizo/fundzim/internal/platform/outbox	1.037s
+ok  	github.com/Fatifizo/fundzim/internal/platform/ratelimit	1.063s
+ok  	github.com/Fatifizo/fundzim/internal/platform/reconsweep	2.080s
+ok  	github.com/Fatifizo/fundzim/internal/platform/secretstore	1.120s
+ok  	github.com/Fatifizo/fundzim/internal/platform/storage	1.024s
+ok  	github.com/Fatifizo/fundzim/internal/platform/verifcase	1.024s
+?   	github.com/Fatifizo/fundzim/internal/platform/version	[no test files]
+ok  	github.com/Fatifizo/fundzim/internal/psp	1.039s
+?   	github.com/Fatifizo/fundzim/internal/psp/psptest	[no test files]
+ok  	github.com/Fatifizo/fundzim/internal/psp/sandbox	1.048s
+ok  	github.com/Fatifizo/fundzim/internal/reconciliation	1.153s
+ok  	github.com/Fatifizo/fundzim/internal/risk	22.524s
+ok  	github.com/Fatifizo/fundzim/internal/storage	1.584s
+?   	github.com/Fatifizo/fundzim/internal/users	[no test files]
+?   	github.com/Fatifizo/fundzim/internal/verification	[no test files]
+?   	github.com/Fatifizo/fundzim/migrations	[no test files]
+exit 0

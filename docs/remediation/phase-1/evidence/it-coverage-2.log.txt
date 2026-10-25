@@ -1,0 +1,6 @@
+=== RUN   TestReconciliationCoverageConcurrentAndInterrupted
+    reconciliation_coverage_test.go:186: want 202 , got 422 PAYOUT_NOT_ELIGIBLE [{reason_category PAYOUTS_UNAVAILABLE}] (null)
+--- FAIL: TestReconciliationCoverageConcurrentAndInterrupted (34.35s)
+FAIL
+FAIL	github.com/Fatifizo/fundzim/tests/integration	34.410s
+FAIL

@@ -1,0 +1,13 @@
+=== RUN   TestReconciliationCoveragePayoutOutsideWindow
+--- PASS: TestReconciliationCoveragePayoutOutsideWindow (40.39s)
+=== RUN   TestReconciliationCoverageConcurrentAndInterrupted
+    reconciliation_coverage_test.go:220: cycle 1: 3 payouts, 0 interrupted runs
+--- PASS: TestReconciliationCoverageConcurrentAndInterrupted (8.42s)
+=== RUN   TestReconciliationCoverageFeeOutsideWindow
+--- PASS: TestReconciliationCoverageFeeOutsideWindow (5.26s)
+=== RUN   TestReconciliationCoverageLedgerSweeps
+--- PASS: TestReconciliationCoverageLedgerSweeps (2.07s)
+=== RUN   TestReconciliationCoverageCheckpointGuards
+--- PASS: TestReconciliationCoverageCheckpointGuards (0.13s)
+PASS
+ok  	github.com/Fatifizo/fundzim/tests/integration	56.347s

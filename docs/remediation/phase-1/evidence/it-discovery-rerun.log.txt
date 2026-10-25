@@ -1,0 +1,14 @@
+commit 8baee4eb549c4de7e8823ea485d9234110a1f021
+=== RUN   TestDiscoveryEndToEnd
+--- PASS: TestDiscoveryEndToEnd (35.04s)
+=== RUN   TestDiscoveryEndToEnd
+--- PASS: TestDiscoveryEndToEnd (17.08s)
+=== RUN   TestDiscoveryEndToEnd
+--- PASS: TestDiscoveryEndToEnd (15.95s)
+=== RUN   TestDiscoveryEndToEnd
+--- PASS: TestDiscoveryEndToEnd (18.03s)
+=== RUN   TestDiscoveryEndToEnd
+--- PASS: TestDiscoveryEndToEnd (15.05s)
+PASS
+ok  	github.com/Fatifizo/fundzim/tests/integration	101.185s
+exit 0

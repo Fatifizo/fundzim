@@ -1,0 +1,84 @@
+commit 8baee4eb549c4de7e8823ea485d9234110a1f021
+=== RUN   TestLedgerReconciliationSweepVolume
+panic: test timed out after 2h0m0s
+	running tests:
+		TestLedgerReconciliationSweepVolume (2h0m0s)
+
+goroutine 142045 [running]:
+testing.(*M).startAlarm.func1()
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/testing/testing.go:2961 +0x34a
+created by time.goFunc
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/time/sleep.go:182 +0x2d
+
+goroutine 1 [chan receive, 119 minutes]:
+testing.(*T).Run(0x25945f8e008, {0x9e0211?, 0x2594603faa0?}, 0x1048188)
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/testing/testing.go:2268 +0x4f2
+testing.runTests.func1(0x25945f8e008)
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/testing/testing.go:2744 +0x37
+testing.tRunner(0x25945f8e008, 0x2594603fbc8)
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/testing/testing.go:2195 +0xea
+testing.runTests({0x9d9ea2, 0x1b}, {0x9e6f17, 0x2d}, 0x25945f6c090, {0x10cf3e0, 0x3, 0x3}, {0xc2afa4ff477d45b3, 0x68c61d5fd2d, ...})
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/testing/testing.go:2742 +0x510
+testing.(*M).Run(0x25945f208c0)
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/testing/testing.go:2602 +0x6af
+main.main()
+	_testmain.go:50 +0x9b
+
+goroutine 49 [runnable]:
+syscall.read(0x7?, {0x25946028000?, 0x2000?, 0x2000?})
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/syscall/zsyscall_linux_amd64.go:729 +0xc8
+syscall.Read(...)
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/syscall/syscall_unix.go:183
+internal/poll.ignoringEINTRIO(...)
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/internal/poll/fd_unix.go:743
+internal/poll.(*FD).Read(0x25945e1e300, {0x25946028000, 0x2000, 0x2000})
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/internal/poll/fd_unix.go:166 +0x214
+net.(*netFD).Read(0x25945e1e300, {0x25946028000?, 0x7566ea?, 0xf72e78?})
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/net/fd_posix.go:68 +0x25
+net.(*conn).Read(0x25946282050, {0x25946028000?, 0x4917f2?, 0x25945d5dfb0?})
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/net/net.go:196 +0x45
+github.com/jackc/pgx/v5/pgconn/internal/bgreader.(*BGReader).Read(0x25945ebe2c0, {0x25946028000, 0x2000, 0x2000})
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgconn/internal/bgreader/bgreader.go:100 +0xcb
+io.ReadAtLeast({0x103e390, 0x25945ebe2c0}, {0x25946028000, 0x2000, 0x2000}, 0x5)
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/io/io.go:335 +0x83
+github.com/jackc/pgx/v5/pgproto3.(*chunkReader).Next(0x25945e7aa80, 0x5)
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgproto3/chunkreader.go:80 +0x289
+github.com/jackc/pgx/v5/pgproto3.(*Frontend).Receive(0x2594602a008)
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgproto3/frontend.go:313 +0x3c
+github.com/jackc/pgx/v5/pgconn.(*PgConn).peekMessage(0x25945f30b08)
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgconn/pgconn.go:643 +0x155
+github.com/jackc/pgx/v5/pgconn.(*PgConn).receiveMessage(0x25945f30b08)
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgconn/pgconn.go:667 +0x26
+github.com/jackc/pgx/v5/pgconn.(*ResultReader).receiveMessage(0x25945f30bc0)
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgconn/pgconn.go:1921 +0x37
+github.com/jackc/pgx/v5/pgconn.(*ResultReader).readUntilRowDescription(0x25945f30bc0, 0x259460be0a0, {0x25946a0ab40, 0x5, 0x8})
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgconn/pgconn.go:1888 +0x73
+github.com/jackc/pgx/v5/pgconn.(*PgConn).execExtendedSuffix(0x25945f30b08, 0x25945f30bc0, 0x259460be0a0, {0x25946a0ab40, 0x5, 0x8})
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgconn/pgconn.go:1388 +0x1c5
+github.com/jackc/pgx/v5/pgconn.(*PgConn).ExecStatement(0x25945f30b08, {0x10446f8?, 0x25945e145b0?}, 0x259460be0a0, {0x2594619e000, 0x2, 0x10}, {0x25945e50000, 0x2, 0x10}, ...)
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgconn/pgconn.go:1328 +0x17d
+github.com/jackc/pgx/v5.(*Conn).Query(0x25945f22280, {0x10446f8?, 0x25945e145b0?}, {0x9fa1ae, 0x1ea}, {0x259461a8140, 0x2, 0x2})
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/conn.go:857 +0x1425
+github.com/jackc/pgx/v5/pgxpool.(*Conn).Query(0x25945fae000?, {0x10446f8?, 0x25945e145b0?}, {0x9fa1ae?, 0x25945cc3808?}, {0x259461a8140?, 0x489c2f?, 0x10?})
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgxpool/conn.go:90 +0x3c
+github.com/jackc/pgx/v5/pgxpool.(*Pool).Query(0x9d3033?, {0x10446f8, 0x25945e145b0}, {0x9fa1ae, 0x1ea}, {0x259461a8140, 0x2, 0x2})
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgxpool/pool.go:770 +0x9f
+github.com/Fatifizo/fundzim/internal/ledger.(*Service).Reconcile(0x25946a0e270, {0x10446f8, 0x25945e145b0}, {0x9d26da, 0x10})
+	/home/administrator/projects/fundzim/internal/ledger/reconcile.go:202 +0x37d
+github.com/Fatifizo/fundzim/tests/perf/ledger.TestLedgerReconciliationSweepVolume(0x25945f8e248)
+	/home/administrator/projects/fundzim/tests/perf/ledger/recon_sweep_perf_test.go:196 +0x2967
+testing.tRunner(0x25945f8e248, 0x1048188)
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/testing/testing.go:2195 +0xea
+created by testing.(*T).Run in goroutine 1
+	/home/administrator/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/testing/testing.go:2260 +0x4d4
+
+goroutine 50 [select]:
+github.com/jackc/pgx/v5/pgxpool.(*Pool).backgroundHealthCheck(0x25945fae000)
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgxpool/pool.go:510 +0xc8
+github.com/jackc/pgx/v5/pgxpool.NewWithConfig.func5()
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgxpool/pool.go:337 +0x3d
+created by github.com/jackc/pgx/v5/pgxpool.NewWithConfig in goroutine 49
+	/home/administrator/go/pkg/mod/github.com/jackc/pgx/v5@v5.11.0/pgxpool/pool.go:334 +0x465
+FAIL	github.com/Fatifizo/fundzim/tests/perf/ledger	7200.031s
+FAIL
+exit 1

@@ -1,0 +1,895 @@
+=== RUN   TestCampaignMediaApprovedStrippedAndServed
+--- PASS: TestCampaignMediaApprovedStrippedAndServed (11.29s)
+=== RUN   TestCampaignMediaEICARRejected
+    campaign_media_test.go:669: real ClamAV passed a PNG with EICAR in a tEXt chunk; the re-encode removed it from the served bytes
+--- PASS: TestCampaignMediaEICARRejected (9.12s)
+=== RUN   TestCampaignMediaScannerOutageNeverApproves
+--- PASS: TestCampaignMediaScannerOutageNeverApproves (47.39s)
+=== RUN   TestCampaignMediaIDORAndValidation
+--- PASS: TestCampaignMediaIDORAndValidation (32.77s)
+=== RUN   TestCampaignMediaPrivateObjectNeverLinked
+--- PASS: TestCampaignMediaPrivateObjectNeverLinked (6.96s)
+=== RUN   TestCampaignMediaWidthVariants
+    campaign_media_test.go:1087: no pre-variant APPROVED media in this database; backfill step not exercised here
+--- PASS: TestCampaignMediaWidthVariants (18.77s)
+=== RUN   TestCampaignUpdatesPublishDirectAndPreModerated
+--- PASS: TestCampaignUpdatesPublishDirectAndPreModerated (1.84s)
+=== RUN   TestCampaignUpdatesSuspendedCampaignRefused
+--- PASS: TestCampaignUpdatesSuspendedCampaignRefused (1.85s)
+=== RUN   TestCampaignUpdatesIDOR
+--- PASS: TestCampaignUpdatesIDOR (3.24s)
+=== RUN   TestCampaignUpdatesPublicListingAndHide
+--- PASS: TestCampaignUpdatesPublicListingAndHide (1.91s)
+=== RUN   TestCampaignUpdatesModeratorCannotApproveOwnLinkedContent
+--- PASS: TestCampaignUpdatesModeratorCannotApproveOwnLinkedContent (2.54s)
+=== RUN   TestCampaignLifecycleEndToEnd
+--- PASS: TestCampaignLifecycleEndToEnd (15.59s)
+=== RUN   TestCampaignSelfReviewFourEyesAndPrivacy
+--- PASS: TestCampaignSelfReviewFourEyesAndPrivacy (9.26s)
+=== RUN   TestCampaignComplianceRestrictionEnforcement
+--- PASS: TestCampaignComplianceRestrictionEnforcement (9.97s)
+=== RUN   TestCampaignConcurrency
+--- PASS: TestCampaignConcurrency (9.67s)
+=== RUN   TestCampaignFailureInjection
+--- PASS: TestCampaignFailureInjection (6.49s)
+=== RUN   TestCampaignPerformanceSample
+    campaigns_test.go:561: PERF POST /campaigns (create draft)           n=30 p50=13.06542ms p95=20.801568ms max=83.592801ms
+    campaigns_test.go:561: PERF PATCH /campaigns/{id} (edit draft)       n=30 p50=11.924941ms p95=18.181647ms max=49.691002ms
+    campaigns_test.go:561: PERF GET /campaigns/mine                      n=50 p50=3.228049ms p95=5.472816ms max=12.295558ms
+    campaigns_test.go:561: PERF GET /campaigns/{id}/eligibility          n=50 p50=6.384343ms p95=10.110131ms max=11.431631ms
+    campaigns_test.go:561: PERF GET /public/campaigns?q=                 n=50 p50=7.323318ms p95=12.371877ms max=18.883472ms
+    campaigns_test.go:561: PERF GET /admin/campaigns/review              n=50 p50=2.817169ms p95=5.704606ms max=9.162329ms
+    campaigns_test.go:592: PERF dataset: 52 campaigns (10 live) in the shared development database; sequential requests, concurrency 1
+--- PASS: TestCampaignPerformanceSample (2.96s)
+=== RUN   TestCampaignSecurityRechecks
+--- PASS: TestCampaignSecurityRechecks (15.96s)
+=== RUN   TestComplianceRoleIsGatewayOnly
+--- PASS: TestComplianceRoleIsGatewayOnly (0.21s)
+=== RUN   TestComplianceRLSHidesRestrictedSTR
+--- PASS: TestComplianceRLSHidesRestrictedSTR (0.19s)
+=== RUN   TestComplianceMakerCheckerAndSubjectConflicts
+--- PASS: TestComplianceMakerCheckerAndSubjectConflicts (0.38s)
+=== RUN   TestComplianceOrganisationMemberCannotDecide
+--- PASS: TestComplianceOrganisationMemberCannotDecide (0.10s)
+=== RUN   TestComplianceConcurrentDecisionsExactlyOneWins
+--- PASS: TestComplianceConcurrentDecisionsExactlyOneWins (0.57s)
+=== RUN   TestComplianceDuplicateDeliveryOpensOneCase
+--- PASS: TestComplianceDuplicateDeliveryOpensOneCase (0.23s)
+=== RUN   TestRiskSignalDedupeAndAssessment
+--- PASS: TestRiskSignalDedupeAndAssessment (0.14s)
+=== RUN   TestRiskLimitsMakerCheckerAndBaseline
+--- PASS: TestRiskLimitsMakerCheckerAndBaseline (0.09s)
+=== RUN   TestRiskEscalationOpensComplianceCaseThroughOutbox
+--- PASS: TestRiskEscalationOpensComplianceCaseThroughOutbox (0.82s)
+=== RUN   TestComplianceHTTPWorkflow
+--- PASS: TestComplianceHTTPWorkflow (0.31s)
+=== RUN   TestDiscoveryEndToEnd
+--- PASS: TestDiscoveryEndToEnd (18.60s)
+=== RUN   TestDiscoveryGovernanceAndRBAC
+--- PASS: TestDiscoveryGovernanceAndRBAC (1.58s)
+=== RUN   TestDiscoveryFailureInjectionAndAbuse
+--- PASS: TestDiscoveryFailureInjectionAndAbuse (8.08s)
+=== RUN   TestDiscoveryConcurrency
+--- PASS: TestDiscoveryConcurrency (9.42s)
+=== RUN   TestFeesPerf
+    fees_perf_test.go:34: | fee quote (policy selection + exact calculation + store), c=1 | 1 | 400 | 16.9 | 23.9 | 45.3 | 58 | 0 |
+        
+    fees_perf_test.go:34: | fee quote (policy selection + exact calculation + store), c=8 | 8 | 400 | 13.7 | 19.6 | 96.4 | 493 | 0 |
+        
+    fees_perf_test.go:34: | policy lookup (Resolve: platform fee, most specific scope) | 8 | 1000 | 0.5 | 0.7 | 1.8 | 15747 | 0 |
+        
+    fees_perf_test.go:34: | fee assessment + fee journals (fixture donation: 2 assessments, capture + provider-fee journals) | 8 | 200 | 192.1 | 501.9 | 640.7 | 35 | 0 |
+        
+    fees_perf_test.go:34: | staff policy list | 8 | 200 | 1.9 | 2.6 | 5.7 | 3933 | 0 |
+        
+    fees_perf_test.go:34: | staff assessment list (100) | 8 | 300 | 1.9 | 3.8 | 6.5 | 3545 | 0 |
+        
+    fees_perf_test.go:34: | staff quote list (50) | 8 | 300 | 2.0 | 3.7 | 5.8 | 3638 | 0 |
+        
+    fees_perf_test.go:34: | revenue report (12 months, per currency) | 8 | 50 | 9.9 | 15.9 | 18.9 | 704 | 0 |
+        
+    fees_perf_test.go:34: | fee reconciliation run (latest ≤ 5000 assessments) | 1 | 3 | 2517.0 | 2546.3 | 2546.3 | 0 | 0 |
+        
+## Fee performance
+
+measured 2026-10-25T12:22:54Z UTC; GOMAXPROCS=16; development stack (compose PostgreSQL 17.11, default settings); in-process service calls; dataset after the run: 800 fee quotes, 400 assessments, 2 fee policies, 400 fee ledger journals.
+
+| scenario | c | n | p50 ms | p95 ms | max ms | ops/s | errors |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| fee quote (policy selection + exact calculation + store), c=1 | 1 | 400 | 16.9 | 23.9 | 45.3 | 58 | 0 |
+| fee quote (policy selection + exact calculation + store), c=8 | 8 | 400 | 13.7 | 19.6 | 96.4 | 493 | 0 |
+| policy lookup (Resolve: platform fee, most specific scope) | 8 | 1000 | 0.5 | 0.7 | 1.8 | 15747 | 0 |
+| fee assessment + fee journals (fixture donation: 2 assessments, capture + provider-fee journals) | 8 | 200 | 192.1 | 501.9 | 640.7 | 35 | 0 |
+| staff policy list | 8 | 200 | 1.9 | 2.6 | 5.7 | 3933 | 0 |
+| staff assessment list (100) | 8 | 300 | 1.9 | 3.8 | 6.5 | 3545 | 0 |
+| staff quote list (50) | 8 | 300 | 2.0 | 3.7 | 5.8 | 3638 | 0 |
+| revenue report (12 months, per currency) | 8 | 50 | 9.9 | 15.9 | 18.9 | 704 | 0 |
+| fee reconciliation run (latest ≤ 5000 assessments) | 1 | 3 | 2517.0 | 2546.3 | 2546.3 | 0 | 0 |
+
+--- PASS: TestFeesPerf (40.77s)
+=== RUN   TestFeePolicyMakerCheckerLifecycleAndImmutability
+--- PASS: TestFeePolicyMakerCheckerLifecycleAndImmutability (5.04s)
+=== RUN   TestFeePolicyLinkedAccountCannotApprove
+--- PASS: TestFeePolicyLinkedAccountCannotApprove (4.57s)
+=== RUN   TestFeePolicyPrecedenceAndSelection
+--- PASS: TestFeePolicyPrecedenceAndSelection (4.81s)
+=== RUN   TestFeeQuotesAndDonationIntentBinding
+--- PASS: TestFeeQuotesAndDonationIntentBinding (6.56s)
+=== RUN   TestFeeAssessmentOnTestPaymentIsNeverPosted
+--- PASS: TestFeeAssessmentOnTestPaymentIsNeverPosted (8.80s)
+=== RUN   TestFeeAccountingFixturesRefundsAndChargebacks
+--- PASS: TestFeeAccountingFixturesRefundsAndChargebacks (9.91s)
+=== RUN   TestFeeAdjustmentsMakerCheckerAndImmutability
+--- PASS: TestFeeAdjustmentsMakerCheckerAndImmutability (5.12s)
+=== RUN   TestFeeConcurrency
+--- PASS: TestFeeConcurrency (7.46s)
+=== RUN   TestFeePayoutFeesNeverDeductTwice
+--- PASS: TestFeePayoutFeesNeverDeductTwice (17.26s)
+=== RUN   TestFeeSecurity
+--- PASS: TestFeeSecurity (7.56s)
+=== RUN   TestFeeReconciliationAndRevenueReport
+--- PASS: TestFeeReconciliationAndRevenueReport (9.36s)
+=== RUN   TestFeeFailureInjection
+fee failure injection: ledger outage, database outage and ledger refusal handled
+--- PASS: TestFeeFailureInjection (11.82s)
+=== RUN   TestFinancialLedgerPoolExhaustionFailsCleanly
+    financial_faults_test.go:45: posting with the pool exhausted: context deadline exceeded
+--- PASS: TestFinancialLedgerPoolExhaustionFailsCleanly (5.63s)
+=== RUN   TestFinancialAuditVerificationInterrupted
+    financial_faults_test.go:85: deadline 1ms: interrupted (timeout: context deadline exceeded); nothing recorded
+    financial_faults_test.go:85: deadline 20ms: interrupted (timeout: context deadline exceeded); nothing recorded
+    financial_faults_test.go:91: deadline 200ms: completed (1888 rows, 93 ms); one INTACT run recorded
+    financial_faults_test.go:91: deadline 2s: completed (1888 rows, 64 ms); one INTACT run recorded
+    financial_faults_test.go:91: deadline 5m0s: completed (1888 rows, 63 ms); one INTACT run recorded
+--- PASS: TestFinancialAuditVerificationInterrupted (0.48s)
+=== RUN   TestFinancialPayoutReconciliationInterrupted
+    financial_faults_test.go:120: run with 1ms: checked 0, err timeout: context deadline exceeded
+    financial_faults_test.go:120: run with 50ms: checked 3, err timeout: context deadline exceeded
+    financial_faults_test.go:120: run with 300ms: checked 3, err <nil>
+    financial_faults_test.go:120: run with 1s: checked 3, err <nil>
+--- PASS: TestFinancialPayoutReconciliationInterrupted (7.25s)
+=== RUN   TestFinancialLedgerConcurrentConflictingPayloads
+--- PASS: TestFinancialLedgerConcurrentConflictingPayloads (0.50s)
+=== RUN   TestFinancialLedgerOppositeOrderPostingsDoNotDeadlock
+    financial_ledger_test.go:129: opposite-direction postings: 200 posted, 0 deadlocks, 0 other errors
+--- PASS: TestFinancialLedgerOppositeOrderPostingsDoNotDeadlock (4.15s)
+=== RUN   TestFinancialLedgerConnectionLossAndAmbiguousRetry
+    financial_ledger_test.go:173: posting after connection loss: FATAL: terminating connection due to administrator command (SQLSTATE 57P01)
+--- PASS: TestFinancialLedgerConnectionLossAndAmbiguousRetry (0.64s)
+=== RUN   TestFinancialLedgerIntegrityDuringConcurrentPosting
+    financial_ledger_test.go:241: 640 integrity runs passed during 1362 concurrent postings
+--- PASS: TestFinancialLedgerIntegrityDuringConcurrentPosting (20.44s)
+=== RUN   TestFinancialLoad
+    financial_load_test.go:77: opt-in: FUNDZIM_IT_S19_LOAD=1 (local disposable stack only)
+--- SKIP: TestFinancialLoad (0.00s)
+=== RUN   TestFinancialPaymentPollBudgetExhaustionAndLateSuccess
+--- PASS: TestFinancialPaymentPollBudgetExhaustionAndLateSuccess (9.44s)
+=== RUN   TestFinancialPaymentPollAttemptCap
+--- PASS: TestFinancialPaymentPollAttemptCap (11.05s)
+=== RUN   TestFinancialPaymentConcurrentSweepsPollOnce
+    financial_payment_poll_test.go:169: round 0: queried once by 8 concurrent sweeps
+--- PASS: TestFinancialPaymentConcurrentSweepsPollOnce (7.31s)
+=== RUN   TestFinancialPaymentPollErrorClassesNeverFail
+--- PASS: TestFinancialPaymentPollErrorClassesNeverFail (4.22s)
+=== RUN   TestFinancialPayoutConcurrentApprovals
+    financial_payout_concurrency_test.go:60: 12 concurrent approval calls: 2 accepted, 10 refused; 2 approvals by 2 checkers; 1 transitions
+--- PASS: TestFinancialPayoutConcurrentApprovals (5.47s)
+=== RUN   TestFinancialPayoutCancelRacesSubmission
+    financial_payout_concurrency_test.go:96: round 0: status CANCELLED, 1 cancels and 0 submissions succeeded, 0 CREATE_PAYOUT attempts
+    financial_payout_concurrency_test.go:96: round 1: status CANCELLED, 1 cancels and 0 submissions succeeded, 0 CREATE_PAYOUT attempts
+    financial_payout_concurrency_test.go:96: round 2: status CANCELLED, 1 cancels and 0 submissions succeeded, 0 CREATE_PAYOUT attempts
+--- PASS: TestFinancialPayoutCancelRacesSubmission (14.49s)
+=== RUN   TestFinancialPayoutConcurrentReconciliationRunsRecordOnce
+    financial_payout_concurrency_test.go:156: 6 concurrent runs: references [PROVIDER_STATUS_MISMATCH], exceptions 1
+--- PASS: TestFinancialPayoutConcurrentReconciliationRunsRecordOnce (6.98s)
+=== RUN   TestFinancialPayoutCrossTenantUnderConcurrency
+--- PASS: TestFinancialPayoutCrossTenantUnderConcurrency (6.64s)
+=== RUN   TestFinancialPayoutConcurrentStatusQueries
+    financial_payout_poll_race_test.go:54: 64 concurrent status queries: 64 ok, 0 failed; database deadlocks during the run: 0; errors: map[]
+    financial_payout_poll_race_test.go:72: 6 GET_STATUS attempts recorded
+--- PASS: TestFinancialPayoutConcurrentStatusQueries (5.53s)
+=== RUN   TestFinancialPayoutCompletionWindowVersusReconciliation
+--- PASS: TestFinancialPayoutCompletionWindowVersusReconciliation (8.23s)
+=== RUN   TestFinancialPayoutConnectionLostBetweenJournalAndConsumption
+    financial_payout_race_test.go:249: after the fault: reservation ACTIVE
+--- PASS: TestFinancialPayoutConnectionLostBetweenJournalAndConsumption (6.95s)
+=== RUN   TestFinancialPayoutLedgerRefusalIsStillReported
+--- PASS: TestFinancialPayoutLedgerRefusalIsStillReported (13.28s)
+=== RUN   TestFinancialReservationInvariantsInTheDatabase
+    financial_payout_race_test.go:399: CONSUMED without consumption journal refused: INTERNAL_ERROR ERROR: reservation of payout 01a17307-3936-7e34-83f1-612ff0103c29 (status PENDING_REVIEW) cannot be consumed without authoritative completion (SQLSTATE 23514)
+    financial_payout_race_test.go:400: second reservation for one payout refused: INTERNAL_ERROR ERROR: duplicate key value violates unique constraint "uq_payout_reservations_payout" (SQLSTATE 23505)
+    financial_payout_race_test.go:403: reservation moved to another payout refused: INTERNAL_ERROR ERROR: payout reservation facts and journal links are set once (SQLSTATE 23001)
+    financial_payout_race_test.go:404: reservation shares another's reserve journal refused: INTERNAL_ERROR ERROR: payout reservation facts and journal links are set once (SQLSTATE 23001)
+    financial_payout_race_test.go:414: RELEASED → CONSUMED refused: INTERNAL_ERROR ERROR: payout reservation facts and journal links are set once (SQLSTATE 23001)
+    financial_payout_race_test.go:416: RELEASED → ACTIVE refused: INTERNAL_ERROR ERROR: payout reservation facts and journal links are set once (SQLSTATE 23001)
+--- PASS: TestFinancialReservationInvariantsInTheDatabase (8.56s)
+=== RUN   TestFinancialReconciliationVolumeSample
+    financial_recon_volume_test.go:20: opt-in: FUNDZIM_IT_S19_LOAD=1 (local disposable stack only)
+--- SKIP: TestFinancialReconciliationVolumeSample (0.00s)
+=== RUN   TestFinancialWorkerCrashMidFlight
+    financial_worker_crash_test.go:26: opt-in: set FUNDZIM_IT_WORKER_KILL_CMD and FUNDZIM_IT_WORKER_START_CMD (local disposable stack only)
+--- SKIP: TestFinancialWorkerCrashMidFlight (0.00s)
+=== RUN   TestIdentityRegistrationVerificationAndLogin
+--- PASS: TestIdentityRegistrationVerificationAndLogin (3.97s)
+=== RUN   TestIdentityLoginGenericErrorsAndCSRF
+--- PASS: TestIdentityLoginGenericErrorsAndCSRF (3.84s)
+=== RUN   TestIdentityEmailChangeAndResend
+--- PASS: TestIdentityEmailChangeAndResend (11.07s)
+=== RUN   TestIdentitySessionsRotationLogoutAndIDOR
+--- PASS: TestIdentitySessionsRotationLogoutAndIDOR (3.45s)
+=== RUN   TestIdentityPasswordResetAndChange
+--- PASS: TestIdentityPasswordResetAndChange (7.03s)
+=== RUN   TestIdentityMFAEnrollLoginRecovery
+--- PASS: TestIdentityMFAEnrollLoginRecovery (31.07s)
+=== RUN   TestIdentityPhoneVerification
+--- PASS: TestIdentityPhoneVerification (1.61s)
+=== RUN   TestIdentityConcurrency
+--- PASS: TestIdentityConcurrency (2.24s)
+=== RUN   TestIdentityRBACStaffMakerChecker
+--- PASS: TestIdentityRBACStaffMakerChecker (14.63s)
+=== RUN   TestIdentityOrganisationIsolation
+--- PASS: TestIdentityOrganisationIsolation (5.00s)
+=== RUN   TestIdentityAuditChainsIntact
+--- PASS: TestIdentityAuditChainsIntact (0.26s)
+=== RUN   TestIdentityPerformanceSample
+    identity_test.go:1049: GET /me sequential: n=300 workers=1 p50=2.543683ms p95=3.420221ms p99=4.076908ms max=4.298299ms throughput=391 req/s
+    identity_test.go:1049: GET /me concurrent: n=1000 workers=20 p50=3.19369ms p95=4.913028ms p99=46.508731ms max=51.186694ms throughput=4838 req/s
+    identity_test.go:1049: PATCH /me concurrent: n=300 workers=10 p50=19.740306ms p95=85.789964ms p99=145.616779ms max=153.558458ms throughput=344 req/s
+--- PASS: TestIdentityPerformanceSample (4.27s)
+=== RUN   TestDistributedLoginLimitAcrossReplicas
+    identity_test.go:1076: set FUNDZIM_IT_API_URL and FUNDZIM_IT_API2_URL (scale-test profile)
+--- SKIP: TestDistributedLoginLimitAcrossReplicas (0.00s)
+=== RUN   TestIdentitySessionExpiry
+--- PASS: TestIdentitySessionExpiry (7.78s)
+=== RUN   TestMigrationsAppliedAndRepeatable
+--- PASS: TestMigrationsAppliedAndRepeatable (0.03s)
+=== RUN   TestAppRoleReadinessQueries
+--- PASS: TestAppRoleReadinessQueries (0.03s)
+=== RUN   TestAuditEventsAreAppendOnlyForRuntimeRoles
+=== RUN   TestAuditEventsAreAppendOnlyForRuntimeRoles/fundzim_app
+=== RUN   TestAuditEventsAreAppendOnlyForRuntimeRoles/fundzim_worker
+--- PASS: TestAuditEventsAreAppendOnlyForRuntimeRoles (0.07s)
+    --- PASS: TestAuditEventsAreAppendOnlyForRuntimeRoles/fundzim_app (0.03s)
+    --- PASS: TestAuditEventsAreAppendOnlyForRuntimeRoles/fundzim_worker (0.04s)
+=== RUN   TestAuditHashChainVerifiesAndIsWorkerOnly
+--- PASS: TestAuditHashChainVerifiesAndIsWorkerOnly (0.06s)
+=== RUN   TestReferenceDataAndPrivilegeBoundaries
+--- PASS: TestReferenceDataAndPrivilegeBoundaries (0.02s)
+=== RUN   TestOutboxContentImmutableAndUndispatchedNotDeletable
+--- PASS: TestOutboxContentImmutableAndUndispatchedNotDeletable (0.03s)
+=== RUN   TestRedisConnectivity
+--- PASS: TestRedisConnectivity (0.00s)
+=== RUN   TestStorageEachClassWithItsOwnCredential
+=== RUN   TestStorageEachClassWithItsOwnCredential/PUBLIC_CAMPAIGN_MEDIA
+=== RUN   TestStorageEachClassWithItsOwnCredential/PRIVATE_IDENTITY_DOCUMENTS
+=== RUN   TestStorageEachClassWithItsOwnCredential/PRIVATE_COMPLIANCE_DOCUMENTS
+--- PASS: TestStorageEachClassWithItsOwnCredential (0.03s)
+    --- PASS: TestStorageEachClassWithItsOwnCredential/PUBLIC_CAMPAIGN_MEDIA (0.01s)
+    --- PASS: TestStorageEachClassWithItsOwnCredential/PRIVATE_IDENTITY_DOCUMENTS (0.01s)
+    --- PASS: TestStorageEachClassWithItsOwnCredential/PRIVATE_COMPLIANCE_DOCUMENTS (0.01s)
+=== RUN   TestStorageCredentialsCannotCrossBuckets
+=== RUN   TestStorageCredentialsCannotCrossBuckets/PUBLIC_CAMPAIGN_MEDIA_on_PRIVATE_COMPLIANCE_DOCUMENTS
+=== RUN   TestStorageCredentialsCannotCrossBuckets/PUBLIC_CAMPAIGN_MEDIA_on_PRIVATE_IDENTITY_DOCUMENTS
+=== RUN   TestStorageCredentialsCannotCrossBuckets/PRIVATE_IDENTITY_DOCUMENTS_on_PUBLIC_CAMPAIGN_MEDIA
+=== RUN   TestStorageCredentialsCannotCrossBuckets/PRIVATE_IDENTITY_DOCUMENTS_on_PRIVATE_COMPLIANCE_DOCUMENTS
+=== RUN   TestStorageCredentialsCannotCrossBuckets/PRIVATE_COMPLIANCE_DOCUMENTS_on_PUBLIC_CAMPAIGN_MEDIA
+=== RUN   TestStorageCredentialsCannotCrossBuckets/PRIVATE_COMPLIANCE_DOCUMENTS_on_PRIVATE_IDENTITY_DOCUMENTS
+--- PASS: TestStorageCredentialsCannotCrossBuckets (0.03s)
+    --- PASS: TestStorageCredentialsCannotCrossBuckets/PUBLIC_CAMPAIGN_MEDIA_on_PRIVATE_COMPLIANCE_DOCUMENTS (0.00s)
+    --- PASS: TestStorageCredentialsCannotCrossBuckets/PUBLIC_CAMPAIGN_MEDIA_on_PRIVATE_IDENTITY_DOCUMENTS (0.01s)
+    --- PASS: TestStorageCredentialsCannotCrossBuckets/PRIVATE_IDENTITY_DOCUMENTS_on_PUBLIC_CAMPAIGN_MEDIA (0.00s)
+    --- PASS: TestStorageCredentialsCannotCrossBuckets/PRIVATE_IDENTITY_DOCUMENTS_on_PRIVATE_COMPLIANCE_DOCUMENTS (0.00s)
+    --- PASS: TestStorageCredentialsCannotCrossBuckets/PRIVATE_COMPLIANCE_DOCUMENTS_on_PUBLIC_CAMPAIGN_MEDIA (0.00s)
+    --- PASS: TestStorageCredentialsCannotCrossBuckets/PRIVATE_COMPLIANCE_DOCUMENTS_on_PRIVATE_IDENTITY_DOCUMENTS (0.00s)
+=== RUN   TestPrivateBucketsHaveNoAnonymousAccess
+--- PASS: TestPrivateBucketsHaveNoAnonymousAccess (0.01s)
+=== RUN   TestRunningAPI
+--- PASS: TestRunningAPI (0.02s)
+=== RUN   TestFrontendReachesBackend
+    integration_test.go:381: FUNDZIM_IT_WEB_URL not set (e.g. http://127.0.0.1:3000)
+--- SKIP: TestFrontendReachesBackend (0.00s)
+=== RUN   TestLedgerSyntheticFixturesBalancesAndTrialBalance
+--- PASS: TestLedgerSyntheticFixturesBalancesAndTrialBalance (2.35s)
+=== RUN   TestLedgerDatabaseInvariantsDirectSQL
+--- PASS: TestLedgerDatabaseInvariantsDirectSQL (0.59s)
+=== RUN   TestLedgerApplicationRoleHasNoLedgerAccess
+--- PASS: TestLedgerApplicationRoleHasNoLedgerAccess (0.32s)
+=== RUN   TestLedgerHundredConcurrentDuplicatePostingsYieldOneJournal
+--- PASS: TestLedgerHundredConcurrentDuplicatePostingsYieldOneJournal (0.49s)
+=== RUN   TestLedgerReversalsMakerCheckerAndNoDoubleReversal
+--- PASS: TestLedgerReversalsMakerCheckerAndNoDoubleReversal (0.50s)
+=== RUN   TestLedgerAdjustmentExpiry
+--- PASS: TestLedgerAdjustmentExpiry (0.44s)
+=== RUN   TestLedgerAccountFreezeVersusConcurrentPostings
+--- PASS: TestLedgerAccountFreezeVersusConcurrentPostings (0.62s)
+=== RUN   TestLedgerPeriodCloseMakerCheckerAndPriorPeriodPostings
+--- PASS: TestLedgerPeriodCloseMakerCheckerAndPriorPeriodPostings (1.09s)
+=== RUN   TestLedgerReconciliationFindsExceptionsAndWorkflow
+--- PASS: TestLedgerReconciliationFindsExceptionsAndWorkflow (5.68s)
+=== RUN   TestLedgerPaymentsConsumerNeverPostsTestPayments
+--- PASS: TestLedgerPaymentsConsumerNeverPostsTestPayments (0.39s)
+=== RUN   TestLedgerFailureInjection
+--- PASS: TestLedgerFailureInjection (2.78s)
+=== RUN   TestLedgerTrialBalanceStaysBalancedDuringPosting
+--- PASS: TestLedgerTrialBalanceStaysBalancedDuringPosting (0.80s)
+=== RUN   TestLedgerStaffAPI
+--- PASS: TestLedgerStaffAPI (2.72s)
+=== RUN   TestNotificationsPerf
+    notifications_perf_test.go:34: | notification creation (recipient resolution, routing for 4 channels, in-app render) | 8 | 400 | 6.9 | 8.6 | 63.3 | 995 | 0 |
+        
+    notifications_perf_test.go:34: | template rendering (e-mail text + HTML) | 8 | 5000 | 0.0 | 0.0 | 0.1 | 808658 | 0 |
+        
+    notifications_perf_test.go:60: | delivery sweeps + simulator callbacks: 400 external deliveries drained | 1 | 400 | — | — | 5417.7 (total) | 74 | 0 |
+        
+    notifications_perf_test.go:34: | in-app inbox page (25 of 200) | 8 | 500 | 0.6 | 1.0 | 12.9 | 10069 | 0 |
+        
+    notifications_perf_test.go:34: | unread count | 8 | 1000 | 0.5 | 0.6 | 1.0 | 16900 | 0 |
+        
+    notifications_perf_test.go:34: | webhook verification + evidence (unknown message) | 8 | 500 | 1.8 | 2.4 | 4.5 | 4199 | 0 |
+        
+    notifications_perf_test.go:34: | communications dashboard | 8 | 100 | 10.1 | 18.5 | 25.2 | 673 | 0 |
+        
+    notifications_perf_test.go:34: | communications report (30 days) | 8 | 50 | 9.8 | 16.4 | 23.4 | 675 | 0 |
+        
+    notifications_perf_test.go:34: | operations snapshot (notifications) | 8 | 100 | 3.6 | 8.2 | 9.7 | 2157 | 0 |
+        
+## Notification engine performance
+
+measured 2026-10-25T12:29:15Z UTC; GOMAXPROCS=16; development stack (compose PostgreSQL 17.11, default settings); in-process service calls (simulators); dataset after the run: 984 notifications, 3721 deliveries, 655 attempts.
+
+| scenario | c | n | p50 ms | p95 ms | max ms | ops/s | errors |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| notification creation (recipient resolution, routing for 4 channels, in-app render) | 8 | 400 | 6.9 | 8.6 | 63.3 | 995 | 0 |
+| template rendering (e-mail text + HTML) | 8 | 5000 | 0.0 | 0.0 | 0.1 | 808658 | 0 |
+| delivery sweeps + simulator callbacks: 400 external deliveries drained | 1 | 400 | — | — | 5417.7 (total) | 74 | 0 |
+| in-app inbox page (25 of 200) | 8 | 500 | 0.6 | 1.0 | 12.9 | 10069 | 0 |
+| unread count | 8 | 1000 | 0.5 | 0.6 | 1.0 | 16900 | 0 |
+| webhook verification + evidence (unknown message) | 8 | 500 | 1.8 | 2.4 | 4.5 | 4199 | 0 |
+| communications dashboard | 8 | 100 | 10.1 | 18.5 | 25.2 | 673 | 0 |
+| communications report (30 days) | 8 | 50 | 9.8 | 16.4 | 23.4 | 675 | 0 |
+| operations snapshot (notifications) | 8 | 100 | 3.6 | 8.2 | 9.7 | 2157 | 0 |
+
+--- PASS: TestNotificationsPerf (20.66s)
+=== RUN   TestNotificationsOutboxCreatesOnceAndDelivers
+--- PASS: TestNotificationsOutboxCreatesOnceAndDelivers (22.83s)
+=== RUN   TestNotificationsFinancialSafety
+--- PASS: TestNotificationsFinancialSafety (2.13s)
+=== RUN   TestNotificationsConsentAndPreferences
+--- PASS: TestNotificationsConsentAndPreferences (1.74s)
+=== RUN   TestNotificationsDeliveryScenarios
+--- PASS: TestNotificationsDeliveryScenarios (14.32s)
+=== RUN   TestNotificationsWebhookSecurityAndCrashRecovery
+--- PASS: TestNotificationsWebhookSecurityAndCrashRecovery (3.42s)
+=== RUN   TestNotificationsDeadLetterReplayAndTemplates
+--- PASS: TestNotificationsDeadLetterReplayAndTemplates (2.02s)
+=== RUN   TestNotificationsInboxIsolationAndStaffRBAC
+--- PASS: TestNotificationsInboxIsolationAndStaffRBAC (3.22s)
+=== RUN   TestNotificationsFailureInjection
+--- PASS: TestNotificationsFailureInjection (1.60s)
+=== RUN   TestNotificationsQueueIsolation
+--- PASS: TestNotificationsQueueIsolation (6.21s)
+=== RUN   TestNotificationsConsentWithdrawnDuringRetry
+--- PASS: TestNotificationsConsentWithdrawnDuringRetry (2.33s)
+=== RUN   TestNotificationsConsentLookupFailureFailsClosed
+--- PASS: TestNotificationsConsentLookupFailureFailsClosed (2.31s)
+=== RUN   TestOperationsPerf
+    operations_perf_test.go:32: | snapshot: identity_security | 1 | 50 | 1.1 | 2.2 | 3.6 | 759 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: audit | 1 | 50 | 0.7 | 1.0 | 2.5 | 1358 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: identity | 1 | 50 | 1.7 | 2.8 | 4.6 | 549 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: campaigns | 1 | 50 | 0.9 | 1.6 | 10.3 | 847 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: kyc | 1 | 50 | 1.0 | 1.6 | 34.7 | 597 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: beneficiaries | 1 | 50 | 0.7 | 1.2 | 5.8 | 1199 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: compliance | 1 | 50 | 0.7 | 0.9 | 31.4 | 771 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: risk | 1 | 50 | 1.8 | 3.3 | 28.9 | 394 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: payments | 1 | 50 | 1.2 | 1.9 | 10.5 | 707 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: providers | 1 | 50 | 5.2 | 8.9 | 16.5 | 177 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: ledger | 1 | 50 | 13.0 | 19.3 | 30.4 | 71 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: payouts | 1 | 50 | 2.3 | 3.8 | 18.6 | 372 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: fees | 1 | 50 | 3.0 | 4.2 | 21.0 | 299 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: notifications | 1 | 50 | 2.9 | 5.6 | 18.1 | 277 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: discovery | 1 | 50 | 1.3 | 1.9 | 9.1 | 659 | 0 |
+        
+    operations_perf_test.go:32: | snapshot: reconciliation | 1 | 50 | 1.9 | 2.8 | 21.5 | 423 | 0 |
+        
+    operations_perf_test.go:32: | command center overview (all module snapshots), c=1 | 1 | 100 | 35.4 | 62.1 | 82.0 | 26 | 0 |
+        
+    operations_perf_test.go:32: | command center overview (all module snapshots), c=8 | 8 | 100 | 38.1 | 88.6 | 114.8 | 182 | 0 |
+        
+    operations_perf_test.go:32: | viewer permissions (EffectivePermissions) | 8 | 500 | 1.2 | 2.0 | 11.8 | 5687 | 0 |
+        
+    operations_perf_test.go:32: | approval center (all modules) | 8 | 200 | 22.1 | 28.6 | 36.6 | 352 | 0 |
+        
+    operations_perf_test.go:32: | exception center (all modules) | 8 | 200 | 23.6 | 30.1 | 38.7 | 331 | 0 |
+        
+    operations_perf_test.go:32: | platform health (probes measured now) | 8 | 100 | 9.9 | 14.0 | 19.9 | 752 | 0 |
+        
+    operations_perf_test.go:32: | global search (uuid) | 8 | 200 | 13.4 | 18.9 | 38.4 | 562 | 0 |
+        
+    operations_perf_test.go:32: | support case queue (50) | 8 | 300 | 0.4 | 1.0 | 2.0 | 15461 | 0 |
+        
+    operations_perf_test.go:32: | reports (30 days) | 8 | 50 | 28.6 | 36.2 | 40.3 | 275 | 0 |
+        
+## Operations portal performance
+
+measured 2026-10-25T12:30:28Z UTC; GOMAXPROCS=16; development stack (compose PostgreSQL 17.11, default settings); in-process service calls on the server's composition (app.NewOperations); dataset: 5350 audit events, 1 support cases.
+
+| scenario | c | n | p50 ms | p95 ms | max ms | ops/s | errors |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| snapshot: identity_security | 1 | 50 | 1.1 | 2.2 | 3.6 | 759 | 0 |
+| snapshot: audit | 1 | 50 | 0.7 | 1.0 | 2.5 | 1358 | 0 |
+| snapshot: identity | 1 | 50 | 1.7 | 2.8 | 4.6 | 549 | 0 |
+| snapshot: campaigns | 1 | 50 | 0.9 | 1.6 | 10.3 | 847 | 0 |
+| snapshot: kyc | 1 | 50 | 1.0 | 1.6 | 34.7 | 597 | 0 |
+| snapshot: beneficiaries | 1 | 50 | 0.7 | 1.2 | 5.8 | 1199 | 0 |
+| snapshot: compliance | 1 | 50 | 0.7 | 0.9 | 31.4 | 771 | 0 |
+| snapshot: risk | 1 | 50 | 1.8 | 3.3 | 28.9 | 394 | 0 |
+| snapshot: payments | 1 | 50 | 1.2 | 1.9 | 10.5 | 707 | 0 |
+| snapshot: providers | 1 | 50 | 5.2 | 8.9 | 16.5 | 177 | 0 |
+| snapshot: ledger | 1 | 50 | 13.0 | 19.3 | 30.4 | 71 | 0 |
+| snapshot: payouts | 1 | 50 | 2.3 | 3.8 | 18.6 | 372 | 0 |
+| snapshot: fees | 1 | 50 | 3.0 | 4.2 | 21.0 | 299 | 0 |
+| snapshot: notifications | 1 | 50 | 2.9 | 5.6 | 18.1 | 277 | 0 |
+| snapshot: discovery | 1 | 50 | 1.3 | 1.9 | 9.1 | 659 | 0 |
+| snapshot: reconciliation | 1 | 50 | 1.9 | 2.8 | 21.5 | 423 | 0 |
+| command center overview (all module snapshots), c=1 | 1 | 100 | 35.4 | 62.1 | 82.0 | 26 | 0 |
+| command center overview (all module snapshots), c=8 | 8 | 100 | 38.1 | 88.6 | 114.8 | 182 | 0 |
+| viewer permissions (EffectivePermissions) | 8 | 500 | 1.2 | 2.0 | 11.8 | 5687 | 0 |
+| approval center (all modules) | 8 | 200 | 22.1 | 28.6 | 36.6 | 352 | 0 |
+| exception center (all modules) | 8 | 200 | 23.6 | 30.1 | 38.7 | 331 | 0 |
+| platform health (probes measured now) | 8 | 100 | 9.9 | 14.0 | 19.9 | 752 | 0 |
+| global search (uuid) | 8 | 200 | 13.4 | 18.9 | 38.4 | 562 | 0 |
+| support case queue (50) | 8 | 300 | 0.4 | 1.0 | 2.0 | 15461 | 0 |
+| reports (30 days) | 8 | 50 | 28.6 | 36.2 | 40.3 | 275 | 0 |
+
+--- PASS: TestOperationsPerf (10.70s)
+=== RUN   TestOperationsOverviewSourcesAndPermissions
+--- PASS: TestOperationsOverviewSourcesAndPermissions (0.85s)
+=== RUN   TestOperationsApprovalCenterRoutesToDomain
+--- PASS: TestOperationsApprovalCenterRoutesToDomain (0.83s)
+=== RUN   TestOperationsSupportCases
+--- PASS: TestOperationsSupportCases (0.72s)
+=== RUN   TestOperationsExceptionTriage
+--- PASS: TestOperationsExceptionTriage (2.69s)
+=== RUN   TestOperationsIncidentsAndAlerts
+--- PASS: TestOperationsIncidentsAndAlerts (0.96s)
+=== RUN   TestOperationsStaffGovernance
+--- PASS: TestOperationsStaffGovernance (2.18s)
+=== RUN   TestOperationsAuditCenter
+--- PASS: TestOperationsAuditCenter (0.54s)
+=== RUN   TestOperationsReportsSearchAndSLA
+--- PASS: TestOperationsReportsSearchAndSLA (0.78s)
+=== RUN   TestPaymentsSecretManagerOpenBao
+--- PASS: TestPaymentsSecretManagerOpenBao (3.73s)
+=== RUN   TestPaymentsConformanceSuiteSimulator
+    payments_stage9_test.go:261: conformance create_success                       PASS       ACCEPTED PENDING (pending)
+    payments_stage9_test.go:261: conformance create_decline                       PASS       DEFINITE_FAILURE → PAYMENT_DECLINED
+    payments_stage9_test.go:261: conformance create_timeout_after_send            PASS       INDETERMINATE → PROVIDER_TIMEOUT (status query only)
+    payments_stage9_test.go:261: conformance create_not_sent                      PASS       RETRYABLE_BEFORE_SEND → PROVIDER_UNAVAILABLE
+    payments_stage9_test.go:261: conformance provider_unavailable                 PASS       RETRYABLE_BEFORE_SEND → PROVIDER_UNAVAILABLE
+    payments_stage9_test.go:261: conformance idempotent_create                    PASS       same reference returns the same provider payment
+    payments_stage9_test.go:261: conformance status_query_known                   PASS       ACCEPTED PENDING
+    payments_stage9_test.go:261: conformance status_query_unknown_reference       PASS       NOT_FOUND (final=false)
+    payments_stage9_test.go:261: conformance webhook_valid_current_key            PASS       verified (SIGNATURE) and parsed
+    payments_stage9_test.go:261: conformance webhook_valid_previous_key           PASS       verified (SIGNATURE) and parsed
+    payments_stage9_test.go:261: conformance webhook_tampered_body                PASS       rejected
+    payments_stage9_test.go:261: conformance webhook_missing_signature            PASS       rejected
+    payments_stage9_test.go:261: conformance webhook_wrong_key                    PASS       rejected
+    payments_stage9_test.go:261: conformance webhook_stale_timestamp              PASS       rejected as stale
+    payments_stage9_test.go:261: conformance webhook_dedupe_key_stable            PASS       stable event id
+    payments_stage9_test.go:261: conformance unmapped_status_not_guessed          PASS       UNKNOWN, unmapped (mapping sandbox-map-v1)
+    payments_stage9_test.go:261: conformance limits_unknown_method_fail_closed    PASS       unknown method/currency excluded
+    payments_stage9_test.go:261: conformance redirect_hosts_well_formed           PASS       1 host(s)
+    payments_stage9_test.go:261: conformance no_secret_in_observation             PASS       8 observation(s) clean
+--- PASS: TestPaymentsConformanceSuiteSimulator (1.96s)
+=== RUN   TestPaymentsProviderSandboxIsolation
+--- PASS: TestPaymentsProviderSandboxIsolation (4.99s)
+=== RUN   TestPaymentsExecutionIsolationDatabase
+--- PASS: TestPaymentsExecutionIsolationDatabase (2.57s)
+=== RUN   TestPaymentsStartupGateRefusesProduction
+--- PASS: TestPaymentsStartupGateRefusesProduction (2.06s)
+=== RUN   TestPaymentsContradictoryEvidenceIsEscalated
+--- PASS: TestPaymentsContradictoryEvidenceIsEscalated (2.62s)
+=== RUN   TestPaymentsErrorCategoriesAndAuditEvents
+--- PASS: TestPaymentsErrorCategoriesAndAuditEvents (5.99s)
+=== RUN   TestPaymentsProviderControlsHealthAndAvailability
+--- PASS: TestPaymentsProviderControlsHealthAndAvailability (2.32s)
+=== RUN   TestPaymentsStage9Concurrency
+--- PASS: TestPaymentsStage9Concurrency (1.81s)
+=== RUN   TestPaymentsSandboxSuccessAndIdempotency
+--- PASS: TestPaymentsSandboxSuccessAndIdempotency (4.95s)
+=== RUN   TestPaymentsDeclineThenRetry
+--- PASS: TestPaymentsDeclineThenRetry (2.52s)
+=== RUN   TestPaymentsTimeoutIsUnknownNeverFailed
+--- PASS: TestPaymentsTimeoutIsUnknownNeverFailed (5.75s)
+=== RUN   TestPaymentsCrashBetweenCallAndResultIsRecovered
+--- PASS: TestPaymentsCrashBetweenCallAndResultIsRecovered (1.59s)
+=== RUN   TestPaymentsWebhookOrderingAndDuplicates
+--- PASS: TestPaymentsWebhookOrderingAndDuplicates (15.64s)
+=== RUN   TestPaymentsAnomaliesAreRecordedNotApplied
+--- PASS: TestPaymentsAnomaliesAreRecordedNotApplied (4.38s)
+=== RUN   TestPaymentsWebhookSecurity
+--- PASS: TestPaymentsWebhookSecurity (3.82s)
+=== RUN   TestPaymentsRedirectSessionNeverConfirms
+--- PASS: TestPaymentsRedirectSessionNeverConfirms (3.74s)
+=== RUN   TestPaymentsEligibilityAndCurrency
+--- PASS: TestPaymentsEligibilityAndCurrency (11.96s)
+=== RUN   TestPaymentsConcurrentAttemptsYieldOnePayment
+--- PASS: TestPaymentsConcurrentAttemptsYieldOnePayment (2.61s)
+=== RUN   TestPaymentsRefundRequestsNeverExecute
+--- PASS: TestPaymentsRefundRequestsNeverExecute (3.50s)
+=== RUN   TestPaymentsStaffOperations
+--- PASS: TestPaymentsStaffOperations (4.91s)
+=== RUN   TestPaymentsDatabaseInvariants
+--- PASS: TestPaymentsDatabaseInvariants (1.92s)
+=== RUN   TestPaymentsProviderOutageOpensCircuit
+--- PASS: TestPaymentsProviderOutageOpensCircuit (2.15s)
+=== RUN   TestPaymentsPostingRequestsExactlyOnce
+--- PASS: TestPaymentsPostingRequestsExactlyOnce (8.42s)
+=== RUN   TestPaymentsDeadLetterAndRequeue
+--- PASS: TestPaymentsDeadLetterAndRequeue (2.47s)
+=== RUN   TestPayoutsPerf
+    payouts_perf_test.go:79: | request (eligibility + reserve) then cancel (release) | 1 | 400 | 124.7 | 144.7 | 221.6 | 8 | 0 |
+        
+    payouts_perf_test.go:79: |   of which: withdrawal request incl. eligibility and reservation | 1 | 400 | 90.6 | 107.4 | 179.5 | 0 | 0 |
+        
+    payouts_perf_test.go:79: |   of which: cancellation incl. reservation release | 1 | 400 | 33.6 | 41.3 | 48.7 | 0 | 0 |
+        
+    payouts_perf_test.go:79: | request (eligibility + reserve) then cancel (release) | 8 | 400 | 193.0 | 233.3 | 576.5 | 39 | 0 |
+        
+    payouts_perf_test.go:79: |   of which: withdrawal request incl. eligibility and reservation | 8 | 400 | 128.0 | 167.0 | 490.4 | 0 | 0 |
+        
+    payouts_perf_test.go:79: |   of which: cancellation incl. reservation release | 8 | 400 | 66.2 | 92.2 | 247.9 | 0 | 0 |
+        
+    payouts_perf_test.go:79: | eligibility evaluation (owner preview with destination) | 8 | 300 | 30.7 | 41.5 | 82.7 | 245 | 0 |
+        
+    payouts_perf_test.go:79: | approval decision (FINANCE, recorded with step-up time) | 8 | 8 | 45.4 | 56.8 | 56.8 | 141 | 0 |
+        
+    payouts_perf_test.go:79: | approval decision completing DUAL (→ APPROVED) | 8 | 8 | 36.0 | 85.5 | 85.5 | 93 | 0 |
+        
+    payouts_perf_test.go:79: | payout status retrieval (owner view) | 8 | 500 | 0.8 | 1.2 | 5.6 | 9465 | 0 |
+        
+    payouts_perf_test.go:79: | payout detail (staff: events, decisions, attempts, journals) | 8 | 300 | 5.0 | 6.7 | 23.3 | 1430 | 0 |
+        
+    payouts_perf_test.go:79: | staff payout list, first page | 8 | 300 | 4.5 | 7.9 | 10.2 | 1594 | 0 |
+        
+    payouts_perf_test.go:79: | exception queue | 8 | 300 | 0.6 | 1.2 | 3.8 | 11457 | 0 |
+        
+    payouts_perf_test.go:79: | reconciliation references (latest 200) | 8 | 300 | 0.4 | 0.6 | 2.5 | 18455 | 0 |
+        
+    payouts_perf_test.go:79: | reconciliation run (all payouts past the grace period) | 1 | 3 | 2238.8 | 2263.5 | 2263.5 | 0 | 0 |
+        
+## Payout performance
+
+measured 2026-10-25T12:34:08Z UTC; GOMAXPROCS=16; development stack (compose PostgreSQL 17.11, default settings); in-process service calls; dataset after the run: 823 payout requests, 5031 payout events, 831 eligibility decisions, 1651 payout ledger journals.
+
+| scenario | c | n | p50 ms | p95 ms | max ms | ops/s | errors |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| request (eligibility + reserve) then cancel (release) | 1 | 400 | 124.7 | 144.7 | 221.6 | 8 | 0 |
+|   of which: withdrawal request incl. eligibility and reservation | 1 | 400 | 90.6 | 107.4 | 179.5 | 0 | 0 |
+|   of which: cancellation incl. reservation release | 1 | 400 | 33.6 | 41.3 | 48.7 | 0 | 0 |
+| request (eligibility + reserve) then cancel (release) | 8 | 400 | 193.0 | 233.3 | 576.5 | 39 | 0 |
+|   of which: withdrawal request incl. eligibility and reservation | 8 | 400 | 128.0 | 167.0 | 490.4 | 0 | 0 |
+|   of which: cancellation incl. reservation release | 8 | 400 | 66.2 | 92.2 | 247.9 | 0 | 0 |
+| eligibility evaluation (owner preview with destination) | 8 | 300 | 30.7 | 41.5 | 82.7 | 245 | 0 |
+| approval decision (FINANCE, recorded with step-up time) | 8 | 8 | 45.4 | 56.8 | 56.8 | 141 | 0 |
+| approval decision completing DUAL (→ APPROVED) | 8 | 8 | 36.0 | 85.5 | 85.5 | 93 | 0 |
+| payout status retrieval (owner view) | 8 | 500 | 0.8 | 1.2 | 5.6 | 9465 | 0 |
+| payout detail (staff: events, decisions, attempts, journals) | 8 | 300 | 5.0 | 6.7 | 23.3 | 1430 | 0 |
+| staff payout list, first page | 8 | 300 | 4.5 | 7.9 | 10.2 | 1594 | 0 |
+| exception queue | 8 | 300 | 0.6 | 1.2 | 3.8 | 11457 | 0 |
+| reconciliation references (latest 200) | 8 | 300 | 0.4 | 0.6 | 2.5 | 18455 | 0 |
+| reconciliation run (all payouts past the grace period) | 1 | 3 | 2238.8 | 2263.5 | 2263.5 | 0 | 0 |
+
+--- PASS: TestPayoutsPerf (101.69s)
+=== RUN   TestPayoutSubmitRetryBudgetHaltsAndResumes
+--- PASS: TestPayoutSubmitRetryBudgetHaltsAndResumes (17.66s)
+=== RUN   TestPayoutHistoricalExcessiveAttemptsHaltedWithoutAnotherCall
+--- PASS: TestPayoutHistoricalExcessiveAttemptsHaltedWithoutAnotherCall (6.21s)
+=== RUN   TestPayoutHappyPathReserveApproveSubmitComplete
+--- PASS: TestPayoutHappyPathReserveApproveSubmitComplete (7.55s)
+=== RUN   TestPayoutHundredConcurrentRequestsReserveOnce
+--- PASS: TestPayoutHundredConcurrentRequestsReserveOnce (6.65s)
+=== RUN   TestPayoutUnknownOutcomeKeepsReservationAndIsNeverResubmitted
+--- PASS: TestPayoutUnknownOutcomeKeepsReservationAndIsNeverResubmitted (5.68s)
+=== RUN   TestPayoutSimulatorScenarios
+    payouts_test.go:636: SUCCESS                                       COMPLETED  applied transitions 6, not applied observations 0
+    payouts_test.go:636: PENDING (then a scheduled completion)         COMPLETED  applied transitions 6, not applied observations 0
+    payouts_test.go:636: FAILURE                                       FAILED     applied transitions 5, not applied observations 0
+    payouts_test.go:636: TIMEOUT (then success)                        COMPLETED  applied transitions 6, not applied observations 0
+    payouts_test.go:636: DUPLICATE_CALLBACK                            COMPLETED  applied transitions 6, not applied observations 0 (deliveries 3, stored once)
+    payouts_test.go:636: OUT_OF_ORDER_CALLBACK                         COMPLETED  applied transitions 6, not applied observations 1
+    payouts_test.go:636: INVALID_SIGNATURE (resolved by polling)       COMPLETED  applied transitions 6, not applied observations 0
+    payouts_test.go:636: DELAYED_SUCCESS                               COMPLETED  applied transitions 6, not applied observations 0
+    payouts_test.go:636: PROVIDER_UNAVAILABLE (same-reference retry)   SUBMITTED
+    payouts_test.go:636: PARTIAL_PROVIDER_RESPONSE                     COMPLETED  applied transitions 6, not applied observations 0
+    payouts_test.go:636: FAILURE_AFTER_PROCESSING                      FAILED     applied transitions 6, not applied observations 0
+    payouts_test.go:636: RETURNED_AFTER_COMPLETION                     REVERSED   applied transitions 7, not applied observations 0
+    payouts_test.go:636: WORKER_RESTART                                UNKNOWN (CRASH_DURING_CREATE; reservation BLOCKED)
+--- PASS: TestPayoutSimulatorScenarios (54.31s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:685: after destination suspension: SUBMITTED round 1
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (8.18s)
+=== RUN   TestPayoutEligibilityRefusalsAndPreSubmitRecheck
+    payouts_test.go:737: want 202 , got 422 PAYOUT_NOT_ELIGIBLE [{reason_category PAYOUTS_PAUSED}] (null)
+--- FAIL: TestPayoutEligibilityRefusalsAndPreSubmitRecheck (5.44s)
+=== RUN   TestPayoutDatabaseGuards
+    payouts_test.go:772: want 202 , got 422 PAYOUT_NOT_ELIGIBLE [{reason_category PAYOUTS_PAUSED}] (null)
+--- FAIL: TestPayoutDatabaseGuards (5.01s)
+=== RUN   TestPayoutFailureInjection
+    payouts_test.go:846: under ledger contention:  PAYOUT_NOT_ELIGIBLE: A payout cannot be requested right now.
+--- FAIL: TestPayoutFailureInjection (5.16s)
+=== RUN   TestPayoutReconciliationAndExceptionWorkflow
+    payouts_test.go:892: want 202 , got 422 PAYOUT_NOT_ELIGIBLE [{reason_category PAYOUTS_PAUSED}] (null)
+--- FAIL: TestPayoutReconciliationAndExceptionWorkflow (5.19s)
+=== RUN   TestPublicExperienceEndpoints
+--- PASS: TestPublicExperienceEndpoints (15.73s)
+=== RUN   TestRateLimitAtomicUnderConcurrency
+--- PASS: TestRateLimitAtomicUnderConcurrency (0.05s)
+=== RUN   TestRateLimitTwoReplicasShareOneLimit
+--- PASS: TestRateLimitTwoReplicasShareOneLimit (0.02s)
+=== RUN   TestRateLimitKeysAreHashedWithTTL
+--- PASS: TestRateLimitKeysAreHashedWithTTL (0.01s)
+=== RUN   TestRateLimitSpoofedForwardedForCannotChangeKey
+--- PASS: TestRateLimitSpoofedForwardedForCannotChangeKey (0.01s)
+=== RUN   TestRateLimitFallbackWhenValkeyUnavailable
+redis: 2026/10/25 14:36:31 pool.go:770: redis: connection pool: failed to dial after 5 attempts: dial tcp 127.0.0.1:44205: connect: connection refused
+redis: 2026/10/25 14:36:31 pool.go:770: redis: connection pool: failed to dial after 5 attempts: dial tcp 127.0.0.1:44205: connect: connection refused
+--- PASS: TestRateLimitFallbackWhenValkeyUnavailable (1.04s)
+=== RUN   TestRateLimitFallbackWhenValkeyContainerStopped
+    ratelimit_idempotency_test.go:370: set FUNDZIM_IT_STOP_VALKEY=1 (with docker access) to stop/start the real fundzim-redis container
+--- SKIP: TestRateLimitFallbackWhenValkeyContainerStopped (0.00s)
+=== RUN   TestIdempotencyConcurrentRequestsRunHandlerOnce
+    ratelimit_idempotency_test.go:520: 50 concurrent: fresh=1 replayed=0 in_progress=49
+--- PASS: TestIdempotencyConcurrentRequestsRunHandlerOnce (0.55s)
+=== RUN   TestIdempotencyKeyReusedWithDifferentBody
+--- PASS: TestIdempotencyKeyReusedWithDifferentBody (0.04s)
+=== RUN   TestIdempotencyServerErrorIsRetryable
+--- PASS: TestIdempotencyServerErrorIsRetryable (0.03s)
+=== RUN   TestIdempotencyExpiredLeaseIsTakenOver
+--- PASS: TestIdempotencyExpiredLeaseIsTakenOver (0.05s)
+=== RUN   TestIdempotencyRequiredHeaderAndExpiry
+--- PASS: TestIdempotencyRequiredHeaderAndExpiry (0.04s)
+=== RUN   TestReconciliationCoveragePayoutOutsideWindow
+    reconciliation_coverage_test.go:100: want 202 , got 422 PAYOUT_NOT_ELIGIBLE [{reason_category PAYOUTS_PAUSED}] (null)
+--- FAIL: TestReconciliationCoveragePayoutOutsideWindow (5.61s)
+=== RUN   TestReconciliationCoverageConcurrentAndInterrupted
+    reconciliation_coverage_test.go:186: want 202 , got 422 PAYOUT_NOT_ELIGIBLE [{reason_category PAYOUTS_PAUSED}] (null)
+--- FAIL: TestReconciliationCoverageConcurrentAndInterrupted (4.37s)
+=== RUN   TestReconciliationCoverageFeeOutsideWindow
+--- PASS: TestReconciliationCoverageFeeOutsideWindow (11.98s)
+=== RUN   TestReconciliationCoverageLedgerSweeps
+--- PASS: TestReconciliationCoverageLedgerSweeps (13.43s)
+=== RUN   TestReconciliationCoverageCheckpointGuards
+--- PASS: TestReconciliationCoverageCheckpointGuards (0.10s)
+=== RUN   TestReconciliationRuleSetsAreMakerChecker
+--- PASS: TestReconciliationRuleSetsAreMakerChecker (0.60s)
+=== RUN   TestReconciliationImportsAreImmutableDeduplicatedAndValidated
+--- PASS: TestReconciliationImportsAreImmutableDeduplicatedAndValidated (9.30s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (8.55s)
+=== RUN   TestReconciliationSettlementBatchesAndExplanations
+--- PASS: TestReconciliationSettlementBatchesAndExplanations (5.20s)
+=== RUN   TestReconciliationPayoutsUnknownOutcomeNeverResubmitted
+    reconciliation_test.go:668: request 1000: PAYOUT_NOT_ELIGIBLE: A payout cannot be requested right now.
+--- FAIL: TestReconciliationPayoutsUnknownOutcomeNeverResubmitted (5.38s)
+=== RUN   TestReconciliationRateLimitedPayoutIsBudgeted
+    reconciliation_test.go:737: request 1013: PAYOUT_NOT_ELIGIBLE: A payout cannot be requested right now.
+--- FAIL: TestReconciliationRateLimitedPayoutIsBudgeted (5.14s)
+=== RUN   TestReconciliationBankStatementsAndLedgerAdjustment
+--- PASS: TestReconciliationBankStatementsAndLedgerAdjustment (4.37s)
+=== RUN   TestReconciliationSupersedeAndConflictingEvidence
+--- PASS: TestReconciliationSupersedeAndConflictingEvidence (3.85s)
+=== RUN   TestReconciliationConcurrency
+--- PASS: TestReconciliationConcurrency (2.48s)
+=== RUN   TestReconciliationReportsAndOperations
+--- PASS: TestReconciliationReportsAndOperations (1.95s)
+=== RUN   TestAgeAttestationGrantsAndWithdrawsBasic
+--- PASS: TestAgeAttestationGrantsAndWithdrawsBasic (3.31s)
+=== RUN   TestBasicNeedsEveryCondition
+--- PASS: TestBasicNeedsEveryCondition (5.19s)
+=== RUN   TestComplianceRestrictionsAppliedAndLifted
+--- PASS: TestComplianceRestrictionsAppliedAndLifted (0.37s)
+=== RUN   TestComplianceRestrictionFromSTRCaseAppliesWithoutDisclosure
+--- PASS: TestComplianceRestrictionFromSTRCaseAppliesWithoutDisclosure (0.20s)
+=== RUN   TestCampaignReviewEscalationOpensCaseAndRestrictsCampaign
+--- PASS: TestCampaignReviewEscalationOpensCaseAndRestrictsCampaign (0.21s)
+=== RUN   TestStaffPersonalLink
+--- PASS: TestStaffPersonalLink (12.69s)
+=== RUN   TestKYCDecisionTriggerRefusesLinkedIdentity
+--- PASS: TestKYCDecisionTriggerRefusesLinkedIdentity (3.14s)
+=== RUN   TestRiskPerf
+    risk_perf_test.go:46: | signal → evaluation (5 active rules, no action), c=1 | 1 | 400 | 11.4 | 18.8 | 38.9 | 83 | 0 |
+        
+    risk_perf_test.go:46: | signal → evaluation (5 active rules, no action), c=8 | 8 | 400 | 8.0 | 16.4 | 76.2 | 763 | 0 |
+        
+    risk_perf_test.go:46: | signal → evaluation → case + automated hold (first) / link (rest) | 8 | 200 | 17.9 | 63.2 | 127.2 | 338 | 0 |
+        
+    risk_perf_test.go:46: | hold lookup at an enforcement point (WithdrawalHolds) | 8 | 2000 | 0.4 | 0.7 | 2.8 | 19213 | 0 |
+        
+    risk_perf_test.go:46: | case queue (open, 100) | 8 | 300 | 0.4 | 0.6 | 1.8 | 18188 | 0 |
+        
+    risk_perf_test.go:46: | evaluation list (100) | 8 | 300 | 1.7 | 3.3 | 5.0 | 4204 | 0 |
+        
+    risk_perf_test.go:46: | risk overview | 8 | 100 | 5.2 | 10.6 | 11.4 | 1436 | 0 |
+        
+    risk_perf_test.go:46: | risk reconciliation run | 1 | 3 | 13.1 | 18.2 | 18.2 | 71 | 0 |
+        
+## Risk performance
+
+measured 2026-10-25T12:39:01Z UTC; GOMAXPROCS=16; development stack (compose PostgreSQL 17.11, default settings); in-process service calls; dataset after the run: 2349 signals, 1000 evaluations, 9 cases, 9 holds.
+
+| scenario | c | n | p50 ms | p95 ms | max ms | ops/s | errors |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| signal → evaluation (5 active rules, no action), c=1 | 1 | 400 | 11.4 | 18.8 | 38.9 | 83 | 0 |
+| signal → evaluation (5 active rules, no action), c=8 | 8 | 400 | 8.0 | 16.4 | 76.2 | 763 | 0 |
+| signal → evaluation → case + automated hold (first) / link (rest) | 8 | 200 | 17.9 | 63.2 | 127.2 | 338 | 0 |
+| hold lookup at an enforcement point (WithdrawalHolds) | 8 | 2000 | 0.4 | 0.7 | 2.8 | 19213 | 0 |
+| case queue (open, 100) | 8 | 300 | 0.4 | 0.6 | 1.8 | 18188 | 0 |
+| evaluation list (100) | 8 | 300 | 1.7 | 3.3 | 5.0 | 4204 | 0 |
+| risk overview | 8 | 100 | 5.2 | 10.6 | 11.4 | 1436 | 0 |
+| risk reconciliation run | 1 | 3 | 13.1 | 18.2 | 18.2 | 71 | 0 |
+
+--- PASS: TestRiskPerf (41.00s)
+=== RUN   TestRiskRuleLifecycleAndSafety
+--- PASS: TestRiskRuleLifecycleAndSafety (1.02s)
+=== RUN   TestRiskEvaluationActionsAndHolds
+    risk_test.go:328: want 202 , got 422 PAYOUT_NOT_ELIGIBLE [{reason_category PAYOUTS_PAUSED}] (null)
+--- FAIL: TestRiskEvaluationActionsAndHolds (9.61s)
+=== RUN   TestRiskStaffHoldsMakerChecker
+--- PASS: TestRiskStaffHoldsMakerChecker (16.33s)
+=== RUN   TestRiskCaseWorkflowAndEscalation
+--- PASS: TestRiskCaseWorkflowAndEscalation (2.86s)
+=== RUN   TestRiskScreeningSimulator
+--- PASS: TestRiskScreeningSimulator (12.76s)
+=== RUN   TestRiskConcurrentSignalsAndReleases
+--- PASS: TestRiskConcurrentSignalsAndReleases (6.29s)
+=== RUN   TestRiskReconciliationAndReports
+--- PASS: TestRiskReconciliationAndReports (5.54s)
+=== RUN   TestRiskSignalSources
+--- PASS: TestRiskSignalSources (2.24s)
+=== RUN   TestRiskRuleFaultIsolation
+--- PASS: TestRiskRuleFaultIsolation (0.87s)
+=== RUN   TestSecurityAlertsLifecycle
+--- PASS: TestSecurityAlertsLifecycle (2.18s)
+=== RUN   TestSecurityAuditChainVerification
+    security_audit_test.go:78: audit.audit_events FULL: 13113 rows in 430.471476ms on 1 connections
+    security_audit_test.go:87: audit.audit_events INCREMENTAL: seq 13113..13113 in 4.477143ms
+    security_audit_test.go:78: audit.security_audit_events FULL: 1126 rows in 41.647472ms on 1 connections
+    security_audit_test.go:87: audit.security_audit_events INCREMENTAL: seq 1126..1126 in 3.112224ms
+--- PASS: TestSecurityAuditChainVerification (0.62s)
+=== RUN   TestSecurityAuditChainTamperDetection
+    security_audit_test.go:159: modified row: [1124: hash mismatch (row modified)]
+    security_audit_test.go:168: removed row: [1125: seq gap after 1123 1125: prev_hash does not match previous row]
+--- PASS: TestSecurityAuditChainTamperDetection (0.05s)
+=== RUN   TestSecurityStaffPasswordChangeNeedsTOTPStepUp
+--- PASS: TestSecurityStaffPasswordChangeNeedsTOTPStepUp (30.93s)
+=== RUN   TestSecurityFinancialGatesInDatabase
+--- PASS: TestSecurityFinancialGatesInDatabase (0.04s)
+=== RUN   TestSecurityRuntimeRolesCannotRewriteFinancialHistory
+--- PASS: TestSecurityRuntimeRolesCannotRewriteFinancialHistory (0.03s)
+=== RUN   TestSecurityRetentionRegistryInventsNoPeriods
+--- PASS: TestSecurityRetentionRegistryInventsNoPeriods (0.02s)
+=== RUN   TestSecurityBackupRoleIsReadOnly
+--- PASS: TestSecurityBackupRoleIsReadOnly (0.03s)
+=== RUN   TestSecurityKeysFromSecretManager
+    security_keys_test.go:110: secret manager outage: invalid configuration:
+          - FIELD_ENCRYPTION_LOCAL_KEY: the secret manager did not return the referenced key
+          - BLIND_IN
+--- PASS: TestSecurityKeysFromSecretManager (0.05s)
+=== RUN   TestSecurityFailedMigrationLeavesNothing
+--- PASS: TestSecurityFailedMigrationLeavesNothing (0.05s)
+=== RUN   TestSecurityConcurrentMigrationsSerialise
+--- PASS: TestSecurityConcurrentMigrationsSerialise (6.06s)
+=== RUN   TestSecurityPerformanceSample
+    security_perf_test.go:66: POST /auth/login (Argon2id): n=20 workers=1 p50=143.06383ms p95=167.720397ms p99=167.720397ms max=167.720397ms throughput=6.7/s
+    security_perf_test.go:66: POST /auth/login (Argon2id): n=20 workers=8 p50=342.251928ms p95=569.097066ms p99=569.097066ms max=569.097066ms throughput=19.5/s
+    security_perf_test.go:66: GET /me (authenticated): n=500 workers=10 p50=1.829904ms p95=2.876816ms p99=11.35322ms max=28.646427ms throughput=4593.7/s
+    security_perf_test.go:66: GET /version (public, no session): n=500 workers=10 p50=214.044µs p95=369.174µs p99=593.119µs max=2.46775ms throughput=41672.6/s
+    security_perf_test.go:66: secret manager resolve (uncached): n=200 workers=4 p50=1.430333ms p95=8.617572ms p99=11.632716ms max=12.561085ms throughput=1777.1/s
+    security_perf_test.go:66: secret manager resolve (cached): n=2000 workers=4 p50=1.576µs p95=4.981µs p99=120.339µs max=439.261µs throughput=773698.6/s
+    security_perf_test.go:66: audit event write (own transaction): n=400 workers=1 p50=2.015677ms p95=3.389173ms p99=4.383271ms max=12.408281ms throughput=457.4/s
+    security_perf_test.go:66: audit event write (own transaction): n=400 workers=8 p50=14.333687ms p95=18.762439ms p99=28.275407ms max=42.584657ms throughput=546.2/s
+    security_perf_test.go:149: audit incremental verification: seq 1..13919 in 449.951093ms
+    security_perf_test.go:66: security scan (one source, health and backup evidence): n=5 workers=1 p50=18.015768ms p95=42.689766ms p99=42.689766ms max=42.689766ms throughput=43.3/s
+--- PASS: TestSecurityPerformanceSample (19.97s)
+=== RUN   TestStoragePipelineUploadScanPromote
+    storage_pipeline_test.go:193: scanner: real clamd at 127.0.0.1:3310 (ClamAV 1.5.3/28164)
+=== RUN   TestStoragePipelineUploadScanPromote/KYC_DOCUMENT
+=== RUN   TestStoragePipelineUploadScanPromote/COMPLIANCE_EVIDENCE
+=== RUN   TestStoragePipelineUploadScanPromote/PAYOUT_DESTINATION_EVIDENCE
+--- PASS: TestStoragePipelineUploadScanPromote (0.28s)
+    --- PASS: TestStoragePipelineUploadScanPromote/KYC_DOCUMENT (0.13s)
+    --- PASS: TestStoragePipelineUploadScanPromote/COMPLIANCE_EVIDENCE (0.06s)
+    --- PASS: TestStoragePipelineUploadScanPromote/PAYOUT_DESTINATION_EVIDENCE (0.07s)
+=== RUN   TestStoragePipelineEICARRejected
+    storage_pipeline_test.go:270: scanner: real clamd at 127.0.0.1:3310 (ClamAV 1.5.3/28164)
+    storage_pipeline_test.go:279: EICAR detected by ClamAV 1.5.3/28164 as "Eicar-Signature"
+--- PASS: TestStoragePipelineEICARRejected (0.17s)
+=== RUN   TestStoragePipelineScannerOutageThenRecovery
+    storage_pipeline_test.go:295: scanner: real clamd at 127.0.0.1:3310 (ClamAV 1.5.3/28164)
+--- PASS: TestStoragePipelineScannerOutageThenRecovery (0.19s)
+=== RUN   TestStoragePipelineInterruptedScanIsFenced
+    storage_pipeline_test.go:338: scanner: real clamd at 127.0.0.1:3310 (ClamAV 1.5.3/28164)
+--- PASS: TestStoragePipelineInterruptedScanIsFenced (0.15s)
+=== RUN   TestStoragePipelineConcurrentScansPromoteOnce
+    storage_pipeline_test.go:376: scanner: real clamd at 127.0.0.1:3310 (ClamAV 1.5.3/28164)
+--- PASS: TestStoragePipelineConcurrentScansPromoteOnce (0.37s)
+=== RUN   TestStoragePipelineInterruptedUploadCleanedUp
+    storage_pipeline_test.go:419: scanner: real clamd at 127.0.0.1:3310 (ClamAV 1.5.3/28164)
+--- PASS: TestStoragePipelineInterruptedUploadCleanedUp (0.07s)
+=== RUN   TestStoragePipelineUploadRejectionsStoreNothing
+    storage_pipeline_test.go:455: scanner: real clamd at 127.0.0.1:3310 (ClamAV 1.5.3/28164)
+=== RUN   TestStoragePipelineUploadRejectionsStoreNothing/png_declared_as_pdf
+=== RUN   TestStoragePipelineUploadRejectionsStoreNothing/html_disguised_as_png
+=== RUN   TestStoragePipelineUploadRejectionsStoreNothing/empty
+=== RUN   TestStoragePipelineUploadRejectionsStoreNothing/too_large
+--- PASS: TestStoragePipelineUploadRejectionsStoreNothing (0.13s)
+    --- PASS: TestStoragePipelineUploadRejectionsStoreNothing/png_declared_as_pdf (0.04s)
+    --- PASS: TestStoragePipelineUploadRejectionsStoreNothing/html_disguised_as_png (0.01s)
+    --- PASS: TestStoragePipelineUploadRejectionsStoreNothing/empty (0.01s)
+    --- PASS: TestStoragePipelineUploadRejectionsStoreNothing/too_large (0.04s)
+=== RUN   TestStoredObjectsDatabaseGuards
+    storage_pipeline_test.go:490: scanner: real clamd at 127.0.0.1:3310 (ClamAV 1.5.3/28164)
+--- PASS: TestStoredObjectsDatabaseGuards (0.07s)
+=== RUN   TestStorageUploadRouteBodyLimitExemption
+    storage_pipeline_test.go:534: scanner: real clamd at 127.0.0.1:3310 (ClamAV 1.5.3/28164)
+--- PASS: TestStorageUploadRouteBodyLimitExemption (0.67s)
+=== RUN   TestVerificationKYCEndToEnd
+--- PASS: TestVerificationKYCEndToEnd (12.72s)
+=== RUN   TestVerificationSelfReviewAndDuplicateIdentity
+--- PASS: TestVerificationSelfReviewAndDuplicateIdentity (6.83s)
+=== RUN   TestVerificationConcurrentReviewActions
+--- PASS: TestVerificationConcurrentReviewActions (7.07s)
+=== RUN   TestVerificationKYBRepresentativeAndIsolation
+--- PASS: TestVerificationKYBRepresentativeAndIsolation (5.61s)
+=== RUN   TestVerificationBeneficiaryFourEyes
+--- PASS: TestVerificationBeneficiaryFourEyes (3.80s)
+=== RUN   TestVerificationPayoutDestinationNeverVerifiedByFormatOrMock
+--- PASS: TestVerificationPayoutDestinationNeverVerifiedByFormatOrMock (11.34s)
+=== RUN   TestVerificationFailureInjection
+--- PASS: TestVerificationFailureInjection (7.48s)
+=== RUN   TestVerificationPerformanceSample
+    verification_test.go:977: PERF GET /admin/verification/cases        n=50 p50=4.595957ms p95=8.100101ms max=58.093917ms
+    verification_test.go:977: PERF GET /kyc/status                      n=50 p50=1.843226ms p95=2.949107ms max=7.117303ms
+    verification_test.go:977: PERF POST /verification/documents (200KB) n=10 p50=39.037848ms p95=48.060439ms max=48.060439ms
+--- PASS: TestVerificationPerformanceSample (2.69s)
+=== RUN   TestVerificationQueuePagination
+--- PASS: TestVerificationQueuePagination (7.09s)
+=== RUN   TestOutboxDeliversExactlyOncePerSubscriber
+--- PASS: TestOutboxDeliversExactlyOncePerSubscriber (0.73s)
+=== RUN   TestOutboxRelayConcurrentAndUnsubscribed
+--- PASS: TestOutboxRelayConcurrentAndUnsubscribed (0.17s)
+=== RUN   TestOutboxRolledBackTransactionDeliversNothing
+--- PASS: TestOutboxRolledBackTransactionDeliversNothing (1.07s)
+=== RUN   TestOutboxHandlerRetriedUntilSuccess
+--- PASS: TestOutboxHandlerRetriedUntilSuccess (0.92s)
+=== RUN   TestOutboxHandlerAlwaysFailingIsDiscarded
+--- PASS: TestOutboxHandlerAlwaysFailingIsDiscarded (0.89s)
+=== RUN   TestWorkerCancelledMidJobIsRetriedElsewhere
+--- PASS: TestWorkerCancelledMidJobIsRetriedElsewhere (0.42s)
+=== RUN   TestWorkerCrashedJobIsRescued
+--- PASS: TestWorkerCrashedJobIsRescued (32.20s)
+=== RUN   TestNotificationsDeliverToMailpit
+--- PASS: TestNotificationsDeliverToMailpit (0.08s)
+=== RUN   TestNotificationSMTPUnreachableIsRetriedNotLost
+--- PASS: TestNotificationSMTPUnreachableIsRetriedNotLost (0.91s)
+=== RUN   TestWorkerContainerReady
+--- PASS: TestWorkerContainerReady (0.01s)
+FAIL
+FAIL	github.com/Fatifizo/fundzim/tests/integration	1477.824s
+FAIL
+exit 1
