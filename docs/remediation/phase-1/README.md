@@ -24,9 +24,11 @@ Stage 0–20 acceptance is still NOT_RECORDED. The Stage 20 report and registers
 | `97b8a70` | sweep engine, migration `20261025090000`, payouts/fees/ledger sweeps, OpenAPI, tests, ADR-052 code |
 | `8baee4e` | discovery typo test fix (KI-R1-08) |
 | `a0a687d` | keyset reads order by the uuid key (F-R1-06); ledger volume test deadlines scale with the run (KI-R1-09) — final code candidate |
+| `08411f6` | CI push trigger for `remediation/**` (CI run 40211164419) |
 | docs commit (this README) | phase documents, preserved evidence, CLAUDE.md block |
 
 The logs are in [evidence/](evidence/), with hashes in `evidence/SHA256SUMS`. Each log names its commit in its first line, or in
 test-evidence.md §2 where it does not. Database runs used only the disposable compose project `fundzim-r1` (fresh volumes) and
 the scratch databases `fundzim_perf_r1` / `fundzim_perf_r1b` inside it. The development project `fundzim` was stopped
-without `-v`; its data was not touched.
+without `-v` for the whole phase. During teardown, its restart applied this phase's additive migration to the development
+database (F-R1-07). It was stopped again and stays stopped until the owner decides.

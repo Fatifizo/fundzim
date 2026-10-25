@@ -3,7 +3,7 @@
 Repository integration, governance and financial reconciliation completeness. Non-production. Branch
 `remediation/reconciliation-completeness`. Date 2026-10-25.
 
-**Engineering result: PASS WITH CONDITIONS.** Launch recommendation unchanged: **BLOCKED** (Stage 20). Nothing merged, deployed
+**Engineering result: PASS WITH CONDITIONS.** The conditions are the owner decisions D-06, D-05 and D-01, green CI on the integrated commit (one Web unit test failed on the branch run, KI-R1-10), and an owner decision on the development-database incident (F-R1-07). Launch recommendation unchanged: **BLOCKED** (Stage 20). Nothing merged, deployed
 or accepted.
 
 ## 1. Executive summary
@@ -37,7 +37,7 @@ Launch remains blocked by the other Stage 20 blockers (providers, legal, account
 | `main` | `a552de2` (Stage 0); unprotected (`protected: false`, API 2026-10-25) |
 | Branch | `remediation/reconciliation-completeness` created from `6a65d70` (did not exist before) |
 | Commits | `97b8a70` (code, migration, OpenAPI, tests), `8baee4e` (test fix), `a0a687d` (F-R1-06 fix, volume test deadlines), docs commit — see §15 |
-| Environments | disposable compose project `fundzim-r1` (fresh volumes, verified empty: goose head `20261025090000`, 0 payouts); scratch DBs `fundzim_perf_r1`, `fundzim_perf_r1b`. Development project stopped without `-v` and restarted at the end; its data was not touched |
+| Environments | disposable compose project `fundzim-r1` (fresh volumes, verified empty: goose head `20261025090000`, 0 payouts); scratch DBs `fundzim_perf_r1`, `fundzim_perf_r1b`. Development project stopped without `-v` for the whole phase. At teardown its restart applied the additive migration to it (F-R1-07); stopped again |
 
 Details: [preflight.md](preflight.md).
 
@@ -51,8 +51,9 @@ Details: [preflight.md](preflight.md).
 | F-R1-03 | MEDIUM | an open payout exception suppressed every new mismatch type | fixed (recorded as evidence) |
 | F-R1-04 | MEDIUM | fee MISSING_FEE judged on partial groups; ledger duplicates counted within the window | fixed |
 | F-R1-05 | MEDIUM | test services would share the worker's `default` checkpoints | fixed (own scopes; source-suffix scopes) |
+| F-R1-07 | HIGH (process; stop condition) | teardown restarted the development stack with the image tag that the disposable project had rebuilt at `a0a687d`, so `20261025090000` was applied to the **shared development database** (additive only; 0 checkpoint rows and 0 new references written). Development stack stopped; owner decides keep or restore | OPEN — owner decision |
 | F-R1-06 | MEDIUM | this phase's own keyset reads ordered by the text output column: a full sort per batch, and order safety depending on the collation (verified: nothing skipped) | fixed in `a0a687d` |
-| KI-R1-01 … 09 | LOW–INFO | operational / test limitations (cycle duration, row growth, hot deferrals, in-memory facts, out-of-scope items, local secrets printed, payout test race, discovery flake, sub-batch deadline liveness) | see [known-issues.md](known-issues.md) |
+| KI-R1-01 … 10 | LOW–INFO | operational / test limitations (cycle duration, row growth, hot deferrals, in-memory facts, out-of-scope items, local secrets printed, payout test race, discovery flake, sub-batch deadline liveness, CI web unit test failure) | see [known-issues.md](known-issues.md) |
 
 ## 4. Root causes
 
@@ -169,6 +170,11 @@ Throughout this phase:
 - no real donation, payment or payout happened (simulator only);
 - no production credential was loaded.
 
+**Environment isolation was breached once (F-R1-07).** During teardown, this phase's migration was applied to the shared
+development database. The migration is additive: no existing row changed and no reconciliation effect was written. The
+development API and worker ran the branch code for about a minute before the stack was stopped. This is a stop condition
+("a migration affecting shared data"). Work stopped there, apart from documenting it. No Down migration was run.
+
 The only invariant failure observed was L6 on the disposable database. It was caused by this phase's own test fixture
 (F-R1-02), investigated under the stop condition, and removed; the disposable database was recreated from empty.
 
@@ -189,6 +195,7 @@ All 17 Stage 20 launch blockers remain open. B-05 (reconciliation coverage) is E
 | D-05 | pilot volumes |
 | D-13 | stage acceptance in order, including this phase |
 | D-12 | signing, release and rollback procedure |
+| F-R1-07 | development database: keep the additive migration (recommended; forward-only) or restore from the newest backup (2026-10-23, which discards later writes); the development stack stays stopped until decided |
 
 Stage 20's D-02 … D-14 are otherwise unchanged. No decision was recorded by Claude Code.
 
@@ -198,14 +205,29 @@ Stage 20's D-02 … D-14 are otherwise unchanged. No decision was recorded by Cl
 - **This branch:** pushed to `origin/remediation/reconciliation-completeness` (not `main`) to obtain remote CI. The observed
   result is recorded below only after the run was seen. Local results are in §8 and are not a substitute for CI.
 
-CI_OBSERVED
+- **CI trigger:** the workflow ran only for `main`, `stage-**` and pull requests, so commit `08411f6` adds `remediation/**` to the
+  push trigger. Permissions, pins and jobs are unchanged, and `internal/deploytest` passes.
+- **Run [40211164419](https://github.com/Fatifizo/fundzim/actions/runs/40211164419) on `08411f6`** (code identical to
+  `a0a687d`; observed through the API): **7 of 8 jobs succeeded.**
+  - Succeeded: Go, Integration, Real-stack E2E, Web end-to-end, Container images, OpenAPI/SQL drafts, Secret scanning.
+  - **Failed: Web (lint, types, unit tests, build, audit)**, at step `npm test`.
+    `apps/web/src/__tests__/discovery-components.test.tsx:83` (*placement requests … send an idempotency key once*) reported
+    `expected "vi.fn()" to be called 1 times, but got 0 times`. Build and audit were skipped after it.
+  - This phase changed no file under `apps/web`, and the test is unchanged since Stage 16. It passed in Stage 20's run
+    40179378365.
+  - Locally on Node 24.21.0 it passes: full suite 578/578, the file 15/15 in isolation, and the full suite 3/3 pinned to one CPU.
+    The full job log needs authentication and was not read, so the cause is **not established**. The assertion is synchronous
+    right after an asynchronous submit, so a timing dependence is suspected but not proven.
+  - Nothing was changed to make it pass (KI-R1-10).
+- **The CI result therefore does not meet "green".** CI must be green on the integrated commit before B-05 closes (§12).
+- The run on the commit that records this result is reported in the completion message, not here.
 
 ## 15. Commit and branch details
 
 | Item | Value |
 |---|---|
 | Branch | `remediation/reconciliation-completeness` (new; created from `6a65d70`; no existing branch overwritten) |
-| Commits | `97b8a70` code, migration, OpenAPI, tests · `8baee4e` discovery test fix · `a0a687d` F-R1-06 fix and volume test deadlines · docs commit (phase documents, evidence, CLAUDE.md) |
+| Commits | `97b8a70` code, migration, OpenAPI, tests · `8baee4e` discovery test fix · `a0a687d` F-R1-06 fix and volume test deadlines · `871248d`, `3134d21` documents and evidence · `08411f6` CI trigger · final docs commit (CI result, F-R1-07) |
 | Code candidate | `a0a687d` (the docs commit changes no code) |
 | `main` | unchanged at `a552de2`; nothing merged; no PR opened; no repository setting changed |
 
@@ -217,6 +239,10 @@ CI_OBSERVED
 - **Checkpoint rows accumulate** (KI-R1-02). No retention period is invented (LR-012).
 - **The payout test race (KI-R1-07)** can still fail one test intermittently.
 - **Volume figures come from one dev host**, with payment facts held in memory for the ledger harness (KI-R1-04).
+- **CI is not green** (Web unit test, KI-R1-10). It must be green on the integrated commit.
+- **The development database is at the branch migration (F-R1-07)** while every other branch lacks it. Starting the
+  development stack from an older commit fails the migration check or runs code that does not know the new tables, until the
+  owner decides.
 - **The branch is not integrated.** Until D-01, `main` still lacks every stage since Stage 0.
 
 ## 17. Next workstream

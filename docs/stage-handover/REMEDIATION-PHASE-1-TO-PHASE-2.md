@@ -9,6 +9,14 @@
 - Stage 0–20 acceptance: NOT_RECORDED. Launch: NOT authorised. Every financial gate is off.
 - Current status of all launch workstreams: `docs/remediation/phase-1/remediation-register.md`.
 
+## Open incidents and CI
+
+- **F-R1-07:** migration `20261025090000` was applied to the shared development database during teardown (additive). The
+  development stack is **stopped** until the owner decides between keeping it and restoring from a backup. Before starting the
+  development stack, rebuild the images from the intended commit (`docker compose build`).
+- **KI-R1-10:** branch CI run 40211164419 was 7/8. The Web unit test `discovery-components.test.tsx:83` failed and did not
+  reproduce locally. Investigate it with the job log (authenticated) before the integration PR.
+
 ## Inputs the next workstream needs from the owner
 
 1. D-01: apply branch protection (`docs/remediation/phase-1/integration-plan.md` §4) and approve the PR route.

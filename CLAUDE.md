@@ -19,7 +19,8 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 owner decisions; non-production; launch NOT authorised).** Not a product stage. Branch `remediation/reconciliation-completeness`
 from `6a65d70`; nothing merged. What it built: `docs/remediation/phase-1/README.md` (preflight, integration plan, coverage
 design, test evidence, performance, remediation register, final report; ADR-052); next workstream starts from
-`docs/stage-handover/REMEDIATION-PHASE-1-TO-PHASE-2.md`. Binding rules: **windowed reconciliation passes guarantee nothing —
+`docs/stage-handover/REMEDIATION-PHASE-1-TO-PHASE-2.md`. The development stack is stopped and its database already holds migration `20261025090000`
+(F-R1-07, owner decision pending). Binding rules: **windowed reconciliation passes guarantee nothing —
 coverage comes from the sweeps** (`internal/platform/reconsweep`; detectors PAYOUTS, FEE_ASSESSMENTS, PAYMENT_JOURNALS,
 PAYMENT_FACTS); a checkpoint advances only by compare-and-swap after its batch was examined and recorded — never advance it
 another way, never skip a record (defer it), never delete or rewrite a checkpoint (DB guard); a keyset read orders by the table's uuid column, never by a
@@ -28,7 +29,10 @@ a new financial detector gets a sweep; **tests and tools never run a detector in
 a non-payments journal source derives `<scope>.<source>`) — a run with fake facts or another config would move the worker's
 checkpoint past records it never judged; **never plant a duplicate or otherwise invariant-breaking ledger journal on the shared
 or disposable integration database** (append-only: L6 fails for ever and EC-19 refuses every payout) — use a scratch
-`fundzim_perf*` database; run budgets are engineering defaults, the coverage freshness target is owner decision D-06.
+`fundzim_perf*` database; **compose projects share the image tags `fundzim/api:local` / `fundzim/web:local`** — after building a
+disposable project from another commit, rebuild the images from the development commit (`docker compose build`) before
+`docker compose up` of the development project, or its `fundzim-migrate` applies the other commit's migrations to the shared
+database (F-R1-07); run budgets are engineering defaults, the coverage freshness target is owner decision D-06.
 
 **Stage 20 — Production certification, operational readiness & launch decision (complete; recommendation BLOCKED;
 launch NOT authorised; awaiting owner decisions).** Stages 0–20 acceptance NOT_RECORDED. What Stage 20 produced:
