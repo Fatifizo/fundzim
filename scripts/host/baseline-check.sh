@@ -11,7 +11,7 @@ emit() { printf '{"control":"%s","result":"%s","detail":"%s"}\n' "$1" "$2" "$(pr
 have() { command -v "$1" >/dev/null 2>&1; }
 sshd_opt() { # effective sshd option (needs read access to sshd -T; falls back to the config file)
   if have sshd && sshd -T >/dev/null 2>&1; then sshd -T 2>/dev/null | awk -v k="$1" 'tolower($1)==k{print tolower($2); exit}'
-  elif [ -r /etc/ssh/sshd_config ]; then grep -Ei "^\s*$1\s" /etc/ssh/sshd_config | tail -1 | awk '{print tolower($2)}'; fi
+  elif [ -r /etc/ssh/sshd_config ]; then grep -Ei "^\s*$1\s" /etc/ssh/sshd_config | tail -n 1 | awk '{print tolower($2)}'; fi
 }
 
 # H-01 supported OS release

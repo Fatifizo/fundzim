@@ -1,0 +1,40 @@
+{
+  "result": "PASSED",
+  "scenarios": [
+    {
+      "scenario": "corrupt",
+      "outcome": "refused",
+      "evidence": "{\"backup_id\": \"fundzim-development-20261025T090003Z-1d26e3\", \"files\": 3, \"problems\": [\"storage.tar.gpg: size or SHA-256 differs from the manifest\"]}"
+    },
+    {
+      "scenario": "wrong_key_manifest",
+      "outcome": "refused",
+      "evidence": "{\"backup_id\": \"fundzim-development-20261025T090003Z-1d26e3\", \"files\": 3, \"problems\": [\"manifest MAC does not verify (manifest altered or wrong key)\"]}"
+    },
+    {
+      "scenario": "wrong_key_decrypt",
+      "outcome": "refused",
+      "evidence": "gpg: decryption failed: Bad session key"
+    },
+    {
+      "scenario": "tampered_manifest",
+      "outcome": "refused",
+      "evidence": "{\"backup_id\": \"fundzim-development-20261025T090003Z-1d26e3\", \"files\": 3, \"problems\": [\"manifest MAC does not verify (manifest altered or wrong key)\"]}"
+    },
+    {
+      "scenario": "missing_file",
+      "outcome": "refused",
+      "evidence": "{\"backup_id\": \"fundzim-development-20261025T090003Z-1d26e3\", \"files\": 3, \"problems\": [\"config.tar.gpg: missing\"]}"
+    },
+    {
+      "scenario": "truncated_restore",
+      "outcome": "refused",
+      "evidence": "pg_restore: error: could not read from input file: end of file"
+    },
+    {
+      "scenario": "truncated_restore_leaves_nothing",
+      "outcome": "refused",
+      "evidence": "0 FundZim tables after the failed restore"
+    }
+  ]
+}

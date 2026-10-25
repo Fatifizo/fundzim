@@ -45,7 +45,7 @@ step() { # step <name> <command...>: timed; a failing step ends the drill (recor
   e=$(date +%s.%N)
   python3 -c "import json,sys;print(json.dumps({'step':sys.argv[1],'started_at':sys.argv[2],'finished_at':sys.argv[3],'seconds':round(float(sys.argv[5])-float(sys.argv[4]),3),'exit':int(sys.argv[6])}))" \
     "$name" "$st" "$(now)" "$s" "$e" "$rc" >> "$STEPS"
-  if [ $rc -ne 0 ]; then echo "drill: step $name FAILED:" >&2; tail -20 "$WORK/$name.out" "$WORK/$name.err" >&2; finish 1; fi
+  if [ $rc -ne 0 ]; then echo "drill: step $name FAILED:" >&2; tail -n 20 "$WORK/$name.out" "$WORK/$name.err" >&2; finish 1; fi
 }
 check() { # check <name> <pass|fail> <detail-json>
   python3 -c "import json,sys;print(json.dumps({'check':sys.argv[1],'outcome':sys.argv[2],'detail':json.loads(sys.argv[3])}))" "$1" "$2" "$3" >> "$CHECKS"
@@ -155,7 +155,7 @@ recon_evidence() {
     FROM recon.imports i LEFT JOIN app.stored_objects o ON o.id = i.stored_object_id"
 }
 step recon_evidence recon_evidence
-r=$(tail -1 "$WORK/recon_evidence.out"); total=${r%%|*}; present=${r##*|}
+r=$(tail -n 1 "$WORK/recon_evidence.out"); total=${r%%|*}; present=${r##*|}
 [ "$total" = "$present" ] && o=pass || o=fail
 check reconciliation_evidence_records "$o" "{\"imports\": $total, \"evidence_objects_clean\": $present}"
 
@@ -164,12 +164,12 @@ start_api() {
   env "${DENV[@]}" "$BIN/api" >"$WORK/api.log" 2>&1 &
   API_PID=$!
   for _ in $(seq 1 60); do curl -fsS "http://127.0.0.1:$APIPORT/api/v1/ready" >/dev/null 2>&1 && return 0; sleep 1; done
-  tail -20 "$WORK/api.log"; return 1
+  tail -n 20 "$WORK/api.log"; return 1
 }
 step start_api start_api
 check api_ready pass "{\"ready\": true, \"port\": $APIPORT}"
 if [ -n "$DRILL_USER" ]; then
   step authentication python3 scripts/backup/drill_user.py check "$DRILL_USER" "http://127.0.0.1:$APIPORT"
-  check authentication pass "$(tail -1 "$WORK/authentication.out")"
+  check authentication pass "$(tail -n 1 "$WORK/authentication.out")"
 fi
 finish 0

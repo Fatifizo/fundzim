@@ -626,3 +626,10 @@ Notes on ordering:
   production-like environment.
 - **Acceptance criteria:** Signed go/no-go with named approvers; all blocking legal items resolved; no
   compliance or certification claims beyond what counsel and auditors have confirmed.
+- **Stage 20 as executed (2026-10-25, awaiting owner decisions):** certification assessment only — recommendation
+  **BLOCKED**, launch **not authorised**. Engineering evidence re-run on a disposable stack at the candidate
+  (238/238 runnable integration tests; burst with 0 duplicate effects; restore drill PASSED after fixing F-S20-07, a
+  backup script that mixed compose projects). Blockers B-01 … B-17 (docs/stage-20/production-launch-blockers.md):
+  provider, 31 P0 legal items, privacy, accounting review, reconciliation coverage (KI-S19-09), capacity targets,
+  staff security conditions, KMS, penetration test, infrastructure/DR/RPO-RTO, alerting and on-call, unprotected
+  `main` and no release baseline, formal acceptance, launch authorisation.

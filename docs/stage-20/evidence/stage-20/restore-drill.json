@@ -1,0 +1,232 @@
+{
+  "backup_id": "fundzim-development-20261025T090003Z-1d26e3",
+  "result": "PASSED",
+  "steps": [
+    {
+      "step": "verify_manifest",
+      "started_at": "2026-10-25T09:00:12.770Z",
+      "finished_at": "2026-10-25T09:00:12.906Z",
+      "seconds": 0.135,
+      "exit": 0
+    },
+    {
+      "step": "start_postgres",
+      "started_at": "2026-10-25T09:00:13.076Z",
+      "finished_at": "2026-10-25T09:00:16.077Z",
+      "seconds": 3.004,
+      "exit": 0
+    },
+    {
+      "step": "restore_postgres",
+      "started_at": "2026-10-25T09:00:16.122Z",
+      "finished_at": "2026-10-25T09:00:28.881Z",
+      "seconds": 12.757,
+      "exit": 0
+    },
+    {
+      "step": "restore_storage",
+      "started_at": "2026-10-25T09:00:28.925Z",
+      "finished_at": "2026-10-25T09:00:31.213Z",
+      "seconds": 2.288,
+      "exit": 0
+    },
+    {
+      "step": "build_binaries",
+      "started_at": "2026-10-25T09:00:31.274Z",
+      "finished_at": "2026-10-25T09:00:33.419Z",
+      "seconds": 2.144,
+      "exit": 0
+    },
+    {
+      "step": "schema_version",
+      "started_at": "2026-10-25T09:00:33.479Z",
+      "finished_at": "2026-10-25T09:00:33.569Z",
+      "seconds": 0.09,
+      "exit": 0
+    },
+    {
+      "step": "restored_facts",
+      "started_at": "2026-10-25T09:00:33.649Z",
+      "finished_at": "2026-10-25T09:00:33.794Z",
+      "seconds": 0.144,
+      "exit": 0
+    },
+    {
+      "step": "verify_audit",
+      "started_at": "2026-10-25T09:00:33.880Z",
+      "finished_at": "2026-10-25T09:00:35.238Z",
+      "seconds": 1.357,
+      "exit": 0
+    },
+    {
+      "step": "verify_ledger",
+      "started_at": "2026-10-25T09:00:35.356Z",
+      "finished_at": "2026-10-25T09:00:35.688Z",
+      "seconds": 0.331,
+      "exit": 0
+    },
+    {
+      "step": "verify_objects",
+      "started_at": "2026-10-25T09:00:35.816Z",
+      "finished_at": "2026-10-25T09:00:36.586Z",
+      "seconds": 0.768,
+      "exit": 0
+    },
+    {
+      "step": "recon_evidence",
+      "started_at": "2026-10-25T09:00:36.701Z",
+      "finished_at": "2026-10-25T09:00:36.851Z",
+      "seconds": 0.149,
+      "exit": 0
+    },
+    {
+      "step": "start_api",
+      "started_at": "2026-10-25T09:00:36.949Z",
+      "finished_at": "2026-10-25T09:00:38.015Z",
+      "seconds": 1.065,
+      "exit": 0
+    }
+  ],
+  "checks": [
+    {
+      "check": "manifest",
+      "outcome": "pass",
+      "detail": {
+        "backup_id": "fundzim-development-20261025T090003Z-1d26e3",
+        "files": 3,
+        "problems": []
+      }
+    },
+    {
+      "check": "schema_version",
+      "outcome": "pass",
+      "detail": {
+        "manifest": 20261024090100,
+        "restored": [
+          20261024090100,
+          20261024090100
+        ]
+      }
+    },
+    {
+      "check": "restored_counts_within_dump_window",
+      "outcome": "pass",
+      "detail": {
+        "restored": {
+          "ledger_transactions": 9238,
+          "ledger_entries": 18689,
+          "audit_events_head": 36725,
+          "security_audit_events_head": 1393,
+          "recon_imports": 15,
+          "payment_events": 5299
+        },
+        "outside_window": {}
+      }
+    },
+    {
+      "check": "audit_chains_full_verification",
+      "outcome": "pass",
+      "detail": [
+        {
+          "chain": "audit.audit_events",
+          "to_seq": 36725,
+          "outcome": "INTACT",
+          "duration_ms": 1239,
+          "workers": 1
+        },
+        {
+          "chain": "audit.security_audit_events",
+          "to_seq": 1393,
+          "outcome": "INTACT",
+          "duration_ms": 48,
+          "workers": 1
+        }
+      ]
+    },
+    {
+      "check": "ledger_integrity",
+      "outcome": "pass",
+      "detail": {
+        "passed": true,
+        "checks": [
+          [
+            "L1",
+            "PASSED",
+            9238
+          ],
+          [
+            "L2",
+            "PASSED",
+            9238
+          ],
+          [
+            "L4",
+            "PASSED",
+            18689
+          ],
+          [
+            "L6",
+            "PASSED",
+            7189
+          ],
+          [
+            "L7",
+            "PASSED",
+            2
+          ],
+          [
+            "L9",
+            "PASSED",
+            1
+          ],
+          [
+            "L10",
+            "PASSED",
+            1112
+          ],
+          [
+            "L13",
+            "PASSED",
+            1104
+          ],
+          [
+            "L15",
+            "PASSED",
+            20496
+          ]
+        ]
+      }
+    },
+    {
+      "check": "objects_sha256_and_sse_keys",
+      "outcome": "pass",
+      "detail": {
+        "sampled": 317,
+        "verified": 311,
+        "key_not_configured": 6,
+        "integrity_failures": 0,
+        "missing_or_unreadable": 0,
+        "total_clean_objects": 317,
+        "duration_ms": 709
+      }
+    },
+    {
+      "check": "reconciliation_evidence_records",
+      "outcome": "pass",
+      "detail": {
+        "imports": 15,
+        "evidence_objects_clean": 15
+      }
+    },
+    {
+      "check": "api_ready",
+      "outcome": "pass",
+      "detail": {
+        "ready": true,
+        "port": 18080
+      }
+    }
+  ],
+  "recovery_seconds": 24.232,
+  "environment": "disposable containers on the development host (never production)"
+}

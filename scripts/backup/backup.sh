@@ -41,6 +41,13 @@ STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 encrypt() { gpg --batch --quiet --yes --pinentry-mode loopback --passphrase-file "$BACKUP_KEY_FILE" --symmetric \
   --cipher-algo AES256 --s2k-digest-algo SHA512 --s2k-count 65011712 --compress-algo none -o "$1"; }
 PGIMG=$(docker compose config --images 2>/dev/null | grep '^postgres' | head -1)
+# Stage 20 (F-S20-07): every source of the set comes from the SAME compose project — the database through `docker compose`
+# and the Garage volumes by that project's volume names (they were hard-coded to the default project `fundzim`, so a
+# backup of another project silently mixed its database with the default project's object store).
+PROJECT=$(docker compose config --format json 2>/dev/null | python3 -c 'import json,sys;print(json.load(sys.stdin)["name"])')
+[ -n "$PROJECT" ] || { echo "backup: cannot determine the compose project" >&2; exit 1; }
+META_VOL="${PROJECT}_storage-meta"; DATA_VOL="${PROJECT}_storage-data"
+docker volume inspect "$META_VOL" "$DATA_VOL" >/dev/null 2>&1 || { echo "backup: volumes $META_VOL / $DATA_VOL not found" >&2; exit 1; }
 dur() { python3 -c "print(round($2 - $1, 3))"; }
 log() { printf '%s backup: %s\n' "$(date -u +%H:%M:%S)" "$*" >&2; }
 
@@ -69,10 +76,13 @@ after=$(facts)
 
 # 2. Object storage: metadata snapshot (consistent sqlite copy), then blocks + metadata files
 log "storage snapshot"
+prev=$(docker run --rm -v "$META_VOL":/m:ro --entrypoint sh "$PGIMG" -c 'ls -1t /m/snapshots 2>/dev/null | head -1')
 docker compose exec -T fundzim-storage /garage meta snapshot >/dev/null 2>&1
-snap=$(docker run --rm -v fundzim_storage-meta:/m:ro --entrypoint sh "$PGIMG" -c 'ls -1t /m/snapshots | head -1')
+snap=$(docker run --rm -v "$META_VOL":/m:ro --entrypoint sh "$PGIMG" -c 'ls -1t /m/snapshots | head -1')
 [ -n "$snap" ] || { echo "backup: no Garage metadata snapshot was written" >&2; exit 1; }
-docker run --rm -v fundzim_storage-meta:/m:ro -v fundzim_storage-data:/d:ro --entrypoint sh "$PGIMG" -ec "
+# fail closed unless this run produced a new snapshot in this project's volume (never an older or foreign one)
+[ "$snap" != "$prev" ] || { echo "backup: the Garage snapshot was not created by this run (newest is still $prev)" >&2; exit 1; }
+docker run --rm -v "$META_VOL":/m:ro -v "$DATA_VOL":/d:ro --entrypoint sh "$PGIMG" -ec "
   mkdir /meta
   for f in cluster_layout data_layout node_key node_key.pub peer_list; do [ ! -e /m/\$f ] || cp /m/\$f /meta/; done
   cp /m/snapshots/$snap/db.sqlite /meta/db.sqlite
@@ -87,7 +97,7 @@ t3=$(date +%s.%N)
 FINISHED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 python3 scripts/backup/manifest.py write "$OUT" "$BACKUP_KEY_FILE" <<EOF
 {"backup_id": "$BACKUP_ID", "environment": "$ENV_NAME", "started_at": "$STARTED", "finished_at": "$FINISHED",
- "git_commit": "$(git rev-parse HEAD)", "garage_snapshot": "$snap",
+ "git_commit": "$(git rev-parse HEAD)", "compose_project": "$PROJECT", "garage_snapshot": "$snap",
  "durations_s": {"postgres": $(dur "$t0" "$t1"), "storage": $(dur "$t1" "$t2"), "config": $(dur "$t2" "$t3")},
  "facts_before_dump": {$before}, "facts_after_dump": {$after},
  "order": ["postgres", "storage", "config"], "encryption": "OpenPGP symmetric AES-256 (gpg), key file outside the backup",

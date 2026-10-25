@@ -86,3 +86,8 @@ unseal/recovery keys split among named custodians (never in Git or next to backu
 services (new AppRole secret ids), rotate any key whose exposure is suspected, and verify by starting the API with
 `FIELD_ENCRYPTION_PROVIDER=secretstore`. The development OpenBao is in-memory: after a restart its contents are gone and
 `fundzim-secrets-init` re-seeds the sandbox secrets (DR exercise: 3.3 s).
+
+> **Stage 20 correction (F-S20-07).** `backup.sh` read the Garage volumes by the default project's names, so a backup of
+> any other compose project mixed sources. It now derives the volumes from the active project, fails closed unless this
+> run created a new Garage snapshot, and records `compose_project` in the manifest (docs/stage-20/infrastructure-dr-readiness.md §3).
+

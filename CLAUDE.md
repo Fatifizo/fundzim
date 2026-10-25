@@ -15,6 +15,20 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
+**Stage 20 — Production certification, operational readiness & launch decision (complete; recommendation BLOCKED;
+launch NOT authorised; awaiting owner decisions).** Stages 0–20 acceptance NOT_RECORDED. What Stage 20 produced:
+`docs/stage-20/README.md` (preflight, evidence matrix, financial/provider/legal-privacy/accounting/security/
+infrastructure-DR/operations/capacity/CI certification, findings register, owner decision pack D-01 … D-14, launch
+blockers B-01 … B-17). Binding Stage 20 rules: a certification result is never upgraded because documentation exists or
+a test passes — provider, legal, privacy, accounting, capacity, RPO/RTO, operator and launch decisions are the owner's
+and are never recorded by Claude Code; evidence names its commit and CI run, and a run on another commit is never proof
+for the candidate; certification and load evidence runs on a **disposable compose project** (`docker compose -p <name>`
+after `docker compose down` of the development project **without** `-v`), never on the contaminated development
+database; backups must come from one compose project (`backup.sh` derives the Garage volumes from the active project and
+records `compose_project`; F-S20-07) and every backup type is proven by the restore drill; scripts use `tail -n N`
+(uutils coreutils on the dev host); preserved evidence lives in `docs/stage-20/evidence/` with `SHA256SUMS`.
+Reconciliation coverage (KI-S19-09) and an unprotected `main` (F-S20-01) are launch blockers.
+
 **Stage 19 — Financial concurrency, load, failure & integrity validation (complete; awaiting acceptance; non-production;
 production BLOCKED).** Stages 1–19 are complete but their acceptance has not been recorded (never mark a stage accepted
 yourself); Stage 9 is PARTIAL. What Stage 19 built: `docs/stage-19/README.md` (preflight, invariants, transition

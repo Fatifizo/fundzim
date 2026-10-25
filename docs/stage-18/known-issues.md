@@ -46,7 +46,7 @@ conditions, not engineering blockers for Stage 19.
 | KI-S18-06 | No WebAuthn; no staff MFA reset workflow (F-S18-03, F-S18-12) | privileged access depends on TOTP | OPEN (production condition) |
 | KI-S18-07 | Break-glass: no request/approve/revoke API and no audit tag (F-S18-04) | emergency access is a database operation | OPEN |
 | KI-S18-08 | Artifacts are not signed (no cosign/attestations): provenance is an unsigned record | integrity rests on CI logs and checksums | EXTERNAL (signing infrastructure) |
-| KI-S18-09 | Branch protection, required reviews and protected environments are repository settings not visible to this session | merges are not enforced by review | NOT_VERIFIED (owner) |
+| KI-S18-09 | Branch protection, required reviews and protected environments are repository settings not visible to this session | merges are not enforced by review | NOT_VERIFIED (owner) — Stage 20: verified not protected (`protected: false`), F-S20-01 |
 | KI-S18-10 | Unfixed Debian bookworm CVEs in the web runtime image (1 CRITICAL zlib minizip CVE-2023-45853, 56 HIGH; no fix published) | residual OS risk | OPEN (rebuild on every release; reviewed by the CI report) |
 | KI-S18-11 | No independent penetration test has taken place (package prepared) | — | EXTERNAL |
 | KI-S18-12 | RPO/RTO are engineering proposals, not business-approved | — | OWNER |
