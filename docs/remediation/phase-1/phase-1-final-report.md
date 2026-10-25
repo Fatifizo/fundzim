@@ -3,7 +3,7 @@
 Repository integration, governance and financial reconciliation completeness. Non-production. Branch
 `remediation/reconciliation-completeness`. Date 2026-10-25.
 
-**Engineering result: PASS WITH CONDITIONS.** The conditions are the owner decisions D-06, D-05 and D-01, green CI on the integrated commit (one Web unit test failed on the branch run, KI-R1-10), and an owner decision on the development-database incident (F-R1-07). Launch recommendation unchanged: **BLOCKED** (Stage 20). Nothing merged, deployed
+**Engineering result: PASS WITH CONDITIONS.** The conditions are the owner decisions D-06, D-05 and D-01, green CI on the integrated commit (the branch runs failed a pre-existing Web unit-test race, now fixed, KI-R1-10), and an owner decision on the development-database incident (F-R1-07). Launch recommendation unchanged: **BLOCKED** (Stage 20). Nothing merged, deployed
 or accepted.
 
 ## 1. Executive summary
@@ -216,10 +216,13 @@ Stage 20's D-02 … D-14 are otherwise unchanged. No decision was recorded by Cl
   - This phase changed no file under `apps/web`, and the test is unchanged since Stage 16. It passed in Stage 20's run
     40179378365.
   - Locally on Node 24.21.0 it passes: full suite 578/578, the file 15/15 in isolation, and the full suite 3/3 pinned to one CPU.
-    The full job log needs authentication and was not read, so the cause is **not established**. The assertion is synchronous
-    right after an asynchronous submit, so a timing dependence is suspected but not proven.
-  - Nothing was changed to make it pass (KI-R1-10).
-- **The CI result therefore does not meet "green".** CI must be green on the integrated commit before B-05 closes (§12).
+    The cause was found and reproduced (KI-R1-10): a pre-existing race between the error-summary focus
+    (`requestAnimationFrame`) and simulated typing, sensitive to runner timing.
+  - Run 40213342713 on `9d16090` failed the same job on the sibling test (line 105, same mechanism). That run was then
+    superseded by the fix push.
+  - Fix: both tests wait for the focus before typing. The assertion was added, not weakened.
+- **CI on the branch was not green before the KI-R1-10 test fix.** The run on the fix commit is reported in the completion
+  message. CI must be green on the integrated commit before B-05 closes (§12).
 - The run on the commit that records this result is reported in the completion message, not here.
 
 ## 15. Commit and branch details
@@ -239,7 +242,8 @@ Stage 20's D-02 … D-14 are otherwise unchanged. No decision was recorded by Cl
 - **Checkpoint rows accumulate** (KI-R1-02). No retention period is invented (LR-012).
 - **The payout test race (KI-R1-07)** can still fail one test intermittently.
 - **Volume figures come from one dev host**, with payment facts held in memory for the ledger harness (KI-R1-04).
-- **CI is not green** (Web unit test, KI-R1-10). It must be green on the integrated commit.
+- **CI green not yet observed on the branch.** The KI-R1-10 fix is verified locally only. 27 components share the focus pattern,
+  so other tests may share the race.
 - **The development database is at the branch migration (F-R1-07)** while every other branch lacks it. Starting the
   development stack from an older commit fails the migration check or runs code that does not know the new tables, until the
   owner decides.

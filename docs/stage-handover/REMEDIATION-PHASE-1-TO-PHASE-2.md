@@ -14,8 +14,9 @@
 - **F-R1-07:** migration `20261025090000` was applied to the shared development database during teardown (additive). The
   development stack is **stopped** until the owner decides between keeping it and restoring from a backup. Before starting the
   development stack, rebuild the images from the intended commit (`docker compose build`).
-- **KI-R1-10:** branch CI run 40211164419 was 7/8. The Web unit test `discovery-components.test.tsx:83` failed and did not
-  reproduce locally. Investigate it with the job log (authenticated) before the integration PR.
+- **KI-R1-10:** branch CI failed the Web job on a pre-existing race between `requestAnimationFrame` error focus and simulated
+  typing (reproduced locally). Both affected tests are fixed. 27 components share the focus pattern: if another test fails the
+  same way, apply the same wait.
 
 ## Inputs the next workstream needs from the owner
 

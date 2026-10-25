@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -77,6 +77,8 @@ describe("discovery components", () => {
     await user.click(screen.getByRole("button", { name: "Request placement" }));
     expect(screen.getByText(/Paste the campaign's id/)).toBeInTheDocument();
     expect(api.requestPlacement).not.toHaveBeenCalled();
+    // the error summary takes focus on the next animation frame; typing before it lands would lose keystrokes (KI-R1-10)
+    await waitFor(() => expect(document.activeElement?.textContent).toContain("Please correct the errors below."));
     await user.type(screen.getByLabelText("Campaign id"), "0192f000-0000-7000-8000-000000000601");
     await user.type(screen.getByLabelText(/Why this campaign/), "Shows the range of education causes");
     await user.click(screen.getByRole("button", { name: "Request placement" }));
@@ -99,6 +101,7 @@ describe("discovery components", () => {
     await user.click(screen.getByRole("button", { name: "Submit proposal" }));
     expect(screen.getByText("Enter a whole number from 0 to 100.")).toBeInTheDocument();
     expect(api.proposeRanking).not.toHaveBeenCalled();
+    await waitFor(() => expect(document.activeElement?.textContent).toContain("Please correct the errors below."));
     await user.clear(views);
     await user.type(views, "12");
     await user.click(screen.getByRole("button", { name: "Submit proposal" }));
