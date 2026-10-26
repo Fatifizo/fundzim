@@ -14,6 +14,7 @@ import (
 	"os"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Fatifizo/fundzim/internal/operations"
 	"github.com/Fatifizo/fundzim/internal/platform/clock"
@@ -190,4 +191,43 @@ func TestSecurityAlertsLifecycle(t *testing.T) {
 	_, _ = scanner.SecurityScan(ctx(t))
 	r = admin.do("GET", "/admin/security/backups", nil)
 	admin.expect(r, 200, "")
+}
+
+// Remediation phase 3 (CI run 40300772129): scans take their observation time before they serialise on the advisory
+// lock, so two concurrent scans may write in the opposite order of their times. The scan with the earlier time must
+// neither fail (ck_ops_security_alerts_counts: last_seen_at >= first_seen_at) nor move last_seen_at or the evidence back.
+func TestSecurityAlertsOutOfOrderScanTimes(t *testing.T) {
+	need(t, "DATABASE_MIGRATION_URL")
+	letters := make([]byte, 8)
+	for i := range letters {
+		letters[i] = byte('a' + rand.Intn(26))
+	}
+	mod := "it_sec_ooo_" + string(letters) // lower-case letters and underscores (CHECK)
+	gateKey := mod + ".live_execution"
+	src := operations.Source{Module: mod, Snapshot: func(context.Context) (opsview.Snapshot, error) {
+		return opsview.Snapshot{Module: mod, Metrics: []opsview.Metric{{Key: gateKey, Label: "IT gate", Module: mod, Status: opsview.StatusUnknown,
+			Nature: opsview.Unknown, Source: "integration test"}}}, nil
+	}}
+	app := pool(t, os.Getenv("DATABASE_URL"))
+	mig := pool(t, os.Getenv("DATABASE_MIGRATION_URL"))
+	later := time.Now().UTC().Truncate(time.Second).Add(time.Hour)
+	earlier := later.Add(-time.Minute)
+	scan := func(at time.Time) {
+		t.Helper()
+		s := &operations.Service{Pool: app, Clock: clock.NewFake(at), Sources: []operations.Source{src}, ClearScope: []string{mod}}
+		if _, err := s.SecurityScan(ctx(t)); err != nil {
+			t.Fatalf("scan at %s: %v", at.Format(time.RFC3339), err)
+		}
+	}
+	scan(later)   // the later observation commits first
+	scan(earlier) // the earlier observation writes afterwards
+	var first, last time.Time
+	var observed string
+	if err := mig.QueryRow(ctx(t), `SELECT first_seen_at, last_seen_at, evidence->>'observed_at' FROM app.ops_security_alerts
+		WHERE dedupe_key = $1 AND status <> 'RESOLVED'`, "FINANCIAL_GATE_NOT_BLOCKED:"+gateKey).Scan(&first, &last, &observed); err != nil {
+		t.Fatal(err)
+	}
+	if !first.Equal(later) || !last.Equal(later) || observed != later.Format(time.RFC3339) {
+		t.Fatalf("out-of-order scan moved the alert back: first %s last %s evidence %s (want %s)", first, last, observed, later)
+	}
 }

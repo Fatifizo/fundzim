@@ -267,7 +267,10 @@ func (s *Service) SecurityScan(ctx context.Context) (ScanResult, error) {
 			case err != nil:
 				return err
 			default:
-				if _, err := tx.Exec(ctx, `UPDATE app.ops_security_alerts SET last_seen_at = $2, evidence = $3,
+				// scans observe (now) before they serialise on the advisory lock, so a scan may write after a later one:
+				// last_seen_at and the evidence never move back in time (remediation phase 3; ck_ops_security_alerts_counts)
+				if _, err := tx.Exec(ctx, `UPDATE app.ops_security_alerts SET last_seen_at = greatest(last_seen_at, $2),
+					evidence = CASE WHEN $2 >= last_seen_at THEN $3 ELSE evidence END,
 					severity = CASE WHEN $4 > array_position(ARRAY['INFO','LOW','MEDIUM','HIGH','CRITICAL'], severity) - 1 THEN $5 ELSE severity END,
 					condition_active = true, cleared_at = NULL, occurrences = occurrences + CASE WHEN condition_active THEN 0 ELSE 1 END,
 					version = version + 1 WHERE id = $1`, id, now, ev, severityRank(f.severity), f.severity); err != nil {
