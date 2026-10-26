@@ -14,6 +14,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/httpx"
 	"github.com/Fatifizo/fundzim/internal/platform/idempotency"
 	"github.com/Fatifizo/fundzim/internal/platform/outbox"
+	"github.com/Fatifizo/fundzim/internal/platform/reconsweep"
 )
 
 // Stage 10 ledger wiring (ADR-042). The ledger connects as fundzim_ledger — the only writer of the ledger schema —
@@ -44,6 +45,10 @@ func (a paymentFacts) PaymentsInStatus(ctx context.Context, status string, befor
 
 func (a paymentFacts) PaymentIDsAfter(ctx context.Context, after string, statuses []string, limit int) ([]string, error) {
 	return a.p.PaymentFactIDsAfter(ctx, after, statuses, limit)
+}
+
+func (a paymentFacts) PaymentStampsBetween(ctx context.Context, from, to string, statuses []string) ([]reconsweep.Stamp, error) {
+	return a.p.PaymentFactStampsBetween(ctx, from, to, statuses)
 }
 
 func newLedger(ctx context.Context, m *VerificationModules, d VerificationDeps) error {

@@ -121,3 +121,16 @@ func TestSecurityFindingsReconciliationSweepHealth(t *testing.T) {
 		t.Errorf("expected 4 alerts, got %d", len(fs))
 	}
 }
+
+// Remediation phase 4: a checkpoint that failed its integrity verification raises a CRITICAL in-app alert.
+func TestSecurityFindingsReconciliationSweepIntegrity(t *testing.T) {
+	now := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	recent := now.Add(-time.Hour)
+	ok := BackupEvidence{LastBackup: &recent, LastRestore: &recent}
+	snaps := []opsview.Snapshot{{Module: "ledger", Metrics: []opsview.Metric{{Key: "ledger.reconciliation.sweep_health.payment_journals",
+		State: "INTEGRITY_FAILURE", Value: opsview.Int64(60), Label: "journals", Source: "checkpoint"}}}}
+	fs := securityFindings(now, snaps, nil, nil, ok)
+	if len(fs) != 1 || fs[0].key != "RECONCILIATION_SWEEP_INTEGRITY" || fs[0].severity != "CRITICAL" || fs[0].evidence["state"] != "INTEGRITY_FAILURE" {
+		t.Fatalf("integrity alert: %+v", fs)
+	}
+}

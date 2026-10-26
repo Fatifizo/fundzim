@@ -127,6 +127,10 @@ func securityFindings(now time.Time, snaps []opsview.Snapshot, statuses []Source
 					metricEvidence(m, now))
 			// F-R2-03: a reconciliation sweep that fails, stopped progressing or is blocked by deferrals no longer proves
 			// coverage; raised as an in-app operations alert (no external delivery exists, D-10)
+			// remediation phase 4: a checkpoint whose coverage claim is contradicted by its evidence or the source records
+			case strings.Contains(m.Key, ".reconciliation.sweep_health") && m.State == reconsweep.HealthIntegrityFailure:
+				add("RECONCILIATION_SWEEP_INTEGRITY", "CRITICAL", module, m.Key, "A reconciliation checkpoint failed its integrity verification: "+m.Label,
+					m.Source, metricEvidence(m, now))
 			case strings.Contains(m.Key, ".reconciliation.sweep_health") && m.State == reconsweep.HealthFailing:
 				add("RECONCILIATION_SWEEP_FAILING", "HIGH", module, m.Key, "A reconciliation sweep keeps failing: "+m.Label, m.Source, metricEvidence(m, now))
 			case strings.Contains(m.Key, ".reconciliation.sweep_health") && m.State == reconsweep.HealthStalled:

@@ -670,16 +670,19 @@ func TestPayoutApprovalSeparationOfDutiesAndInvalidation(t *testing.T) {
 	if _, err := p.app.Exec(ctx(t), `UPDATE app.payout_requests SET status = 'APPROVED', status_rank = 20 WHERE id = $1`, id); err == nil {
 		t.Fatal("database allowed APPROVED without approvals")
 	}
-	p.approve(t, id)
+	// from the approval to the cancellation the payout must not be submitted by the compose worker (KI-R1-07): the
+	// decisions barrier stops every submission attempt before it can move the payout (payout_worker_barrier_test.go)
+	bar := holdEligibilityDecisions(t, p.mig)
+	bar.do("approve", func() error { p.approve(t, id); return nil })
 	// a material change (destination details) after approval invalidates the approvals: back to review, new round
 	p.stepUpOwner(t)
 	r = p.owner.do("GET", "/payout-destinations/"+p.dest, nil)
 	p.owner.expect(r, 200, "")
 	// changing the shared fixture destination would unverify it for later tests: use the approval-round mechanism
 	// through a destination SUSPENSION and reinstatement by a reviewer instead (same invalidation path)
-	if err := p.po.SetSuspended(ctx(t), p.dest, p.f.rev2.id, "SUSPECTED_TAKEOVER", true); err != nil {
-		t.Fatal(err)
-	}
+	bar.do("suspend the destination", func() error {
+		return p.po.SetSuspended(ctx(t), p.dest, p.f.rev2.id, "SUSPECTED_TAKEOVER", true)
+	})
 	// the shared fixture destination is reinstated even when an assertion below fails, so a failure here never cascades
 	// into later payout tests (KI-R1-07); a no-op when the test reinstates it itself
 	t.Cleanup(func() { _ = p.po.SetSuspended(context.Background(), p.dest, p.f.rev2.id, "REVIEW_CLEARED", false) })
@@ -687,19 +690,36 @@ func TestPayoutApprovalSeparationOfDutiesAndInvalidation(t *testing.T) {
 	if po.Status != payouts.StReview || po.ApprovalRound != 2 {
 		t.Fatalf("after destination suspension: %s round %d", po.Status, po.ApprovalRound)
 	}
-	if err := p.po.SetSuspended(ctx(t), p.dest, p.f.rev2.id, "REVIEW_CLEARED", false); err != nil {
-		t.Fatal(err)
-	}
+	bar.do("reinstate the destination", func() error {
+		return p.po.SetSuspended(ctx(t), p.dest, p.f.rev2.id, "REVIEW_CLEARED", false)
+	})
 	// old-round approvals do not count; amount and destination snapshot are immutable
-	if _, err := p.app.Exec(ctx(t), `UPDATE app.payout_requests SET amount_minor = 1 WHERE id = $1`, id); err == nil {
+	var amountErr error
+	bar.do("amount change attempt", func() error {
+		_, amountErr = p.app.Exec(ctx(t), `UPDATE app.payout_requests SET amount_minor = 1 WHERE id = $1`, id)
+		return nil
+	})
+	if amountErr == nil {
 		t.Fatal("payout amount changed after approval")
 	}
-	p.approve(t, id)
+	bar.do("re-approve", func() error { p.approve(t, id); return nil })
 	if st := p.payout(t, id).Status; st != payouts.StApproved {
 		t.Fatalf("after re-approval: %s", st)
 	}
-	if _, err := p.po.CancelByStaff(ctx(t), p.f.finance1.id, id, "test cleanup: cancel before submission"); err != nil {
+	bar.do("cancel before submission", func() error {
+		_, err := p.po.CancelByStaff(ctx(t), p.f.finance1.id, id, "test cleanup: cancel before submission")
+		return err
+	})
+	bar.release()
+	t.Logf("decisions barrier: %d submission attempt(s) of the worker intercepted", bar.intercepted)
+	// the payout was never submitted: no submission event, no provider instruction
+	var submitted, creates int
+	if err := p.mig.QueryRow(ctx(t), `SELECT (SELECT count(*) FROM app.payout_events WHERE payout_request_id = $1 AND to_status = 'SUBMITTED'),
+		(SELECT count(*) FROM app.payout_attempts WHERE payout_request_id = $1 AND operation = 'CREATE_PAYOUT')`, id).Scan(&submitted, &creates); err != nil {
 		t.Fatal(err)
+	}
+	if submitted != 0 || creates != 0 {
+		t.Fatalf("the payout was submitted (%d events, %d CREATE_PAYOUT attempts)", submitted, creates)
 	}
 	if pay, pend := p.balances(t, camp); pay != 20_000 || pend != 0 {
 		t.Fatalf("after cancellation payable %d pending %d", pay, pend)

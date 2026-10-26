@@ -21,9 +21,14 @@ type memStore struct {
 	beforeCAS   func(ctx context.Context) // runs inside Advance before the version check (concurrency interleavings)
 	attempts    []string                  // stop reason of every recorded run
 	failed      int                       // consecutive failed runs
+	evidence    map[int64][]Evidence      // per cycle, in advance order (remediation phase 4)
+	completedAt map[int64]time.Time
+	integrity   *IntegrityReport // last recorded verification
 }
 
-func newMemStore() *memStore { return &memStore{completed: map[int64]bool{}} }
+func newMemStore() *memStore {
+	return &memStore{completed: map[int64]bool{}, evidence: map[int64][]Evidence{}, completedAt: map[int64]time.Time{}}
+}
 
 func (m *memStore) Active(_ context.Context, detector, scope string) (Checkpoint, error) {
 	m.mu.Lock()
@@ -36,7 +41,8 @@ func (m *memStore) Active(_ context.Context, detector, scope string) (Checkpoint
 	return c, nil
 }
 
-func (m *memStore) Advance(ctx context.Context, cur, next Checkpoint, complete bool, _ string) (bool, error) {
+func (m *memStore) Advance(ctx context.Context, cur, next Checkpoint, complete bool, _ string, ev Evidence) (bool, error) {
+	ev.ExaminedAt = time.Now()
 	if m.beforeCAS != nil {
 		m.beforeCAS(ctx)
 	}
@@ -55,8 +61,10 @@ func (m *memStore) Advance(ctx context.Context, cur, next Checkpoint, complete b
 	next.Version = cur.Version + 1
 	next.Deferred = append([]Deferral(nil), next.Deferred...)
 	m.cycles[i] = next
+	m.evidence[cur.Cycle] = append(m.evidence[cur.Cycle], ev)
 	if complete {
 		m.completed[cur.Cycle] = true
+		m.completedAt[cur.Cycle] = time.Now()
 		m.cycles = append(m.cycles, Checkpoint{ID: fmt.Sprintf("c%d", cur.Cycle+1), Detector: cur.Detector, Scope: cur.Scope, Cycle: cur.Cycle + 1,
 			Deferred: append([]Deferral(nil), next.Deferred...)})
 	}
@@ -65,6 +73,53 @@ func (m *memStore) Advance(ctx context.Context, cur, next Checkpoint, complete b
 
 func (m *memStore) Coverage(context.Context, string, string) (Coverage, error) {
 	return Coverage{}, nil
+}
+
+// IntegrityCycles, Evidence and RecordIntegrity make memStore an IntegrityStore.
+func (m *memStore) IntegrityCycles(context.Context, string, string) (running, last, beforeLast *CycleRecord, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rec := func(i int) *CycleRecord {
+		c := m.cycles[i]
+		r := &CycleRecord{ID: c.ID, Cycle: c.Cycle, Status: "RUNNING", StartedAt: c.StartedAt, Cursor: c.Cursor, Examined: c.Examined, Batches: c.Batches}
+		for _, d := range c.Deferred {
+			r.Deferred = append(r.Deferred, d.Key)
+		}
+		if m.completed[c.Cycle] {
+			at := m.completedAt[c.Cycle]
+			r.Status, r.CompletedAt = "COMPLETED", &at
+		}
+		return r
+	}
+	n := len(m.cycles)
+	if n > 0 {
+		running = rec(n - 1)
+	}
+	if n > 1 {
+		last = rec(n - 2)
+	}
+	if n > 2 {
+		beforeLast = rec(n - 3)
+	}
+	return running, last, beforeLast, nil
+}
+
+func (m *memStore) Evidence(_ context.Context, sweepID string) ([]Evidence, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, c := range m.cycles {
+		if c.ID == sweepID {
+			return append([]Evidence(nil), m.evidence[c.Cycle]...), nil
+		}
+	}
+	return nil, nil
+}
+
+func (m *memStore) RecordIntegrity(_ context.Context, _, _ string, r IntegrityReport) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.integrity = &r
+	return nil
 }
 
 // RecordAttempt keeps the latest outcome and the consecutive failures, as the SQL store does on the RUNNING row.
@@ -100,10 +155,12 @@ type table struct {
 	failOn   string            // examine of this key fails (database error)
 	failNext error             // next() fails
 	onExam   func(k string)    // runs at each examination (to change data mid-run)
+	mod      map[string]time.Time
 }
 
 func newTable(n int) *table {
-	t := &table{keys: map[string]bool{}, state: map[string]string{}, examined: map[string]int{}, seen: map[string]string{}, findings: map[string]bool{}}
+	t := &table{keys: map[string]bool{}, state: map[string]string{}, examined: map[string]int{}, seen: map[string]string{}, findings: map[string]bool{},
+		mod: map[string]time.Time{}}
 	for i := 0; i < n; i++ {
 		t.add(key(i), "ok")
 	}
@@ -116,12 +173,27 @@ func (t *table) add(k, st string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.keys[k], t.state[k] = true, st
+	t.mod[k] = time.Now()
 }
 
 func (t *table) set(k, st string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.state[k] = st
+	t.mod[k] = time.Now()
+}
+
+// source is the independent scope read (Source): every key in scope ("gone" is out of scope) in (from, to].
+func (t *table) source(_ context.Context, from, to string) ([]Stamp, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	var out []Stamp
+	for k := range t.keys {
+		if k > from && (to == "" || k <= to) && t.state[k] != "gone" {
+			out = append(out, Stamp{Key: k, Modified: t.mod[k]})
+		}
+	}
+	return out, nil
 }
 
 func (t *table) next(_ context.Context, after string, limit int) ([]string, error) {

@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Fatifizo/fundzim/internal/ledger"
@@ -162,6 +163,10 @@ func TestLedgerReconciliationSweepVolume(t *testing.T) {
 				}
 				maxRun = max(maxRun, time.Since(r0))
 				runs++
+				// remediation phase 4: every run verifies the journal checkpoint's integrity (facts: no stamps in memory)
+				if st := rep.Integrity[ledger.SweepPaymentJournals].Status; st != reconsweep.IntegrityVerified && st != reconsweep.IntegrityIncomplete {
+					t.Fatalf("scale %d run %d: journal checkpoint integrity %s: %+v", scale, runs, st, rep.Integrity[ledger.SweepPaymentJournals].Problems)
+				}
 				examined += rep.Sweeps[ledger.SweepPaymentJournals].Examined + rep.Sweeps[ledger.SweepPaymentFacts].Examined
 				jDone = jDone || rep.Sweeps[ledger.SweepPaymentJournals].CycleCompleted
 				fDone = fDone || rep.Sweeps[ledger.SweepPaymentFacts].CycleCompleted
@@ -190,6 +195,50 @@ func TestLedgerReconciliationSweepVolume(t *testing.T) {
 			t.Fatalf("scale %d: the journal cycle examined %d of %d journals", scale, completedExamined, journals)
 		}
 		t.Logf("scale %d: full cycle %d runs, %s, slowest run %s", scale, runs, wall.Round(time.Millisecond), maxRun.Round(time.Millisecond))
+		// a standalone verification of the completed journal cycle and the new running one: time, re-read batches,
+		// allocation, the plan of one range re-read and the evidence's size
+		jscope := cfg.Scope + "." + ledger.SourceSynthetic
+		jsrc := func(c context.Context, lo, hi string) ([]reconsweep.Stamp, error) {
+			rows, err := pool.Query(c, `SELECT t.id::text, t.posted_at FROM ledger.ledger_transactions t WHERE t.id > $1::uuid AND t.id <= $2::uuid
+				AND t.source_system = 'synthetic_fixture' AND t.source_type = 'payment' AND t.posting_rule = 'DONATION_CAPTURED'`,
+				reconsweep.After(lo), reconsweep.Until(hi))
+			if err != nil {
+				return nil, err
+			}
+			return pgx.CollectRows(rows, func(r pgx.CollectableRow) (reconsweep.Stamp, error) {
+				var st reconsweep.Stamp
+				return st, r.Scan(&st.Key, &st.Modified)
+			})
+		}
+		var m0, m1 runtime.MemStats
+		runtime.ReadMemStats(&m0)
+		v0 := time.Now()
+		integ, err := reconsweep.Verify(ctx, reconsweep.SQLStore{Pool: pool, Table: "ledger.ledger_reconciliation_sweeps"}, jsrc,
+			reconsweep.IntegrityOptions{Detector: ledger.SweepPaymentJournals, Scope: jscope, MaxRuntime: 30 * time.Minute})
+		verifyTime := time.Since(v0)
+		runtime.ReadMemStats(&m1)
+		if err != nil || integ.Status != reconsweep.IntegrityVerified {
+			t.Fatalf("scale %d: standalone verification %s %v %+v", scale, integ.Status, err, integ.Problems)
+		}
+		reread := 0
+		for _, c := range integ.Cycles {
+			reread += c.ReReadBatches
+		}
+		var lo, hi string
+		_ = pool.QueryRow(ctx, `SELECT coalesce(from_key::text, ''), to_key::text FROM ledger.ledger_reconciliation_sweep_batches b JOIN ledger.ledger_reconciliation_sweeps s
+			ON s.id = b.sweep_id WHERE s.scope = $1 AND s.status = 'COMPLETED' ORDER BY b.seq DESC LIMIT 1 OFFSET 1`, jscope).Scan(&lo, &hi)
+		var plan []string
+		if prow, err := pool.Query(ctx, `EXPLAIN (ANALYZE, BUFFERS) SELECT t.id::text, t.posted_at FROM ledger.ledger_transactions t WHERE t.id > $1::uuid
+			AND t.id <= $2::uuid AND t.source_system = 'synthetic_fixture' AND t.source_type = 'payment' AND t.posting_rule = 'DONATION_CAPTURED'`,
+			reconsweep.After(lo), reconsweep.Until(hi)); err == nil {
+			plan, _ = pgx.CollectRows(prow, pgx.RowTo[string])
+		}
+		var evRows int64
+		var evBytes string
+		_ = pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM ledger.ledger_reconciliation_sweep_batches),
+			pg_size_pretty(pg_total_relation_size('ledger.ledger_reconciliation_sweep_batches'))`).Scan(&evRows, &evBytes)
+		t.Logf("scale %d: standalone verification %s (%d batches re-read, %.1f MiB allocated), evidence %d rows / %s", scale,
+			verifyTime.Round(time.Millisecond), reread, float64(m1.TotalAlloc-m0.TotalAlloc)/(1<<20), evRows, evBytes)
 		// interruption and recovery: deadlines from 1/8 to 8/8 of the slowest uninterrupted run, so they expire inside
 		// batches. A deadline shorter than one batch never advances the checkpoint (safe, but no progress: the first
 		// attempt with fixed 50–449 ms deadlines never completed at this volume — the worker's job timeouts are 10 min).
@@ -211,6 +260,11 @@ func TestLedgerReconciliationSweepVolume(t *testing.T) {
 		if completedExamined != int64(journals) || interrupted == 0 {
 			t.Fatalf("scale %d: interrupted cycle examined %d of %d (interrupted runs %d)", scale, completedExamined, journals, interrupted)
 		}
+		after, err := reconsweep.Verify(ctx, reconsweep.SQLStore{Pool: pool, Table: "ledger.ledger_reconciliation_sweeps"}, jsrc,
+			reconsweep.IntegrityOptions{Detector: ledger.SweepPaymentJournals, Scope: jscope, MaxRuntime: 30 * time.Minute})
+		if err != nil || after.Status != reconsweep.IntegrityVerified {
+			t.Fatalf("scale %d: integrity after the interrupted cycle %s %v %+v", scale, after.Status, err, after.Problems)
+		}
 		var refs int
 		_ = pool.QueryRow(ctx, `SELECT count(*) FROM ledger.ledger_reconciliation_references WHERE detected_by_run LIKE 'recon:%' AND source_id = ANY($1::uuid[])
 			AND status = 'OPEN'`, []string{oldMismatch, dup, unevaluated}).Scan(&refs)
@@ -223,8 +277,13 @@ func TestLedgerReconciliationSweepVolume(t *testing.T) {
 		f("| one full cycle of both sweeps | %d runs, %s wall, slowest run %s |\n", runs, wall.Round(time.Millisecond), maxRun.Round(time.Millisecond))
 		f("| records examined in that cycle (journals + facts) | %d (%.0f records/s) |\n", examined, float64(examined)/wall.Seconds())
 		f("| planted old AMOUNT_MISMATCH, cross-batch DUPLICATE_POSTING, oldest NOT_EVALUATED | found, once each |\n")
-		f("| next cycle under deadlines of 1/8 … 8/8 of the slowest run | %d interrupted runs, completed in %s, examined %d = %d journals |\n\n",
+		f("| next cycle under deadlines of 1/8 … 8/8 of the slowest run | %d interrupted runs, completed in %s, examined %d = %d journals |\n",
 			interrupted, recovery.Round(time.Millisecond), completedExamined, journals)
+		f("| checkpoint integrity (every run of the cycle; journals) | VERIFIED or INCOMPLETE in every run; VERIFIED after the interrupted cycle |\n")
+		f("| standalone verification (completed + running cycle) | %s, %d batches re-read, %.1f MiB allocated |\n", verifyTime.Round(time.Millisecond), reread,
+			float64(m1.TotalAlloc-m0.TotalAlloc)/(1<<20))
+		f("| evidence (all scopes in this database) | %d rows, %s |\n\n", evRows, evBytes)
+		f("plan of one range re-read (1 000-key batch):\n\n```\n%s\n```\n\n", strings.Join(plan, "\n"))
 		t.Logf("scale %d: interrupted cycle completed in %s (%d interrupted runs)", scale, recovery.Round(time.Millisecond), interrupted)
 	}
 	out := os.Getenv("FUNDZIM_PERF_OUT")

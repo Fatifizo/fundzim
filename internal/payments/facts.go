@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
+	"github.com/Fatifizo/fundzim/internal/platform/reconsweep"
 )
 
 // Fact is what reconciliation needs to know about one payment (no personal data). The ledger reads payments only
@@ -62,6 +63,22 @@ func (s *Service) PaymentFactIDsAfter(ctx context.Context, after string, statuse
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// PaymentFactStampsBetween lists the payments in one of the statuses with from < id <= to (to "" = unbounded) and their
+// last modification (updated_at, set by the database on every change), in any order: the independent scope read of the
+// ledger's PAYMENT_FACTS checkpoint-integrity verification (remediation phase 4).
+func (s *Service) PaymentFactStampsBetween(ctx context.Context, from, to string, statuses []string) ([]reconsweep.Stamp, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT p.id::text, p.updated_at FROM app.payment_intents p WHERE p.id > $1::uuid AND p.id <= $2::uuid
+		AND p.status = ANY($3::text[])`, reconsweep.After(from), reconsweep.Until(to), statuses)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (reconsweep.Stamp, error) {
+		var st reconsweep.Stamp
+		err := r.Scan(&st.Key, &st.Modified)
+		return st, err
+	})
 }
 
 // OpenRefundExposure is the total of the campaign's refund requests in one currency that are not yet terminal

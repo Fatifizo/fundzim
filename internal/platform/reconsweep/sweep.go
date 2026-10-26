@@ -76,19 +76,38 @@ type Coverage struct {
 	LastAttemptOutcome string     `json:"last_attempt_outcome"`
 	LastAttemptError   string     `json:"last_attempt_error,omitempty"`
 	FailedAttempts     int        `json:"failed_attempts"`
+	// The latest integrity verification of the running and last completed cycle (remediation phase 4; Verify).
+	IntegrityStatus    string     `json:"integrity_status,omitempty"`
+	IntegrityCheckedAt *time.Time `json:"integrity_checked_at,omitempty"`
 }
 
 // Store persists checkpoints (one RUNNING checkpoint per detector and scope).
 type Store interface {
 	// Active returns the RUNNING checkpoint, creating cycle 1 when the detector has none.
 	Active(ctx context.Context, detector, scope string) (Checkpoint, error)
-	// Advance replaces cur with next when cur.Version is still current (false: another run advanced it first). With
-	// complete, cur's cycle is closed and the next cycle opens empty, carrying next.Deferred.
-	Advance(ctx context.Context, cur, next Checkpoint, complete bool, runID string) (bool, error)
+	// Advance replaces cur with next when cur.Version is still current (false: another run advanced it first), and
+	// stores ev — the evidence of the batch that justifies the move — in the same transaction (remediation phase 4: the
+	// database refuses a position change without matching evidence). With complete, cur's cycle is closed and the next
+	// cycle opens empty, carrying next.Deferred.
+	Advance(ctx context.Context, cur, next Checkpoint, complete bool, runID string, ev Evidence) (bool, error)
 	Coverage(ctx context.Context, detector, scope string) (Coverage, error)
 	// RecordAttempt stores the outcome of one run (stop reason, error, consecutive failures) on the RUNNING checkpoint
 	// without changing its position.
 	RecordAttempt(ctx context.Context, detector, scope string, rep Report) error
+}
+
+// Evidence is the durable record of one checkpoint advance (remediation phase 4): the keys the batch examined, in key
+// order, between the old cursor (From, exclusive) and the new one (To), the keys it newly carried as deferrals, and the
+// carried deferrals it examined and resolved. The database checks every position change against it (constraint
+// trigger); Verify compares it independently with the detector's scope.
+type Evidence struct {
+	Seq        int64     // = the checkpoint's batch counter after the advance
+	From, To   string    // "" = before the first key
+	Keys       []string  // examined by the walk in this batch (deferred ones included)
+	Deferred   []string  // keys of this batch newly carried as deferrals
+	Resolved   []string  // carried deferrals examined and no longer deferred
+	Completing bool      // the batch closed the cycle
+	ExaminedAt time.Time // set by the store (database time of the advance)
 }
 
 // Outcome is the result of examining one record.
@@ -229,6 +248,7 @@ func runSweep(ctx context.Context, st Store, o Options, next Next, examine Exami
 		// 1. deferrals carried from earlier batches (first batch of a run only), bounded so they never stop the walk:
 		// at most half the record budget and the time budget; untried ones keep their place at the front, retried
 		// ones that stay deferred go to the back (each keeps its first deferral time)
+		var resolved, newlyDeferred []string
 		if retry && len(nx.Deferred) > 0 {
 			share := max(1, o.MaxRecords/2)
 			var untried, kept []Deferral
@@ -249,6 +269,7 @@ func runSweep(ctx context.Context, st Store, o Options, next Next, examine Exami
 					continue
 				}
 				rep.DeferralsResolved++
+				resolved = append(resolved, d.Key)
 			}
 			rep.DeferralsNotRetried = len(untried)
 			nx.Deferred = append(untried, kept...)
@@ -282,6 +303,7 @@ func runSweep(ctx context.Context, st Store, o Options, next Next, examine Exami
 				if !hasKey(nx.Deferred, k) {
 					nx.Deferred = append(nx.Deferred, Deferral{Key: k, Since: o.Now()})
 					newly++
+					newlyDeferred = append(newlyDeferred, k)
 				}
 			case out.OutOfScope:
 				outScope++
@@ -299,7 +321,9 @@ func runSweep(ctx context.Context, st Store, o Options, next Next, examine Exami
 		nx.Examined += int64(len(keys))
 		nx.Exceptions += int64(batchEx)
 		nx.Batches++
-		ok, err := st.Advance(ctx, cp, nx, complete, o.RunID)
+		ev := Evidence{Seq: nx.Batches, From: cp.Cursor, To: nx.Cursor, Keys: append([]string(nil), keys...), Deferred: newlyDeferred,
+			Resolved: resolved, Completing: complete}
+		ok, err := st.Advance(ctx, cp, nx, complete, o.RunID, ev)
 		if err != nil {
 			return rep.fail(err)
 		}

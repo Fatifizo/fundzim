@@ -65275,7 +65275,7 @@ components:
         state:
           type: string
           description: 'A named condition behind status. For reconciliation sweep health metrics (key *.reconciliation.sweep_health*, remediation phase
-            3): NOT_STARTED, PROGRESSING, PROGRESSING_SLOWLY, STALLED, BLOCKED_ON_DEFERRALS or FAILING — thresholds are engineering defaults, not approved
+            3, 4): NOT_STARTED, PROGRESSING, PROGRESSING_SLOWLY, STALLED, BLOCKED_ON_DEFERRALS, FAILING or INTEGRITY_FAILURE — thresholds are engineering defaults, not approved
             targets (D-06, D-10).'
       required:
       - key

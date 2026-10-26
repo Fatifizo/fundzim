@@ -13,6 +13,7 @@ import (
 
 // Health states of a detector's current cycle, in the order they are decided.
 const (
+	HealthIntegrityFailure   = "INTEGRITY_FAILURE"    // the checkpoint's coverage claim is contradicted by its evidence (Verify)
 	HealthNotStarted         = "NOT_STARTED"          // no cycle has run yet: coverage is not established
 	HealthBlockedOnDeferrals = "BLOCKED_ON_DEFERRALS" // the deferral limit stopped the walk, or a record has waited too long
 	HealthFailing            = "FAILING"              // the latest runs ended in errors
@@ -56,6 +57,7 @@ type Health struct {
 	LastAttemptOutcome       string     `json:"last_attempt_outcome"`
 	DeferredOutstanding      int        `json:"deferred_outstanding"`
 	OldestDeferralAgeSeconds *int64     `json:"oldest_deferral_age_seconds"`
+	IntegrityStatus          string     `json:"integrity_status,omitempty"`
 }
 
 func secs(d time.Duration) *int64 { v := int64(d.Seconds()); return &v }
@@ -65,7 +67,7 @@ func secs(d time.Duration) *int64 { v := int64(d.Seconds()); return &v }
 func (c Coverage) Health(now time.Time, t Thresholds, maxDeferred, openDiscrepancies int) Health {
 	h := Health{Detector: c.Detector, Scope: c.Scope, LastCycle: LastCycleNone, OpenDiscrepancies: openDiscrepancies,
 		FailedAttempts: c.FailedAttempts, LastAttemptAt: c.LastAttemptAt, LastAttemptOutcome: c.LastAttemptOutcome,
-		DeferredOutstanding: c.DeferredOutstanding}
+		DeferredOutstanding: c.DeferredOutstanding, IntegrityStatus: c.IntegrityStatus}
 	if c.LastCompletedCycleStartedAt != nil {
 		h.LastCycle = LastCycleClean
 		if openDiscrepancies > 0 {
@@ -95,6 +97,8 @@ func (c Coverage) Health(now time.Time, t Thresholds, maxDeferred, openDiscrepan
 		h.OldestDeferralAgeSeconds = secs(deferralAge)
 	}
 	switch {
+	case c.IntegrityStatus == IntegrityInconsistent:
+		h.State, h.Reason = HealthIntegrityFailure, "the checkpoint's coverage claim is contradicted by its evidence or the source data: investigate (nothing is changed automatically)"
 	case c.LastAttemptOutcome == StopDeferralLimit || (maxDeferred > 0 && c.DeferredOutstanding >= maxDeferred):
 		h.State, h.Reason = HealthBlockedOnDeferrals, "the deferral limit stops the walk: the checkpoint cannot advance past more unjudged records"
 	case t.FailingAfter > 0 && c.FailedAttempts >= t.FailingAfter:
@@ -118,7 +122,7 @@ func (h Health) Metric(module, key, label, perm, source string) opsview.Metric {
 	m := opsview.Metric{Key: key, Label: label, Module: module, Nature: opsview.TestOnly, Status: opsview.StatusUnknown, Permission: perm,
 		Source: source, Value: h.SecondsSinceProgress, State: h.State}
 	switch h.State {
-	case HealthFailing:
+	case HealthFailing, HealthIntegrityFailure:
 		m.Status = opsview.Unavailable
 	case HealthStalled, HealthBlockedOnDeferrals, HealthProgressingSlowly:
 		m.Status = opsview.Degraded

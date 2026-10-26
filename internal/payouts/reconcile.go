@@ -65,12 +65,14 @@ type ReconReport struct {
 	// ProviderUnverified counts payouts whose required provider status check could not be made (F-R2-02): they are
 	// NOT reconciled — the sweep carries them as deferrals (reason PROVIDER_UNVERIFIED) until a check succeeds. By
 	// cause (the adapter's classification) and a bounded sample of payout ids for investigation.
-	ProviderUnverified       int                 `json:"provider_unverified"`
-	ProviderUnverifiedBy     map[string]int      `json:"provider_unverified_by,omitempty"`
-	ProviderUnverifiedSample []string            `json:"provider_unverified_sample,omitempty"`
-	Sweep                    reconsweep.Report   `json:"sweep"`
-	Coverage                 reconsweep.Coverage `json:"coverage"`
-	SettlementReconciliation string              `json:"settlement_reconciliation"`
+	ProviderUnverified       int               `json:"provider_unverified"`
+	ProviderUnverifiedBy     map[string]int    `json:"provider_unverified_by,omitempty"`
+	ProviderUnverifiedSample []string          `json:"provider_unverified_sample,omitempty"`
+	Sweep                    reconsweep.Report `json:"sweep"`
+	// Integrity is the checkpoint-integrity verification after the sweep (remediation phase 4; reconsweep.Verify).
+	Integrity                *reconsweep.IntegrityReport `json:"integrity,omitempty"`
+	Coverage                 reconsweep.Coverage         `json:"coverage"`
+	SettlementReconciliation string                      `json:"settlement_reconciliation"`
 }
 
 // Deferral reasons of the payout sweep.
@@ -169,6 +171,14 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRepor
 			}
 			return reconsweep.Outcome{Exceptions: n}, nil
 		})
+	// independent integrity verification of the checkpoints against their evidence and the payouts themselves
+	if ctx.Err() == nil {
+		integ, ierr := reconsweep.Verify(ctx, store, s.sweepScope, reconsweep.IntegrityOptions{Detector: SweepDetector, Scope: cfg.Scope, Now: s.now})
+		rep.Integrity = &integ
+		if err == nil {
+			err = ierr
+		}
+	}
 	// the run's evidence is recorded even when the sweep stopped on an error (non-cancelled context)
 	actx := context.WithoutCancel(ctx)
 	rep.Coverage, _ = store.Coverage(actx, SweepDetector, cfg.Scope)
@@ -177,8 +187,8 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRepor
 			Metadata: map[string]any{"run": rep.RunID, "checked": rep.Checked, "new_mismatches": rep.NewMismatches, "triggered_by": triggeredBy,
 				"open_exception_evidence": rep.OpenExceptionEvidence, "settlement": "NOT_PERFORMED", "sweep": rep.Sweep,
 				"provider_unverified": rep.ProviderUnverified, "provider_unverified_by": rep.ProviderUnverifiedBy,
-				"provider_unverified_sample": rep.ProviderUnverifiedSample,
-				"coverage_watermark":         rep.Coverage.LastCompletedCycleStartedAt}})
+				"provider_unverified_sample": rep.ProviderUnverifiedSample, "integrity": integrityStatus(rep.Integrity),
+				"coverage_watermark": rep.Coverage.LastCompletedCycleStartedAt}})
 	})
 	if err != nil {
 		return rep, err
@@ -194,6 +204,29 @@ func (s *Service) sweepNext(ctx context.Context, after string, limit int) ([]str
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// sweepScope is the integrity Source of the payout sweep: every payout in scope now (past PAYOUT_REQUESTED, a state it
+// never returns to) in (from, to], with its last modification (updated_at, set by the database on every change).
+// Independent of sweepNext: a set query, no ordering, no limit.
+func (s *Service) sweepScope(ctx context.Context, from, to string) ([]reconsweep.Stamp, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT p.id::text, p.updated_at FROM app.payout_requests p WHERE p.status <> 'PAYOUT_REQUESTED'
+		AND p.id > $1::uuid AND p.id <= $2::uuid`, reconsweep.After(from), reconsweep.Until(to))
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (reconsweep.Stamp, error) {
+		var st reconsweep.Stamp
+		err := r.Scan(&st.Key, &st.Modified)
+		return st, err
+	})
+}
+
+func integrityStatus(r *reconsweep.IntegrityReport) string {
+	if r == nil {
+		return ""
+	}
+	return r.Status
 }
 
 // recordMismatches records one payout's mismatches: immutable references plus (at most one unresolved per payout) a

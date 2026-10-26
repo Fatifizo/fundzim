@@ -131,9 +131,17 @@ type ReconcileReport struct {
 	NewExceptions int            `json:"new_exceptions"`
 	ByType        map[string]int `json:"by_type"`
 	// Sweeps and Coverage are the coverage sweeps' evidence (KI-S19-09, ADR-052); Checked counts the windowed passes.
-	Sweeps                   map[string]reconsweep.Report   `json:"sweeps"`
-	Coverage                 map[string]reconsweep.Coverage `json:"coverage"`
-	SettlementReconciliation string                         `json:"settlement_reconciliation"`
+	Sweeps   map[string]reconsweep.Report   `json:"sweeps"`
+	Coverage map[string]reconsweep.Coverage `json:"coverage"`
+	// Integrity is the checkpoint-integrity verification per detector (remediation phase 4; reconsweep.Verify).
+	Integrity                map[string]reconsweep.IntegrityReport `json:"integrity,omitempty"`
+	SettlementReconciliation string                                `json:"settlement_reconciliation"`
+}
+
+// PaymentFactStamps is the independent scope read of the PAYMENT_FACTS integrity verification (remediation phase 4).
+// Optional: a PaymentFacts without it (test doubles) leaves that detector unverified.
+type PaymentFactStamps interface {
+	PaymentStampsBetween(ctx context.Context, from, to string, statuses []string) ([]reconsweep.Stamp, error)
 }
 
 type exception struct {
@@ -188,7 +196,7 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconcileR
 		return ReconcileReport{}, err
 	}
 	rep := ReconcileReport{RunID: "recon:" + ids.New(), Environment: env, StartedAt: s.now(), Checked: map[string]int{}, ByType: map[string]int{},
-		Sweeps: map[string]reconsweep.Report{}, Coverage: map[string]reconsweep.Coverage{},
+		Sweeps: map[string]reconsweep.Report{}, Coverage: map[string]reconsweep.Coverage{}, Integrity: map[string]reconsweep.IntegrityReport{},
 		SettlementReconciliation: "NOT_PERFORMED: no provider settlement evidence (PCR-007, PCR-016; Stage 17)"}
 	var found []exception
 	from := s.journalSource()
@@ -329,6 +337,32 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconcileR
 		sweepErr = errors.Join(sweepErr, err)
 	}
 
+	// independent integrity verification of both checkpoints against their evidence and the source records
+	if ctx.Err() == nil {
+		journals := func(ctx context.Context, lo, hi string) ([]reconsweep.Stamp, error) {
+			rows, err := s.Pool.Query(ctx, `SELECT t.id::text, t.posted_at FROM ledger.ledger_transactions t WHERE t.id > $1::uuid AND t.id <= $2::uuid
+				AND t.source_system = $3 AND t.source_type = 'payment' AND t.posting_rule = 'DONATION_CAPTURED'`, reconsweep.After(lo), reconsweep.Until(hi), from)
+			if err != nil {
+				return nil, err
+			}
+			return pgx.CollectRows(rows, func(r pgx.CollectableRow) (reconsweep.Stamp, error) {
+				var st reconsweep.Stamp
+				err := r.Scan(&st.Key, &st.Modified) // journals are immutable: posted_at is their only modification
+				return st, err
+			})
+		}
+		integ, ierr := reconsweep.Verify(ctx, store, journals, reconsweep.IntegrityOptions{Detector: SweepPaymentJournals, Scope: cfg.Scope, Now: s.now})
+		rep.Integrity[SweepPaymentJournals] = integ
+		sweepErr = errors.Join(sweepErr, ierr)
+		if fs, ok := s.Facts.(PaymentFactStamps); ok {
+			facts := func(ctx context.Context, lo, hi string) ([]reconsweep.Stamp, error) {
+				return fs.PaymentStampsBetween(ctx, lo, hi, []string{"SUCCEEDED", "UNKNOWN"})
+			}
+			integ, ierr := reconsweep.Verify(ctx, store, facts, reconsweep.IntegrityOptions{Detector: SweepPaymentFacts, Scope: cfg.Scope, Now: s.now})
+			rep.Integrity[SweepPaymentFacts] = integ
+			sweepErr = errors.Join(sweepErr, ierr)
+		}
+	}
 	// the run's evidence is recorded even when a sweep stopped on an error (non-cancelled context)
 	actx := context.WithoutCancel(ctx)
 	for _, d := range []string{SweepPaymentJournals, SweepPaymentFacts} {

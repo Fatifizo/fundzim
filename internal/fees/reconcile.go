@@ -59,8 +59,9 @@ type ReconRun struct {
 	Mismatches               int        `json:"mismatches"`
 	SettlementReconciliation string     `json:"settlement_reconciliation"`
 	// Sweep and Coverage are the coverage sweep's evidence (Checked/Matched count the recency pass; Mismatches both).
-	Sweep    *reconsweep.Report   `json:"sweep,omitempty"`
-	Coverage *reconsweep.Coverage `json:"coverage,omitempty"`
+	Sweep     *reconsweep.Report          `json:"sweep,omitempty"`
+	Coverage  *reconsweep.Coverage        `json:"coverage,omitempty"`
+	Integrity *reconsweep.IntegrityReport `json:"integrity,omitempty"` // remediation phase 4 (reconsweep.Verify)
 }
 
 // ReconItem is a detected mismatch.
@@ -226,6 +227,13 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRun, 
 			return reconsweep.Outcome{Exceptions: n}, err
 		})
 	run.Sweep = &sweep
+	if ctx.Err() == nil {
+		integ, ierr := reconsweep.Verify(ctx, store, s.sweepScope, reconsweep.IntegrityOptions{Detector: SweepDetector, Scope: cfg.Scope, Now: s.now})
+		run.Integrity = &integ
+		if sweepErr == nil {
+			sweepErr = ierr
+		}
+	}
 	// the run is closed even when the sweep stopped on an error (non-cancelled context)
 	actx := context.WithoutCancel(ctx)
 	if cov, err := store.Coverage(actx, SweepDetector, cfg.Scope); err == nil {
@@ -310,6 +318,21 @@ func (s *Service) sweepNext(ctx context.Context, after string, limit int) ([]str
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// sweepScope is the integrity Source of the fee sweep: every assessment in (from, to] (all are in scope) with its last
+// modification (updated_at, set by the database on every change). Independent of sweepNext: no ordering, no limit.
+func (s *Service) sweepScope(ctx context.Context, from, to string) ([]reconsweep.Stamp, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT a.id::text, a.updated_at FROM app.fee_assessments a WHERE a.id > $1::uuid AND a.id <= $2::uuid`,
+		reconsweep.After(from), reconsweep.Until(to))
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (reconsweep.Stamp, error) {
+		var st reconsweep.Stamp
+		err := r.Scan(&st.Key, &st.Modified)
+		return st, err
+	})
 }
 
 // sweepExamine checks one assessment in its current state, and the completeness of its source's calculation (every
