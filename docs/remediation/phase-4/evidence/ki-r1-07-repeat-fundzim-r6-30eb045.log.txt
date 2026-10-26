@@ -1,0 +1,63 @@
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:714: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (35.28s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.04s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.51s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.00s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (7.54s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (5.32s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.20s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.89s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.82s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.20s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.10s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (7.61s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (5.14s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.30s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.86s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (5.94s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.08s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (7.50s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.25s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:651: ERROR: duplicate key value violates unique constraint "uq_users_staff_personal_user_id" (SQLSTATE 23505)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.20s)
+FAIL
+FAIL	github.com/Fatifizo/fundzim/tests/integration	156.880s
+FAIL

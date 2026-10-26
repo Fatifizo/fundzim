@@ -1,0 +1,11 @@
+# go test -tags integration results on commit f7d1cf7
+pass     5.86s TestPayoutDecisionsBarrierStopsASubmissionInTheWindow
+pass    33.01s TestPayoutSubmissionCommittedBeforeDestinationSuspension
+pass     7.67s TestReconciliationCorrectionsFeeEveryMissingType
+pass    21.21s TestReconciliationCorrectionsPayoutLookupFailure
+pass     5.87s TestReconciliationCorrectionsUnknownPayoutLookupFailure
+pass     0.16s TestReconciliationCoverageCheckpointGuards
+pass     0.59s TestReconciliationIntegrityDatabaseRefusesUnsupportedMoves
+pass    12.19s TestReconciliationIntegrityDetectsAForgedConsistentAdvance
+pass     0.88s TestReconciliationIntegrityKilledBeforeCheckpointAdvance
+pass    11.21s TestReconciliationIntegrityRealSweepsVerify

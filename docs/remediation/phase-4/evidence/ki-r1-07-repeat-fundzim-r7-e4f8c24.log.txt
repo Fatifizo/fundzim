@@ -1,0 +1,63 @@
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:718: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (36.53s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:718: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (7.26s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:718: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.94s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:718: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (8.55s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:718: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.18s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (5.91s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (7.57s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.37s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.21s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (7.46s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.25s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.26s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (7.49s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.18s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.33s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (7.57s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (5.14s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.23s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.92s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:682: want 200 , got 429 RATE_LIMITED [] (null)
+--- FAIL: TestPayoutApprovalSeparationOfDutiesAndInvalidation (5.86s)
+FAIL
+FAIL	github.com/Fatifizo/fundzim/tests/integration	163.276s
+FAIL

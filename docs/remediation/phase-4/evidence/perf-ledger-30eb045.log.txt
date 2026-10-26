@@ -1,0 +1,13 @@
+=== RUN   TestLedgerReconciliationSweepVolume
+    recon_sweep_perf_test.go:142: scale 20000: loaded in 4m59.85s
+    recon_sweep_perf_test.go:197: scale 20000: full cycle 3 runs, 19.697s, slowest run 9.778s
+    recon_sweep_perf_test.go:240: scale 20000: standalone verification 69ms (21 batches re-read, 8.2 MiB allocated), evidence 42 rows / 760 kB
+    recon_sweep_perf_test.go:287: scale 20000: interrupted cycle completed in 17.36s (4 interrupted runs)
+    recon_sweep_perf_test.go:142: scale 100000: loaded in 20m16.887s
+    recon_sweep_perf_test.go:197: scale 100000: full cycle 11 runs, 1m40.739s, slowest run 10.497s
+    recon_sweep_perf_test.go:240: scale 100000: standalone verification 297ms (101 batches re-read, 39.0 MiB allocated), evidence 275 rows / 4616 kB
+    recon_sweep_perf_test.go:287: scale 100000: interrupted cycle completed in 1m20.932s (14 interrupted runs)
+    recon_sweep_perf_test.go:297: 
+--- PASS: TestLedgerReconciliationSweepVolume (1736.37s)
+PASS
+ok  	github.com/Fatifizo/fundzim/tests/perf/ledger	1736.398s

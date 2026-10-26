@@ -1,0 +1,50 @@
+2026-10-26T14:38:30Z commit e4f8c244bcf1371c213cac2fa24664c6a4797025 tree-clean=no
+2026-10-26T14:38:30Z isolation: project=fundzim-r7; images: image: fundzim/api:fundzim-r7 image: fundzim/web:fundzim-r7 
+2026-10-26T14:38:30Z isolation: APP_ENV=development production secret refs in .env: 0
+2026-10-26T14:38:30Z isolation: existing fundzim-r7 volumes before: 0
+2026-10-26T14:38:30Z dev images before: api=sha256:adfb403d703e7e2493225ad267411b15b1ed63b7c2406b024456c4798e3f4639 web=sha256:9c4e1ccd74369bd1699536aaf038a7f45bfe55f843ceeb4ddcb55fec025d8331
+2026-10-26T14:38:30Z stopping development project (no -v)
+ Network fundzim_edge Removed 
+ Container fundzim-r7-fundzim-postgres-1 Healthy 
+2026-10-26T14:39:08Z secrets-init 0
+ Container fundzim-r7-fundzim-clamav-1 Started 
+2026-10-26T14:39:12Z storage-init 0
+[Kfundzim-migrate-1 exited with code 0
+ Container fundzim-r7-fundzim-migrate-1 Stopping 
+ Container fundzim-r7-fundzim-migrate-1 Stopped 
+2026-10-26T14:40:06Z migrate 0
+2026-10-26T14:40:06Z isolation: fundzim-r7 volumes now: fundzim-r7_clamav-db fundzim-r7_postgres-data fundzim-r7_storage-data fundzim-r7_storage-meta 
+2026-10-26T14:40:06Z clamav healthy
+ Container fundzim-r7-fundzim-api-1 Healthy 
+2026-10-26T14:40:17Z version {"data":{"name":"FundZim","version":"0.1.0-dev","build":"unknown","commit":"e4f8c244bcf1371c213cac2fa24664c6a4797025"},"meta":{"request_id":"01a178a7-accc-7464-bb73-d100be1ceba2"}}
+2026-10-26T14:40:17Z r3 image api=sha256:65319149368b193c6bb73e0deb4a8a6a876c48d8954ee3e157fefeeb1d10d775; dev api now=sha256:adfb403d703e7e2493225ad267411b15b1ed63b7c2406b024456c4798e3f4639
+2026-10-26T14:40:17Z KI-R1-07 repeatability: 20 consecutive runs against the live worker
+2026-10-26T14:43:06Z KI-R1-07 exit 0: pass=5 fail=15 intercepted-lines=0
+      5 decisions barrier: 0 submission attempt(s) of the worker intercepted
+2026-10-26T14:43:06Z targeted phase 3 tests start
+2026-10-26T14:45:44Z targeted exit 0
+top-level tests: {'pass': 9, 'fail': 1}
+FAILED: ['TestPayoutDecisionsBarrierStopsASubmissionInTheWindow']
+SKIPPED: []
+2026-10-26T14:45:44Z full integration suite start
+2026-10-26T15:14:19Z full suite exit 0
+top-level tests: {'pass': 252, 'skip': 7, 'fail': 1}
+FAILED: ['TestPayoutDecisionsBarrierStopsASubmissionInTheWindow']
+SKIPPED: ['TestFinancialLoad', 'TestFinancialReconciliationVolumeSample', 'TestFinancialWorkerCrashMidFlight', 'TestDistributedLoginLimitAcrossReplicas', 'TestFrontendReachesBackend', 'TestRateLimitFallbackWhenValkeyContainerStopped', 'TestReconciliationCoverageVolume']
+2026-10-26T15:14:19Z historical coverage volume test (opt-in) start
+2026-10-26T15:14:59Z volume exit 0
+--- PASS: TestReconciliationCoverageVolume (37.98s)
+ok  	github.com/Fatifizo/fundzim/tests/integration	38.028s
+--- PASS: TestMigrationsAppliedAndRepeatable (12.46s)
+ok  	github.com/Fatifizo/fundzim/tests/integration	12.514s
+2026-10-26T15:15:14Z migration round trip exit 0
+ Network fundzim-r7_default Removed 
+2026-10-26T15:15:25Z fundzim-r7 removed with -v; fundzim-r7 volumes left: 0
+2026-10-26T15:15:25Z dev images after: api=sha256:adfb403d703e7e2493225ad267411b15b1ed63b7c2406b024456c4798e3f4639 web=sha256:9c4e1ccd74369bd1699536aaf038a7f45bfe55f843ceeb4ddcb55fec025d8331
+ Container fundzim-fundzim-clamav-1 Healthy 
+fundzim-migrate-1  | no pending migrations
+2026-10-26T15:15:47Z dev ready {"data":{"status":"ready"},"meta":{"request_id":"01a178c8-2e38-7604-9bde-87ec699d217d"}}
+dev goose max version 20261025090000
+fundzim-api fundzim/api:fundzim running
+fundzim-web fundzim/web:fundzim running
+fundzim-worker fundzim/api:fundzim running

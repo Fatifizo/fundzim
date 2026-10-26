@@ -1,0 +1,62 @@
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (37.19s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.99s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.24s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.91s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.62s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.39s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.28s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (7.32s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.33s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.34s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (7.65s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.00s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.28s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (7.34s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.51s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.13s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (7.24s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.48s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (6.23s)
+=== RUN   TestPayoutApprovalSeparationOfDutiesAndInvalidation
+    payouts_test.go:722: decisions barrier: 0 submission attempt(s) of the worker intercepted
+--- PASS: TestPayoutApprovalSeparationOfDutiesAndInvalidation (7.54s)
+PASS
+ok  	github.com/Fatifizo/fundzim/tests/integration	164.093s

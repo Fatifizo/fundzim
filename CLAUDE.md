@@ -15,6 +15,21 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
+**Remediation phase 4 — deterministic financial tests and checkpoint integrity (complete; awaiting review and owner decisions;
+non-production; launch NOT authorised).** Not a product stage. Branch `remediation/checkpoint-integrity` from `1e167b1`; nothing
+merged; `main` unprotected (integration blocked: D-01, D-01a). What it built: `docs/remediation/phase-4/README.md` (KI-R1-07 fixed
+with a decisions barrier; checkpoint integrity: evidence per advance, DB constraint triggers, independent verifier; ADR-052
+Amendment 2); next workstream starts from `docs/stage-handover/REMEDIATION-PHASE-4-TO-PHASE-5.md`. Migrations `20261026120000`
+and `20261027090000` are on the branch only — never apply them to the shared development database without the owner's
+authorisation. Binding rules: **a checkpoint position change needs its batch evidence in the same transaction** (constraint
+trigger; `Store.Advance` writes it) — never update a checkpoint's cursor, counters or deferrals any other way, never write,
+edit or delete evidence by hand, and a new cycle starts empty with the previous cycle's deferrals; `reconsweep.Verify` runs
+after every sweep and its `Source` must stay an independent set query (no ORDER BY / LIMIT) with a database-maintained
+modification time that changes whenever a record enters or leaves scope; INTEGRITY_FAILURE is investigated, never "repaired"
+by moving a checkpoint; evidence retention is undecided (LR-012) — never delete it. A test that needs an APPROVED payout to stay
+unsubmitted uses `holdEligibilityDecisions` (tests/integration/payout_worker_barrier_test.go), never a paused worker or a sleep;
+`pg_stat_activity.query` of other roles is visible only to the superuser connection.
+
 **Remediation phase 3 — reconciliation defect closure and integration readiness (complete; awaiting review and owner decisions;
 non-production; launch NOT authorised).** Not a product stage. Branch `remediation/reconciliation-corrections` from `be9cfb6`;
 nothing merged; `main` unprotected. What it built: `docs/remediation/phase-3/README.md` (F-R2-01/02/03 fixed, F-R3-01 alert-scan

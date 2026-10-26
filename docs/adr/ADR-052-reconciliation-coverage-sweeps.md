@@ -127,3 +127,21 @@ root causes and evidence: `docs/remediation/phase-3/`.
 
 Also: the ledger's PAYMENT_FACTS sweep runs even when the PAYMENT_JOURNALS sweep failed in the same run (both errors are
 returned), and fee findings carry a check discriminator in their dedupe key (F-R2-01; outside the engine).
+
+## Amendment 2 — remediation phase 4 (2026-10-26; status of the ADR unchanged: Proposed)
+
+Checkpoint integrity (`docs/remediation/phase-4/checkpoint-integrity-design.md`). Before this amendment, the guard prevented
+moving a checkpoint backwards but not forwards past unexamined records.
+
+1. **Evidence per advance.** `Store.Advance` takes the batch's `Evidence` and stores it in the same transaction: range, the
+   examined keys, deferrals added and resolved. Evidence is stored in append-only `*_reconciliation_sweep_batches` tables
+   (migration `20261027090000`).
+2. **Preventive.** Deferred constraint triggers refuse, at commit, any checkpoint position change without the matching
+   evidence row (from = old cursor, to = new cursor, examined + its key count, batches + 1, deferral set equation). They also
+   refuse a new cycle that does not start empty with the previous cycle's deferrals. This applies to every role.
+3. **Detective.** `reconsweep.Verify` runs after every sweep run. It re-reads the scope through the module's independent
+   `Source` (a set query with modification times) and checks the running and last completed cycles. The outcome is recorded
+   on the checkpoint as VERIFIED, INCONSISTENT, INCOMPLETE or UNVERIFIABLE. INCONSISTENT makes the health INTEGRITY_FAILURE
+   and raises a CRITICAL in-app alert. The verifier never moves a checkpoint or changes money.
+4. **Limit.** Evidence that lists real keys which were never examined cannot be distinguished from a real examination.
+   Evidence retention is not decided (LR-012).

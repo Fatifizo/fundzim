@@ -1,0 +1,67 @@
+2026-10-26T13:32:53Z commit 30eb0452383f429a7ed40b0d3196a0c2187780fd tree-clean=yes
+2026-10-26T13:32:53Z isolation: project=fundzim-r6; images: image: fundzim/api:fundzim-r6 image: fundzim/web:fundzim-r6 
+2026-10-26T13:32:53Z isolation: APP_ENV=development production secret refs in .env: 0
+2026-10-26T13:32:53Z isolation: existing fundzim-r6 volumes before: 0
+2026-10-26T13:32:53Z dev images before: api=sha256:adfb403d703e7e2493225ad267411b15b1ed63b7c2406b024456c4798e3f4639 web=sha256:9c4e1ccd74369bd1699536aaf038a7f45bfe55f843ceeb4ddcb55fec025d8331
+2026-10-26T13:32:54Z stopping development project (no -v)
+ Network fundzim_default Removed 
+ Container fundzim-r6-fundzim-redis-1 Healthy 
+2026-10-26T13:33:28Z secrets-init 0
+ Container fundzim-r6-fundzim-clamav-1 Started 
+2026-10-26T13:33:32Z storage-init 0
+[Kfundzim-migrate-1 exited with code 0
+ Container fundzim-r6-fundzim-migrate-1 Stopping 
+ Container fundzim-r6-fundzim-migrate-1 Stopped 
+2026-10-26T13:34:22Z migrate 0
+2026-10-26T13:34:22Z isolation: fundzim-r6 volumes now: fundzim-r6_clamav-db fundzim-r6_postgres-data fundzim-r6_storage-data fundzim-r6_storage-meta 
+2026-10-26T13:34:22Z clamav healthy
+ Container fundzim-r6-fundzim-api-1 Healthy 
+2026-10-26T13:34:33Z version {"data":{"name":"FundZim","version":"0.1.0-dev","build":"unknown","commit":"30eb0452383f429a7ed40b0d3196a0c2187780fd"},"meta":{"request_id":"01a1786b-7fc7-71bf-bbea-62952e562788"}}
+2026-10-26T13:34:33Z r3 image api=sha256:28c375c8e9acd330d3753ceb28dc096e0ac29cfad7eb0b706acb47df4b9febc5; dev api now=sha256:adfb403d703e7e2493225ad267411b15b1ed63b7c2406b024456c4798e3f4639
+2026-10-26T13:34:33Z KI-R1-07 repeatability: 20 consecutive runs against the live worker
+2026-10-26T13:37:16Z KI-R1-07 exit 0: pass=1 fail=19 intercepted-lines=0
+      1 decisions barrier: 0 submission attempt(s) of the worker intercepted
+2026-10-26T13:37:16Z targeted phase 3 tests start
+2026-10-26T13:38:49Z targeted exit 0
+top-level tests: {'pass': 8}
+FAILED: []
+SKIPPED: []
+2026-10-26T13:38:49Z full integration suite start
+2026-10-26T14:05:34Z full suite exit 0
+top-level tests: {'pass': 251, 'skip': 7, 'fail': 1}
+FAILED: ['TestReconciliationCoverageCheckpointGuards']
+SKIPPED: ['TestFinancialLoad', 'TestFinancialReconciliationVolumeSample', 'TestFinancialWorkerCrashMidFlight', 'TestDistributedLoginLimitAcrossReplicas', 'TestFrontendReachesBackend', 'TestRateLimitFallbackWhenValkeyContainerStopped', 'TestReconciliationCoverageVolume']
+2026-10-26T14:05:34Z historical coverage volume test (opt-in) start
+2026-10-26T14:06:14Z volume exit 0
+--- PASS: TestReconciliationCoverageVolume (37.69s)
+ok  	github.com/Fatifizo/fundzim/tests/integration	37.742s
+2026-10-26T14:06:15Z r6 API and worker stopped
+2026-10-26T14:06:15Z scratch database fundzim_perf_r6 for the ledger volume harness
+applied 20261026120000_reconciliation_sweep_attempts.sql (114ms)
+applied 20261027090000_reconciliation_sweep_evidence.sql (136ms)
+2026-10-26T14:06:24Z perf migrate 0
+2026-10-26T14:06:24Z ledger volume harness start (20 000 and 100 000 journals)
+2026-10-26T14:35:21Z ledger volume exit 0
+    recon_sweep_perf_test.go:142: scale 20000: loaded in 4m59.85s
+    recon_sweep_perf_test.go:197: scale 20000: full cycle 3 runs, 19.697s, slowest run 9.778s
+    recon_sweep_perf_test.go:240: scale 20000: standalone verification 69ms (21 batches re-read, 8.2 MiB allocated), evidence 42 rows / 760 kB
+    recon_sweep_perf_test.go:287: scale 20000: interrupted cycle completed in 17.36s (4 interrupted runs)
+    recon_sweep_perf_test.go:142: scale 100000: loaded in 20m16.887s
+    recon_sweep_perf_test.go:197: scale 100000: full cycle 11 runs, 1m40.739s, slowest run 10.497s
+    recon_sweep_perf_test.go:240: scale 100000: standalone verification 297ms (101 batches re-read, 39.0 MiB allocated), evidence 275 rows / 4616 kB
+    recon_sweep_perf_test.go:287: scale 100000: interrupted cycle completed in 1m20.932s (14 interrupted runs)
+--- PASS: TestLedgerReconciliationSweepVolume (1736.37s)
+ok  	github.com/Fatifizo/fundzim/tests/perf/ledger	1736.398s
+--- PASS: TestMigrationsAppliedAndRepeatable (12.54s)
+ok  	github.com/Fatifizo/fundzim/tests/integration	12.591s
+2026-10-26T14:35:36Z migration round trip exit 0
+ Network fundzim-r6_edge Removed 
+2026-10-26T14:35:47Z fundzim-r6 removed with -v; fundzim-r6 volumes left: 0
+2026-10-26T14:35:47Z dev images after: api=sha256:adfb403d703e7e2493225ad267411b15b1ed63b7c2406b024456c4798e3f4639 web=sha256:9c4e1ccd74369bd1699536aaf038a7f45bfe55f843ceeb4ddcb55fec025d8331
+ Container fundzim-fundzim-clamav-1 Healthy 
+fundzim-migrate-1  | no pending migrations
+2026-10-26T14:36:09Z dev ready {"data":{"status":"ready"},"meta":{"request_id":"01a178a3-e5f0-7ca7-bd1a-80770570eb20"}}
+dev goose max version 20261025090000
+fundzim-api fundzim/api:fundzim running
+fundzim-web fundzim/web:fundzim running
+fundzim-worker fundzim/api:fundzim running
