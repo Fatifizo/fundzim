@@ -37,6 +37,7 @@ type Metric struct {
 	Source     string `json:"source"`     // where the number comes from (table/query, in words)
 	Permission string `json:"permission"` // who may see it
 	Href       string `json:"href,omitempty"`
+	State      string `json:"state,omitempty"` // a named condition behind Status (e.g. a reconciliation sweep's health state)
 }
 
 // Approval is a pending maker-checker decision owned by a module.

@@ -20,6 +20,7 @@ import (
 	"github.com/Fatifizo/fundzim/internal/platform/errs"
 	"github.com/Fatifizo/fundzim/internal/platform/ids"
 	"github.com/Fatifizo/fundzim/internal/platform/opsview"
+	"github.com/Fatifizo/fundzim/internal/platform/reconsweep"
 )
 
 // Security permissions.
@@ -91,6 +92,9 @@ func metricEvidence(m opsview.Metric, now time.Time) map[string]any {
 	if m.Value != nil {
 		ev["value"] = *m.Value
 	}
+	if m.State != "" {
+		ev["state"] = m.State
+	}
 	return ev
 }
 
@@ -121,6 +125,16 @@ func securityFindings(now time.Time, snaps []opsview.Snapshot, statuses []Source
 			case strings.HasPrefix(m.Key, "audit.chain.") && (m.Status == opsview.Degraded || m.Status == opsview.StatusUnknown):
 				add("AUDIT_CHAIN_VERIFICATION_STALE", "MEDIUM", "audit", m.Key, "Audit chain verification is stale or has never run", m.Source,
 					metricEvidence(m, now))
+			// F-R2-03: a reconciliation sweep that fails, stopped progressing or is blocked by deferrals no longer proves
+			// coverage; raised as an in-app operations alert (no external delivery exists, D-10)
+			case strings.Contains(m.Key, ".reconciliation.sweep_health") && m.State == reconsweep.HealthFailing:
+				add("RECONCILIATION_SWEEP_FAILING", "HIGH", module, m.Key, "A reconciliation sweep keeps failing: "+m.Label, m.Source, metricEvidence(m, now))
+			case strings.Contains(m.Key, ".reconciliation.sweep_health") && m.State == reconsweep.HealthStalled:
+				add("RECONCILIATION_SWEEP_STALLED", "HIGH", module, m.Key, "A reconciliation sweep has stopped making progress: "+m.Label, m.Source,
+					metricEvidence(m, now))
+			case strings.Contains(m.Key, ".reconciliation.sweep_health") && m.State == reconsweep.HealthBlockedOnDeferrals:
+				add("RECONCILIATION_SWEEP_BLOCKED", "HIGH", module, m.Key, "A reconciliation sweep is blocked by records it cannot judge yet: "+m.Label,
+					m.Source, metricEvidence(m, now))
 			case m.Key == "reconciliation.exceptions.critical" && val(m) > 0:
 				add("RECONCILIATION_CRITICAL_EXCEPTIONS", "HIGH", module, m.Key, "Critical reconciliation exceptions are open (TEST evidence)", m.Source,
 					metricEvidence(m, now))

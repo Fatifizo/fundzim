@@ -13,8 +13,15 @@
 //     version after the batch, so a crash, error, timeout or lost race leaves it at the last fully examined batch
 //     and the batch is examined again (examination is idempotent: findings are deduplicated by their owners);
 //   - concurrent runs are safe: both may examine the same batch (deduplicated findings), only one advances;
-//   - a record the detector may not judge yet (inside its grace period) is never silently passed: it is carried in
-//     the checkpoint as a deferral, retried at the start of every run, and counted (oldest deferral age is visible).
+//   - a record the detector may not judge yet (inside its grace period, or a required external check could not be
+//     made) is never silently passed: it is carried in the checkpoint as a deferral, retried at the start of later
+//     runs, and counted (oldest deferral age and the reasons of the run are visible);
+//   - deferrals never stop the walk (remediation phase 3, F-R2-02): a run retries at most half its record budget of
+//     them, oldest-untried first (a retried deferral that stays deferred goes to the back), and stops retrying at the
+//     time budget; a batch also stops at the time budget after at least one record, and the checkpoint then advances
+//     to the last examined key only — so slow or failing checks of some records never prevent progress on the rest;
+//   - every run's outcome is recorded on the RUNNING checkpoint (RecordAttempt), so a sweep that fails or stops
+//     making progress is visible (Health) even when nothing advances (F-R2-03).
 //
 // The package owns no table: each module stores its checkpoints in its own table through Store (SQLStore keeps the
 // SQL in one place; the module names its own table).
@@ -63,6 +70,12 @@ type Coverage struct {
 	RunningExamined             int64      `json:"running_examined"`
 	DeferredOutstanding         int        `json:"deferred_outstanding"`
 	OldestDeferralSince         *time.Time `json:"oldest_deferral_since"`
+	// The running cycle's last advance and the recorded outcome of the latest run (F-R2-03; Health).
+	LastAdvancedAt     *time.Time `json:"last_advanced_at"`
+	LastAttemptAt      *time.Time `json:"last_attempt_at"`
+	LastAttemptOutcome string     `json:"last_attempt_outcome"`
+	LastAttemptError   string     `json:"last_attempt_error,omitempty"`
+	FailedAttempts     int        `json:"failed_attempts"`
 }
 
 // Store persists checkpoints (one RUNNING checkpoint per detector and scope).
@@ -73,13 +86,17 @@ type Store interface {
 	// complete, cur's cycle is closed and the next cycle opens empty, carrying next.Deferred.
 	Advance(ctx context.Context, cur, next Checkpoint, complete bool, runID string) (bool, error)
 	Coverage(ctx context.Context, detector, scope string) (Coverage, error)
+	// RecordAttempt stores the outcome of one run (stop reason, error, consecutive failures) on the RUNNING checkpoint
+	// without changing its position.
+	RecordAttempt(ctx context.Context, detector, scope string, rep Report) error
 }
 
 // Outcome is the result of examining one record.
 type Outcome struct {
-	Deferred   bool // not judged yet: carried and retried
-	OutOfScope bool // no longer in the detector's scope (counted as examined: nothing to judge)
-	Exceptions int  // new findings recorded for it
+	Deferred   bool   // not judged yet: carried and retried
+	Reason     string // why it was deferred (bounded vocabulary of the detector, e.g. GRACE_PERIOD); counted per run
+	OutOfScope bool   // no longer in the detector's scope (counted as examined: nothing to judge)
+	Exceptions int    // new findings recorded for it
 }
 
 // Examine judges one record in its current state and records its findings (idempotently).
@@ -103,8 +120,8 @@ const (
 type Config struct {
 	Scope       string        // DefaultScope in production; tests use their own scope
 	BatchSize   int           // keys per checkpoint
-	MaxRecords  int           // records examined per run (deferral retries included)
-	MaxDuration time.Duration // no new batch starts after this
+	MaxRecords  int           // records examined per run (deferral retries included; at most half of it on retries)
+	MaxDuration time.Duration // no new record starts after this (at least one record per run is examined)
 	MaxDeferred int           // deferrals a checkpoint may carry
 }
 
@@ -138,34 +155,57 @@ type Options struct {
 
 // Report is the evidence of one run.
 type Report struct {
-	Detector          string     `json:"detector"`
-	Scope             string     `json:"scope"`
-	Cycle             int64      `json:"cycle"`
-	CycleStartedAt    time.Time  `json:"cycle_started_at"`
-	CursorFrom        string     `json:"cursor_from"`
-	CursorTo          string     `json:"cursor_to"`
-	Examined          int        `json:"examined"`
-	OutOfScope        int        `json:"out_of_scope"`
-	DeferredNew       int        `json:"deferred_new"`
-	DeferralsRetried  int        `json:"deferrals_retried"`
-	DeferralsResolved int        `json:"deferrals_resolved"`
-	DeferredCarried   int        `json:"deferred_carried"`
-	OldestDeferral    *time.Time `json:"oldest_deferral_since"`
-	Exceptions        int        `json:"exceptions"`
-	Batches           int        `json:"batches"`
-	Advanced          bool       `json:"checkpoint_advanced"`
-	CycleCompleted    bool       `json:"cycle_completed"`
-	StoppedBy         string     `json:"stopped_by"`
-	Error             string     `json:"error,omitempty"`
+	Detector          string    `json:"detector"`
+	Scope             string    `json:"scope"`
+	Cycle             int64     `json:"cycle"`
+	CycleStartedAt    time.Time `json:"cycle_started_at"`
+	CursorFrom        string    `json:"cursor_from"`
+	CursorTo          string    `json:"cursor_to"`
+	Examined          int       `json:"examined"`
+	OutOfScope        int       `json:"out_of_scope"`
+	DeferredNew       int       `json:"deferred_new"`
+	DeferralsRetried  int       `json:"deferrals_retried"`
+	DeferralsResolved int       `json:"deferrals_resolved"`
+	// DeferralsNotRetried were left for later runs because the run's retry share or time budget was used up.
+	DeferralsNotRetried int `json:"deferrals_not_retried"`
+	// DeferredReasons counts this run's deferral decisions (new and retried-still-deferred) by the detector's reason.
+	DeferredReasons map[string]int `json:"deferred_reasons,omitempty"`
+	DeferredCarried int            `json:"deferred_carried"`
+	OldestDeferral  *time.Time     `json:"oldest_deferral_since"`
+	Exceptions      int            `json:"exceptions"`
+	Batches         int            `json:"batches"`
+	Advanced        bool           `json:"checkpoint_advanced"`
+	CycleCompleted  bool           `json:"cycle_completed"`
+	StoppedBy       string         `json:"stopped_by"`
+	Error           string         `json:"error,omitempty"`
 }
 
 // ErrDeferralLimit is returned (with a report) when a batch would leave more deferrals than MaxDeferred.
 var ErrDeferralLimit = errors.New("reconsweep: deferral limit reached; checkpoint not advanced")
 
 // Run advances one detector's sweep by up to MaxRecords records. It returns the report and the first error; on
-// error the checkpoint stays at the last batch that was fully examined.
+// error the checkpoint stays at the last batch that was fully examined. The outcome is recorded on the checkpoint
+// in every case (non-cancelled context); a failure to record it is returned when the run itself succeeded.
 func Run(ctx context.Context, st Store, o Options, next Next, examine Examine) (Report, error) {
 	o = o.withDefaults()
+	rep, err := runSweep(ctx, st, o, next, examine)
+	if aerr := st.RecordAttempt(context.WithoutCancel(ctx), o.Detector, o.Scope, rep); aerr != nil && err == nil {
+		return rep, aerr
+	}
+	return rep, err
+}
+
+func (r *Report) deferredFor(reason string) {
+	if reason == "" {
+		reason = "UNSPECIFIED"
+	}
+	if r.DeferredReasons == nil {
+		r.DeferredReasons = map[string]int{}
+	}
+	r.DeferredReasons[reason]++
+}
+
+func runSweep(ctx context.Context, st Store, o Options, next Next, examine Examine) (Report, error) {
 	rep := Report{Detector: o.Detector, Scope: o.Scope}
 	start := o.Now()
 	cp, err := st.Active(ctx, o.Detector, o.Scope)
@@ -186,23 +226,32 @@ func Run(ctx context.Context, st Store, o Options, next Next, examine Examine) (
 		nx := cp
 		nx.Deferred = append([]Deferral(nil), cp.Deferred...)
 		var batchEx int
-		// 1. deferrals carried from earlier batches (first batch of a run only)
+		// 1. deferrals carried from earlier batches (first batch of a run only), bounded so they never stop the walk:
+		// at most half the record budget and the time budget; untried ones keep their place at the front, retried
+		// ones that stay deferred go to the back (each keeps its first deferral time)
 		if retry && len(nx.Deferred) > 0 {
-			kept := nx.Deferred[:0:0]
-			for _, d := range nx.Deferred {
+			share := max(1, o.MaxRecords/2)
+			var untried, kept []Deferral
+			for i, d := range nx.Deferred {
+				if rep.DeferralsRetried >= share || (rep.DeferralsRetried > 0 && o.Now().Sub(start) >= o.MaxDuration) {
+					untried = append(untried, nx.Deferred[i:]...)
+					break
+				}
 				out, err := examine(ctx, d.Key)
 				if err != nil {
 					return rep.fail(err)
 				}
 				rep.DeferralsRetried++
+				batchEx += out.Exceptions // findings recorded while still deferred (e.g. internal checks) count too
 				if out.Deferred {
-					kept = append(kept, d) // keeps its first deferral time
+					kept = append(kept, d)
+					rep.deferredFor(out.Reason)
 					continue
 				}
 				rep.DeferralsResolved++
-				batchEx += out.Exceptions
 			}
-			nx.Deferred = kept
+			rep.DeferralsNotRetried = len(untried)
+			nx.Deferred = append(untried, kept...)
 		}
 		retry = false
 		// 2. the next keys after the checkpoint
@@ -215,13 +264,21 @@ func Run(ctx context.Context, st Store, o Options, next Next, examine Examine) (
 			return rep.fail(err)
 		}
 		var newly, outScope int
-		for _, k := range keys {
+		fetched, truncated := len(keys), false
+		for i, k := range keys {
+			// the time budget also holds inside a batch (slow external checks): stop after at least one record and
+			// advance only to the last examined key
+			if (i > 0 || rep.Examined > 0) && o.Now().Sub(start) >= o.MaxDuration {
+				keys, truncated = keys[:i], true
+				break
+			}
 			out, err := examine(ctx, k)
 			if err != nil {
 				return rep.fail(err)
 			}
 			switch {
 			case out.Deferred:
+				rep.deferredFor(out.Reason)
 				if !hasKey(nx.Deferred, k) {
 					nx.Deferred = append(nx.Deferred, Deferral{Key: k, Since: o.Now()})
 					newly++
@@ -235,7 +292,7 @@ func Run(ctx context.Context, st Store, o Options, next Next, examine Examine) (
 			rep.StoppedBy, rep.Error = StopDeferralLimit, ErrDeferralLimit.Error()
 			return rep, ErrDeferralLimit
 		}
-		complete := len(keys) < limit
+		complete := !truncated && fetched < limit
 		if len(keys) > 0 {
 			nx.Cursor = keys[len(keys)-1]
 		}
@@ -264,6 +321,10 @@ func Run(ctx context.Context, st Store, o Options, next Next, examine Examine) (
 		}
 		nx.Version = cp.Version + 1
 		cp = nx
+		if truncated {
+			rep.StoppedBy = StopTimeBudget
+			break
+		}
 	}
 	rep.DeferredCarried = len(cp.Deferred)
 	for _, d := range cp.Deferred {

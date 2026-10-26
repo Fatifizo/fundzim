@@ -61,10 +61,44 @@ type ReconReport struct {
 	ByType        map[string]int `json:"by_type"`
 	// OpenExceptionEvidence counts mismatch references added under an exception that was already open (a changed
 	// discrepancy: a mismatch type not referenced since the exception opened).
-	OpenExceptionEvidence    int                 `json:"open_exception_evidence"`
+	OpenExceptionEvidence int `json:"open_exception_evidence"`
+	// ProviderUnverified counts payouts whose required provider status check could not be made (F-R2-02): they are
+	// NOT reconciled — the sweep carries them as deferrals (reason PROVIDER_UNVERIFIED) until a check succeeds. By
+	// cause (the adapter's classification) and a bounded sample of payout ids for investigation.
+	ProviderUnverified       int                 `json:"provider_unverified"`
+	ProviderUnverifiedBy     map[string]int      `json:"provider_unverified_by,omitempty"`
+	ProviderUnverifiedSample []string            `json:"provider_unverified_sample,omitempty"`
 	Sweep                    reconsweep.Report   `json:"sweep"`
 	Coverage                 reconsweep.Coverage `json:"coverage"`
 	SettlementReconciliation string              `json:"settlement_reconciliation"`
+}
+
+// Deferral reasons of the payout sweep.
+const (
+	deferGrace              = "GRACE_PERIOD"
+	deferProviderUnverified = "PROVIDER_UNVERIFIED"
+	unverifiedSampleMax     = 20
+)
+
+// providerCheck is the result of the provider status comparison of one payout (F-R2-02). A comparison is required for
+// a payout that reached the provider (SubmittedAt) when a provider is reachable in this environment
+// (LOCAL_SIMULATOR). Verified means an authoritative answer was obtained and compared; otherwise cause says why not,
+// and the payout is not reconciled — its financial state is never inferred from the failure.
+type providerCheck struct {
+	required bool
+	verified bool
+	cause    string
+}
+
+func (rep *ReconReport) unverified(id, cause string) {
+	rep.ProviderUnverified++
+	if rep.ProviderUnverifiedBy == nil {
+		rep.ProviderUnverifiedBy = map[string]int{}
+	}
+	rep.ProviderUnverifiedBy[cause]++
+	if len(rep.ProviderUnverifiedSample) < unverifiedSampleMax {
+		rep.ProviderUnverifiedSample = append(rep.ProviderUnverifiedSample, id)
+	}
 }
 
 type mismatch struct {
@@ -94,7 +128,7 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRepor
 	}
 	cutoff := s.now().Add(-s.reconGrace())
 	for _, cand := range list {
-		p, ms, err := s.reconcileFresh(ctx, cand.ID, cutoff)
+		p, ms, pc, err := s.reconcileFresh(ctx, cand.ID, cutoff)
 		if err != nil {
 			return rep, err
 		}
@@ -102,6 +136,9 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRepor
 			continue // changed since the run started: the sweep carries it as a deferral when it reaches it
 		}
 		rep.Checked++
+		if pc.required && !pc.verified {
+			rep.unverified(p.ID, pc.cause) // the sweep defers it; the recency pass only reports it
+		}
 		if _, err := s.recordMismatches(ctx, p, ms, &rep); err != nil {
 			return rep, err
 		}
@@ -111,17 +148,26 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRepor
 	cfg := s.ReconSweep.Or(DefaultReconSweep)
 	rep.Sweep, err = reconsweep.Run(ctx, store, reconsweep.Options{Config: cfg, Detector: SweepDetector, RunID: rep.RunID, Now: s.now},
 		s.sweepNext, func(ctx context.Context, id string) (reconsweep.Outcome, error) {
-			p, ms, err := s.reconcileFresh(ctx, id, s.now().Add(-s.reconGrace()))
+			p, ms, pc, err := s.reconcileFresh(ctx, id, s.now().Add(-s.reconGrace()))
 			switch {
 			case err != nil:
 				return reconsweep.Outcome{}, err
 			case p == nil:
-				return reconsweep.Outcome{Deferred: true}, nil
+				return reconsweep.Outcome{Deferred: true, Reason: deferGrace}, nil
 			case p.Status == StRequested:
 				return reconsweep.Outcome{OutOfScope: true}, nil
 			}
+			// the internal comparisons are authoritative and recorded now (idempotently under an open exception)
 			n, err := s.recordMismatches(ctx, p, ms, &rep)
-			return reconsweep.Outcome{Exceptions: n}, err
+			if err != nil {
+				return reconsweep.Outcome{}, err
+			}
+			if pc.required && !pc.verified {
+				// not reconciled: carried and retried until a provider answer is compared (F-R2-02)
+				rep.unverified(p.ID, pc.cause)
+				return reconsweep.Outcome{Deferred: true, Reason: deferProviderUnverified, Exceptions: n}, nil
+			}
+			return reconsweep.Outcome{Exceptions: n}, nil
 		})
 	// the run's evidence is recorded even when the sweep stopped on an error (non-cancelled context)
 	actx := context.WithoutCancel(ctx)
@@ -130,7 +176,9 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconRepor
 		return audit.Record(ctx, tx, audit.Event{Action: "payout.reconciliation.run", ActorType: "system", TargetType: "payout_reconciliation",
 			Metadata: map[string]any{"run": rep.RunID, "checked": rep.Checked, "new_mismatches": rep.NewMismatches, "triggered_by": triggeredBy,
 				"open_exception_evidence": rep.OpenExceptionEvidence, "settlement": "NOT_PERFORMED", "sweep": rep.Sweep,
-				"coverage_watermark": rep.Coverage.LastCompletedCycleStartedAt}})
+				"provider_unverified": rep.ProviderUnverified, "provider_unverified_by": rep.ProviderUnverifiedBy,
+				"provider_unverified_sample": rep.ProviderUnverifiedSample,
+				"coverage_watermark":         rep.Coverage.LastCompletedCycleStartedAt}})
 	})
 	if err != nil {
 		return rep, err
@@ -242,19 +290,20 @@ func nonNil(m map[string]any) map[string]any {
 // reconcileFresh re-reads one candidate (nil when it changed after cutoff), lets the ledger catch up with its state
 // when a required link is missing (syncLedger, the Recover job's path; idempotent keys, links only where NULL), and
 // lists the mismatches of the state as it is afterwards. A recovery that fails is part of the evidence.
-func (s *Service) reconcileFresh(ctx context.Context, id string, cutoff time.Time) (*Payout, []mismatch, error) {
+func (s *Service) reconcileFresh(ctx context.Context, id string, cutoff time.Time) (*Payout, []mismatch, providerCheck, error) {
+	var pc providerCheck
 	p, err := s.payout(ctx, s.Pool, id, false)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, pc, err
 	}
 	if !p.UpdatedAt.Before(cutoff) {
-		return nil, nil, nil
+		return nil, nil, pc, nil
 	}
 	syncCode := ""
 	if ledgerSyncPending(p) {
 		if serr := s.syncLedger(ctx, id); serr != nil {
 			if ctx.Err() != nil {
-				return nil, nil, serr
+				return nil, nil, pc, serr
 			}
 			syncCode = "LEDGER_ERROR"
 			if e := errs.As(serr); e != nil {
@@ -262,12 +311,12 @@ func (s *Service) reconcileFresh(ctx context.Context, id string, cutoff time.Tim
 			}
 		}
 		if p, err = s.payout(ctx, s.Pool, id, false); err != nil {
-			return nil, nil, err
+			return nil, nil, pc, err
 		}
 	}
-	ms, err := s.reconcileOne(ctx, p)
+	ms, pc, err := s.reconcileOne(ctx, p)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, pc, err
 	}
 	if syncCode != "" {
 		for i := range ms {
@@ -277,7 +326,7 @@ func (s *Service) reconcileFresh(ctx context.Context, id string, cutoff time.Tim
 			}
 		}
 	}
-	return &p, ms, nil
+	return &p, ms, pc, nil
 }
 
 // ledgerSyncPending: the payout's state requires a journal (and reservation transition) syncLedger has not linked yet
@@ -298,8 +347,9 @@ func ledgerSyncPending(p Payout) bool {
 	return false
 }
 
-// reconcileOne lists the mismatches of one payout.
-func (s *Service) reconcileOne(ctx context.Context, p Payout) ([]mismatch, error) {
+// reconcileOne lists the mismatches of one payout and the outcome of its provider status check.
+func (s *Service) reconcileOne(ctx context.Context, p Payout) ([]mismatch, providerCheck, error) {
+	var pc providerCheck
 	var out []mismatch
 	amt := p.AmountMinor
 	r := p.Reservation
@@ -336,7 +386,7 @@ func (s *Service) reconcileOne(ctx context.Context, p Payout) ([]mismatch, error
 	for _, step := range need {
 		j, ok, err := s.Ledger.JournalByKey(ctx, "payout:"+p.ID+":"+step)
 		if err != nil {
-			return nil, err
+			return nil, pc, err
 		}
 		switch {
 		case !ok:
@@ -357,36 +407,72 @@ func (s *Service) reconcileOne(ctx context.Context, p Payout) ([]mismatch, error
 	var accepted, refs int
 	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE operation = 'CREATE_PAYOUT' AND classification = 'ACCEPTED'),
 		count(DISTINCT provider_reference_returned) FROM app.payout_attempts WHERE payout_request_id = $1`, p.ID).Scan(&accepted, &refs); err != nil {
-		return nil, err
+		return nil, pc, err
 	}
 	if accepted > 1 || refs > 1 {
 		out = append(out, mismatch{typ: "DUPLICATE_PAYOUT_REFERENCE", detail: map[string]any{"accepted_creates": accepted, "distinct_refs": refs}})
 	}
-	// the provider's own view of our reference (status API), for payouts that reached it
+	// the provider's own view of our reference (status API), for payouts that reached it. A status query only: no
+	// instruction is ever sent from reconciliation.
 	if p.SubmittedAt != nil && s.ExecEnv == ExecLocalSimulator {
+		pc.required = true
 		pp, meta, err := s.adapterFor(ctx, p)
-		if err == nil {
-			o := pp.GetPayout(ctx, meta, p.ID)
-			if o.Class == psp.ClassAccepted {
-				prov := o.Canonical
-				ref := o.ProviderRef
-				if o.ReportedAmount != nil && *o.ReportedAmount != amt {
-					a := *o.ReportedAmount
-					out = append(out, mismatch{typ: "AMOUNT_MISMATCH", expected: &amt, actual: &a, providerRef: ref})
-				}
-				if o.ReportedCcy != "" && o.ReportedCcy != p.Currency {
-					out = append(out, mismatch{typ: "CURRENCY_MISMATCH", providerRef: ref, detail: map[string]any{"provider_currency": o.ReportedCcy}})
-				}
-				ours := map[string]string{StCompleted: psp.PayoutCompleted, StReversed: psp.PayoutReturned, StFailed: psp.PayoutFailed}[p.Status]
-				if ours != "" && prov != ours && !(p.Status == StCompleted && prov == psp.PayoutReturned) {
-					out = append(out, mismatch{typ: "PROVIDER_STATUS_MISMATCH", providerRef: ref, detail: map[string]any{"ours": p.Status, "provider": prov}})
-				}
-			} else if o.Class == psp.ClassNotFound && (p.Status == StCompleted || p.Status == StReversed) {
-				out = append(out, mismatch{typ: "PROVIDER_STATUS_MISMATCH", detail: map[string]any{"ours": p.Status, "provider": "NOT_FOUND"}})
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, pc, ctx.Err()
 			}
+			pc.cause = "ADAPTER_UNAVAILABLE"
+			return out, pc, nil
 		}
+		pm, ok, cause := judgeProvider(p, pp.GetPayout(ctx, meta, p.ID))
+		if ctx.Err() != nil {
+			return nil, pc, ctx.Err() // a cancelled run is an error of the run, not a provider outcome
+		}
+		pc.verified, pc.cause = ok, cause
+		out = append(out, pm...)
 	}
-	return out, nil
+	return out, pc, nil
+}
+
+// judgeProvider compares one provider status observation with the payout (pure; F-R2-02). Only an authoritative
+// answer is compared: ACCEPTED with a status, or NOT_FOUND. Every other class — timeout or connection loss
+// (INDETERMINATE), rate limiting, a refused or unsupported query, an authentication or configuration error, a definite
+// failure of the query itself — and an ACCEPTED answer without any status is an inability to obtain the provider's
+// view: verified = false with the cause, and no mismatch is derived from it (nothing is inferred from a failure).
+func judgeProvider(p Payout, o psp.Observation) (ms []mismatch, verified bool, cause string) {
+	amt := p.AmountMinor
+	switch o.Class {
+	case psp.ClassAccepted:
+		if o.RawStatus == "" && o.Canonical == "" {
+			return nil, false, "INCOMPLETE_RESPONSE"
+		}
+		prov, ref := o.Canonical, o.ProviderRef
+		if o.ReportedAmount != nil && *o.ReportedAmount != amt {
+			a := *o.ReportedAmount
+			ms = append(ms, mismatch{typ: "AMOUNT_MISMATCH", expected: &amt, actual: &a, providerRef: ref})
+		}
+		if o.ReportedCcy != "" && o.ReportedCcy != p.Currency {
+			ms = append(ms, mismatch{typ: "CURRENCY_MISMATCH", providerRef: ref, detail: map[string]any{"provider_currency": o.ReportedCcy}})
+		}
+		ours := map[string]string{StCompleted: psp.PayoutCompleted, StReversed: psp.PayoutReturned, StFailed: psp.PayoutFailed}[p.Status]
+		if ours != "" && prov != ours && !(p.Status == StCompleted && prov == psp.PayoutReturned) {
+			ms = append(ms, mismatch{typ: "PROVIDER_STATUS_MISMATCH", providerRef: ref, detail: map[string]any{"ours": p.Status, "provider": prov}})
+		}
+		return ms, true, ""
+	case psp.ClassNotFound:
+		if p.Status == StCompleted || p.Status == StReversed {
+			ms = append(ms, mismatch{typ: "PROVIDER_STATUS_MISMATCH", detail: map[string]any{"ours": p.Status, "provider": "NOT_FOUND"}})
+		}
+		return ms, true, ""
+	}
+	cause = string(o.Class)
+	if cause == "" {
+		cause = "NO_CLASSIFICATION"
+	}
+	if o.UnknownReason != "" {
+		cause += ":" + o.UnknownReason
+	}
+	return nil, false, cause
 }
 
 func contains(xs []string, v string) bool {

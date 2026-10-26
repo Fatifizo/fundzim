@@ -50,10 +50,14 @@ func (s *Service) OpsSnapshot(ctx context.Context) (opsview.Snapshot, error) {
 		cov, err := store.Coverage(ctx, d, scope)
 		cm := cov.Metric(m, "ledger.reconciliation.coverage_age_seconds."+strings.ToLower(d), "Seconds since the last complete "+d+" reconciliation sweep began",
 			view, "ledger.ledger_reconciliation_sweeps, last COMPLETED cycle (ADR-052)", s.now())
+		hm := cov.Health(s.now(), reconsweep.DefaultThresholds, s.ReconSweep.Or(DefaultReconSweep).MaxDeferred, int(recon)).Metric(m,
+			"ledger.reconciliation.sweep_health."+strings.ToLower(d), d+" reconciliation sweep: seconds since the checkpoint last progressed (state = sweep health)",
+			view, "ledger.ledger_reconciliation_sweeps RUNNING cycle and recorded run outcome; thresholds are engineering defaults (D-06, D-10)")
 		if err != nil {
 			cm.Value, cm.Status = nil, opsview.Unavailable
+			hm.Value, hm.Status, hm.State = nil, opsview.Unavailable, ""
 		}
-		snap.Metrics = append(snap.Metrics, cm)
+		snap.Metrics = append(snap.Metrics, cm, hm)
 	}
 	rows, err := s.Pool.Query(ctx, `SELECT id::text, kind, currency, requested_by::text, requested_at, status FROM ledger.ledger_adjustments
 		WHERE status = 'PENDING_APPROVAL' AND expires_at > now() ORDER BY requested_at LIMIT 200`)

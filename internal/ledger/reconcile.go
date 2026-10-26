@@ -313,7 +313,9 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconcileR
 	})
 	rep.Sweeps[SweepPaymentJournals] = jr
 	sweepErr = err
-	if sweepErr == nil && s.Facts != nil {
+	// PAYMENT_FACTS runs even when the journal sweep failed (F-R2-03): one sweep's error never stalls the other; both
+	// errors are returned
+	if s.Facts != nil && ctx.Err() == nil {
 		fr, err := reconsweep.Run(ctx, store, opts(SweepPaymentFacts), func(ctx context.Context, after string, limit int) ([]string, error) {
 			return s.Facts.PaymentIDsAfter(ctx, reconsweep.After(after), []string{"SUCCEEDED", "UNKNOWN"}, limit)
 		}, func(ctx context.Context, id string) (reconsweep.Outcome, error) {
@@ -324,7 +326,7 @@ func (s *Service) Reconcile(ctx context.Context, triggeredBy string) (ReconcileR
 			return record(ctx, ex)
 		})
 		rep.Sweeps[SweepPaymentFacts] = fr
-		sweepErr = err
+		sweepErr = errors.Join(sweepErr, err)
 	}
 
 	// the run's evidence is recorded even when a sweep stopped on an error (non-cancelled context)

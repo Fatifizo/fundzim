@@ -107,6 +107,29 @@ func (s SQLStore) Advance(ctx context.Context, cur, next Checkpoint, complete bo
 	return won, nil
 }
 
+// RecordAttempt implements Store: the run's stop reason and error on the RUNNING checkpoint, and the count of
+// consecutive failed runs (reset by a run without error). Only the attempt columns change; the guard allows such an
+// update without a version step, so it never disturbs a concurrent run's compare-and-swap.
+func (s SQLStore) RecordAttempt(ctx context.Context, detector, scope string, rep Report) error {
+	t, err := s.table()
+	if err != nil {
+		return err
+	}
+	outcome := rep.StoppedBy
+	if outcome == "" {
+		outcome = StopError
+	}
+	failed := rep.Error != ""
+	msg := rep.Error
+	if r := []rune(msg); len(r) > 300 {
+		msg = string(r[:300])
+	}
+	_, err = s.Pool.Exec(ctx, `UPDATE `+t+` SET last_attempt_at = now(), last_attempt_outcome = $3, last_attempt_error = nullif($4, ''),
+		failed_attempts = CASE WHEN $5 THEN failed_attempts + 1 ELSE 0 END WHERE detector = $1 AND scope = $2 AND status = 'RUNNING'`,
+		detector, scope, outcome, msg, failed)
+	return err
+}
+
 // Coverage implements Store.
 func (s SQLStore) Coverage(ctx context.Context, detector, scope string) (Coverage, error) {
 	t, err := s.table()
@@ -121,9 +144,16 @@ func (s SQLStore) Coverage(ctx context.Context, detector, scope string) (Coverag
 		return c, err
 	}
 	var since []time.Time
-	err = s.Pool.QueryRow(ctx, `SELECT cycle, started_at, examined, deferred_since FROM `+t+`
-		WHERE detector = $1 AND scope = $2 AND status = 'RUNNING'`, detector, scope).
-		Scan(&c.RunningCycle, &c.RunningStartedAt, &c.RunningExamined, &since)
+	var outcome, aerr *string
+	err = s.Pool.QueryRow(ctx, `SELECT cycle, started_at, examined, deferred_since, last_advanced_at, last_attempt_at, last_attempt_outcome,
+		last_attempt_error, failed_attempts FROM `+t+` WHERE detector = $1 AND scope = $2 AND status = 'RUNNING'`, detector, scope).
+		Scan(&c.RunningCycle, &c.RunningStartedAt, &c.RunningExamined, &since, &c.LastAdvancedAt, &c.LastAttemptAt, &outcome, &aerr, &c.FailedAttempts)
+	if outcome != nil {
+		c.LastAttemptOutcome = *outcome
+	}
+	if aerr != nil {
+		c.LastAttemptError = *aerr
+	}
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return c, err
 	}

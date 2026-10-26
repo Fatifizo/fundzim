@@ -19,6 +19,8 @@ type memStore struct {
 	completed   map[int64]bool
 	failAdvance error
 	beforeCAS   func(ctx context.Context) // runs inside Advance before the version check (concurrency interleavings)
+	attempts    []string                  // stop reason of every recorded run
+	failed      int                       // consecutive failed runs
 }
 
 func newMemStore() *memStore { return &memStore{completed: map[int64]bool{}} }
@@ -63,6 +65,19 @@ func (m *memStore) Advance(ctx context.Context, cur, next Checkpoint, complete b
 
 func (m *memStore) Coverage(context.Context, string, string) (Coverage, error) {
 	return Coverage{}, nil
+}
+
+// RecordAttempt keeps the latest outcome and the consecutive failures, as the SQL store does on the RUNNING row.
+func (m *memStore) RecordAttempt(_ context.Context, _, _ string, rep Report) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.attempts = append(m.attempts, rep.StoppedBy)
+	if rep.Error != "" {
+		m.failed++
+	} else {
+		m.failed = 0
+	}
+	return nil
 }
 
 func (m *memStore) cycle() int64 {
@@ -142,7 +157,9 @@ func (t *table) examine(_ context.Context, k string) (Outcome, error) {
 	t.seen[k] = st
 	switch st {
 	case "hot":
-		return Outcome{Deferred: true}, nil
+		return Outcome{Deferred: true, Reason: "GRACE_PERIOD"}, nil
+	case "down": // a required external check could not be made (provider unreachable): not judged, carried
+		return Outcome{Deferred: true, Reason: "PROVIDER_UNVERIFIED"}, nil
 	case "gone":
 		return Outcome{OutOfScope: true}, nil
 	case "bad":
@@ -441,8 +458,9 @@ func TestSweepEmptyScope(t *testing.T) {
 	}
 }
 
-// 24: a run that exceeds its time budget stops between batches with its checkpoint at the last completed batch; the
-// next run resumes.
+// 24: a run that exceeds its time budget stops — since remediation phase 3 also inside a batch (F-R2-02: slow
+// external checks must not hold a batch past the budget) — with its checkpoint at the last examined key; the next run
+// resumes right after it and nothing is skipped.
 func TestSweepTimeBudget(t *testing.T) {
 	tb, st := newTable(1000), newMemStore()
 	now := time.Unix(1000, 0)
@@ -451,11 +469,11 @@ func TestSweepTimeBudget(t *testing.T) {
 	o.MaxDuration = 2500 * time.Millisecond
 	o.Now = func() time.Time { return now }
 	r := run(t, st, tb, o)
-	if r.StoppedBy != StopTimeBudget || r.Examined != 300 || r.CursorTo != key(299) {
+	if r.StoppedBy != StopTimeBudget || r.Examined != 250 || r.CursorTo != key(249) || r.CycleCompleted {
 		t.Fatalf("time budget: %+v", r)
 	}
 	r = run(t, st, tb, o)
-	if r.CursorFrom != key(299) {
+	if r.CursorFrom != key(249) || tb.examined[key(250)] != 1 || tb.examined[key(249)] != 1 {
 		t.Fatalf("resume after the time budget: %+v", r)
 	}
 }
@@ -472,5 +490,161 @@ func TestSweepBudgetAlwaysMakesProgress(t *testing.T) {
 		if r.Examined == 0 && !r.CycleCompleted {
 			t.Fatalf("run %d made no progress: %+v", i, r)
 		}
+	}
+}
+
+// F-R2-02: records whose required external check keeps failing are carried, never passed, and never stop the walk:
+// the rest of the scope completes its cycles, each run retries at most half its budget of deferrals, rotation reaches
+// every deferral, and a deferred record found inconsistent once its check succeeds is recorded then.
+func TestSweepFailingChecksNeverStopTheWalk(t *testing.T) {
+	tb, st := newTable(1000), newMemStore()
+	for i := 0; i < 1000; i += 10 { // 100 records whose provider check fails
+		tb.set(key(i), "down")
+	}
+	o := opts(50, 100)
+	runs := runCycle(t, st, tb, o)
+	c, _ := st.Active(context.Background(), "D", "test")
+	if len(c.Deferred) != 100 {
+		t.Fatalf("expected the 100 unverifiable records carried, got %d", len(c.Deferred))
+	}
+	for i := 0; i < 1000; i++ {
+		if tb.examined[key(i)] == 0 {
+			t.Fatalf("%s never examined although other records' checks failed", key(i))
+		}
+	}
+	t.Logf("cycle of 1 000 records with 100 failing checks completed in %d runs", runs)
+	// bounded retries with rotation: every deferral is retried within a few runs, none starves
+	tb.resetExamined()
+	for r := 0; r < 4; r++ {
+		rep := run(t, st, tb, o)
+		if rep.DeferralsRetried > 50 {
+			t.Fatalf("run retried %d deferrals, more than half its 100-record budget", rep.DeferralsRetried)
+		}
+		if rep.DeferredReasons["PROVIDER_UNVERIFIED"] == 0 {
+			t.Fatalf("deferral reasons not reported: %+v", rep.DeferredReasons)
+		}
+		if rep.Examined == 0 && !rep.CycleCompleted {
+			t.Fatalf("the walk made no progress while deferrals were retried: %+v", rep)
+		}
+	}
+	for i := 0; i < 1000; i += 10 {
+		if tb.examined[key(i)] == 0 {
+			t.Fatalf("deferral %s was never retried in 4 runs (rotation starves it)", key(i))
+		}
+	}
+	// the provider recovers: one record is genuinely inconsistent, the rest are fine
+	for i := 0; i < 1000; i += 10 {
+		tb.set(key(i), "ok")
+	}
+	tb.set(key(500), "bad")
+	for r := 0; r < 5; r++ {
+		run(t, st, tb, o)
+	}
+	c, _ = st.Active(context.Background(), "D", "test")
+	if len(c.Deferred) != 0 || !tb.findings[key(500)+":bad"] {
+		t.Fatalf("after recovery: %d deferrals left, finding recorded = %v", len(c.Deferred), tb.findings[key(500)+":bad"])
+	}
+}
+
+// F-R2-02: slow checks (each taking long, e.g. timeouts) inside one batch never hold the run past its time budget,
+// deferral retries stop at the budget too, and the next run resumes at the last examined key.
+func TestSweepSlowChecksRespectTheTimeBudget(t *testing.T) {
+	tb, st := newTable(400), newMemStore()
+	now := time.Unix(1000, 0)
+	tb.onExam = func(string) { now = now.Add(10 * time.Second) } // a 10 s timeout per check
+	o := opts(200, 100000)
+	o.MaxDuration = time.Minute
+	o.Now = func() time.Time { return now }
+	r := run(t, st, tb, o)
+	if r.StoppedBy != StopTimeBudget || r.Examined != 6 || r.CursorTo != key(5) || !r.Advanced {
+		t.Fatalf("one 200-record batch of slow checks must stop at the budget: %+v", r)
+	}
+	for i := 6; i < 400; i++ {
+		tb.set(key(i), "down")
+	}
+	tb.onExam = func(string) { now = now.Add(10 * time.Second) }
+	r = run(t, st, tb, o) // defers 6 more slow records, then a third run retries them within the budget
+	r = run(t, st, tb, o)
+	if r.DeferralsRetried == 0 || r.DeferralsRetried > 6 || r.DeferralsNotRetried+r.DeferralsRetried != 6 {
+		t.Fatalf("deferral retries must stop at the time budget and keep the rest: %+v", r)
+	}
+	if r.Examined == 0 {
+		t.Fatalf("the walk must still examine at least one record: %+v", r)
+	}
+}
+
+// F-R2-03: every run's outcome is recorded — successes reset the failure count, errors and the deferral limit raise it.
+func TestSweepRecordsEveryAttempt(t *testing.T) {
+	tb, st := newTable(100), newMemStore()
+	run(t, st, tb, opts(50, 50))
+	tb.failOn = key(60)
+	for i := 0; i < 2; i++ {
+		if _, err := Run(context.Background(), st, opts(50, 50), tb.next, tb.examine); err == nil {
+			t.Fatal("expected the examine failure")
+		}
+	}
+	if st.failed != 2 || st.attempts[len(st.attempts)-1] != StopError {
+		t.Fatalf("failed attempts %d, outcomes %v", st.failed, st.attempts)
+	}
+	tb.failOn = ""
+	run(t, st, tb, opts(50, 50))
+	if st.failed != 0 || len(st.attempts) != 4 {
+		t.Fatalf("a successful run must reset the count: %d %v", st.failed, st.attempts)
+	}
+	tb2, st2 := newTable(30), newMemStore()
+	for i := 0; i < 30; i++ {
+		tb2.set(key(i), "down")
+	}
+	o := opts(30, 100)
+	o.MaxDeferred = 5
+	if _, err := Run(context.Background(), st2, o, tb2.next, tb2.examine); !errors.Is(err, ErrDeferralLimit) {
+		t.Fatal(err)
+	}
+	if st2.failed != 1 || st2.attempts[0] != StopDeferralLimit {
+		t.Fatalf("deferral limit not recorded: %d %v", st2.failed, st2.attempts)
+	}
+}
+
+// F-R2-03: the health states are distinguished from the checkpoint evidence alone.
+func TestHealthClassification(t *testing.T) {
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	at := func(d time.Duration) *time.Time { x := now.Add(-d); return &x }
+	th := DefaultThresholds
+	cases := []struct {
+		name      string
+		c         Coverage
+		open      int
+		want      string
+		wantCycle string
+	}{
+		{"never ran", Coverage{}, 0, HealthNotStarted, LastCycleNone},
+		{"progressing", Coverage{RunningStartedAt: at(30 * time.Minute), LastAdvancedAt: at(10 * time.Minute)}, 0, HealthProgressing, LastCycleNone},
+		{"progressing slowly", Coverage{RunningStartedAt: at(30 * time.Hour), LastAdvancedAt: at(10 * time.Minute)}, 0, HealthProgressingSlowly, LastCycleNone},
+		{"stalled", Coverage{RunningStartedAt: at(5 * time.Hour), LastAdvancedAt: at(2 * time.Hour), LastAttemptOutcome: StopTimeBudget}, 0, HealthStalled, LastCycleNone},
+		{"stalled: worker stopped, nothing recorded", Coverage{RunningStartedAt: at(3 * time.Hour)}, 0, HealthStalled, LastCycleNone},
+		{"failing", Coverage{RunningStartedAt: at(time.Hour), LastAdvancedAt: at(50 * time.Minute), FailedAttempts: 3, LastAttemptOutcome: StopError},
+			0, HealthFailing, LastCycleNone},
+		{"one failure while advancing is not yet failing", Coverage{RunningStartedAt: at(time.Hour), LastAdvancedAt: at(5 * time.Minute), FailedAttempts: 1},
+			0, HealthProgressing, LastCycleNone},
+		{"blocked: deferral limit", Coverage{RunningStartedAt: at(time.Hour), LastAdvancedAt: at(5 * time.Minute), LastAttemptOutcome: StopDeferralLimit,
+			FailedAttempts: 1}, 0, HealthBlockedOnDeferrals, LastCycleNone},
+		{"blocked: old deferral", Coverage{RunningStartedAt: at(time.Hour), LastAdvancedAt: at(5 * time.Minute), DeferredOutstanding: 1,
+			OldestDeferralSince: at(30 * time.Hour)}, 0, HealthBlockedOnDeferrals, LastCycleNone},
+		{"completed, clean", Coverage{LastCompletedCycleStartedAt: at(20 * time.Minute), RunningStartedAt: at(5 * time.Minute)}, 0, HealthProgressing, LastCycleClean},
+		{"completed, discrepancies open", Coverage{LastCompletedCycleStartedAt: at(20 * time.Minute), RunningStartedAt: at(5 * time.Minute)}, 3,
+			HealthProgressing, LastCycleDiscrepancies},
+	}
+	for _, c := range cases {
+		h := c.c.Health(now, th, 10000, c.open)
+		if h.State != c.want || h.LastCycle != c.wantCycle {
+			t.Errorf("%s: state %s / %s, want %s / %s (%s)", c.name, h.State, h.LastCycle, c.want, c.wantCycle, h.Reason)
+		}
+		m := h.Metric("m", "m.k", "l", "p", "s")
+		if m.State != h.State || m.Status == "HEALTHY" {
+			t.Errorf("%s: metric %+v", c.name, m)
+		}
+	}
+	if h := (Coverage{RunningStartedAt: at(time.Hour), LastAdvancedAt: at(time.Minute), DeferredOutstanding: 10000}).Health(now, th, 10000, 0); h.State != HealthBlockedOnDeferrals {
+		t.Errorf("full deferral list: %s", h.State)
 	}
 }

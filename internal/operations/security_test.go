@@ -81,3 +81,43 @@ func TestSecurityFindings(t *testing.T) {
 		}
 	}
 }
+
+// F-R2-03: a reconciliation sweep that fails, stalls or is blocked by deferrals raises one in-app alert per detector and
+// state; progressing (also slowly) or not-started sweeps raise nothing here (not started is the coverage figure's UNKNOWN).
+func TestSecurityFindingsReconciliationSweepHealth(t *testing.T) {
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	recent := now.Add(-time.Hour)
+	ok := BackupEvidence{LastBackup: &recent, LastRestore: &recent}
+	v := opsview.Int64
+	m := func(key, state string) opsview.Metric {
+		return opsview.Metric{Key: key, State: state, Value: v(7200), Label: key, Source: "checkpoint"}
+	}
+	quiet := []opsview.Snapshot{{Module: "payouts", Metrics: []opsview.Metric{m("payouts.reconciliation.sweep_health", "PROGRESSING")}},
+		{Module: "fees", Metrics: []opsview.Metric{m("fees.reconciliation.sweep_health", "PROGRESSING_SLOWLY")}},
+		{Module: "ledger", Metrics: []opsview.Metric{m("ledger.reconciliation.sweep_health.payment_facts", "NOT_STARTED")}}}
+	if got := securityFindings(now, quiet, nil, nil, ok); len(got) != 0 {
+		t.Fatalf("healthy or slow sweeps raised %+v", got)
+	}
+	bad := []opsview.Snapshot{{Module: "payouts", Metrics: []opsview.Metric{m("payouts.reconciliation.sweep_health", "STALLED")}},
+		{Module: "fees", Metrics: []opsview.Metric{m("fees.reconciliation.sweep_health", "FAILING")}},
+		{Module: "ledger", Metrics: []opsview.Metric{m("ledger.reconciliation.sweep_health.payment_journals", "BLOCKED_ON_DEFERRALS"),
+			m("ledger.reconciliation.sweep_health.payment_facts", "STALLED")}}}
+	fs := securityFindings(now, bad, nil, nil, ok)
+	dedupes := map[string]string{}
+	for _, f := range fs {
+		dedupes[f.dedupe] = f.severity
+		if f.evidence["state"] == nil {
+			t.Errorf("%s: evidence lacks the health state", f.dedupe)
+		}
+	}
+	for _, d := range []string{"RECONCILIATION_SWEEP_STALLED:payouts.reconciliation.sweep_health", "RECONCILIATION_SWEEP_FAILING:fees.reconciliation.sweep_health",
+		"RECONCILIATION_SWEEP_BLOCKED:ledger.reconciliation.sweep_health.payment_journals",
+		"RECONCILIATION_SWEEP_STALLED:ledger.reconciliation.sweep_health.payment_facts"} {
+		if dedupes[d] != "HIGH" {
+			t.Errorf("%s: severity %q, want HIGH (raised: %v)", d, dedupes[d], dedupes)
+		}
+	}
+	if len(fs) != 4 {
+		t.Errorf("expected 4 alerts, got %d", len(fs))
+	}
+}

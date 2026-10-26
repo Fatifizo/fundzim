@@ -88,6 +88,60 @@ type finding struct {
 	assessmentID, txID     string
 	currency               string
 	expected, observed     map[string]any
+	// check names the comparison that produced the finding when one kind can come from several comparisons on the same
+	// assessment and journal (F-R2-01): it is part of the dedupe key, so an open finding of one comparison never hides
+	// a different discrepancy. Empty for kinds with one comparison per (assessment, journal): their key is unchanged.
+	check string
+}
+
+// Checks of the kinds that several comparisons produce for the same assessment and journal (F-R2-01).
+const (
+	checkCalcComponent   = "calculation_component"
+	checkJournalLines    = "journal_fee_lines"
+	checkPostedAssessed  = "posted_vs_assessed"
+	checkProviderReport  = "provider_report"
+	checkCategoryPrefix  = "category:"
+	detailCalcComponent  = "the assessed fee differs from its calculation"
+	detailJournalLines   = "the journal's fee lines differ from the recorded fee"
+	detailPostedAssessed = "the posted fee differs from the assessed fee"
+	detailProviderReport = "the provider-reported fee differs from the estimate"
+)
+
+// dedupeKey identifies one discrepancy: an OPEN reference with the same key is the same discrepancy, still unresolved.
+func dedupeKey(f finding) string {
+	k := legacyKey(f)
+	if f.check != "" {
+		k += ":" + f.check
+	}
+	return k
+}
+
+// legacyKey is the key before F-R2-01 (kind, assessment, journal) — still the key of kinds without a check, and the key
+// of OPEN references recorded before the fix.
+func legacyKey(f finding) string { return f.kind + ":" + f.assessmentID + ":" + f.txID }
+
+// legacyCheck derives the check of a reference recorded under a legacy key from its stored content ("" when it cannot
+// be derived: the reference is then not taken to represent the finding, so a distinct discrepancy is never hidden; at
+// worst one finding is recorded once more under its new key).
+func legacyCheck(kind, detail string, expected map[string]any) string {
+	switch kind {
+	case RecMissingFee:
+		if c, ok := expected["category"].(string); ok && c != "" {
+			return checkCategoryPrefix + c
+		}
+	case RecAmountMismatch:
+		switch detail {
+		case detailCalcComponent:
+			return checkCalcComponent
+		case detailJournalLines:
+			return checkJournalLines
+		case detailPostedAssessed:
+			return checkPostedAssessed
+		case detailProviderReport:
+			return checkProviderReport
+		}
+	}
+	return ""
 }
 
 func (s *Service) grace() time.Duration {
@@ -216,15 +270,26 @@ func (s *Service) missingFees(ctx context.Context, group []Assessment) ([]findin
 			have[*c] = true
 		}
 	}
+	return missingFindings(group, cs, have), nil
+}
+
+// missingFindings is the pure MISSING_FEE judgement of one (source, calculation) group: one finding per assessable
+// component category with neither an assessment nor an OPEN finding (have), each with its own check, so every missing
+// category is reported (F-R2-01). A category listed twice in the calculation is reported once.
+func missingFindings(group []Assessment, cs []componentRow, have map[string]bool) []finding {
 	var out []finding
+	seen := map[string]bool{}
 	for _, c := range cs {
-		if c.Basis != BasisNotConfigured && !have[c.Category] {
-			out = append(out, finding{kind: RecMissingFee, severity: "SEV2", assessmentID: group[0].ID, currency: group[0].Currency,
-				detail:   "the calculation has a " + c.Category + " component but no assessment exists for it",
-				expected: map[string]any{"category": c.Category, "amount_minor": amtP(c.Amount)}, observed: map[string]any{"assessment": nil}})
+		if c.Basis == BasisNotConfigured || have[c.Category] || seen[c.Category] {
+			continue
 		}
+		seen[c.Category] = true
+		out = append(out, finding{kind: RecMissingFee, severity: "SEV2", assessmentID: group[0].ID, currency: group[0].Currency,
+			detail:   "the calculation has a " + c.Category + " component but no assessment exists for it",
+			expected: map[string]any{"category": c.Category, "amount_minor": amtP(c.Amount)}, observed: map[string]any{"assessment": nil},
+			check: checkCategoryPrefix + c.Category})
 	}
-	return out, nil
+	return out
 }
 
 // sourceGroup returns every assessment of a's source and calculation, in id order (group[0] carries the group's
@@ -290,6 +355,10 @@ func (s *Service) checkAssessment(ctx context.Context, a Assessment, now time.Ti
 		out = append(out, finding{kind: kind, severity: sev, detail: detail, assessmentID: a.ID, txID: txID, currency: a.Currency,
 			expected: exp, observed: obs})
 	}
+	addAmount := func(check, sev, detail, txID string, exp, obs map[string]any) {
+		add(RecAmountMismatch, sev, detail, txID, exp, obs)
+		out[len(out)-1].check = check
+	}
 	// 1. determinism: recompute the calculation from its canonical inputs
 	var inputsRaw, resultRaw []byte
 	var calcCcy string
@@ -317,7 +386,7 @@ func (s *Service) checkAssessment(ctx context.Context, a Assessment, now time.Ti
 	// 2. the assessed amount equals its calculation component
 	for _, c := range stored.Components {
 		if c.Category == a.Category && !eqStrP(c.Amount, a.FeeMinor) {
-			add(RecAmountMismatch, "SEV1", "the assessed fee differs from its calculation", "", map[string]any{"fee_minor": c.Amount},
+			addAmount(checkCalcComponent, "SEV1", detailCalcComponent, "", map[string]any{"fee_minor": c.Amount},
 				map[string]any{"fee_minor": a.FeeMinor})
 		}
 	}
@@ -356,11 +425,11 @@ func (s *Service) checkAssessment(ctx context.Context, a Assessment, now time.Ti
 				map[string]any{"policy_version_id": a.PolicyVersionID}, map[string]any{"policy_version_id": j.FeePolicyVersionID})
 		}
 		if got, want := postedFee(j, r.Purpose), r.FeeAmountMinor; got != want {
-			add(RecAmountMismatch, "SEV1", "the journal's fee lines differ from the recorded fee", j.TransactionID,
+			addAmount(checkJournalLines, "SEV1", detailJournalLines, j.TransactionID,
 				map[string]any{"fee_minor": amt(want)}, map[string]any{"fee_minor": amt(got)})
 		}
 		if own && r.Purpose == "CAPTURE" && a.fee != nil && r.FeeAmountMinor != *a.fee {
-			add(RecAmountMismatch, "SEV1", "the posted fee differs from the assessed fee", j.TransactionID,
+			addAmount(checkPostedAssessed, "SEV1", detailPostedAssessed, j.TransactionID,
 				map[string]any{"fee_minor": a.FeeMinor}, map[string]any{"fee_minor": amt(r.FeeAmountMinor)})
 		}
 	}
@@ -379,7 +448,7 @@ func (s *Service) checkAssessment(ctx context.Context, a Assessment, now time.Ti
 			add(RecUnreconciledFee, "SEV3", "no provider-reported or provider-confirmed fee exists for this "+a.Basis+" fee (no provider evidence source in Stage 12)",
 				"", map[string]any{"basis": BasisProviderConfirmed}, map[string]any{"basis": a.Basis})
 		case len(reps) > 0 && (a.fee == nil || reps[0] != *a.fee):
-			add(RecAmountMismatch, "SEV2", "the provider-reported fee differs from the estimate", "", map[string]any{"fee_minor": a.FeeMinor},
+			addAmount(checkProviderReport, "SEV2", detailProviderReport, "", map[string]any{"fee_minor": a.FeeMinor},
 				map[string]any{"reported_fee_minor": amt(reps[0])})
 		}
 	}
@@ -471,7 +540,25 @@ func (s *Service) providerReports(ctx context.Context, assessmentID string) ([]i
 func (s *Service) recordFinding(ctx context.Context, runID string, f finding, now time.Time) (bool, error) {
 	exp, _ := json.Marshal(nonNil(f.expected))
 	obs, _ := json.Marshal(nonNil(f.observed))
-	key := f.kind + ":" + f.assessmentID + ":" + f.txID
+	key := dedupeKey(f)
+	if f.check != "" {
+		// an OPEN reference recorded before F-R2-01 under the legacy key is this finding only if its content shows the
+		// same check; a reference of another check (another category, another comparison) does not hide this one
+		var detail string
+		var expRaw []byte
+		err := s.Pool.QueryRow(ctx, `SELECT detail, expected FROM app.fee_reconciliation_references WHERE dedupe_key = $1 AND status = 'OPEN'`,
+			legacyKey(f)).Scan(&detail, &expRaw)
+		switch {
+		case err == nil:
+			var e map[string]any
+			_ = json.Unmarshal(expRaw, &e)
+			if legacyCheck(f.kind, detail, e) == f.check {
+				return false, nil
+			}
+		case !errors.Is(err, pgx.ErrNoRows):
+			return false, err
+		}
+	}
 	var id string
 	err := s.Pool.QueryRow(ctx, `INSERT INTO app.fee_reconciliation_references (id, run_id, kind, severity, assessment_id, ledger_transaction_id, currency,
 		expected, observed, detail, dedupe_key, status, detected_at)
