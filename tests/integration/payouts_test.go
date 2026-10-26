@@ -679,8 +679,12 @@ func TestPayoutApprovalSeparationOfDutiesAndInvalidation(t *testing.T) {
 	bar := holdEligibilityDecisions(t, p.mig)
 	bar.do("approve", func() error { p.approve(t, id); return nil })
 	// a material change (destination details) after approval invalidates the approvals: back to review, new round
-	p.stepUpOwner(t)
+	// (step up only when the read asks for it: the shared owner's step-ups are rate limited across runs)
 	r = p.owner.do("GET", "/payout-destinations/"+p.dest, nil)
+	if r.Status == 403 && r.Error.Code == "STEP_UP_REQUIRED" {
+		p.stepUpOwner(t)
+		r = p.owner.do("GET", "/payout-destinations/"+p.dest, nil)
+	}
 	p.owner.expect(r, 200, "")
 	// changing the shared fixture destination would unverify it for later tests: use the approval-round mechanism
 	// through a destination SUSPENSION and reinstatement by a reviewer instead (same invalidation path)

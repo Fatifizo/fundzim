@@ -32,7 +32,7 @@ type decisionsBarrier struct {
 	t           *testing.T
 	tx          pgx.Tx
 	pid         int
-	obs, su     *pgxpool.Pool
+	su          *pgxpool.Pool
 	intercepted int
 }
 
@@ -43,7 +43,7 @@ func holdEligibilityDecisions(t *testing.T, mig *pgxpool.Pool) *decisionsBarrier
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := &decisionsBarrier{t: t, tx: tx, obs: mig, su: su}
+	b := &decisionsBarrier{t: t, tx: tx, su: su}
 	if err := tx.QueryRow(ctx(t), `SELECT pg_backend_pid()`).Scan(&b.pid); err != nil {
 		t.Fatal(err)
 	}
@@ -55,9 +55,10 @@ func holdEligibilityDecisions(t *testing.T, mig *pgxpool.Pool) *decisionsBarrier
 	return b
 }
 
-// blocked lists the backends waiting directly on the barrier with an eligibility-decision insert.
+// blocked lists the backends waiting directly on the barrier with an eligibility-decision insert. It observes through
+// the superuser connection: pg_stat_activity hides the query text of other roles' sessions from fundzim_migrator.
 func (b *decisionsBarrier) blocked() ([]int, error) {
-	rows, err := b.obs.Query(context.Background(), `SELECT pid FROM pg_stat_activity WHERE $1 = ANY (pg_blocking_pids(pid))
+	rows, err := b.su.Query(context.Background(), `SELECT pid FROM pg_stat_activity WHERE $1 = ANY (pg_blocking_pids(pid))
 		AND query ILIKE 'INSERT INTO app.payout_eligibility_decisions%'`, b.pid)
 	if err != nil {
 		return nil, err
