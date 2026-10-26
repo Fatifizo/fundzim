@@ -1,5 +1,8 @@
 # Remediation phase 2 — review of the Phase 1 reconciliation implementation (phase D)
 
+> **Status update (remediation phase 3, 2026-10-26):** F-R2-01, F-R2-02 and F-R2-03 are fixed on branch
+> `remediation/reconciliation-corrections` (pending review and integration) — see `docs/remediation/phase-3/`. This review is kept as written.
+
 **Scope.** `internal/platform/reconsweep`, the sweep wiring in `internal/payouts/reconcile.go`, `internal/fees/reconcile.go`,
 `internal/ledger/reconcile.go` and `internal/payments/facts.go`, migration `20261025090000`, and the tests. Reviewed at
 `c8fb8c6`. Phase 2 changes no reconciliation code.

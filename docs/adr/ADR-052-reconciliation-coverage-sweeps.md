@@ -95,3 +95,35 @@ fast *recency pass* (detection latency after recent transitions); they guarantee
 - Stage 17 statement reconciliation remains the settlement control; settlement reconciliation stays NOT_PERFORMED.
 - Not addressed: Stage 17's 93-day statement horizon, risk reconciliation's 30-day window (not a financial detector), batched
   exception writes (KI-S19-16).
+
+## Amendment 1 — remediation phase 3 (2026-10-26; status of the ADR unchanged: Proposed)
+
+Findings F-R2-01 … F-R2-03 of the phase 2 review (`docs/remediation/phase-2/reconciliation-review.md`) change four rules. Details,
+root causes and evidence: `docs/remediation/phase-3/`.
+
+1. **External checks that cannot be made defer the record (F-R2-02).** A detector reports `Outcome{Deferred, Reason}` when a
+   required external comparison could not be made (payouts: the provider status lookup timed out, lost its connection, was
+   rate limited, refused, unsupported, malformed or incomplete; `PROVIDER_UNVERIFIED`). Such a record is not reconciled, is not
+   counted as covered, and nothing is inferred from the failure. Internal comparisons found meanwhile are still recorded.
+2. **Deferrals never stop the walk (F-R2-02).**
+   - A run retries at most half its record budget of deferrals, and stops retrying at the time budget. Untried deferrals keep
+     their place at the front of the list; retried ones that stay deferred move to the back (round-robin; each keeps its first
+     deferral time).
+   - The time budget is also checked before each record of a batch, after at least one record. The checkpoint then advances to
+     the last examined key only, so the "never past an unexamined record" guarantee is unchanged.
+   - The deferral limit still fails closed (`DEFERRAL_LIMIT`).
+3. **Every run's outcome is recorded (F-R2-03).** `Store.RecordAttempt` writes `last_attempt_at`, `last_attempt_outcome`,
+   `last_attempt_error` and `failed_attempts` (consecutive) on the RUNNING checkpoint (migration `20261026120000`). The guard
+   accepts an update that changes only these columns without a version step; every other rule of the guard is unchanged.
+4. **Health is a first-class signal (F-R2-03).** `Coverage.Health` classifies the current cycle from the checkpoint rows alone:
+   - states: NOT_STARTED, PROGRESSING, PROGRESSING_SLOWLY, STALLED, BLOCKED_ON_DEFERRALS, FAILING;
+   - last cycle: NONE, COMPLETED_CLEAN, COMPLETED_WITH_DISCREPANCIES.
+
+   Its thresholds are **engineering defaults**, not approved targets (D-06, D-10): stall after 1 h without progress, slow after
+   a 24 h cycle, a deferral older than 24 h, failing after 3 consecutive failed runs. Each module publishes a
+   `*.reconciliation.sweep_health*` operations metric, and the Stage 18 alert scan raises RECONCILIATION_SWEEP_FAILING,
+   RECONCILIATION_SWEEP_STALLED and RECONCILIATION_SWEEP_BLOCKED as in-app alerts. No alert leaves FundZim (no delivery
+   channel exists).
+
+Also: the ledger's PAYMENT_FACTS sweep runs even when the PAYMENT_JOURNALS sweep failed in the same run (both errors are
+returned), and fee findings carry a check discriminator in their dedupe key (F-R2-01; outside the engine).

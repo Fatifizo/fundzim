@@ -15,6 +15,21 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
+**Remediation phase 3 — reconciliation defect closure and integration readiness (complete; awaiting review and owner decisions;
+non-production; launch NOT authorised).** Not a product stage. Branch `remediation/reconciliation-corrections` from `be9cfb6`;
+nothing merged; `main` unprotected. What it built: `docs/remediation/phase-3/README.md` (F-R2-01/02/03 fixed, F-R3-01 alert-scan
+race fixed, coverage guarantees, test evidence, register, final report; ADR-052 Amendment 1); next workstream starts from
+`docs/stage-handover/REMEDIATION-PHASE-3-TO-PHASE-4.md`. Migration `20261026120000` exists on the branch only — **never apply
+it to the shared development database without the owner's authorisation** (do not `up --build` the development project from
+this branch). Binding rules: **a finding's dedupe key names the comparison that produced it** (fees `check`): two comparisons
+never share a key, and an OPEN reference never hides another discrepancy; **a required external check that could not be made
+is a deferral (`Outcome{Deferred, Reason}`), never an examined record** — nothing is inferred from a failed lookup, and
+reconciliation never sends an instruction; deferral retries and batches stay inside the run's budgets (the checkpoint advances
+only to the last examined key); every sweep run records its outcome (`RecordAttempt`) and its health is published
+(`*.reconciliation.sweep_health*`, in-app alerts only) — health thresholds are engineering defaults (D-06, D-10); alert scans
+never move `last_seen_at` back. KI-R1-07 (payout approval test vs the worker) still makes CI red at random — never call such a
+run green; a re-run is evidence only with its own run id.
+
 **Remediation phase 2 — release governance and controlled repository integration (complete; awaiting review and owner
 decisions; non-production; launch NOT authorised).** Not a product stage. Branch `remediation/release-governance` from `c8fb8c6`;
 nothing merged, `main` (`a552de2`) still unprotected (proposal only — Claude Code has no GitHub admin token and no D-01).

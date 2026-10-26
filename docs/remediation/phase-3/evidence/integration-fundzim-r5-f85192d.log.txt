@@ -1,0 +1,52 @@
+2026-10-26T10:12:46Z commit f85192d0c0d1796267d42cb7d4d15b98a7af89cb tree-clean=no
+2026-10-26T10:12:46Z isolation: project=fundzim-r5; images: image: fundzim/api:fundzim-r5 image: fundzim/web:fundzim-r5 
+2026-10-26T10:12:46Z isolation: APP_ENV=development production secret refs in .env: 0
+2026-10-26T10:12:46Z isolation: existing fundzim-r5 volumes before: 0
+2026-10-26T10:12:46Z dev images before: api=sha256:adfb403d703e7e2493225ad267411b15b1ed63b7c2406b024456c4798e3f4639 web=sha256:9c4e1ccd74369bd1699536aaf038a7f45bfe55f843ceeb4ddcb55fec025d8331
+2026-10-26T10:12:46Z stopping development project (no -v)
+time="2026-10-26T12:12:46+02:00" level=warning msg="Warning: No resource found to remove for project \"fundzim\"."
+ Container fundzim-r5-fundzim-redis-1 Healthy 
+2026-10-26T10:12:55Z secrets-init 0
+ Container fundzim-r5-fundzim-clamav-1 Started 
+2026-10-26T10:12:59Z storage-init 0
+[Kfundzim-migrate-1 exited with code 0
+ Container fundzim-r5-fundzim-migrate-1 Stopping 
+ Container fundzim-r5-fundzim-migrate-1 Stopped 
+2026-10-26T10:13:52Z migrate 0
+2026-10-26T10:13:52Z isolation: fundzim-r5 volumes now: fundzim-r5_clamav-db fundzim-r5_postgres-data fundzim-r5_storage-data fundzim-r5_storage-meta 
+2026-10-26T10:13:52Z clamav healthy
+ Container fundzim-r5-fundzim-api-1 Healthy 
+2026-10-26T10:14:02Z version {"data":{"name":"FundZim","version":"0.1.0-dev","build":"unknown","commit":"f85192d0c0d1796267d42cb7d4d15b98a7af89cb"},"meta":{"request_id":"01a177b3-ea8a-766b-b72e-6e34f0dd3089"}}
+2026-10-26T10:14:02Z r3 image api=sha256:862bf63ba01bcd4599618c1a1a5486a052c326366e6cb3a89e43cd1c827d2b7c; dev api now=sha256:adfb403d703e7e2493225ad267411b15b1ed63b7c2406b024456c4798e3f4639
+2026-10-26T10:14:02Z targeted phase 3 tests start
+2026-10-26T10:15:14Z targeted exit 0
+top-level tests: {'pass': 5}
+FAILED: []
+SKIPPED: []
+2026-10-26T10:15:14Z proof: the out-of-order scan test against the pre-fix code (9ed4974 + the new test only) must fail
+    security_alerts_test.go:223: scan at 2026-10-26T11:14:26Z: ERROR: new row for relation "ops_security_alerts" violates check constraint "ck_ops_security_alerts_counts" (SQLSTATE 23514)
+--- FAIL: TestSecurityAlertsOutOfOrderScanTimes (0.08s)
+FAIL
+FAIL	github.com/Fatifizo/fundzim/tests/integration	0.117s
+FAIL
+2026-10-26T10:15:26Z full integration suite start
+2026-10-26T10:42:03Z full suite exit 0
+top-level tests: {'pass': 247, 'skip': 7}
+FAILED: []
+SKIPPED: ['TestFinancialLoad', 'TestFinancialReconciliationVolumeSample', 'TestFinancialWorkerCrashMidFlight', 'TestDistributedLoginLimitAcrossReplicas', 'TestFrontendReachesBackend', 'TestRateLimitFallbackWhenValkeyContainerStopped', 'TestReconciliationCoverageVolume']
+2026-10-26T10:42:03Z historical coverage volume test (opt-in) start
+2026-10-26T10:42:40Z volume exit 0
+--- PASS: TestReconciliationCoverageVolume (35.05s)
+ok  	github.com/Fatifizo/fundzim/tests/integration	35.096s
+--- PASS: TestMigrationsAppliedAndRepeatable (12.25s)
+ok  	github.com/Fatifizo/fundzim/tests/integration	12.301s
+2026-10-26T10:42:55Z migration round trip exit 0
+ Network fundzim-r5_edge Removed 
+2026-10-26T10:43:06Z fundzim-r5 removed with -v; fundzim-r5 volumes left: 0
+2026-10-26T10:43:06Z dev images after: api=sha256:adfb403d703e7e2493225ad267411b15b1ed63b7c2406b024456c4798e3f4639 web=sha256:9c4e1ccd74369bd1699536aaf038a7f45bfe55f843ceeb4ddcb55fec025d8331
+ Container fundzim-fundzim-clamav-1 Healthy 
+fundzim-migrate-1  | no pending migrations
+2026-10-26T10:43:28Z dev ready {"data":{"status":"ready"},"meta":{"request_id":"01a177ce-de21-751a-9077-27950b53cbb9"}}
+fundzim-api fundzim/api:fundzim running
+fundzim-web fundzim/web:fundzim running
+fundzim-worker fundzim/api:fundzim running

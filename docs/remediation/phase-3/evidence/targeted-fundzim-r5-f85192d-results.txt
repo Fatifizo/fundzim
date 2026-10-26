@@ -1,0 +1,6 @@
+# go test -tags integration results (top-level and subtests) on commit f85192d
+pass     39.4s TestReconciliationCorrectionsFeeEveryMissingType
+pass    19.08s TestReconciliationCorrectionsPayoutLookupFailure
+pass     5.35s TestReconciliationCorrectionsUnknownPayoutLookupFailure
+pass     2.81s TestSecurityAlertsLifecycle
+pass     0.08s TestSecurityAlertsOutOfOrderScanTimes
