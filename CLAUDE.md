@@ -15,6 +15,20 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
+**Remediation phase 2 — release governance and controlled repository integration (complete; awaiting review and owner
+decisions; non-production; launch NOT authorised).** Not a product stage. Branch `remediation/release-governance` from `c8fb8c6`;
+nothing merged, `main` (`a552de2`) still unprotected (proposal only — Claude Code has no GitHub admin token and no D-01).
+What it built: `docs/remediation/phase-2/README.md` (preflight, branch-protection proposal, dependency map and integration plan,
+reconciliation review F-R2-01…03, release-candidate procedure and signing plan, CI governance, dev isolation, register, final
+report); next workstream starts from `docs/stage-handover/REMEDIATION-PHASE-2-TO-PHASE-3.md`. Binding rules: the history is
+linear (every stage branch is an ancestor of the next) — integrate the head through a PR with merge commits, never squash or
+rebase shared branches; **CI job names are the required checks** — `TestWorkflowRequiredChecks` pins them and allows exactly
+one workflow: rename a job only together with the protection rule; `main` CI runs are never cancelled; a release candidate is
+described only by states it has reached (`scripts/release/rc-manifest.py`: built / `UNSIGNED_NOT_VERIFIABLE` /
+`NOT_AUTHORISED`) — never call CI green "verified" or "released"; never sign with an ad-hoc key (keyless attestation is the
+proposal, D-12); **an applied migration is never edited** (goose stores no checksum) — change it with a new migration; a
+service without `ReconSweep.Scope` falls back to `default` — tests and tools always set one.
+
 **Remediation phase 1 — repository integration, governance and reconciliation completeness (complete; awaiting review and
 owner decisions; non-production; launch NOT authorised).** Not a product stage. Branch `remediation/reconciliation-completeness`
 from `6a65d70`; nothing merged. What it built: `docs/remediation/phase-1/README.md` (preflight, integration plan, coverage
@@ -29,10 +43,9 @@ a new financial detector gets a sweep; **tests and tools never run a detector in
 a non-payments journal source derives `<scope>.<source>`) — a run with fake facts or another config would move the worker's
 checkpoint past records it never judged; **never plant a duplicate or otherwise invariant-breaking ledger journal on the shared
 or disposable integration database** (append-only: L6 fails for ever and EC-19 refuses every payout) — use a scratch
-`fundzim_perf*` database; **compose projects share the image tags `fundzim/api:local` / `fundzim/web:local`** — after building a
-disposable project from another commit, rebuild the images from the development commit (`docker compose build`) before
-`docker compose up` of the development project, or its `fundzim-migrate` applies the other commit's migrations to the shared
-database (F-R1-07); run budgets are engineering defaults, the coverage freshness target is owner decision D-06.
+`fundzim_perf*` database; **FundZim images are tagged per compose project** (`fundzim/{api,web}:${COMPOSE_PROJECT_NAME}`, Phase 2; deploytest
+enforces it) so a disposable build can no longer replace the development project's image (F-R1-07) — still build the
+development project from the intended commit with `GIT_COMMIT=$(git rev-parse HEAD)`; run budgets are engineering defaults, the coverage freshness target is owner decision D-06.
 
 **Stage 20 — Production certification, operational readiness & launch decision (complete; recommendation BLOCKED;
 launch NOT authorised; awaiting owner decisions).** Stages 0–20 acceptance NOT_RECORDED. What Stage 20 produced:

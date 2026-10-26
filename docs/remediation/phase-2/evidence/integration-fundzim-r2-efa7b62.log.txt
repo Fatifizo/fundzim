@@ -1,0 +1,34 @@
+2026-10-26T08:09:52Z commit efa7b622c773c55234291f7f574b042baa048b8d tree-clean=yes
+2026-10-26T08:09:52Z dev images before: api=sha256:adfb403d703e7e2493225ad267411b15b1ed63b7c2406b024456c4798e3f4639 web=sha256:9c4e1ccd74369bd1699536aaf038a7f45bfe55f843ceeb4ddcb55fec025d8331
+2026-10-26T08:09:52Z stopping development project (no -v)
+ Network fundzim_default Removed 
+ Network fundzim_edge Removed 
+ Container fundzim-r2-fundzim-storage-1 Healthy 
+2026-10-26T08:10:39Z secrets-init 0
+ Container fundzim-r2-fundzim-clamav-1 Started 
+2026-10-26T08:10:43Z storage-init 0
+[Kfundzim-migrate-1 exited with code 0
+ Container fundzim-r2-fundzim-migrate-1 Stopping 
+ Container fundzim-r2-fundzim-migrate-1 Stopped 
+2026-10-26T08:11:31Z migrate 0
+2026-10-26T08:11:31Z clamav healthy
+ Container fundzim-r2-fundzim-api-1 Healthy 
+2026-10-26T08:11:41Z version {"data":{"name":"FundZim","version":"0.1.0-dev","build":"unknown","commit":"efa7b622c773c55234291f7f574b042baa048b8d"},"meta":{"request_id":"01a17743-e68b-7491-811b-2b10ba397876"}}
+2026-10-26T08:11:41Z r2 image api=sha256:239b804d0f23a4e9b075a0fba9b6a88a9aecf923c87e17a5f1ddeac0692f7739; dev api now=sha256:adfb403d703e7e2493225ad267411b15b1ed63b7c2406b024456c4798e3f4639
+2026-10-26T08:11:41Z integration suite start
+2026-10-26T08:36:42Z integration suite exit 0
+top-level tests: {'pass': 243, 'skip': 7}
+FAILED: []
+SKIPPED: ['TestFinancialLoad', 'TestFinancialReconciliationVolumeSample', 'TestFinancialWorkerCrashMidFlight', 'TestDistributedLoginLimitAcrossReplicas', 'TestFrontendReachesBackend', 'TestRateLimitFallbackWhenValkeyContainerStopped', 'TestReconciliationCoverageVolume']
+--- PASS: TestMigrationsAppliedAndRepeatable (12.12s)
+ok  	github.com/Fatifizo/fundzim/tests/integration	12.155s
+2026-10-26T08:36:57Z migration round trip exit 0
+ Network fundzim-r2_edge Removed 
+2026-10-26T08:37:08Z fundzim-r2 removed with -v
+2026-10-26T08:37:08Z dev images after: api=sha256:adfb403d703e7e2493225ad267411b15b1ed63b7c2406b024456c4798e3f4639 web=sha256:9c4e1ccd74369bd1699536aaf038a7f45bfe55f843ceeb4ddcb55fec025d8331
+ Container fundzim-fundzim-clamav-1 Healthy 
+fundzim-migrate-1  | no pending migrations
+2026-10-26T08:37:30Z dev ready {"data":{"status":"ready"},"meta":{"request_id":"01a1775b-8b80-72d0-8309-1dd098ba0a59"}}
+fundzim-api fundzim/api:fundzim running
+fundzim-web fundzim/web:fundzim running
+fundzim-worker fundzim/api:fundzim running

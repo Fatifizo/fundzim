@@ -1,0 +1,28 @@
+commit efa7b622c773c55234291f7f574b042baa048b8d
+
+> fundzim@0.1.0 test
+> vitest run
+
+
+ RUN  v5.0.1 /home/administrator/projects/fundzim/apps/web
+
+Not implemented: navigation to another Document
+
+ Test Files  61 passed (61)
+      Tests  578 passed (578)
+   Start at  10:08:07
+   Duration  17.15s (environment 50%, tests 25%, setup 12%, transform 10%, import 3%)
+
+Environment  jsdom was created 61 times · 98.58s total, 50% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+
+exit 0
+> fundzim@0.1.0 lint
+> eslint
+
+lint exit 0
+
+Generating route types...
+✓ Types generated successfully
+typecheck exit 0

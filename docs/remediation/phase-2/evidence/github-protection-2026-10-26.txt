@@ -1,0 +1,34 @@
+# GitHub repository protection, read 2026-10-26T08:11:02Z (unauthenticated public API)
+## repo
+{
+  "full_name": "Fatifizo/fundzim",
+  "private": false,
+  "visibility": "public",
+  "default_branch": "main"
+}
+## branches/main
+{
+  "name": "main",
+  "commit": "a552de2b44daf83d662b4675055908f7d7a7a982",
+  "protected": false,
+  "protection": {
+    "enabled": false,
+    "required_status_checks": {
+      "enforcement_level": "off",
+      "contexts": [],
+      "checks": []
+    }
+  }
+}
+## rulesets
+[
+
+]
+
+## rules/branches/main
+[
+
+]
+
+## workflows
+{"id":379524151,"name":"ci","path":".github/workflows/ci.yml","state":"active"}
