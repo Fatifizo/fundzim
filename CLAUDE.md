@@ -19,8 +19,8 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 owner decisions; non-production; launch NOT authorised).** Not a product stage. Branch `remediation/reconciliation-completeness`
 from `6a65d70`; nothing merged. What it built: `docs/remediation/phase-1/README.md` (preflight, integration plan, coverage
 design, test evidence, performance, remediation register, final report; ADR-052); next workstream starts from
-`docs/stage-handover/REMEDIATION-PHASE-1-TO-PHASE-2.md`. The development stack is stopped and its database already holds migration `20261025090000`
-(F-R1-07, owner decision pending). Binding rules: **windowed reconciliation passes guarantee nothing —
+`docs/stage-handover/REMEDIATION-PHASE-1-TO-PHASE-2.md`. The development database keeps migration `20261025090000` (F-R1-07: owner decided 2026-10-26 to keep it; the
+development stack runs images built from the branch head `07e5965`). Binding rules: **windowed reconciliation passes guarantee nothing —
 coverage comes from the sweeps** (`internal/platform/reconsweep`; detectors PAYOUTS, FEE_ASSESSMENTS, PAYMENT_JOURNALS,
 PAYMENT_FACTS); a checkpoint advances only by compare-and-swap after its batch was examined and recorded — never advance it
 another way, never skip a record (defer it), never delete or rewrite a checkpoint (DB guard); a keyset read orders by the table's uuid column, never by a
