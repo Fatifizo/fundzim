@@ -91,7 +91,7 @@ restored=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Vault-Token: $SECRETS_KV
 record scenario secret_manager_stopped during_api_ready "$during" secret_after_dev_restart_http "$lost" reseed_seconds "$reseed" secret_after_reseed_http "$restored"
 
 # 7. corrupt deployment: a release with invalid configuration must refuse to start (never start half-configured)
-bad=$(docker run --rm --network none -e APP_ENV=production fundzim/api:local >/dev/null 2>"$OUT/bad.err"; echo $?)
+bad=$(docker run --rm --network none -e APP_ENV=production "fundzim/api:${COMPOSE_PROJECT_NAME:-fundzim}" >/dev/null 2>"$OUT/bad.err"; echo $?)
 reason=$(grep -c 'invalid configuration' "$OUT/bad.err" || true)
 record scenario invalid_configuration_release exit_code "$bad" refused_with_validation_errors "$reason"
 

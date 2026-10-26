@@ -11,7 +11,9 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push supersedes an older run on a working branch, but every commit on main keeps its own complete run: the
+  # release baseline needs CI evidence for that exact commit (docs/remediation/phase-2/ci-governance.md).
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   GOTOOLCHAIN: local

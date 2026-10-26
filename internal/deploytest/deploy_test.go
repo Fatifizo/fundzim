@@ -123,6 +123,10 @@ func TestComposeContainersAreHardened(t *testing.T) {
 			if !s.ReadOnly {
 				t.Errorf("%s: FundZim containers run with read_only: true", name)
 			}
+			// F-R1-07: one tag per compose project, so a disposable build never replaces the development project's image
+			if !strings.HasSuffix(s.Image, ":${COMPOSE_PROJECT_NAME}") {
+				t.Errorf("%s: FundZim image %q must be tagged with ${COMPOSE_PROJECT_NAME}", name, s.Image)
+			}
 		} else if !regexp.MustCompile(`@sha256:[0-9a-f]{64}$`).MatchString(s.Image) {
 			t.Errorf("%s: third-party image %q is not pinned by digest", name, s.Image)
 		}
@@ -238,5 +242,54 @@ func TestWorkflowLeastPrivilege(t *testing.T) {
 			!regexp.MustCompile(regexp.QuoteMeta(m[1])+`\s*"\s*\|\s*sha256sum -c`).MatchString(src) {
 			t.Errorf("download %s is not verified with sha256sum -c", m[1])
 		}
+	}
+}
+
+// requiredChecks are the status checks the proposed protection of main requires (docs/remediation/phase-2/branch-protection.md).
+// Branch protection matches checks by job name: renaming a job silently drops it from the gate, and a second workflow could
+// report a check of the same name. Both must fail here first.
+var requiredChecks = []string{
+	"Go (format, vet, unit tests, vulnerabilities)",
+	"Web (lint, types, unit tests, build, audit)",
+	"Web end-to-end (Playwright)",
+	"OpenAPI and SQL design drafts",
+	"Integration (real PostgreSQL, Valkey, Garage, ClamAV via docker compose)",
+	"Real-stack E2E (compose + Playwright)",
+	"Container images (build, SBOM, vulnerability scan, provenance)",
+	"Secret scanning",
+}
+
+func TestWorkflowRequiredChecks(t *testing.T) {
+	entries, err := os.ReadDir(filepath.Join(repoRoot(t), ".github", "workflows"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var files []string
+	for _, e := range entries {
+		files = append(files, e.Name())
+	}
+	if !slices.Equal(files, []string{"ci.yml"}) {
+		t.Fatalf("exactly one workflow (ci.yml) may report status checks, found %v: another workflow could satisfy a required check by name", files)
+	}
+	var wf struct {
+		Jobs map[string]struct {
+			Name string `yaml:"name"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal(readFile(t, ".github/workflows/ci.yml"), &wf); err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for id, j := range wf.Jobs {
+		if j.Name == "" {
+			t.Errorf("job %s has no name: required checks match on the job name", id)
+		}
+		names = append(names, j.Name)
+	}
+	slices.Sort(names)
+	want := slices.Clone(requiredChecks)
+	slices.Sort(want)
+	if !slices.Equal(names, want) {
+		t.Errorf("CI job names %q differ from the required checks %q: update branch protection and this list together", names, want)
 	}
 }
