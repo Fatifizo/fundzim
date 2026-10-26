@@ -276,8 +276,8 @@ func TestReconciliationCorrectionsPayoutLookupFailure(t *testing.T) {
 	p := newPayoutIT(t)
 	camp := p.campaign(t, 60_000)
 	var pays []string
-	for i := 0; i < 6; i++ {
-		pays = append(pays, p.completedPayout(t, camp, int64(5_000+i)))
+	for i := 0; i < 6; i++ { // amounts ending in 00: the simulator's SUCCESS scenario (the last two digits select it)
+		pays = append(pays, p.completedPayout(t, camp, int64(5_000+i*100)))
 	}
 	sb := p.s.d.Verification.Sandbox
 	fa := &faultAdapter{Adapter: sb, t: t, status: map[string]func(psp.Observation) psp.Observation{}, calls: map[string]int{}}
