@@ -650,6 +650,10 @@ func TestPayoutApprovalSeparationOfDutiesAndInvalidation(t *testing.T) {
 	if _, err := p.mig.Exec(ctx(t), `UPDATE app.users SET staff_personal_user_id = $2 WHERE id = $1`, linked.id, p.owner.id); err != nil {
 		t.Fatal(err)
 	}
+	// the owner fixture is shared: unlink so a later run on the same database can link again (one link per personal user)
+	t.Cleanup(func() {
+		_, _ = p.mig.Exec(context.Background(), `UPDATE app.users SET staff_personal_user_id = NULL WHERE id = $1`, linked.id)
+	})
 	r := p.staffAct(t, linked, "POST", "/admin/payout-requests/"+id+"/approve", approveBody("linked account must not approve"))
 	p.s.staff(t, linked).expect(r, 403, "SELF_APPROVAL_FORBIDDEN")
 	if _, err := p.app.Exec(ctx(t), `INSERT INTO app.payout_approvals (id, payout_request_id, approval_round, approver_id, approver_role, decision,

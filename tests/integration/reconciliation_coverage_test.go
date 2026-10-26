@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -503,13 +504,21 @@ func TestReconciliationCoverageCheckpointGuards(t *testing.T) {
 			t.Fatalf("%s: a second RUNNING cycle was accepted", name)
 		}
 		hi, lo := "ffffffff-0000-7000-8000-000000000000", "00000001-0000-7000-8000-000000000000"
-		if err := exec(`UPDATE `+table+` SET cursor_key = $2, examined = 10, version = version + 1 WHERE id = $1`, id, hi); err != nil {
+		// remediation phase 4: a position change needs its batch evidence in the same transaction (constraint trigger);
+		// the fixture advance and completion are therefore evidenced single statements, and an unevidenced advance is refused
+		ev := strings.TrimSuffix(table, "_sweeps") + "_sweep_batches"
+		if err := exec(`UPDATE `+table+` SET cursor_key = $2, examined = 10, batches = 1, version = version + 1 WHERE id = $1`, id, hi); err == nil {
+			t.Fatalf("%s: an advance without evidence was accepted", name)
+		}
+		if err := exec(`WITH u AS (UPDATE `+table+` SET cursor_key = $2::uuid, examined = 1, batches = 1, version = version + 1 WHERE id = $1
+			RETURNING id, detector, scope, cycle) INSERT INTO `+ev+` (id, sweep_id, detector, scope, cycle, seq, from_key, to_key, keys, completing)
+			SELECT gen_random_uuid(), u.id, u.detector, u.scope, u.cycle, 1, NULL, $2::uuid, ARRAY[$2::uuid], false FROM u`, id, hi); err != nil {
 			t.Fatalf("%s advance: %v", name, err)
 		}
 		for what, sql := range map[string]string{
 			"cursor backwards":  `UPDATE ` + table + ` SET cursor_key = '` + lo + `', version = version + 1 WHERE id = $1`,
 			"cursor reset":      `UPDATE ` + table + ` SET cursor_key = NULL, version = version + 1 WHERE id = $1`,
-			"counter decreased": `UPDATE ` + table + ` SET examined = 5, version = version + 1 WHERE id = $1`,
+			"counter decreased": `UPDATE ` + table + ` SET examined = 0, version = version + 1 WHERE id = $1`,
 			"version skipped":   `UPDATE ` + table + ` SET examined = 11, version = version + 2 WHERE id = $1`,
 			"version kept":      `UPDATE ` + table + ` SET examined = 11 WHERE id = $1`,
 			"scope changed":     `UPDATE ` + table + ` SET scope = 'it.other', version = version + 1 WHERE id = $1`,
@@ -519,7 +528,9 @@ func TestReconciliationCoverageCheckpointGuards(t *testing.T) {
 				t.Fatalf("%s: %s was accepted", name, what)
 			}
 		}
-		if err := exec(`UPDATE `+table+` SET status = 'COMPLETED', completed_at = now(), version = version + 1 WHERE id = $1`, id); err != nil {
+		if err := exec(`WITH u AS (UPDATE `+table+` SET status = 'COMPLETED', completed_at = now(), batches = 2, version = version + 1 WHERE id = $1
+			RETURNING id, detector, scope, cycle, cursor_key) INSERT INTO `+ev+` (id, sweep_id, detector, scope, cycle, seq, from_key, to_key, keys, completing)
+			SELECT gen_random_uuid(), u.id, u.detector, u.scope, u.cycle, 2, u.cursor_key, u.cursor_key, '{}', true FROM u`, id); err != nil {
 			t.Fatalf("%s complete: %v", name, err)
 		}
 		if err := exec(`UPDATE `+table+` SET examined = 99, version = version + 1 WHERE id = $1`, id); err == nil {

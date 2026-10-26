@@ -139,3 +139,63 @@ func TestPayoutSubmissionCommittedBeforeDestinationSuspension(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// KI-R1-07, the barrier itself, deterministic: a submission attempt that starts inside the window (played by the test,
+// so it is certain to happen) blocks at its decision insert, is removed when the test suspends the destination, commits
+// nothing, and the suspension invalidates the approval (REVIEW, round 2). Nothing is submitted.
+func TestPayoutDecisionsBarrierStopsASubmissionInTheWindow(t *testing.T) {
+	p := newPayoutIT(t)
+	camp := p.campaign(t, 20_000)
+	id := p.request(t, camp, 5_000, 202, "")
+	bar := holdEligibilityDecisions(t, p.mig)
+	bar.do("approve", func() error { p.approve(t, id); return nil })
+	submit := make(chan error, 1)
+	go func() { _, err := p.po.SubmitApproved(context.Background(), id); submit <- err }()
+	deadline := time.Now().Add(time.Minute)
+	for {
+		pids, err := bar.blocked()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(pids) > 0 {
+			break // the attempt holds the payout row and waits at its decision insert
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the submission attempt never reached its decision insert")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	bar.do("suspend the destination", func() error {
+		return p.po.SetSuspended(ctx(t), p.dest, p.f.rev2.id, "SUSPECTED_TAKEOVER", true)
+	})
+	t.Cleanup(func() { _ = p.po.SetSuspended(context.Background(), p.dest, p.f.rev2.id, "REVIEW_CLEARED", false) })
+	if err := <-submit; err == nil {
+		t.Fatal("the intercepted submission reported success")
+	}
+	if bar.intercepted == 0 {
+		t.Fatal("no submission attempt was intercepted")
+	}
+	po := p.payout(t, id)
+	if po.Status != payouts.StReview || po.ApprovalRound != 2 {
+		t.Fatalf("after the intercepted submission and the suspension: %s round %d", po.Status, po.ApprovalRound)
+	}
+	bar.do("reinstate the destination", func() error {
+		return p.po.SetSuspended(ctx(t), p.dest, p.f.rev2.id, "REVIEW_CLEARED", false)
+	})
+	bar.do("cancel", func() error {
+		_, err := p.po.CancelByStaff(ctx(t), p.f.finance1.id, id, "test cleanup: cancel before submission")
+		return err
+	})
+	bar.release()
+	var submitted, creates, decisions int
+	if err := p.mig.QueryRow(ctx(t), `SELECT (SELECT count(*) FROM app.payout_events WHERE payout_request_id = $1 AND to_status = 'SUBMITTED'),
+		(SELECT count(*) FROM app.payout_attempts WHERE payout_request_id = $1 AND operation = 'CREATE_PAYOUT'),
+		(SELECT count(*) FROM app.payout_eligibility_decisions WHERE payout_request_id = $1 AND phase = $2)`, id, payouts.PhasePreSubmit).
+		Scan(&submitted, &creates, &decisions); err != nil {
+		t.Fatal(err)
+	}
+	if submitted != 0 || creates != 0 || decisions != 0 {
+		t.Fatalf("the intercepted attempt left traces: %d SUBMITTED events, %d CREATE_PAYOUT attempts, %d pre-submission decisions",
+			submitted, creates, decisions)
+	}
+}
