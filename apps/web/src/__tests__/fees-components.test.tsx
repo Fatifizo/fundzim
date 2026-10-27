@@ -211,6 +211,56 @@ describe("staff fee forms", () => {
     expect(within(form).getByLabelText("Who bears the fee").querySelectorAll("option")).toHaveLength(3); // never platform-absorbed for a platform fee
   });
 
+  // G-02: after a successful draft the page refresh hides the form (a draft now exists); the confirmation survives it
+  it("draft confirmation survives the refresh that replaces the form, keeping its element and focus", async () => {
+    const user = userEvent.setup();
+    const createVersion = vi.fn(async () => ({}));
+    const api = fakeApi({ createVersion });
+    const { rerender, container } = render(staffShell(<VersionForm policyId="p1" category="PLATFORM_FEE" currency="USD" api={api} />));
+    const form = screen.getByRole("form", { name: "Draft a fee policy version" });
+    await user.type(within(form).getByLabelText("Rate (%)"), "3");
+    await user.click(within(form).getByRole("button", { name: "Create draft" }));
+    const notice = await screen.findByRole("status");
+    expect(notice).toHaveTextContent("Draft version created.");
+    await waitFor(() => expect(notice).toHaveFocus());
+    // what router.refresh() renders once the draft exists
+    rerender(staffShell(<VersionForm policyId="p1" category="PLATFORM_FEE" currency="USD" available={false} api={api} />));
+    expect(screen.queryByRole("form", { name: "Draft a fee policy version" })).not.toBeInTheDocument();
+    expect(screen.getByText("A draft or pending version already exists. Decide it first.")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toBe(notice); // the same element: not re-inserted, still announced and focused
+    expect(notice).toHaveFocus();
+    expect(createVersion).toHaveBeenCalledTimes(1);
+    expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("a failed draft shows no success; a double click and a retry never create a second draft", async () => {
+    const user = userEvent.setup();
+    let release: (v: unknown) => void = () => {};
+    const createVersion = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise((r) => (release = r)).then(() => Promise.reject(apiError("FEE_POLICY_CONFLICT", 409))))
+      .mockResolvedValueOnce({});
+    render(staffShell(<VersionForm policyId="p1" category="PLATFORM_FEE" currency="USD" api={fakeApi({ createVersion })} />));
+    const form = screen.getByRole("form", { name: "Draft a fee policy version" });
+    await user.type(within(form).getByLabelText("Rate (%)"), "3");
+    const button = within(form).getByRole("button", { name: "Create draft" });
+    await user.click(button);
+    await user.click(within(form).getByRole("button", { name: "Saving…" })); // disabled while saving
+    expect(createVersion).toHaveBeenCalledTimes(1);
+    release(undefined);
+    expect(await within(form).findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("server text that must not be shown");
+    expect(form).toBeInTheDocument(); // still offered: nothing was created
+    // the retry of the same terms reuses the Idempotency-Key, so a save that did reach the server cannot be duplicated
+    await user.click(within(form).getByRole("button", { name: "Create draft" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Draft version created.");
+    expect(createVersion).toHaveBeenCalledTimes(2);
+    const keys = createVersion.mock.calls.map((c) => c[2]);
+    expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(keys[1]).toBe(keys[0]);
+  });
+
   it("provider evidence never offers VERIFIED; adjustment requests need an amount and a note", async () => {
     const user = userEvent.setup();
     const requestAdjustment = vi.fn(async () => ({}));

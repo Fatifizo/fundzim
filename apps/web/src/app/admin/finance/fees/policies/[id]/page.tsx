@@ -68,7 +68,7 @@ export default async function FeePolicyPage({ params }: PageProps<"/admin/financ
         </ol>
       </Section>
       <Section id="draft" title="Draft a new version" description="Terms can be edited only as a draft. Submitting freezes them; a different person approves; then the version is activated.">
-        {openDraft ? <p className="text-ink-700">A draft or pending version already exists. Decide it first.</p> : <VersionForm policyId={p.id} category={p.category} currency={p.currency} />}
+        <VersionForm policyId={p.id} category={p.category} currency={p.currency} available={!openDraft} />
       </Section>
     </AccountPage>
   );

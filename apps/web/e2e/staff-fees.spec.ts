@@ -84,6 +84,10 @@ test("fees: TEST banner, policy maker-checker with step-up and the adjustment ch
   await draft.getByLabel("Rate (%)").fill("3");
   await draft.getByRole("button", { name: "Create draft" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Draft version created." })).toBeVisible();
+  // G-02: the refresh replaces the form (a draft now exists); the confirmation must survive it, not race it
+  await expect(page.getByText("A draft or pending version already exists. Decide it first.")).toBeVisible();
+  await expect(page.getByRole("form", { name: "Draft a fee policy version" })).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "Draft version created." })).toBeVisible();
   const v1 = page.getByRole("region", { name: "Version 1" });
   await expect(v1).toContainText("3.00%");
   await expect(v1).toContainText("Draft");

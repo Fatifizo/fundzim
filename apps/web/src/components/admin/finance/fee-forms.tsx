@@ -56,13 +56,15 @@ function useFormSubmit() {
       setBusy(false);
     }
   }
+  const noticeStatus = notice ? <FormStatus ref={noticeRef} title={notice} /> : null;
+  const errorStatus = <FormError ref={errorRef} message={error} />;
   const status = (
     <>
-      {notice ? <FormStatus ref={noticeRef} title={notice} /> : null}
-      <FormError ref={errorRef} message={error} />
+      {noticeStatus}
+      {errorStatus}
     </>
   );
-  return { router, busy, fieldErrors, run, fail, setNotice, status };
+  return { router, busy, fieldErrors, run, fail, setNotice, status, noticeStatus, errorStatus };
 }
 
 function FormShell({ label, children, onSubmit }: { label: string; children: ReactNode; onSubmit: (e: FormEvent<HTMLFormElement>) => void }) {
@@ -120,8 +122,12 @@ function localNowPlus(minutes: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-/** Draft a new version of a policy (fee.config.request). Terms are frozen when the draft is submitted. */
-export function VersionForm({ policyId, category, currency, api = feesApi }: { policyId: string; category: string; currency: string; api?: FeesApi }) {
+/**
+ * Draft a new version of a policy (fee.config.request). Terms are frozen when the draft is submitted.
+ * available=false (a draft or pending version exists) keeps the component mounted without its form, so the confirmation
+ * survives the refresh that follows a successful draft (G-02; the same pattern as FeeAction).
+ */
+export function VersionForm({ policyId, category, currency, available = true, api = feesApi }: { policyId: string; category: string; currency: string; available?: boolean; api?: FeesApi }) {
   const f = useFormSubmit();
   const passThrough = category !== "PLATFORM_FEE";
   const models = passThrough ? ["PROVIDER_PASS_THROUGH"] : ["PERCENTAGE", "FIXED", "PERCENTAGE_PLUS_FIXED", "CAPPED", "MINIMUM_FEE", "ZERO_FEE"];
@@ -165,29 +171,37 @@ export function VersionForm({ policyId, category, currency, api = feesApi }: { p
       f.setNotice("Draft version created. Submit it for approval when ready.");
     });
   }
+  // the notice keeps one position whether or not the form is shown, so its element (and focus) survive the swap
   return (
-    <FormShell label="Draft a fee policy version" onSubmit={submit}>
-      {f.status}
-      <SelectField label="Fee model" name="model" options={opts(models)} />
-      {passThrough ? (
-        <p className="text-ink-700">The amount comes from provider fee evidence; this version decides only who bears it.</p>
+    <div className="space-y-5">
+      {f.noticeStatus}
+      {available ? (
+        <FormShell label="Draft a fee policy version" onSubmit={submit}>
+          {f.errorStatus}
+          <SelectField label="Fee model" name="model" options={opts(models)} />
+          {passThrough ? (
+            <p className="text-ink-700">The amount comes from provider fee evidence; this version decides only who bears it.</p>
+          ) : (
+            <>
+              <TextField label="Rate (%)" name="rate" inputMode="decimal" autoComplete="off" hint="For percentage models. For example 5 or 2.9." error={f.fieldErrors.rate} />
+              <TextField label={`Fixed amount (${currency})`} name="fixed" inputMode="decimal" autoComplete="off" hint="For fixed models." error={f.fieldErrors.fixed} />
+              <TextField label={`Minimum fee (${currency}, optional)`} name="min" inputMode="decimal" autoComplete="off" error={f.fieldErrors.min} />
+              <TextField label={`Maximum fee (${currency}, optional)`} name="max" inputMode="decimal" autoComplete="off" error={f.fieldErrors.max} />
+            </>
+          )}
+          <SelectField label="Rounding" name="rounding_mode" options={opts(ROUNDING_MODES)} />
+          <SelectField label="Who bears the fee" name="responsibility" options={opts(responsibilities)} />
+          <TextField label="Donor share (%) when shared" name="donor_share" inputMode="decimal" autoComplete="off" error={f.fieldErrors.donor_share} />
+          {category === "PLATFORM_FEE" ? <SelectField label="Refund treatment" name="refund_treatment" options={opts(REFUND_TREATMENTS)} /> : null}
+          <TextField label="Effective from" name="effective_from" type="datetime-local" defaultValue={localNowPlus(5)} required error={f.fieldErrors.effective_from} hint="Never retroactive: it must start after it is submitted." />
+          <SubmitButton busy={f.busy} busyLabel="Saving…">
+            Create draft
+          </SubmitButton>
+        </FormShell>
       ) : (
-        <>
-          <TextField label="Rate (%)" name="rate" inputMode="decimal" autoComplete="off" hint="For percentage models. For example 5 or 2.9." error={f.fieldErrors.rate} />
-          <TextField label={`Fixed amount (${currency})`} name="fixed" inputMode="decimal" autoComplete="off" hint="For fixed models." error={f.fieldErrors.fixed} />
-          <TextField label={`Minimum fee (${currency}, optional)`} name="min" inputMode="decimal" autoComplete="off" error={f.fieldErrors.min} />
-          <TextField label={`Maximum fee (${currency}, optional)`} name="max" inputMode="decimal" autoComplete="off" error={f.fieldErrors.max} />
-        </>
+        <p className="text-ink-700">A draft or pending version already exists. Decide it first.</p>
       )}
-      <SelectField label="Rounding" name="rounding_mode" options={opts(ROUNDING_MODES)} />
-      <SelectField label="Who bears the fee" name="responsibility" options={opts(responsibilities)} />
-      <TextField label="Donor share (%) when shared" name="donor_share" inputMode="decimal" autoComplete="off" error={f.fieldErrors.donor_share} />
-      {category === "PLATFORM_FEE" ? <SelectField label="Refund treatment" name="refund_treatment" options={opts(REFUND_TREATMENTS)} /> : null}
-      <TextField label="Effective from" name="effective_from" type="datetime-local" defaultValue={localNowPlus(5)} required error={f.fieldErrors.effective_from} hint="Never retroactive: it must start after it is submitted." />
-      <SubmitButton busy={f.busy} busyLabel="Saving…">
-        Create draft
-      </SubmitButton>
-    </FormShell>
+    </div>
   );
 }
 
