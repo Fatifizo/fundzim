@@ -1,0 +1,154 @@
+
+Running 150 tests using 8 workers
+
+[1/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[2/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[3/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[4/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[5/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[6/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[7/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[8/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[9/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[10/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[11/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[12/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[13/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[14/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[15/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[16/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[17/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[18/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[19/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[20/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[21/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[22/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[23/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[24/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[25/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[26/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[27/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[28/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[29/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[30/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[31/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[32/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[33/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[34/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[35/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[36/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[37/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[38/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[39/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[40/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[41/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[42/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[43/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[44/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[45/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[46/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[47/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[48/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[49/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[50/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[51/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[52/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[53/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[54/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[55/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[56/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[57/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[58/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[59/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[60/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[61/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[62/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[63/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[64/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[65/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[66/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[67/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[68/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[69/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[70/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[71/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[72/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[73/150] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[74/150] [desktop-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[75/150] [desktop-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[76/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[77/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[78/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[79/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[80/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[81/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[82/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[83/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[84/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[85/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[86/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[87/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[88/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[89/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[90/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[91/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[92/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[93/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[94/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[95/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[96/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[97/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[98/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[99/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[100/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[101/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[102/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[103/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[104/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[105/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[106/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[107/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[108/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[109/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[110/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[111/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[112/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[113/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[114/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[115/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[116/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[117/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[118/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[119/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[120/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[121/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[122/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[123/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[124/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[125/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[126/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[127/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[128/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[129/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[130/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[131/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[132/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[133/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[134/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[135/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[136/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[137/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[138/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[139/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[140/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[141/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[142/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[143/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[144/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[145/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[146/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[147/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+[148/150] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[149/150] [mobile-chromium] › e2e/staff-fees.spec.ts:146:5 › fees: provider evidence, reconciliation, assessment detail and the revenue report
+[150/150] [mobile-chromium] › e2e/staff-fees.spec.ts:207:5 › fee pages are not available to staff without fee.view
+  150 passed (5.1m)

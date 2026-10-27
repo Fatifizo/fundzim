@@ -1,0 +1,76 @@
+
+Running 2 tests using 2 workers
+
+[1/2] [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+[2/2] [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker
+  1) [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('status').filter({ hasText: 'Draft version created.' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('status').filter({ hasText: 'Draft version created.' }) with timeout 5000ms
+      - waiting for getByRole('status').filter({ hasText: 'Draft version created.' })
+
+
+      88 |   await expect(page.getByText("A draft or pending version already exists. Decide it first.")).toBeVisible();
+      89 |   await expect(page.getByRole("form", { name: "Draft a fee policy version" })).toHaveCount(0);
+    > 90 |   await expect(page.getByRole("status").filter({ hasText: "Draft version created." })).toBeVisible();
+         |                                                                                        ^
+      91 |   const v1 = page.getByRole("region", { name: "Version 1" });
+      92 |   await expect(v1).toContainText("3.00%");
+      93 |   await expect(v1).toContainText("Draft");
+        at /home/administrator/projects/fundzim/apps/web/e2e/staff-fees.spec.ts:90:88
+
+    Error Context: test-results/staff-fees-fees-TEST-banne-2148f--and-the-adjustment-checker-mobile-chromium/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/staff-fees-fees-TEST-banne-2148f--and-the-adjustment-checker-mobile-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/staff-fees-fees-TEST-banne-2148f--and-the-adjustment-checker-mobile-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  2) [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('status').filter({ hasText: 'Draft version created.' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('status').filter({ hasText: 'Draft version created.' }) with timeout 5000ms
+      - waiting for getByRole('status').filter({ hasText: 'Draft version created.' })
+
+
+      88 |   await expect(page.getByText("A draft or pending version already exists. Decide it first.")).toBeVisible();
+      89 |   await expect(page.getByRole("form", { name: "Draft a fee policy version" })).toHaveCount(0);
+    > 90 |   await expect(page.getByRole("status").filter({ hasText: "Draft version created." })).toBeVisible();
+         |                                                                                        ^
+      91 |   const v1 = page.getByRole("region", { name: "Version 1" });
+      92 |   await expect(v1).toContainText("3.00%");
+      93 |   await expect(v1).toContainText("Draft");
+        at /home/administrator/projects/fundzim/apps/web/e2e/staff-fees.spec.ts:90:88
+
+    Error Context: test-results/staff-fees-fees-TEST-banne-2148f--and-the-adjustment-checker-desktop-chromium/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/staff-fees-fees-TEST-banne-2148f--and-the-adjustment-checker-desktop-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/staff-fees-fees-TEST-banne-2148f--and-the-adjustment-checker-desktop-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  2 failed
+    [desktop-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker 
+    [mobile-chromium] › e2e/staff-fees.spec.ts:50:5 › fees: TEST banner, policy maker-checker with step-up and the adjustment checker 

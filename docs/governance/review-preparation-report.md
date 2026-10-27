@@ -72,6 +72,53 @@ Stale after Phase 6, and refreshed in this step:
   - **The fix is a small presentation change**: keep the notice above the form, or hand it to the page after the refresh.
     It needs its own reviewed commit.
 
+**G-02 update (2026-10-27): FIXED ON BRANCH `remediation/g02-fee-draft-notice` (`d83d1ac`, from `d3d45c6`). NOT REVIEWED.
+NOT CLOSED.**
+- **Cause confirmed before the change.** A new e2e assertion waits until the refresh has replaced the form, then requires
+  the confirmation. On the unfixed code (`d3d45c6` plus that assertion) it failed on desktop and mobile, 2/2
+  (`evidence/g02/e2e-reproduction-before-fix-d3d45c6.log.txt`).
+- **Fix (presentation only).**
+  - The policy page keeps `VersionForm` mounted and passes `available={!openDraft}`, the pattern `FeeAction` already uses.
+  - The notice keeps one position above the form or the "draft already exists" text, so its element, focus and
+    live-region announcement survive the refresh.
+  - Requests, idempotency, step-up, validation, fee rules and the server's one-draft rule are unchanged. Files:
+    `fee-forms.tsx`, `policies/[id]/page.tsx`, `fees-components.test.tsx`, `staff-fees.spec.ts`.
+- **Duplicates.** Not possible through this path:
+  - the database unique index `uq_fee_policy_versions_one_draft`;
+  - one `Idempotency-Key` per body until success;
+  - the button disabled while saving.
+
+  The last two are now unit-tested.
+- **Local results on `d83d1ac`** (`evidence/g02/`):
+
+  | Check | Result |
+  |---|---|
+  | Fee unit tests | 12/12 |
+  | Mutation check | putting the notice back inside the form makes the new unit test fail |
+  | `staff-fees.spec.ts` ×25 on desktop and mobile | 150/150; the G-02 test 50/50 |
+  | Full web unit suite | 582/582 |
+  | lint, typecheck | clean |
+  | Full mock e2e | 221 passed, 1 skipped (the existing mobile-only test) |
+
+  Local runs are not GitHub CI. The race was intermittent there, and the new assertion checks the state after the
+  refresh rather than winning a race.
+- **CI run 40521729530 on `d83d1ac`: failure, 7/8.**
+  - In the web e2e job the fee tests passed on both projects: 220 passed, 1 skipped.
+  - The one failure was `verification.spec.ts:504` [desktop]: `socket hang up` on the test helper's mock-user request
+    (`e2e/helpers.ts:52`) — **G-03**, below.
+  - **No green CI run exists yet for the fix commit.**
+
+**G-03 — intermittent connection reset in the e2e test helper (new, not fixed).**
+- **Observed.** In CI run 40521729530, `createUser` (`apps/web/e2e/helpers.ts:52`) got `socket hang up` on
+  `POST /api/v1/__mock/users` to the auth app (port 3101). This happened before the page under test was involved.
+- **Unrelated to G-02.**
+  - The failing test and request never touch fee code.
+  - The mock e2e suite does not use the database or real services.
+- **Not reproduced and not investigated further here.** A likely class of cause is an HTTP keep-alive connection closed by
+  the server while the client reuses it; this is a hypothesis, not established.
+- **History.** Not previously recorded in the repository.
+- **Needed.** Its own investigation and fix, under review.
+
 ## 5. Gate status
 
 | Area | Status |
