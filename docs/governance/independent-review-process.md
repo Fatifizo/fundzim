@@ -1,7 +1,7 @@
 # Independent review process for sensitive FundZim changes
 
 **Status: PROCESS DEFINED; NO REVIEWER AVAILABLE.** No independent reviewer has been named (D-01a). Every gate below that
-needs one is therefore **BLOCKED**. Nothing in this repository is an independent review of Phases 1–4: the Phase 2 "review"
+needs one is therefore **BLOCKED**. Nothing in this repository is an independent review of Phases 1–6 or of Stages 1–20: the Phase 2 "review"
 was done by an agent of the same tool on the author's behalf, and Claude Code is the author of the code.
 
 ## 1. Roles (one person may hold several roles, but never review their own change)
@@ -22,7 +22,7 @@ was done by an agent of the same tool on the author's behalf, and Claude Code is
 | Ledger posting, journal immutability (`internal/ledger`, ledger migrations) | required | required | — | append-only triggers, grants of `fundzim_ledger` |
 | Payout reservation and consumption, payment state transitions (`internal/payouts`, `internal/payments`) | required | required | — | `app.guard_transition`, status tables, locks |
 | Reconciliation completeness, provider-status ambiguity, retries and idempotency (`internal/platform/reconsweep`, `internal/reconciliation`, detectors) | required | required | — | unique keys, deferrals |
-| Checkpoint progression and batch evidence (reconsweep, migrations `20261025090000`, `20261026120000`, `20261027090000`) | required | advisory | advisory | constraint triggers, guard function, role privileges |
+| Checkpoint progression, batch evidence and integrity status (reconsweep, migrations `20261025090000`, `20261026120000`, `20261027090000`, `20261028090000`) | required | advisory | advisory | constraint triggers, guard function, role privileges |
 | Database triggers, constraints, indexes, roles, privileges (`migrations/`, `deploy/docker/postgres`) | required | when financial tables | required for roles | lock behaviour, Down safety |
 | Migrations and rollback strategy | required | when financial tables | — | forward-only in production; Down only in development |
 | Audit integrity (`internal/audit`) | required | — | required | MAC checkpoints, keys |
@@ -82,4 +82,5 @@ All of the following are required:
 | GitHub approval | <PR #, approval on head <sha>> |
 ```
 
-Completed records go in `docs/governance/reviews/` through a reviewed PR. **None exists today.**
+Completed records go in `docs/governance/reviews/` through a reviewed PR. **None exists today.** The scope, claims and
+evidence index for Phases 1–6 are prepared in `review-scope-phases-1-6.md`; the scope decision is D-15.

@@ -12,11 +12,12 @@ is not in this table.
 |---|---|---|---|
 | D-01 | Protect `main`; establish merge controls | Repository administrator; settings verified by the `main-branch-protection.md` §7 queries | **OPEN** (verified 2026-10-27: `protected: false`, no rulesets) |
 | D-01a | Arrange an independent second reviewer | A named, available reviewer who is not the author account; `independent-review-process.md` | **OPEN** |
+| D-15 | Decide the review scope for integration: the whole range `a552de2..<candidate>` (Stages 1–20 and Phases 1–6), or Phases 1–6 first | Owner, with the reviewer; `review-scope-phases-1-6.md` §1 | **OPEN** (added 2026-10-27) |
 | D-05 | Approve expected financial and operational volumes | Owner / operations capacity decision | **OPEN** |
-| D-06 | Approve reconciliation freshness and maximum full-sweep duration | Owner / operations, supported by measurements | **OPEN** |
+| D-06 | Approve reconciliation freshness and maximum full-sweep duration, including the integrity-verification staleness threshold (engineering default 1 h, Phase 6) | Owner / operations, supported by measurements | **OPEN** |
 | D-10 | Approve alert thresholds and a human notification destination | Owner / operations; a delivery path verified end to end | **OPEN** |
 | D-12 | Decide artifact signing and verification | Owner / security / release | **OPEN** |
-| D-13 | Record formal stage and remediation acceptance | Authorised owner entries in `docs/governance/stage-acceptance-register.md` | **OPEN** (register: 21 rows NOT_RECORDED; Phases 1–5 not listed) |
+| D-13 | Record formal stage and remediation acceptance | Authorised owner entries in `docs/governance/stage-acceptance-register.md` | **OPEN** (register: 21 rows NOT_RECORDED; remediation Phases 1–6 not listed) |
 | LR-012 | Resolve evidence and record retention | Legal / privacy authority; documented decision | **OPEN** (LEGAL_REVIEW_REQUIRED) |
 
 ## Details
@@ -40,6 +41,18 @@ is not in this table.
 - **Who:** the owner.
 - **Blocks:** integration (Gate C) and acceptance.
 - **Closes it:** a named reviewer with access, and their first completed review record.
+- **Type:** external.
+
+### D-15: review scope for integration (added 2026-10-27)
+- **Why:** a merge into `main` carries 115 commits. Only 24 of them are remediation Phases 1–6; the other 91 are Stages 1–20,
+  which were never independently reviewed either. Integration gate 4 asks for the whole range.
+- **Available evidence:** `review-scope-phases-1-6.md` (ranges, files, claims C1–C14, evidence index, re-run commands);
+  `independent-review-process.md` §2 (which paths need which reviewer).
+- **Missing:** the decision: whole range (per-stage PRs make it tractable), Phases 1–6 first with integration blocked until
+  the rest is reviewed, or a scoped acceptance of the unreviewed range with the risk owned in writing.
+- **Who:** the owner, with the reviewer named under D-01a.
+- **Blocks:** the start of the review that integration needs.
+- **Closes it:** a recorded decision naming the range(s) and their order.
 - **Type:** external.
 
 ### D-05: volumes

@@ -3,26 +3,31 @@
 **Integration status: BLOCKED.** `main` is unprotected (D-01), there is no independent reviewer (D-01a), the integration target
 is not approved, and none of the work is accepted (D-13). This plan prepares the integration; it executes nothing.
 
-It updates `docs/remediation/phase-2/integration-plan.md` with the verified state of 2026-10-27.
+It updates `docs/remediation/phase-2/integration-plan.md` with the verified state of 2026-10-27, refreshed after remediation
+Phase 6. **The live status of every gate is kept in `integration-checklist.md`**; the review scope is in
+`review-scope-phases-1-6.md`.
 
 ## 1. Facts from the git graph (verified)
 
-- One linear history: `main` (`a552de2`) → Stages 1–20 → remediation Phases 1–5 (111 commits on this branch, 0 merges).
+- One linear history: `main` (`a552de2`) → Stages 1–20 (91 commits) → remediation Phases 1–6 (24 commits): 115 commits to
+  the candidate `dfaa53b`, 0 merges.
 - Every stage and remediation branch is an ancestor of the current head; no branch has commits that the head lacks.
 - No branch duplicates or supersedes another. Each later branch **contains** the earlier ones; it does not re-implement them.
 - **Containment is not review.** That a branch contains another's commits says nothing about whether those commits were
   reviewed or accepted. None was independently reviewed, and none is accepted.
 - **Migrations:**
-  - 52 files with unique, strictly increasing timestamps (`20261008120000` … `20261027090000`); every stage's first
+  - 53 files with unique, strictly increasing timestamps (`20261008120000` … `20261028090000`); every stage's first
     migration is newer than all earlier ones.
   - Three earlier migrations were edited inside their own stage (`2494c4b`, `558825d`, `3ea9738`), only idempotency or Down;
     see phase-2 integration-plan.md §1.
-  - The remediation migrations `20261025090000`, `20261026120000` and `20261027090000` were each written in a single commit
-    and never edited.
+  - The remediation migrations `20261025090000`, `20261026120000`, `20261027090000` and `20261028090000` were each written
+    in a single commit. `20261028090000`'s Down was corrected in the next commit (`b9496c3`) while the migration had been
+    applied only to disposable databases (Phase 6, F-R6-01). No migration applied to a retained database was edited.
 - **Environment state:**
   - the shared development database is at `20261025090000`;
-  - it **must not** receive `20261026120000` or `20261027090000` without the code that uses them (packet D4, prerequisite 1)
-    and the owner's authorisation.
+  - it **must not** receive `20261026120000`, `20261027090000` or `20261028090000` without the code that uses them, all
+    three together (packet D4/D5; `docs/remediation/phase-6/migration-compatibility.md` §3), after a backup, and only with
+    the owner's authorisation.
 
 ## 2. Gates, all required before any merge
 
@@ -31,20 +36,20 @@ It updates `docs/remediation/phase-2/integration-plan.md` with the verified stat
 | 1 | Approved integration target (`main`) and candidate head SHA | not approved |
 | 2 | Active branch protection, verified | NOT ACTIVE |
 | 3 | An independent reviewer | none |
-| 4 | Reviewed commit range: `a552de2..<candidate>`, with financial paths reviewed per `independent-review-process.md` §2 | not reviewed |
-| 5 | The 8 required checks green on the PR merge ref and on the head | head `854e824`: 8/8 (run 40358498063); merge ref not run (no PR) |
-| 6 | Reviewed migration sequence (all 52; focus on the 3 remediation ones) | packet D4: NOT REVIEWED |
-| 7 | Regression tests passing on the candidate | full integration 253/0/7 on `f7d1cf7` (disposable); CI on `854e824` |
+| 4 | Reviewed commit range: `a552de2..<candidate>`, with financial paths reviewed per `independent-review-process.md` §2 | not reviewed; scope decision D-15 open (`review-scope-phases-1-6.md` §1) |
+| 5 | The 8 required checks green on the PR merge ref and on the head | head `dfaa53b`: 8/8 (run 40476468316); merge ref not run (no PR) |
+| 6 | Reviewed migration sequence (all 53; focus on the 4 remediation ones) | packet D4/D5: NOT REVIEWED |
+| 7 | Regression tests passing on the candidate | full integration 255/0/8 on `b9496c3` (disposable `fundzim-r10`); CI on `dfaa53b` |
 | 8 | Reconciliation completeness at relevant volumes | ledger 20 000 and 100 000 journals (Phase 4); payouts and fees small-volume only |
 | 9 | Financial invariants and concurrency tests | `TestFinancial*` and the families, green on `f7d1cf7` |
 | 10 | Backup and restore validation for the integration | Stage 18 drills on development; **to repeat** before migrating any long-lived database |
-| 11 | Release-candidate manifest and commit/CI traceability | `rc-manifest.py` `ELIGIBLE_FOR_REVIEW` for `854e824` |
+| 11 | Release-candidate manifest and commit/CI traceability | `rc-manifest.py` `ELIGIBLE_FOR_REVIEW` for `dfaa53b` (run 40476468316); unsigned, not authorised |
 | 12 | Explicit owner authorisation of the merge | none |
 | 13 | A separate authorisation before any deployment or live financial operation | none (launch BLOCKED; all financial gates off) |
 
 ## 3. Proposed sequence (once gates 1–4 and 12 are met)
 
-1. The owner fixes the candidate (the head of `remediation/governance-gate`, or a later reviewed head) and records it.
+1. The owner fixes the candidate (the head of `remediation/integrity-status`, or a later reviewed head) and records it.
 2. Open **one** pull request, candidate → `main`.
    - The history is linear and `main` has no commits of its own, so the merge is conflict-free and equivalent to a
      fast-forward.

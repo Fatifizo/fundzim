@@ -15,6 +15,14 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
+**Governance review preparation after remediation Phase 6 (2026-10-27; documents only; review NOT REVIEWED; integration
+BLOCKED).** On `remediation/integrity-status`. What it added: `docs/governance/review-scope-phases-1-6.md` (the reviewer's
+entry point: ranges, claims C1–C14, evidence, re-run commands), `docs/governance/integration-checklist.md` (live gate status;
+replaces the plan's current-state column), `docs/governance/review-preparation-report.md`, owner decision D-15. Binding rules:
+**the integration checklist is updated only with verified evidence** — Claude Code never marks a review, approval or owner
+decision MET; a merge into `main` carries Stages 1–20 as well as the remediation (115 commits), so a review of Phases 1–6
+alone does not unblock integration without D-15.
+
 **Remediation phase 6 — governance verification, integrity-check reliability and integration gate (governance gate BLOCKED;
 F-R5-01/02 fixed on the branch, NOT REVIEWED; integration and launch BLOCKED).** Not a product stage. Branch
 `remediation/integrity-status` from `dfa91b6`; nothing merged; final code commit `b9496c3` (CI 40472554403 8/8). What it built:

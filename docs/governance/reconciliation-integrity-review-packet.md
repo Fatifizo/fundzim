@@ -1,10 +1,12 @@
-# Reconciliation and checkpoint-integrity review packet (Phases 1, 3, 4)
+# Reconciliation and checkpoint-integrity review packet (Phases 1, 3, 4, 6)
 
 **Review status: NOT REVIEWED.** No independent reviewer exists (D-01a). The "author pre-review" notes in §6 were written
 by Claude Code, the author. They are inputs for the reviewer, **not** a review.
 
-**Code under review:** branch `remediation/checkpoint-integrity`, commits `6a65d70..f7d1cf7`. The reconciliation-relevant code
-is `97b8a70..f7d1cf7`. Design records: ADR-052 (Proposed) with Amendments 1–2, `docs/remediation/phase-{1,3,4}/`.
+**Code under review:** commits `6a65d70..f7d1cf7` (Phases 1–4, branch `remediation/checkpoint-integrity`) and
+`dfa91b6..b9496c3` (Phase 6, branch `remediation/integrity-status`; §D6). The reconciliation-relevant code is
+`97b8a70..f7d1cf7` plus `019b245`, `b9496c3`. Design records: ADR-052 (Proposed) with Amendments 1–3,
+`docs/remediation/phase-{1,3,4,6}/`. Overall scope and claims: `review-scope-phases-1-6.md`.
 
 ## D1. Checkpoint advancement
 
@@ -62,6 +64,9 @@ with processing. This limitation is **not eliminated** by any control below.
 | Tested | disposable `fundzim-r3/r5` (up, full suite, Down→0→Up) | disposable `fundzim-r6/r7/r8` and scratch `fundzim_perf_r6` (up, full suite, volume, Down→0→Up) |
 | Applied to the shared development database | **no** (verified 2026-10-27) | **no** (verified 2026-10-27) |
 
+`20261028090000` (Phase 6) is described in §D6. All three pending migrations go to a shared database together, with their
+code.
+
 **Prerequisites before applying to the shared development database** (owner authorisation required):
 1. **Deploy code and migrations together.**
    - `20261027090000` refuses every checkpoint advance that lacks evidence. The development stack's current images
@@ -74,6 +79,28 @@ with processing. This limitation is **not eliminated** by any control below.
 4. Plan the evidence retention decision (LR-012) before the tables grow.
 5. Never run Down there.
 
+## D6. Phase 6 — integrity status (F-R5-01, F-R5-02) and compatibility (F-R5-03)
+
+Design: `docs/remediation/phase-6/integrity-status-design.md`. Compatibility: `…/migration-compatibility.md`. Evidence:
+`…/test-evidence.md`.
+
+| Look at | Where | Question for the reviewer |
+|---|---|---|
+| Every verification outcome is recorded (ERROR, INCOMPLETE/INTERRUPTED, INCOMPLETE/TIME_BUDGET; fixed reason codes) | `reconsweep/integrity.go` `Verify` (`fail`) | Is there any return path that still skips `RecordIntegrity`? Is `context.WithoutCancel` right for the record? |
+| Ordering by the check's start; last success apart from the latest outcome; latest failure kept after recovery | `reconsweep/sqlstore.go` `RecordIntegrity`, `Advance` (carry-over INSERT … SELECT) | Can a concurrent older check overwrite a newer outcome? Is the carry-over complete and safe at the cycle-start trigger? |
+| Integrity state and thresholds | `reconsweep/health.go` `integrityState`, `IntegrityMetric` | Are NOT_RUN / STALE boundaries safe (never a false VERIFIED)? 1 h and 5 min are engineering defaults (D-06/D-10) |
+| Alert | `operations/security.go` (`RECONCILIATION_SWEEP_INTEGRITY_UNVERIFIED`, HIGH) | Raised from the integrity metric even when sweep health shows another state |
+| Migration `20261028090000` | `migrations/20261028090000_reconciliation_integrity_status.sql` | Additive? Guard attempt-only set extended correctly? Error-code and failure-history CHECKs sufficient? Down (development only): NOT VALID CHECK for immutable completed rows, `SET CONSTRAINTS ALL IMMEDIATE` |
+| Not applied to the shared development database | read-only check 2026-10-27: at `20261025090000` | — |
+
+What Phase 6 does **not** change:
+- The sweep's own run outcome (`RecordAttempt`) still reflects the sweep. A verification failure is recorded in the
+  integrity columns and joined into the run's error, not in `failed_attempts`. A-1's "attempt recorded as successful" part
+  is addressed by the separate integrity status, not by changing the attempt.
+- **A-4 and the D3 limitation stand.** The integrity columns are written by the same database role as the sweep, so a role
+  holder could write VERIFIED by hand. Detecting that needs a separate verifier role or an append-only verification log.
+  Neither exists.
+
 ## D5. Reviewer checklist and outcome
 
 | Item | Status |
@@ -82,6 +109,7 @@ with processing. This limitation is **not eliminated** by any control below.
 | D2 verifier rules, sources and visibility | NOT REVIEWED |
 | D3 residual limitation and mitigations accepted or actioned | NOT REVIEWED |
 | D4 migrations `20261026120000`, `20261027090000` | NOT REVIEWED |
+| D6 Phase 6: integrity status and migration `20261028090000` | NOT REVIEWED |
 | Author pre-review notes A-1 … A-4 dispositioned | NOT REVIEWED |
 | **Overall** | **NOT REVIEWED (BLOCKED: no independent reviewer, D-01a)** |
 
@@ -91,7 +119,7 @@ The reviewer uses the record template in `independent-review-process.md` §5.
 
 | Id | Severity (author's view) | Observation | Suggested disposition |
 |---|---|---|---|
-| A-1 (F-R5-01) | LOW–MEDIUM | When `Verify` fails (a source query error), the module returns the error but the run's attempt was already recorded as successful, and the checkpoint keeps its **previous** integrity status. Health can therefore show a stale VERIFIED; the failure is visible only as a job error | Record a verification failure on the checkpoint (e.g. status INCOMPLETE with the error in detail), and make Health treat an `integrity_checked_at` older than N runs as degraded |
-| A-2 (F-R5-02) | LOW | Health ignores INCOMPLETE and UNVERIFIABLE: a verifier that never finishes at volume raises no signal | Map persistent INCOMPLETE to DEGRADED (threshold: D-06/D-10) |
-| A-3 (F-R5-03) | MEDIUM (deployment) | Migration `20261027090000` with pre-Phase-3 code blocks every sweep advance | D4 prerequisite 1; record in the integration plan |
-| A-4 | INFO | Attempt-only and integrity-only updates can be written by the same role, which could reset `failed_attempts` or write VERIFIED | Covered by D3; a separate verifier role would close it |
+| A-1 (F-R5-01) — **fixed on the branch in Phase 6, not reviewed** (§D6) | LOW–MEDIUM | When `Verify` fails (a source query error), the module returns the error but the run's attempt was already recorded as successful, and the checkpoint keeps its **previous** integrity status. Health can therefore show a stale VERIFIED; the failure is visible only as a job error | Record a verification failure on the checkpoint (e.g. status INCOMPLETE with the error in detail), and make Health treat an `integrity_checked_at` older than N runs as degraded |
+| A-2 (F-R5-02) — **fixed on the branch in Phase 6, not reviewed** (§D6) | LOW | Health ignores INCOMPLETE and UNVERIFIABLE: a verifier that never finishes at volume raises no signal | Map persistent INCOMPLETE to DEGRADED (threshold: D-06/D-10) |
+| A-3 (F-R5-03) — **analysed and tested in Phase 6; procedural control open** | MEDIUM (deployment) | Migration `20261027090000` with pre-Phase-3 code blocks every sweep advance | D4 prerequisite 1; record in the integration plan |
+| A-4 — **unchanged by Phase 6; open** | INFO | Attempt-only and integrity-only updates can be written by the same role, which could reset `failed_attempts` or write VERIFIED | Covered by D3; a separate verifier role would close it |

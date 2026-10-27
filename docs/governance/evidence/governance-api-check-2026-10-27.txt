@@ -1,0 +1,23 @@
+# GitHub governance state via the unauthenticated public REST API (read-only; no token), 2026-10-27T12:59Z
+== GET /repos/Fatifizo/fundzim
+{'full_name': 'Fatifizo/fundzim', 'private': False, 'default_branch': 'main', 'name': 'fundzim'}
+== GET /repos/Fatifizo/fundzim/branches/main
+{'name': 'main', 'protected': False, 'commit': 'a552de2'}
+== GET /repos/Fatifizo/fundzim/branches/main/protection
+{'message': 'Requires authentication', 'status': '401'}
+== GET /repos/Fatifizo/fundzim/rulesets
+list, length 0
+== GET /repos/Fatifizo/fundzim/rules/branches/main
+list, length 0
+== GET /repos/Fatifizo/fundzim/pulls?state=all
+list, length 0
+== GET /repos/Fatifizo/fundzim/contents/.github/CODEOWNERS
+{'message': 'Not Found', 'status': '404'}
+== GET /repos/Fatifizo/fundzim/contents/docs/governance/reviews?ref=remediation/integrity-status
+{'message': 'Not Found', 'status': '404'}
+== GET /repos/Fatifizo/fundzim/branches/remediation/integrity-status
+{'name': 'remediation/integrity-status', 'protected': False, 'commit': 'dfaa53b'}
+== GET /repos/Fatifizo/fundzim/actions/runs/40472554403
+{'name': 'ci', 'status': 'completed', 'head_sha': 'b9496c3', 'conclusion': 'success', 'run_attempt': 1}
+== GET /repos/Fatifizo/fundzim/actions/runs/40476468316
+{'name': 'ci', 'status': 'completed', 'head_sha': 'dfaa53b', 'conclusion': 'success', 'run_attempt': 1}
