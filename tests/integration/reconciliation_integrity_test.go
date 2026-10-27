@@ -291,8 +291,14 @@ func TestReconciliationIntegrityKilledBeforeCheckpointAdvance(t *testing.T) {
 	if r := verifyPayoutScope(t, p, svc.ReconSweep.Scope); r.Status != reconsweep.IntegrityVerified {
 		t.Fatalf("after resuming: %s %+v", r.Status, r.Problems)
 	}
-	if again := runningSweep(t, p.app, payoutSweeps, svc.ReconSweep.Scope); again.batches <= cp.batches {
-		t.Fatalf("the resumed run did not advance: %+v", again)
+	// the killed run's checkpoint row itself must have advanced (it may also have completed its cycle when the scope
+	// holds few records, e.g. on a fresh database: then the running row is the next cycle's, with no batches yet)
+	var batches int64
+	if err := p.mig.QueryRow(ctx(t), `SELECT batches FROM app.payout_reconciliation_sweeps WHERE id = $1`, cp.id).Scan(&batches); err != nil {
+		t.Fatal(err)
+	}
+	if batches <= cp.batches {
+		t.Fatalf("the resumed run did not advance: batches %d, before %d", batches, cp.batches)
 	}
 }
 

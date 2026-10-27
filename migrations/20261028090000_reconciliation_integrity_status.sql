@@ -102,6 +102,9 @@ CALL app.apply_runtime_grants();
 -- +goose StatementBegin
 SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '60s';
+-- the evidence constraint triggers run at statement end here, so the UPDATEs below leave no pending trigger events
+-- for the ALTER TABLEs (an integrity-only update passes them: its version is unchanged)
+SET CONSTRAINTS ALL IMMEDIATE;
 -- the guard of 20261027090000 first: the integrity-only rewrite of ERROR below must stay an attempt-only update
 CREATE OR REPLACE FUNCTION app.reconciliation_sweep_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
