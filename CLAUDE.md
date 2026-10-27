@@ -15,6 +15,17 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
+**Remediation phase 5 — governance and integration-readiness gate (governance documentation complete; controlled integration
+BLOCKED; production launch BLOCKED).** Not a product stage. Branch `remediation/governance-gate` from `854e824`; nothing merged.
+What it built: `docs/governance/` (repository baseline, `main` protection specification, independent-review process and record
+template, reconciliation-integrity review packet, owner decision register, controlled integration plan, CI reliability,
+register, final report); next workstream starts from `docs/stage-handover/REMEDIATION-PHASE-5-TO-PHASE-6.md`. Binding rules:
+**Claude Code is the author, never the independent reviewer** — its notes are "author pre-review", and a gate needing a reviewer
+stays NOT REVIEWED/BLOCKED until a named person other than the author account records a review; never create CODEOWNERS or
+review records with invented accounts; distinguish "not verified" (no token) from "not configured"; an in-app alert is not
+human notification (D-10); the Phase 3/4 migrations go to a shared database only together with the code that uses them
+(`20261027090000` with older code refuses every sweep advance), after a backup, with owner authorisation, never Down.
+
 **Remediation phase 4 — deterministic financial tests and checkpoint integrity (complete; awaiting review and owner decisions;
 non-production; launch NOT authorised).** Not a product stage. Branch `remediation/checkpoint-integrity` from `1e167b1`; nothing
 merged; `main` unprotected (integration blocked: D-01, D-01a). What it built: `docs/remediation/phase-4/README.md` (KI-R1-07 fixed
