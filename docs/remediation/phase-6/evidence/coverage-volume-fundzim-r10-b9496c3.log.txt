@@ -1,0 +1,98 @@
+=== RUN   TestReconciliationCoverageVolume
+    reconciliation_coverage_volume_test.go:151: 
+        ## Coverage sweep volume — payouts and fees (ADR-052)
+        
+        started 2026-10-27T08:46:44Z UTC; GOMAXPROCS=16; NumCPU=16; PostgreSQL 17.11; disposable compose project
+        
+        ### Payouts (870 in scope, 49 submitted → one provider status query each)
+        
+        | measure | value |
+        |---|---|
+        | runs for one cycle (budget 2000 records/run, batch 200) | 1 |
+        | examined (runs) / examined (completed checkpoint) | 870 / 870 |
+        | cycle wall time (runs back to back, incl. recency pass of 5 000) | 3.537s |
+        | slowest run | 3.531s |
+        | sweep records/s (examined ÷ wall) | 246 |
+        | test-process heap allocated during the cycle | 33.8 MiB total (8.7 MiB live after) |
+        | sessions waiting on a lock, max sampled after each run | 0 |
+        
+        ### Fee assessments (501)
+        
+        | measure | value |
+        |---|---|
+        | runs for one cycle (budget 5000 records/run, batch 500) | 1 |
+        | examined | 501 |
+        | cycle wall time (incl. recency pass of 5 000) | 3.606s |
+        | slowest run | 3.605s |
+        | sweep records/s | 139 |
+        | sessions waiting on a lock, max sampled | 0 |
+        
+        ```
+        Limit (actual time=0.156..0.275 rows=200 loops=1)
+          Buffers: shared hit=26
+          InitPlan 1
+            ->  Limit (actual time=0.126..0.127 rows=1 loops=1)
+                  Buffers: shared hit=8
+                  ->  Index Only Scan using pk_payout_requests on payout_requests (actual time=0.097..0.122 rows=101 loops=1)
+                        Heap Fetches: 68
+                        Buffers: shared hit=8
+          ->  Index Scan using pk_payout_requests on payout_requests p (actual time=0.155..0.258 rows=200 loops=1)
+                Index Cond: (id > (InitPlan 1).col1)
+                Filter: (status <> 'PAYOUT_REQUESTED'::text)
+                Buffers: shared hit=26
+        Planning:
+          Buffers: shared hit=13
+        Planning Time: 0.385 ms
+        Execution Time: 0.351 ms
+        ```
+        
+        ```
+        Limit (actual time=0.495..0.558 rows=400 loops=1)
+          Buffers: shared hit=97
+          InitPlan 1
+            ->  Limit (actual time=0.097..0.098 rows=1 loops=1)
+                  Buffers: shared hit=65
+                  ->  Index Only Scan using pk_fee_assessments on fee_assessments (actual time=0.051..0.093 rows=101 loops=1)
+                        Heap Fetches: 101
+                        Buffers: shared hit=65
+          ->  Sort (actual time=0.494..0.526 rows=400 loops=1)
+                Sort Key: a.id
+                Sort Method: quicksort  Memory: 78kB
+                Buffers: shared hit=97
+                ->  Seq Scan on fee_assessments a (actual time=0.109..0.271 rows=400 loops=1)
+                      Filter: (id > (InitPlan 1).col1)
+                      Rows Removed by Filter: 101
+                      Buffers: shared hit=94
+        Planning:
+          Buffers: shared hit=18
+        Planning Time: 0.278 ms
+        Execution Time: 0.658 ms
+        ```
+        
+        ```
+        Limit (actual time=0.131..0.134 rows=19 loops=1)
+          Buffers: shared hit=10
+          InitPlan 1
+            ->  Limit (actual time=0.071..0.071 rows=1 loops=1)
+                  Buffers: shared hit=6
+                  ->  Index Only Scan using uq_payment_intents_id_provider on payment_intents (actual time=0.046..0.070 rows=11 loops=1)
+                        Heap Fetches: 9
+                        Buffers: shared hit=6
+          ->  Sort (actual time=0.130..0.131 rows=19 loops=1)
+                Sort Key: p.id
+                Sort Method: quicksort  Memory: 27kB
+                Buffers: shared hit=10
+                ->  Seq Scan on payment_intents p (actual time=0.094..0.112 rows=19 loops=1)
+                      Filter: ((id > (InitPlan 1).col1) AND (status = ANY ('{SUCCEEDED,UNKNOWN}'::text[])))
+                      Rows Removed by Filter: 22
+                      Buffers: shared hit=10
+        Planning:
+          Buffers: shared hit=286
+        Planning Time: 3.773 ms
+        Execution Time: 0.206 ms
+        ```
+        
+        
+--- PASS: TestReconciliationCoverageVolume (35.88s)
+PASS
+ok  	github.com/Fatifizo/fundzim/tests/integration	35.922s

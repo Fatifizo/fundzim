@@ -1,0 +1,6 @@
+=== RUN   TestReconciliationIntegrityKilledBeforeCheckpointAdvance
+--- PASS: TestReconciliationIntegrityKilledBeforeCheckpointAdvance (29.62s)
+=== RUN   TestReconciliationMigrationCompatibility
+--- PASS: TestReconciliationMigrationCompatibility (7.95s)
+PASS
+ok  	github.com/Fatifizo/fundzim/tests/integration	37.653s

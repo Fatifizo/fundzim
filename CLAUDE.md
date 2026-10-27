@@ -15,6 +15,20 @@ Read `docs/PRODUCT.md` for scope and `docs/ROADMAP.md` for the staged plan.
 
 ## Current stage
 
+**Remediation phase 6 — governance verification, integrity-check reliability and integration gate (governance gate BLOCKED;
+F-R5-01/02 fixed on the branch, NOT REVIEWED; integration and launch BLOCKED).** Not a product stage. Branch
+`remediation/integrity-status` from `dfa91b6`; nothing merged; final code commit `b9496c3` (CI 40472554403 8/8). What it built:
+`docs/remediation/phase-6/` (final report, findings, integrity-status design, migration compatibility, test evidence,
+register; ADR-052 Amendment 3; migration `20261028090000`); next workstream starts from
+`docs/stage-handover/REMEDIATION-PHASE-6-TO-PHASE-7.md`. Binding rules: **every verification outcome is recorded** — a read
+failure is ERROR, an ended context INCOMPLETE/INTERRUPTED, the budget INCOMPLETE/TIME_BUDGET, each with a fixed reason code
+(never a database message; DB CHECK) — and never leaves an earlier VERIFIED as the latest outcome; `integrity_verified_at` is
+the last success, `integrity_last_failure(_at)` survives recovery, results are ordered by the check's start; the integrity
+metric is never HEALTHY and its 1 h staleness threshold is an engineering default until D-06; the three remediation
+migrations (`20261026120000`, `20261027090000`, `20261028090000`) go to a shared database only with their code, migration
+first, services stopped, after a backup and owner authorisation; tests that need several schema levels use a scratch
+`fundzim_perf_compat_*` database (`FUNDZIM_IT_MIGRATION_COMPAT=1`).
+
 **Remediation phase 5 — governance and integration-readiness gate (governance documentation complete; controlled integration
 BLOCKED; production launch BLOCKED).** Not a product stage. Branch `remediation/governance-gate` from `854e824`; nothing merged.
 What it built: `docs/governance/` (repository baseline, `main` protection specification, independent-review process and record

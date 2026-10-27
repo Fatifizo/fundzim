@@ -1,0 +1,50 @@
+=== RUN   TestOperationsPerf
+    operations_perf_test.go:22: set FUNDZIM_IT_PERF=1
+--- SKIP: TestOperationsPerf (0.00s)
+=== RUN   TestOperationsOverviewSourcesAndPermissions
+--- PASS: TestOperationsOverviewSourcesAndPermissions (32.83s)
+=== RUN   TestOperationsApprovalCenterRoutesToDomain
+--- PASS: TestOperationsApprovalCenterRoutesToDomain (0.95s)
+=== RUN   TestOperationsSupportCases
+--- PASS: TestOperationsSupportCases (0.63s)
+=== RUN   TestOperationsExceptionTriage
+--- PASS: TestOperationsExceptionTriage (2.89s)
+=== RUN   TestOperationsIncidentsAndAlerts
+--- PASS: TestOperationsIncidentsAndAlerts (0.87s)
+=== RUN   TestOperationsStaffGovernance
+--- PASS: TestOperationsStaffGovernance (2.14s)
+=== RUN   TestOperationsAuditCenter
+--- PASS: TestOperationsAuditCenter (0.47s)
+=== RUN   TestOperationsReportsSearchAndSLA
+--- PASS: TestOperationsReportsSearchAndSLA (0.87s)
+=== RUN   TestReconciliationCorrectionsFeeEveryMissingType
+--- PASS: TestReconciliationCorrectionsFeeEveryMissingType (7.96s)
+=== RUN   TestReconciliationCorrectionsPayoutLookupFailure
+--- PASS: TestReconciliationCorrectionsPayoutLookupFailure (20.23s)
+=== RUN   TestReconciliationCorrectionsUnknownPayoutLookupFailure
+--- PASS: TestReconciliationCorrectionsUnknownPayoutLookupFailure (5.18s)
+=== RUN   TestReconciliationCoverageCheckpointGuards
+--- PASS: TestReconciliationCoverageCheckpointGuards (0.15s)
+=== RUN   TestReconciliationIntegrityStatusFailureAndRecovery
+--- PASS: TestReconciliationIntegrityStatusFailureAndRecovery (13.13s)
+=== RUN   TestReconciliationIntegrityStatusCarriesAndOrders
+--- PASS: TestReconciliationIntegrityStatusCarriesAndOrders (0.12s)
+=== RUN   TestReconciliationIntegrityDatabaseRefusesUnsupportedMoves
+--- PASS: TestReconciliationIntegrityDatabaseRefusesUnsupportedMoves (0.59s)
+=== RUN   TestReconciliationIntegrityDetectsAForgedConsistentAdvance
+--- PASS: TestReconciliationIntegrityDetectsAForgedConsistentAdvance (10.64s)
+=== RUN   TestReconciliationIntegrityKilledBeforeCheckpointAdvance
+    reconciliation_integrity_test.go:295: the resumed run did not advance: {id:01a17c6c-b939-761b-8a0d-cfb561bcbb9f cursor: examined:0 batches:0 version:0}
+--- FAIL: TestReconciliationIntegrityKilledBeforeCheckpointAdvance (0.85s)
+=== RUN   TestReconciliationIntegrityRealSweepsVerify
+--- PASS: TestReconciliationIntegrityRealSweepsVerify (10.04s)
+=== RUN   TestReconciliationMigrationCompatibility
+    reconciliation_migration_compat_test.go:225: down to 20261027090000: partial migration error (type:sql,version:20261028090000): ERROR: cannot ALTER TABLE "payout_reconciliation_sweeps" because it has pending trigger events (SQLSTATE 55006)
+--- FAIL: TestReconciliationMigrationCompatibility (7.67s)
+=== RUN   TestSecurityAlertsLifecycle
+--- PASS: TestSecurityAlertsLifecycle (2.43s)
+=== RUN   TestSecurityAlertsOutOfOrderScanTimes
+--- PASS: TestSecurityAlertsOutOfOrderScanTimes (0.08s)
+FAIL
+FAIL	github.com/Fatifizo/fundzim/tests/integration	120.846s
+FAIL

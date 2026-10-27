@@ -1,0 +1,19 @@
+    t    |     detector     | cycle | integrity_status | integrity_error | integrity_failures |     integrity_checked_at      |     integrity_verified_at     | integrity_last_failure 
+---------+------------------+-------+------------------+-----------------+--------------------+-------------------------------+-------------------------------+------------------------
+ payouts | PAYOUTS          |     2 | VERIFIED         |                 |                  0 | 2026-10-27 08:32:35.246123+00 | 2026-10-27 08:32:35.246123+00 | 
+ fees    | FEE_ASSESSMENTS  |     2 | VERIFIED         |                 |                  0 | 2026-10-27 08:32:37.184833+00 | 2026-10-27 08:32:37.184833+00 | 
+ ledger  | PAYMENT_JOURNALS |     2 | VERIFIED         |                 |                  0 | 2026-10-27 08:32:35.000676+00 | 2026-10-27 08:32:35.000676+00 | 
+ ledger  | PAYMENT_FACTS    |     2 | VERIFIED         |                 |                  0 | 2026-10-27 08:32:35.005981+00 | 2026-10-27 08:32:35.005981+00 | 
+(4 rows)
+
+  tbl   | rows | avg_detail_b | max_detail_b | avg_row_b 
+--------+------+--------------+--------------+-----------
+ payout |   42 |          459 |          885 |       851
+ fee    |   28 |          470 |          487 |       818
+(2 rows)
+
+ ?column? | count | round | max | round 
+----------+-------+-------+-----+-------
+ ledger   |    20 |   466 | 509 |   547
+(1 row)
+

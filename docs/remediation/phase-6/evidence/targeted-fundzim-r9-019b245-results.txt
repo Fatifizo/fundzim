@@ -1,0 +1,23 @@
+# go test -tags integration results on commit 019b245
+pass     0.95s TestOperationsApprovalCenterRoutesToDomain
+pass     0.47s TestOperationsAuditCenter
+pass     2.89s TestOperationsExceptionTriage
+pass     0.87s TestOperationsIncidentsAndAlerts
+pass    32.83s TestOperationsOverviewSourcesAndPermissions
+skip     0.00s TestOperationsPerf
+pass     0.87s TestOperationsReportsSearchAndSLA
+pass     2.14s TestOperationsStaffGovernance
+pass     0.63s TestOperationsSupportCases
+pass     7.96s TestReconciliationCorrectionsFeeEveryMissingType
+pass    20.23s TestReconciliationCorrectionsPayoutLookupFailure
+pass     5.18s TestReconciliationCorrectionsUnknownPayoutLookupFailure
+pass     0.15s TestReconciliationCoverageCheckpointGuards
+pass     0.59s TestReconciliationIntegrityDatabaseRefusesUnsupportedMoves
+pass    10.64s TestReconciliationIntegrityDetectsAForgedConsistentAdvance
+fail     0.85s TestReconciliationIntegrityKilledBeforeCheckpointAdvance
+pass    10.04s TestReconciliationIntegrityRealSweepsVerify
+pass     0.12s TestReconciliationIntegrityStatusCarriesAndOrders
+pass    13.13s TestReconciliationIntegrityStatusFailureAndRecovery
+fail     7.67s TestReconciliationMigrationCompatibility
+pass     2.43s TestSecurityAlertsLifecycle
+pass     0.08s TestSecurityAlertsOutOfOrderScanTimes

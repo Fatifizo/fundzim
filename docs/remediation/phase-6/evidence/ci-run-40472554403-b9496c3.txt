@@ -1,0 +1,9 @@
+40472554403 b9496c3 completed success
+Container images (build, SBOM, vulnerability scan, provenance)	success	175	
+Web (lint, types, unit tests, build, audit)	success	82	
+Go (format, vet, unit tests, vulnerabilities)	success	331	
+Web end-to-end (Playwright)	success	522	Playwright system dependencies (Chromium)=12s; Playwright Chromium browser=9s; Keep the Playwright report and traces of a failed run (mock API only; no real credentials)=0s
+Integration (real PostgreSQL, Valkey, Garage, ClamAV via docker compose)	success	1663	
+OpenAPI and SQL design drafts	success	39	
+Secret scanning	success	8	
+Real-stack E2E (compose + Playwright)	success	892	Install web dependencies and Playwright Chromium (while ClamAV loads)=37s; Real-stack Playwright suite=663s

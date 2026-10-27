@@ -1,0 +1,3 @@
+# go test -tags integration results on commit 019b245 + working-tree fix (committed as b9496c3)
+pass    29.62s TestReconciliationIntegrityKilledBeforeCheckpointAdvance
+pass     7.95s TestReconciliationMigrationCompatibility
