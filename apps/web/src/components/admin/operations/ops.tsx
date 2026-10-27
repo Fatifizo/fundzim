@@ -114,6 +114,7 @@ export function MetricsGrid({ metrics, empty = "No metrics you can view." }: { m
                   <NatureBadge nature={m.nature} />
                   <HealthBadge status={m.status} />
                 </p>
+                {m.state ? <p className="text-sm text-ink-800">State: {humanise(m.state)}</p> : null}
                 <p className="text-sm text-ink-600">Source: {m.source}</p>
               </li>
             ))}

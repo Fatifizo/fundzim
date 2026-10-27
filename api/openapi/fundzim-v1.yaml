@@ -65275,8 +65275,11 @@ components:
         state:
           type: string
           description: 'A named condition behind status. For reconciliation sweep health metrics (key *.reconciliation.sweep_health*, remediation phase
-            3, 4): NOT_STARTED, PROGRESSING, PROGRESSING_SLOWLY, STALLED, BLOCKED_ON_DEFERRALS, FAILING or INTEGRITY_FAILURE — thresholds are engineering defaults, not approved
-            targets (D-06, D-10).'
+            3, 4, 6): NOT_STARTED, PROGRESSING, PROGRESSING_SLOWLY, STALLED, BLOCKED_ON_DEFERRALS, FAILING, INTEGRITY_FAILURE or INTEGRITY_UNVERIFIED.
+            For reconciliation integrity metrics (key *.reconciliation.integrity_age_seconds*, remediation phase 6; value = seconds since the last
+            SUCCESSFUL verification, null when none): NOT_RUN, VERIFIED, LATEST_FAILED (the latest check did not succeed; the last success is
+            recent), STALE (no success within the threshold, or untrustworthy timestamps) or INCONSISTENT. Thresholds are engineering defaults,
+            not approved targets (D-06, D-10).'
       required:
       - key
       - label

@@ -23,7 +23,8 @@ type memStore struct {
 	failed      int                       // consecutive failed runs
 	evidence    map[int64][]Evidence      // per cycle, in advance order (remediation phase 4)
 	completedAt map[int64]time.Time
-	integrity   *IntegrityReport // last recorded verification
+	integrity   *IntegrityReport  // last recorded verification
+	recorded    []IntegrityReport // every recorded verification, in order (remediation phase 6)
 }
 
 func newMemStore() *memStore {
@@ -119,6 +120,7 @@ func (m *memStore) RecordIntegrity(_ context.Context, _, _ string, r IntegrityRe
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.integrity = &r
+	m.recorded = append(m.recorded, r)
 	return nil
 }
 
@@ -691,7 +693,8 @@ func TestHealthClassification(t *testing.T) {
 	}{
 		{"never ran", Coverage{}, 0, HealthNotStarted, LastCycleNone},
 		{"progressing", Coverage{RunningStartedAt: at(30 * time.Minute), LastAdvancedAt: at(10 * time.Minute)}, 0, HealthProgressing, LastCycleNone},
-		{"progressing slowly", Coverage{RunningStartedAt: at(30 * time.Hour), LastAdvancedAt: at(10 * time.Minute)}, 0, HealthProgressingSlowly, LastCycleNone},
+		{"progressing slowly", Coverage{RunningStartedAt: at(30 * time.Hour), LastAdvancedAt: at(10 * time.Minute), IntegrityStatus: IntegrityVerified,
+			IntegrityCheckedAt: at(10 * time.Minute), IntegrityVerifiedAt: at(10 * time.Minute)}, 0, HealthProgressingSlowly, LastCycleNone},
 		{"stalled", Coverage{RunningStartedAt: at(5 * time.Hour), LastAdvancedAt: at(2 * time.Hour), LastAttemptOutcome: StopTimeBudget}, 0, HealthStalled, LastCycleNone},
 		{"stalled: worker stopped, nothing recorded", Coverage{RunningStartedAt: at(3 * time.Hour)}, 0, HealthStalled, LastCycleNone},
 		{"failing", Coverage{RunningStartedAt: at(time.Hour), LastAdvancedAt: at(50 * time.Minute), FailedAttempts: 3, LastAttemptOutcome: StopError},
@@ -702,9 +705,16 @@ func TestHealthClassification(t *testing.T) {
 			FailedAttempts: 1}, 0, HealthBlockedOnDeferrals, LastCycleNone},
 		{"blocked: old deferral", Coverage{RunningStartedAt: at(time.Hour), LastAdvancedAt: at(5 * time.Minute), DeferredOutstanding: 1,
 			OldestDeferralSince: at(30 * time.Hour)}, 0, HealthBlockedOnDeferrals, LastCycleNone},
-		{"completed, clean", Coverage{LastCompletedCycleStartedAt: at(20 * time.Minute), RunningStartedAt: at(5 * time.Minute)}, 0, HealthProgressing, LastCycleClean},
-		{"completed, discrepancies open", Coverage{LastCompletedCycleStartedAt: at(20 * time.Minute), RunningStartedAt: at(5 * time.Minute)}, 3,
+		{"completed, clean", Coverage{LastCompletedCycleStartedAt: at(20 * time.Minute), RunningStartedAt: at(5 * time.Minute), IntegrityStatus: IntegrityVerified,
+			IntegrityCheckedAt: at(4 * time.Minute), IntegrityVerifiedAt: at(4 * time.Minute)}, 0, HealthProgressing, LastCycleClean},
+		{"completed, discrepancies open", Coverage{LastCompletedCycleStartedAt: at(20 * time.Minute), RunningStartedAt: at(5 * time.Minute),
+			IntegrityStatus: IntegrityVerified, IntegrityCheckedAt: at(4 * time.Minute), IntegrityVerifiedAt: at(4 * time.Minute)}, 3,
 			HealthProgressing, LastCycleDiscrepancies},
+		// remediation phase 6 (F-R5-01/02): a cycle that completed, or ran past the threshold, without any verification
+		{"completed, never verified", Coverage{LastCompletedCycleStartedAt: at(20 * time.Minute), RunningStartedAt: at(5 * time.Minute)}, 0,
+			HealthIntegrityUnverified, LastCycleClean},
+		{"slow and never verified", Coverage{RunningStartedAt: at(30 * time.Hour), LastAdvancedAt: at(10 * time.Minute)}, 0,
+			HealthIntegrityUnverified, LastCycleNone},
 	}
 	for _, c := range cases {
 		h := c.c.Health(now, th, 10000, c.open)

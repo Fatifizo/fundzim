@@ -145,3 +145,38 @@ moving a checkpoint backwards but not forwards past unexamined records.
    and raises a CRITICAL in-app alert. The verifier never moves a checkpoint or changes money.
 4. **Limit.** Evidence that lists real keys which were never examined cannot be distinguished from a real examination.
    Evidence retention is not decided (LR-012).
+
+## Amendment 3 — remediation phase 6 (2026-10-27; status of the ADR unchanged: Proposed)
+
+Integrity-status reliability (`docs/remediation/phase-6/integrity-status-design.md`; findings F-R5-01, F-R5-02, F-R5-03).
+Before this amendment, a verification that failed to read left the previous VERIFIED in place, and INCOMPLETE or UNVERIFIABLE
+outcomes did not change the health.
+
+1. **Every outcome is recorded.** `reconsweep.Verify` records every outcome. A read failure is recorded as the new status
+   ERROR; an ended context as INCOMPLETE/INTERRUPTED; the time budget as INCOMPLETE/TIME_BUDGET. Each carries a fixed
+   reason code (CYCLES_READ_FAILED, EVIDENCE_READ_FAILED, SOURCE_READ_FAILED, INTERRUPTED, TIME_BUDGET), never a database
+   message. Problems found before a failure keep the outcome INCONSISTENT. The outcome is written with a context that is
+   not cancelled.
+2. **Last success apart from the latest outcome** (migration `20261028090000`, attempt-only columns carried to the next
+   cycle):
+   - `integrity_verified_at` — start of the last VERIFIED check;
+   - `integrity_unverified_since` — start of the first failure after it;
+   - `integrity_failures` — consecutive non-VERIFIED checks;
+   - `integrity_last_failure(_at)` — the latest failure, kept after a recovery.
+
+   A check's **start** time orders results, so an older check finishing late never overwrites a newer one.
+3. **Integrity state and alert.**
+   - `Health.IntegrityState`:
+     - NOT_RUN — a new detector only;
+     - VERIFIED;
+     - LATEST_FAILED;
+     - STALE — no success within `IntegrityStaleAfter` (engineering default 1 h, not an approved target, D-06/D-10);
+       repeated time-outs or errors, never verified after a completed cycle, or a timestamp more than 5 min in the future;
+     - INCONSISTENT.
+   - STALE makes the sweep health INTEGRITY_UNVERIFIED (after the stall and deferral states).
+   - Each module publishes `*.reconciliation.integrity_age_seconds*`: value = age of the last success, state = integrity
+     state.
+   - The alert scan raises RECONCILIATION_SWEEP_INTEGRITY_UNVERIFIED (HIGH, in-app) from that metric. A sweep whose health
+     shows another state still raises it.
+4. **Compatibility.** Code before this migration keeps working on the new schema. The Phase 6 code requires the migration.
+   Deploy them together, migration first (`docs/remediation/phase-6/migration-compatibility.md`).

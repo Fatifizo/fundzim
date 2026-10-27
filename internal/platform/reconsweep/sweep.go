@@ -78,7 +78,19 @@ type Coverage struct {
 	FailedAttempts     int        `json:"failed_attempts"`
 	// The latest integrity verification of the running and last completed cycle (remediation phase 4; Verify).
 	IntegrityStatus    string     `json:"integrity_status,omitempty"`
-	IntegrityCheckedAt *time.Time `json:"integrity_checked_at,omitempty"`
+	IntegrityCheckedAt *time.Time `json:"integrity_checked_at,omitempty"` // start of the latest verification (any outcome)
+	// IntegrityVerifiedAt is the start of the latest SUCCESSFUL verification (remediation phase 6); IntegrityError the
+	// reason code of a latest verification that did not complete.
+	IntegrityVerifiedAt *time.Time `json:"integrity_verified_at,omitempty"`
+	IntegrityError      string     `json:"integrity_error,omitempty"`
+	// IntegrityUnverifiedSince: the start of the first verification that did not succeed since the last success.
+	IntegrityUnverifiedSince *time.Time `json:"integrity_unverified_since,omitempty"`
+	// IntegrityFailures counts consecutive verifications that did not succeed (0 after a success);
+	// IntegrityLastFailureAt and IntegrityLastFailure ("STATUS" or "STATUS:CODE") keep the latest one after a later
+	// success, so a recovery never erases an earlier failure.
+	IntegrityFailures      int        `json:"integrity_failures"`
+	IntegrityLastFailureAt *time.Time `json:"integrity_last_failure_at,omitempty"`
+	IntegrityLastFailure   string     `json:"integrity_last_failure,omitempty"`
 }
 
 // Store persists checkpoints (one RUNNING checkpoint per detector and scope).

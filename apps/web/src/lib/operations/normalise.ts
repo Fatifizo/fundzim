@@ -32,7 +32,7 @@ export function sources(v: unknown): SourceStatus[] {
 }
 
 export function metrics(v: unknown): Metric[] {
-  return list<Metric>(v, "metrics").map((m) => ({ ...m, value: typeof m.value === "number" ? m.value : null, status: m.status ?? null, href: m.href ?? null }));
+  return list<Metric>(v, "metrics").map((m) => ({ ...m, value: typeof m.value === "number" ? m.value : null, status: m.status ?? null, href: m.href ?? null, state: typeof m.state === "string" && m.state !== "" ? m.state : null }));
 }
 
 /** "3 d 4 h", "2 h 5 min", "45 s" — an age or a target duration (whole units; no rounding up). */

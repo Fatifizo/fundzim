@@ -152,7 +152,7 @@ describe("normalisers and copy", () => {
   });
 });
 
-const metric = (m: Partial<Metric>): Metric => ({ key: "k", label: "Label", module: "risk", value: 3, nature: "REAL", status: null, source: "risk.risk_cases open", permission: "risk.operations.view", href: null, ...m });
+const metric = (m: Partial<Metric>): Metric => ({ key: "k", label: "Label", module: "risk", value: 3, nature: "REAL", status: null, source: "risk.risk_cases open", permission: "risk.operations.view", href: null, state: null, ...m });
 
 describe("operations components", () => {
   it("show each metric's source and nature; an unmeasured metric is 'Not measured'", async () => {
@@ -171,6 +171,36 @@ describe("operations components", () => {
     expect(within(live).getAllByText("Blocked").length).toBeGreaterThan(0);
     expect(within(screen.getByText("TEST payments unknown").closest("li")!).getByText("TEST only")).toBeInTheDocument();
     expect(await axeViolations(container)).toEqual([]);
+  });
+
+  // Remediation phase 6 (F-R5-01): an integrity metric shows its state, so a failed latest check is never read as a
+  // current success; the value is the age of the last SUCCESSFUL verification, and "Not measured" when there is none.
+  it("show a metric's state beside its status (integrity: latest failure, stale, never verified)", async () => {
+    const { container } = render(
+      <MetricsGrid
+        metrics={[
+          metric({ key: "p", label: "Payout integrity", module: "payouts", value: 1200, nature: "TEST_ONLY", status: "DEGRADED", state: "LATEST_FAILED", source: "reconsweep.Verify" }),
+          metric({ key: "f", label: "Fee integrity", module: "fees", value: null, nature: "TEST_ONLY", status: "DEGRADED", state: "STALE", source: "reconsweep.Verify" }),
+          metric({ key: "o", label: "Open risk cases" }),
+        ]}
+      />,
+    );
+    const payout = screen.getByText("Payout integrity").closest("li")!;
+    expect(within(payout).getByText("State: Latest failed")).toBeInTheDocument();
+    expect(within(payout).getByText("Degraded")).toBeInTheDocument();
+    expect(within(payout).queryByText(/Healthy|Verified/)).toBeNull();
+    const fee = screen.getByText("Fee integrity").closest("li")!;
+    expect(within(fee).getByText("State: Stale")).toBeInTheDocument();
+    expect(within(fee).getByText("Not measured")).toBeInTheDocument();
+    expect(within(screen.getByText("Open risk cases").closest("li")!).queryByText(/^State:/)).toBeNull();
+    expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it("normalise a missing or empty state to null", () => {
+    const ms = metrics({ metrics: [{ key: "a", label: "A", module: "m", value: 1, nature: "REAL", source: "s", permission: "p", state: "" },
+      { key: "b", label: "B", module: "m", value: 1, nature: "REAL", source: "s", permission: "p", state: "STALE" },
+      { key: "c", label: "C", module: "m", value: 1, nature: "REAL", source: "s", permission: "p" }] });
+    expect(ms.map((m) => m.state)).toEqual([null, "STALE", null]);
   });
 
   it("say which modules could not be read instead of showing zero", () => {

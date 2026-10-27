@@ -17,6 +17,8 @@ export interface Metric {
   source: string;
   permission: string;
   href: string | null;
+  /** The named condition behind status (e.g. a reconciliation sweep's health or integrity state); null when none. */
+  state: string | null;
 }
 
 export interface SourceStatus {

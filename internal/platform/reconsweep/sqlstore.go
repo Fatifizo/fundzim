@@ -121,8 +121,14 @@ func (s SQLStore) Advance(ctx context.Context, cur, next Checkpoint, complete bo
 		if !complete {
 			return nil
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO `+t+` (id, detector, scope, cycle, status, started_at, deferred_keys, deferred_since)
-			VALUES ($1, $2, $3, $4, 'RUNNING', now(), $5::uuid[], $6::timestamptz[])`, ids.New(), cur.Detector, cur.Scope, cur.Cycle+1, keys, since)
+		// the next cycle carries the latest integrity outcome and the last successful verification (remediation phase 6):
+		// a cycle boundary never erases an INCONSISTENT result or the time of the last success
+		_, err = tx.Exec(ctx, `INSERT INTO `+t+` (id, detector, scope, cycle, status, started_at, deferred_keys, deferred_since,
+			integrity_checked_at, integrity_status, integrity_detail, integrity_error, integrity_verified_at, integrity_unverified_since,
+			integrity_failures, integrity_last_failure_at, integrity_last_failure)
+			SELECT $1, $2, $3, $4, 'RUNNING', now(), $5::uuid[], $6::timestamptz[], o.integrity_checked_at, o.integrity_status, o.integrity_detail,
+			o.integrity_error, o.integrity_verified_at, o.integrity_unverified_since, o.integrity_failures, o.integrity_last_failure_at,
+			o.integrity_last_failure FROM `+t+` o WHERE o.id = $7`, ids.New(), cur.Detector, cur.Scope, cur.Cycle+1, keys, since, cur.ID)
 		return err
 	})
 	if err != nil {
@@ -168,13 +174,22 @@ func (s SQLStore) Coverage(ctx context.Context, detector, scope string) (Coverag
 		return c, err
 	}
 	var since []time.Time
-	var outcome, aerr, istatus *string
+	var outcome, aerr, istatus, ierr, ilast *string
 	err = s.Pool.QueryRow(ctx, `SELECT cycle, started_at, examined, deferred_since, last_advanced_at, last_attempt_at, last_attempt_outcome,
-		last_attempt_error, failed_attempts, integrity_status, integrity_checked_at FROM `+t+` WHERE detector = $1 AND scope = $2 AND status = 'RUNNING'`,
+		last_attempt_error, failed_attempts, integrity_status, integrity_checked_at, integrity_verified_at, integrity_error,
+		integrity_unverified_since, integrity_failures, integrity_last_failure_at, integrity_last_failure FROM `+t+`
+		WHERE detector = $1 AND scope = $2 AND status = 'RUNNING'`,
 		detector, scope).Scan(&c.RunningCycle, &c.RunningStartedAt, &c.RunningExamined, &since, &c.LastAdvancedAt, &c.LastAttemptAt, &outcome, &aerr,
-		&c.FailedAttempts, &istatus, &c.IntegrityCheckedAt)
+		&c.FailedAttempts, &istatus, &c.IntegrityCheckedAt, &c.IntegrityVerifiedAt, &ierr, &c.IntegrityUnverifiedSince,
+		&c.IntegrityFailures, &c.IntegrityLastFailureAt, &ilast)
+	if ilast != nil {
+		c.IntegrityLastFailure = *ilast
+	}
 	if istatus != nil {
 		c.IntegrityStatus = *istatus
+	}
+	if ierr != nil {
+		c.IntegrityError = *ierr
 	}
 	if outcome != nil {
 		c.LastAttemptOutcome = *outcome
@@ -284,7 +299,16 @@ func (s SQLStore) RecordIntegrity(ctx context.Context, detector, scope string, r
 	if err != nil {
 		return err
 	}
-	_, err = s.Pool.Exec(ctx, `UPDATE `+t+` SET integrity_checked_at = now(), integrity_status = $3, integrity_detail = $4
-		WHERE detector = $1 AND scope = $2 AND status = 'RUNNING'`, detector, scope, r.Status, detail)
+	// remediation phase 6 (F-R5-01/02): the check's start time orders results — an older check never overwrites a newer
+	// one; the last SUCCESSFUL verification is kept apart from the latest outcome, and the latest failure (time and
+	// sanitised code) and the consecutive failures survive a later success, so a recovery never erases a failure
+	_, err = s.Pool.Exec(ctx, `UPDATE `+t+` SET integrity_checked_at = $5, integrity_status = $3, integrity_detail = $4,
+		integrity_error = nullif($6, ''), integrity_verified_at = CASE WHEN $3 = 'VERIFIED' THEN $5 ELSE integrity_verified_at END,
+		integrity_unverified_since = CASE WHEN $3 = 'VERIFIED' THEN NULL ELSE coalesce(integrity_unverified_since, $5) END,
+		integrity_failures = CASE WHEN $3 = 'VERIFIED' THEN 0 ELSE integrity_failures + 1 END,
+		integrity_last_failure_at = CASE WHEN $3 = 'VERIFIED' THEN integrity_last_failure_at ELSE $5 END,
+		integrity_last_failure = CASE WHEN $3 = 'VERIFIED' THEN integrity_last_failure ELSE $3 || coalesce(':' || nullif($6, ''), '') END
+		WHERE detector = $1 AND scope = $2 AND status = 'RUNNING' AND (integrity_checked_at IS NULL OR integrity_checked_at <= $5)`,
+		detector, scope, r.Status, detail, r.CheckedAt, r.Error)
 	return err
 }

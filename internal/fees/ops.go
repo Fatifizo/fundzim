@@ -41,14 +41,18 @@ func (s *Service) OpsSnapshot(ctx context.Context) (opsview.Snapshot, error) {
 	cm := cov.Metric(m, "fees.reconciliation.coverage_age_seconds", "Seconds since the last complete fee reconciliation sweep began", view,
 		"app.fee_reconciliation_sweeps, last COMPLETED cycle (ADR-052)", s.now())
 	cfg := s.ReconSweep.Or(DefaultReconSweep)
-	hm := cov.Health(s.now(), reconsweep.DefaultThresholds, cfg.MaxDeferred, int(recon)).Metric(m, "fees.reconciliation.sweep_health",
+	h := cov.Health(s.now(), reconsweep.DefaultThresholds, cfg.MaxDeferred, int(recon))
+	hm := h.Metric(m, "fees.reconciliation.sweep_health",
 		"Fee reconciliation sweep: seconds since the checkpoint last progressed (state = sweep health)", view,
 		"app.fee_reconciliation_sweeps RUNNING cycle and recorded run outcome; thresholds are engineering defaults (D-06, D-10)")
+	im := h.IntegrityMetric(m, "fees.reconciliation.integrity_age_seconds", "Fee reconciliation integrity: seconds since the last successful verification (state = integrity state)", view,
+		"reconciliation integrity: start of the last successful verification (reconsweep.Verify) and the latest outcome; staleness threshold is an engineering default (D-06, D-10)")
 	if err != nil {
 		cm.Value, cm.Status = nil, opsview.Unavailable
 		hm.Value, hm.Status, hm.State = nil, opsview.Unavailable, ""
+		im.Value, im.Status, im.State = nil, opsview.Unavailable, ""
 	}
-	snap.Metrics = append(snap.Metrics, cm, hm)
+	snap.Metrics = append(snap.Metrics, cm, hm, im)
 	rows, err := s.Pool.Query(ctx, `
 		SELECT 'policy_version:' || v.id, v.id::text, 'FEE_POLICY_VERSION_APPROVAL', 'Fee policy ' || p.code || ' v' || v.version_no, coalesce(v.submitted_by::text, ''),
 		       coalesce(v.submitted_at, v.created_at), 'fee.config.approve', ARRAY[v.created_by::text, coalesce(v.submitted_by::text, '')], '/admin/finance/fees/policies/' || p.id

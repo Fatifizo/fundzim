@@ -134,3 +134,38 @@ func TestSecurityFindingsReconciliationSweepIntegrity(t *testing.T) {
 		t.Fatalf("integrity alert: %+v", fs)
 	}
 }
+
+// Remediation phase 6 (F-R5-01/02): an integrity metric with no current successful verification raises a HIGH in-app
+// alert; a single failed check (LATEST_FAILED), a verified one and a new detector (NOT_RUN) do not. Recovery is the
+// condition clearing (the scan's CONDITION_CLEARED), never an automatic resolution.
+func TestSecurityFindingsReconciliationIntegrityUnverified(t *testing.T) {
+	now := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	recent := now.Add(-time.Hour)
+	ok := BackupEvidence{LastBackup: &recent, LastRestore: &recent}
+	m := func(key, state string) opsview.Metric {
+		return opsview.Metric{Key: key, State: state, Value: opsview.Int64(7200), Label: key, Source: "checkpoint"}
+	}
+	quiet := []opsview.Snapshot{{Module: "payouts", Metrics: []opsview.Metric{m("payouts.reconciliation.integrity_age_seconds", "VERIFIED")}},
+		{Module: "fees", Metrics: []opsview.Metric{m("fees.reconciliation.integrity_age_seconds", "LATEST_FAILED")}},
+		{Module: "ledger", Metrics: []opsview.Metric{m("ledger.reconciliation.integrity_age_seconds.payment_facts", "NOT_RUN")}}}
+	if got := securityFindings(now, quiet, nil, nil, ok); len(got) != 0 {
+		t.Fatalf("verified, single-failure or new detectors raised %+v", got)
+	}
+	stale := []opsview.Snapshot{{Module: "ledger", Metrics: []opsview.Metric{m("ledger.reconciliation.integrity_age_seconds.payment_journals", "STALE"),
+		m("ledger.reconciliation.sweep_health.payment_journals", "BLOCKED_ON_DEFERRALS")}}}
+	fs := securityFindings(now, stale, nil, nil, ok)
+	got := map[string]string{}
+	for _, f := range fs {
+		got[f.dedupe] = f.severity
+		if f.key == "RECONCILIATION_SWEEP_INTEGRITY_UNVERIFIED" && f.evidence["state"] != "STALE" {
+			t.Errorf("evidence lacks the integrity state: %+v", f.evidence)
+		}
+	}
+	if got["RECONCILIATION_SWEEP_INTEGRITY_UNVERIFIED:ledger.reconciliation.integrity_age_seconds.payment_journals"] != "HIGH" ||
+		got["RECONCILIATION_SWEEP_BLOCKED:ledger.reconciliation.sweep_health.payment_journals"] != "HIGH" || len(fs) != 2 {
+		t.Fatalf("stale integrity beside a blocked sweep: %v", got)
+	}
+	if got := securityFindings(now, quiet, nil, nil, ok); len(got) != 0 {
+		t.Fatalf("after recovery: %+v", got)
+	}
+}

@@ -2,6 +2,7 @@ package reconsweep
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"time"
 )
@@ -65,6 +66,16 @@ const (
 	IntegrityInconsistent = "INCONSISTENT" // at least one problem: investigate; nothing is changed automatically
 	IntegrityIncomplete   = "INCOMPLETE"   // the time budget ended before every batch was re-read (not verified)
 	IntegrityUnverifiable = "UNVERIFIABLE" // a cycle has batches from before the evidence existed (migration)
+	IntegrityError        = "ERROR"        // the verification itself failed (remediation phase 6): nothing was verified
+)
+
+// Reason codes of a verification that did not complete (IntegrityReport.Error; sanitised: never a database message).
+const (
+	IntegrityErrCyclesRead   = "CYCLES_READ_FAILED"
+	IntegrityErrEvidenceRead = "EVIDENCE_READ_FAILED"
+	IntegrityErrSourceRead   = "SOURCE_READ_FAILED"
+	IntegrityErrInterrupted  = "INTERRUPTED" // the run's context ended (job timeout, shutdown)
+	IntegrityErrTimeBudget   = "TIME_BUDGET" // the re-read budget ended before every batch was re-read
 )
 
 // Problem codes.
@@ -118,6 +129,7 @@ type IntegrityReport struct {
 	Cycles    []CycleIntegrity `json:"cycles"`
 	Problems  []Problem        `json:"problems"`
 	Elapsed   string           `json:"elapsed"`
+	Error     string           `json:"error,omitempty"` // reason code when the verification did not complete
 }
 
 func (r *IntegrityReport) problem(p Problem) {
@@ -148,7 +160,10 @@ type IntegrityOptions struct {
 }
 
 // Verify checks the running cycle and the last completed one of a detector and records the outcome on the running
-// checkpoint. It returns the report and the error of reading or recording (a problem found is not an error).
+// checkpoint — every outcome, including a failure of the verification itself (remediation phase 6, F-R5-01): a read
+// error is recorded as ERROR, an interruption or the time budget as INCOMPLETE, each with a sanitised reason code (never a
+// raw database message), so a previous VERIFIED is never left standing as the latest outcome. It returns the report and
+// the error of reading or recording (a problem found is not an error).
 func Verify(ctx context.Context, st IntegrityStore, src Source, o IntegrityOptions) (IntegrityReport, error) {
 	if o.Margin <= 0 {
 		o.Margin = defaultIntegrityMargin
@@ -161,24 +176,37 @@ func Verify(ctx context.Context, st IntegrityStore, src Source, o IntegrityOptio
 	}
 	start := o.Now()
 	rep := IntegrityReport{Detector: o.Detector, Scope: o.Scope, CheckedAt: start, Problems: []Problem{}}
+	incomplete, unverifiable := false, false
+	fail := func(code string, err error) (IntegrityReport, error) {
+		switch {
+		case len(rep.Problems) > 0:
+			rep.Status = IntegrityInconsistent // what was found stands, even if the verification could not finish
+		case ctx.Err() != nil:
+			rep.Status, code = IntegrityIncomplete, IntegrityErrInterrupted
+		default:
+			rep.Status = IntegrityError
+		}
+		rep.Error = code
+		rep.Elapsed = o.Now().Sub(start).Round(time.Millisecond).String()
+		return rep, errors.Join(err, st.RecordIntegrity(context.WithoutCancel(ctx), o.Detector, o.Scope, rep))
+	}
 	running, last, beforeLast, err := st.IntegrityCycles(ctx, o.Detector, o.Scope)
 	if err != nil {
-		return rep, err
+		return fail(IntegrityErrCyclesRead, err)
 	}
-	incomplete, unverifiable := false, false
-	check := func(c *CycleRecord, initialDeferred []string) error {
+	check := func(c *CycleRecord, initialDeferred []string) (string, error) {
 		ev, err := st.Evidence(ctx, c.ID)
 		if err != nil {
-			return err
+			return IntegrityErrEvidenceRead, err
 		}
 		ci, done, err := verifyCycle(ctx, &rep, c, ev, initialDeferred, src, o, start)
 		if err != nil {
-			return err
+			return IntegrityErrSourceRead, err
 		}
 		incomplete = incomplete || !done
 		unverifiable = unverifiable || ci.Unverifiable
 		rep.Cycles = append(rep.Cycles, ci)
-		return nil
+		return "", nil
 	}
 	if last != nil {
 		var init []string
@@ -186,8 +214,8 @@ func Verify(ctx context.Context, st IntegrityStore, src Source, o IntegrityOptio
 			init = beforeLast.Deferred
 		}
 		// the cycle before the last one is the only source of its initial deferrals (cycle 1 starts with none)
-		if err := check(last, initOrUnknown(init, beforeLast != nil || last.Cycle == 1)); err != nil {
-			return rep, err
+		if code, err := check(last, initOrUnknown(init, beforeLast != nil || last.Cycle == 1)); err != nil {
+			return fail(code, err)
 		}
 	}
 	if running != nil {
@@ -196,15 +224,17 @@ func Verify(ctx context.Context, st IntegrityStore, src Source, o IntegrityOptio
 		if last != nil {
 			init, known = last.Deferred, true
 		}
-		if err := check(running, initOrUnknown(init, known)); err != nil {
-			return rep, err
+		if code, err := check(running, initOrUnknown(init, known)); err != nil {
+			return fail(code, err)
 		}
 	}
 	switch {
 	case len(rep.Problems) > 0:
 		rep.Status = IntegrityInconsistent
+	case incomplete && ctx.Err() != nil:
+		rep.Status, rep.Error = IntegrityIncomplete, IntegrityErrInterrupted
 	case incomplete:
-		rep.Status = IntegrityIncomplete
+		rep.Status, rep.Error = IntegrityIncomplete, IntegrityErrTimeBudget
 	case unverifiable:
 		rep.Status = IntegrityUnverifiable
 	default:

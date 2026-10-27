@@ -131,6 +131,12 @@ func securityFindings(now time.Time, snaps []opsview.Snapshot, statuses []Source
 			case strings.Contains(m.Key, ".reconciliation.sweep_health") && m.State == reconsweep.HealthIntegrityFailure:
 				add("RECONCILIATION_SWEEP_INTEGRITY", "CRITICAL", module, m.Key, "A reconciliation checkpoint failed its integrity verification: "+m.Label,
 					m.Source, metricEvidence(m, now))
+			// remediation phase 6 (F-R5-01/02): no successful integrity verification within the threshold — repeated
+			// errors or time-outs, or none at all — is raised from the integrity metric itself, so a sweep whose health
+			// shows another state (blocked, failing) still raises it
+			case strings.Contains(m.Key, ".reconciliation.integrity_age_seconds") && m.State == reconsweep.IntegrityStateStale:
+				add("RECONCILIATION_SWEEP_INTEGRITY_UNVERIFIED", "HIGH", module, m.Key, "A reconciliation checkpoint has no current successful integrity verification: "+m.Label,
+					m.Source, metricEvidence(m, now))
 			case strings.Contains(m.Key, ".reconciliation.sweep_health") && m.State == reconsweep.HealthFailing:
 				add("RECONCILIATION_SWEEP_FAILING", "HIGH", module, m.Key, "A reconciliation sweep keeps failing: "+m.Label, m.Source, metricEvidence(m, now))
 			case strings.Contains(m.Key, ".reconciliation.sweep_health") && m.State == reconsweep.HealthStalled:
