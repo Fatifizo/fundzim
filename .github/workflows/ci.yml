@@ -92,8 +92,24 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - run: npx playwright install --with-deps chromium
+      # `install --with-deps` split in two equivalent steps (governance phase 5): runs 40353861155 and 40358498063 spent
+      # 767 s and 686 s here against a usual 19–34 s; separate steps show whether the system packages or the browser
+      # download was slow next time. Same packages, same browser, same version (package-lock).
+      - name: Playwright system dependencies (Chromium)
+        run: npx playwright install-deps chromium
+      - name: Playwright Chromium browser
+        run: npx playwright install chromium
       - run: npm run test:e2e
+      - name: Keep the Playwright report and traces of a failed run (mock API only; no real credentials)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-e2e-${{ github.sha }}
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
 
   contracts:
     name: OpenAPI and SQL design drafts
@@ -206,7 +222,8 @@ jobs:
         working-directory: apps/web
         run: |
           npm ci --no-audit --no-fund
-          npx playwright install --with-deps chromium
+          npx playwright install-deps chromium
+          npx playwright install chromium
       - name: Wait for ClamAV signatures
         run: |
           for i in $(seq 1 60); do
