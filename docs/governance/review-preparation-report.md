@@ -52,6 +52,26 @@ Stale after Phase 6, and refreshed in this step:
 - None is independently reviewed, and integration gate 4 requires the whole range.
 - Reviewing Phases 1–6 alone cannot unblock integration unless the owner records how the rest is handled.
 
+**G-02 — a pre-existing UI race made CI red on the documentation commit `5fb1931`** (run 40508474321, 7/8).
+- **Failure:** `Web end-to-end (Playwright)`: `e2e/staff-fees.spec.ts:50` on mobile-chromium. The status "Draft version
+  created." was not visible within 5 s (220 passed, 1 skipped, 1 failed).
+- **Cause, found by reading the code:**
+  - `VersionForm` (`apps/web/src/components/admin/finance/fee-forms.tsx`) keeps its success notice in the form's own state,
+    then calls `router.refresh()`.
+  - After the refresh, the policy page (`apps/web/src/app/admin/finance/fees/policies/[id]/page.tsx:71`) sees the new draft
+    and **replaces the form**, unmounting the notice.
+  - The confirmation exists only between the save and the refresh. Users can miss it, and the test fails when the refresh
+    wins.
+- **Reproduction:** not reproduced locally. 20 repeats of the spec on mobile-chromium all passed (60/60), on a local
+  production build with the mock API.
+- **Origin:** present since Stage 12 (`8c2855d`).
+- **Disposition:**
+  - not fixed here (documents-only step);
+  - the commit changed no code, and the same code passed 8/8 on `b9496c3` and `dfaa53b`;
+  - the failed run is reported as a failure, and no re-run is claimed (re-running needs a token).
+  - **The fix is a small presentation change**: keep the notice above the form, or hand it to the page after the refresh.
+    It needs its own reviewed commit.
+
 ## 5. Gate status
 
 | Area | Status |
@@ -61,7 +81,7 @@ Stale after Phase 6, and refreshed in this step:
 | Review scope | **BLOCKED** (D-15) |
 | Review of Phases 1–6 | **NOT REVIEWED**; preparation complete |
 | Review of Stages 1–20 | **NOT REVIEWED** |
-| Candidate CI | **MET** for `dfaa53b` (8/8); merge-ref CI not run (no PR) |
+| Candidate CI | **MET** for `dfaa53b` (8/8); **NOT MET** for the branch head `5fb1931` (7/8, G-02); merge-ref CI not run (no PR) |
 | Migration readiness | **NOT REVIEWED**; **BLOCKED** for any shared database (E5, E6) |
 | Controlled integration | **BLOCKED** |
 | Production financial operations | **BLOCKED** |
