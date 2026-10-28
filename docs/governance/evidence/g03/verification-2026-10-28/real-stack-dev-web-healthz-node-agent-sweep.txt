@@ -1,0 +1,6 @@
+5900ms trials=20 reused=20 failures=0 {}
+5970ms trials=20 reused=20 failures=0 {}
+5990ms trials=20 reused=20 failures=2 {"ECONNRESET socket hang up":2}
+6000ms trials=20 reused=17 failures=15 {"ECONNRESET socket hang up":15}
+6020ms trials=20 reused=0 failures=0 {}
+6100ms trials=20 reused=0 failures=0 {}

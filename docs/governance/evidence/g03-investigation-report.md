@@ -5,12 +5,13 @@
 | Date | 2026-10-28 |
 | Repository | `/home/administrator/projects/fundzim` (remote `Fatifizo/fundzim`) |
 | Branch | `remediation/g03-e2e-socket-hangup`, created from `d0be53e` (head of `remediation/g02-fee-draft-notice`) |
-| Fix commit | `02aac0e` |
+| Commits | `02aac0e` (fix), `8a293df` (report), `bdbc607` (coverage of the `request` fixture, browser-traffic test, lint guard), then the verification report commit |
 | Untouched | `main` (`a552de2`), `remediation/integrity-status` (`d3d45c6`), G-02 commits `d83d1ac` and `d0be53e` (preserved), every database. No merge, no deployment |
 | Author | Claude Code. **Not independently reviewed** |
 | Status | **FIXED ON THE BRANCH — NOT REVIEWED** (§9) |
 
-Evidence files are in `evidence/g03/` with `SHA256SUMS`.
+Evidence files are in `evidence/g03/` with `SHA256SUMS`. The final verification of 2026-10-28 is §11; its files are in
+`evidence/g03/verification-2026-10-28/`.
 
 ## 1. Original failure
 
@@ -123,6 +124,10 @@ The CI test's own gap (6.7 s locally) is close to the 6 s boundary. A runner on 
 - **All 19 existing specs:** `test` is imported from `./helpers` instead of `@playwright/test`. This is a one-line import
   change each; no test body or assertion changed.
 - **`apps/web/e2e/request-connections.spec.ts`** (new): the regression tests (§7).
+- **`bdbc607`:**
+  - the built-in `request` fixture, used by 6 tests, is covered too;
+  - a test proves browser traffic is unchanged;
+  - a lint guard is added (§11).
 - **Untouched:** no application code, server configuration, financial code or CI workflow changed. Every assertion of
   every existing test is unchanged.
 
@@ -135,12 +140,15 @@ fetches immediately on interception, not after an idle gap.
 2 s idle close and no grace buffer. Below 1 s, the advertised `timeout=0` stops clients reusing connections, which would
 hide the condition (measured, `node-experiments.txt`).
 
-1. Test-setup requests from the default context **and** a `browser.newContext()` context:
+1. Test-setup requests from the default context, a `browser.newContext()` context **and** (from `bdbc607`) the built-in
+   `request` fixture:
    - back-to-back requests and requests sent at the idle close all return 201;
    - every request uses its own connection;
    - every request carries `Connection: close`.
 2. A 500 from the server is returned as a 500, sent **once**: no retry, no hidden failure.
 3. Control: an unprotected client **does** reuse connections. This proves the probe detects reuse.
+4. (From `bdbc607`) The browser's own page loads keep their keep-alive connections: no `Connection: close`, and the
+   connection is reused.
 
 **Results.**
 
@@ -166,34 +174,38 @@ precondition (no connection reuse) rather than timing.
 | 40521729530 | `d83d1ac` | failure 7/8 (the original G-03 failure) |
 | 40526376062 | `d0be53e` | success 8/8 (same path; failure not hit) |
 | **40654287677** | `02aac0e` (fix) | **success 8/8**; web e2e 227 passed, 1 skipped (8.2 min), seen via the API |
+| 40657724785 | `8a293df` (report) | success 8/8; web e2e 227 passed, 1 skipped (7.9 min) |
+| 40672295511 | `bdbc607` | success 8/8; web e2e 229 passed, 1 skipped (6.4 min); the Web job runs lint (the guard) and the guard test |
 
 ## 9. Status, risks and review
 
-**G-03: FIXED ON THE BRANCH — NOT REVIEWED.**
-- The mechanism is reproduced, and the fix removes its precondition, verified by a red→green test, a mutation check and
-  the real-app comparison.
-- CI on the fix commit passed 8/8 (run 40654287677). One green run is not proof that an intermittent race is gone; the
-  regression test asserts the precondition instead.
-- It is not closed: closing needs independent review.
+**G-03: FIXED ON THE BRANCH — NOT REVIEWED. NOT CLOSED.**
+- The mechanism is reproduced, and the fix removes its precondition, verified by red→green tests, mutation checks and
+  real-app comparisons.
+- CI on the fix commits passed (§8). Green runs are not proof that an intermittent race is gone; the regression test
+  asserts the precondition instead.
+- Closing needs independent review.
 
-**Remaining risks.**
+**Remaining risks** (updated by §11).
 1. Attribution of the specific CI failure rests on its signature, not on its server log (§4).
-2. The fix depends on specs importing `test` from `./helpers`. A future spec importing from `@playwright/test` loses the
-   protection silently. Recommended: a lint rule (`no-restricted-imports` for `test` from `@playwright/test` in `e2e/`).
-   **Not added here.**
-3. The real-stack suite (`apps/web/e2e-real`, compose web app) uses the same client and Next server defaults and may have
-   the same race. It is not investigated here.
+2. **Mitigated for `e2e/`:** the lint guard (§11.3) rejects importing `test` from `@playwright/test` in `e2e/**/*.spec.ts`.
+   It does not cover `e2e-real/`.
+3. **The real-stack suite is exposed and unprotected (§11.4).**
+   - Its web container closes idle connections at the same 6 s, and Playwright's client reproduces the hang-up there.
+   - Its specs use `page.request`, the `request` fixture and `browser.newContext()` without the fixture.
+   - No real-stack failure of this kind has been observed. Extending the fixture there is a recommended follow-up, not done
+     here.
 4. `route.fetch()` is not covered (§6).
-5. Wrapping the request client's `fetch` relies on Playwright's documented public method. A Playwright upgrade must keep
+5. Wrapping the request client's `fetch` relies on Playwright's public method. A Playwright upgrade must keep
    `request-connections.spec.ts` green.
 
 **Independent-review requirements.**
 - A reviewer who is not the author account (D-01a).
-- Read `helpers.ts` (fixture, worker-scoped `browser` override, `WeakSet` guard) and the new spec.
-- Confirm that the 19 import changes alter no test body.
-- Re-run `npx playwright test e2e/request-connections.spec.ts` (and ideally the probe scripts in `evidence/g03/scripts/`
-  against `node e2e/serve.mjs`).
-- Decide on risks 2 and 3.
+- Read `helpers.ts` (the `context`, `request` and worker-scoped `browser` fixtures; the `WeakSet` guard), the regression
+  spec, the lint rule and its test.
+- Confirm that the 19 import changes alter no test body (§11.2 gives the mechanical check).
+- Re-run `npx playwright test e2e/request-connections.spec.ts` and `npx vitest run src/__tests__/e2e-import-guard.test.ts`.
+- Decide on risk 3: extend the fixture to `e2e-real/`, or accept the risk.
 
 The record template is in `docs/governance/independent-review-process.md` §5.
 
@@ -205,3 +217,81 @@ The record template is in `docs/governance/independent-review-process.md` §5.
 - No payment, payout, ledger or fee code changed.
 - Cookie values from the CI annotation are redacted.
 - Phase 7 not started.
+
+## 11. Final verification (2026-10-28)
+
+### 11.1 Repository and CI
+
+- Branch `remediation/g03-e2e-socket-hangup`; `02aac0e` and `8a293df` present; the tree was clean and equal to `origin`
+  before this step.
+- CI is in §8. Run 40657724785 on `8a293df`, unknown when the first report was written, completed **success 8/8**.
+
+### 11.2 The shared fixture (`e2e/helpers.ts`)
+
+| Property | Verified how | Result |
+|---|---|---|
+| Default context's API client (`page.request` = `context.request`) | regression test 1 | fresh connection, `Connection: close` |
+| Extra contexts (`browser.newContext()`, 10 tests) | regression test 1 | covered |
+| Built-in `request` fixture (6 tests) | found uncovered in this review; covered in `bdbc607`; test 1; mutation (override removed → test 1 fails on both projects) | covered |
+| Browser navigation and browser traffic unchanged | new test 4: page loads carry no `Connection: close` and reuse the connection | unchanged |
+| No retry of POST requests | test 2: a 500 arrives once | no retry |
+| Server errors preserved | test 2 returns the 500; helpers assert `201` | preserved |
+| Used by every spec | each of the 20 specs imports `test` from `./helpers` (parsed per file) | 20/20 |
+| The 19 import edits change only imports | every changed line in `git diff d0be53e..02aac0e` of the 19 specs is an import line (script check) | 0 non-import lines |
+
+Not covered:
+- `browser.newPage()` (unused);
+- `request.newContext()` from the `@playwright/test` module (used only by the control test);
+- `route.fetch()` (§6).
+
+### 11.3 Direct-import guard
+
+`eslint.config.mjs`, `no-restricted-imports` for `e2e/**/*.spec.ts`, forbids importing `test` from `@playwright/test`
+(including `test as x`), with a message pointing to `./helpers`. ESLint already runs in CI (`npm run lint`).
+`src/__tests__/e2e-import-guard.test.ts` lints sample sources with the repository's config:
+- direct and aliased imports are rejected;
+- the helpers `test` with `expect` and types from `@playwright/test` is accepted;
+- `e2e/helpers.ts`, `playwright.config.ts` and Vitest test files are not affected.
+
+Mutation check: with the rule removed, the guard test fails. All current specs pass the rule.
+
+Not covered: specs outside `e2e/**/*.spec.ts`, notably `e2e-real/`. That suite does not use the fixture at all.
+
+### 11.4 Real-stack coverage
+
+| Question | Finding |
+|---|---|
+| Same API client? | yes: `page.request` (staff-ledger, staff-moderation, staff-reconciliation, support/browser), the built-in `request` fixture (public, discovery) and `browser.newContext()` (featured, staff-moderation) |
+| Imports the shared fixture? | no: every `e2e-real` spec imports `test` from `@playwright/test` |
+| Setup requests outside Playwright's client? | yes. Provisioning (`support/http.ts`, global setup) uses Node's built-in `fetch` (undici). It had 0 failures in sequential trials at gaps 3 900–6 000 ms (`real-stack-dev-web-healthz-undici-sweep.txt`) |
+| Same connection lifecycle? | yes. `fundzim-web` is Next standalone on Node 24.21 with no `KEEP_ALIVE_TIMEOUT`. Through Docker's port publishing it advertises `Keep-Alive: timeout=5` and closes idle connections at 6 s. A Node keep-alive agent failed 17/40 at 5 990–6 000 ms (`real-stack-dev-web-healthz-node-agent-sweep.txt`, read-only `/healthz` of the development stack, which uses no API or database) |
+| Does Playwright's client hit it there? | yes. On the disposable `fundzim-r11` web container (`bdbc607`): default **45/60 OK, 15 × `apiRequestContext.get: socket hang up`**; with `Connection: close` **60/60 OK** (`real-stack-r11-web-healthz-playwright-default-vs-close.txt`) |
+| Does the regression test exercise the real-stack path? | no. It runs only in the mock suite. **The mock-suite tests do not prove real-stack coverage** |
+| Real-stack suite run | disposable compose project `fundzim-r11` built from `bdbc607` (isolation: `isolation-fundzim-r11-bdbc607.txt`), lock held. The first attempt stopped in global setup before any test: the bootstrap script's `docker compose exec` targeted the stopped development project ("service fundzim-postgres is not running"), so it changed nothing. Re-run with `COMPOSE_PROJECT_NAME=fundzim-r11`: **64 passed (10.6 min)** (`e2e-real-r11-bdbc607.log.txt`). This is a baseline: those specs do not use the fix |
+| Environment afterwards | `fundzim-r11` removed with its volumes (0 left). The development project was restarted without rebuilding: image IDs unchanged, "no pending migrations", still at `20261025090000`, 9/9 healthy. `e2e-real/.state` was backed up before the run and restored afterwards (`teardown-and-dev-restore.txt`) |
+
+### 11.5 Local results in this step (`bdbc607` tree; not GitHub CI)
+
+| Command (in `apps/web`) | Result |
+|---|---|
+| `CI=1 E2E_SKIP_BUILD=1 npx playwright test e2e/request-connections.spec.ts` (after) | 8/8 (4 tests × desktop, mobile) |
+| same with `--repeat-each=10` | **80/80** |
+| same with the `request` override removed (mutation) | test 1 failed on both projects |
+| `npx playwright test e2e/verification.spec.ts:505 --repeat-each=30` | **60/60** |
+| `CI=1 E2E_SKIP_BUILD=1 npx playwright test` (full mock suite) | **229 passed, 1 skipped** (the existing mobile-only test) |
+| `npm test` | 585/585 (62 files) |
+| `npx vitest run src/__tests__/e2e-import-guard.test.ts` (and its mutation) | 3/3 (mutation: 1 failed) |
+| `npm run lint`, `npm run typecheck`, `npm run build` | clean |
+| `npm run test:e2e:real` on `fundzim-r11` | 64 passed |
+
+### 11.6 Distinctions
+
+| Claim | Status |
+|---|---|
+| Root-cause mechanism | **reproduced locally**, against the mock harness and the real-stack web container |
+| Exact original CI event linked to it | **not conclusively.** Strong signature match, but the run's log and trace need a token |
+| Local test results | §7, §11.5 |
+| GitHub CI results | §8 |
+| Mock-API coverage | fixed, guarded, regression-tested |
+| Real-stack coverage | **exposed, not fixed**; baseline run passed |
+| Independent review | **none** (no reviewer, D-01a) |

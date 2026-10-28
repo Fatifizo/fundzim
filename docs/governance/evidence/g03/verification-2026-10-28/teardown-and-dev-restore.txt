@@ -1,0 +1,13 @@
+r11 volumes after: 0
+dev up exit: 0
+dev images after:
+sha256:adfb403d703e7e2493225ad267411b15b1ed63b7c2406b024456c4798e3f4639
+sha256:9c4e1ccd74369bd1699536aaf038a7f45bfe55f843ceeb4ddcb55fec025d8331
+fundzim-migrate-1  | no pending migrations
+dev migration after: 20261025090000
+healthy: 9/9
+dev images before:
+sha256:adfb403d703e7e2493225ad267411b15b1ed63b7c2406b024456c4798e3f4639
+sha256:9c4e1ccd74369bd1699536aaf038a7f45bfe55f843ceeb4ddcb55fec025d8331
+dev migration before: 20261025090000
+e2e-real/.state backed up before the run and restored afterwards (8 files, identical to the backup by diff -rq)

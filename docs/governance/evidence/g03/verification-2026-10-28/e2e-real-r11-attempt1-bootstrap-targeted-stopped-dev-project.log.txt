@@ -1,0 +1,24 @@
+
+> fundzim@0.1.0 test:e2e:real
+> playwright test -c playwright.real.config.ts
+
+[real-stack setup] bootstrap ceremony: (re)creating two super admins
+Error: Command failed: /home/administrator/projects/fundzim/scripts/e2e/bootstrap-admins.sh e2e-real-admin-a-mvrz49ezv41d@example.test E2E Admin A e2e-real-admin-b-mvrz49f0uy7s@example.test E2E Admin B
+service "fundzim-postgres" is not running
+
+
+   at support/provision.ts:247
+
+  245 |   const a = { key: "adminA", name: "E2E Admin A", role: "SUPER_ADMIN", email: uniqueEmail("admin-a"), id: "", secret: "" };
+  246 |   const b = { key: "adminB", name: "E2E Admin B", role: "SUPER_ADMIN", email: uniqueEmail("admin-b"), id: "", secret: "" };
+> 247 |   const out = execFileSync(path.join(REPO_ROOT, "scripts/e2e/bootstrap-admins.sh"), [a.email, a.name, b.email, b.name], {
+      |                           ^
+  248 |     cwd: REPO_ROOT,
+  249 |     encoding: "utf8",
+  250 |     stdio: ["ignore", "pipe", "pipe"],
+    at bootstrapAdmins (/home/administrator/projects/fundzim/apps/web/e2e-real/support/provision.ts:247:27)
+    at ensureStaff (/home/administrator/projects/fundzim/apps/web/e2e-real/support/provision.ts:328:11)
+    at globalSetup (/home/administrator/projects/fundzim/apps/web/e2e-real/global-setup.ts:55:3)
+::error ::Error: Command failed: /home/administrator/projects/fundzim/scripts/e2e/bootstrap-admins.sh e2e-real-admin-a-mvrz49ezv41d@example.test E2E Admin A e2e-real-admin-b-mvrz49f0uy7s@example.test E2E Admin B%0Aservice "fundzim-postgres" is not running%0A%0A%0A   at support/provision.ts:247%0A%0A  245 |   const a = { key: "adminA", name: "E2E Admin A", role: "SUPER_ADMIN", email: uniqueEmail("admin-a"), id: "", secret: "" };%0A  246 |   const b = { key: "adminB", name: "E2E Admin B", role: "SUPER_ADMIN", email: uniqueEmail("admin-b"), id: "", secret: "" };%0A> 247 |   const out = execFileSync(path.join(REPO_ROOT, "scripts/e2e/bootstrap-admins.sh"), [a.email, a.name, b.email, b.name], {%0A      |                           ^%0A  248 |     cwd: REPO_ROOT,%0A  249 |     encoding: "utf8",%0A  250 |     stdio: ["ignore", "pipe", "pipe"],%0A    at bootstrapAdmins (/home/administrator/projects/fundzim/apps/web/e2e-real/support/provision.ts:247:27)%0A    at ensureStaff (/home/administrator/projects/fundzim/apps/web/e2e-real/support/provision.ts:328:11)%0A    at globalSetup (/home/administrator/projects/fundzim/apps/web/e2e-real/global-setup.ts:55:3)
+
+::notice title=🎭 Playwright Run Summary::

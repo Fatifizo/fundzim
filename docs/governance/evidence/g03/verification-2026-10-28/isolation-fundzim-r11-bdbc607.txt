@@ -1,0 +1,18 @@
+project: fundzim-r11
+fundzim-r11-fundzim-api-1 fundzim/api:fundzim-r11 Up 19 seconds (healthy)
+fundzim-r11-fundzim-clamav-1 clamav/clamav:1.5.3@sha256:d06c1d6a451d616e1dd79b42f44c8c8c291bba9cf4e75ebc4d0e43c1c6dd87bb Up 32 seconds (healthy)
+fundzim-r11-fundzim-mail-1 axllent/mailpit:v1.31.4@sha256:b68349e3a014b90c5610bfb26b2ae36f3892d7b8cf25ee140c6c71c98d2fcf48 Up 32 seconds (healthy)
+fundzim-r11-fundzim-postgres-1 postgres:17.11-alpine3.24@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 Up 32 seconds (healthy)
+fundzim-r11-fundzim-redis-1 valkey/valkey:9.0.6-alpine3.24@sha256:187679e3bd4036959631e3f03983ab2ba503ab21e6fd0454d508e909db2ee989 Up 32 seconds (healthy)
+fundzim-r11-fundzim-secrets-1 openbao/openbao:2.4.1@sha256:597f62847dd382382056a1d6704d50465908c2040038c4611832a23269a67112 Up 32 seconds (healthy)
+fundzim-r11-fundzim-storage-1 dxflrs/garage:v2.4.1@sha256:9c96caa2612d3411acc5b0e6701fb238dbfba33e533a6d7d3d811a4b12d0d020 Up 32 seconds (healthy)
+fundzim-r11-fundzim-web-1 fundzim/web:fundzim-r11 Up 13 seconds (healthy)
+fundzim-r11-fundzim-worker-1 fundzim/api:fundzim-r11 Up 18 seconds (healthy)
+dev containers running: 0
+r11 volumes: 4
+APP_ENV=development
+PAYMENTS_EXECUTION_ENVIRONMENT=LOCAL_SIMULATOR
+PAYOUTS_EXECUTION_ENVIRONMENT=LOCAL_SIMULATOR
+production secret refs: 0
+version: {"data":{"name":"FundZim","version":"0.1.0-dev","build":"unknown","commit":"bdbc6070d96620fac50c25712be19d69a3a501df"},"meta":{"request_id":"01a1820e-fff0-761c-99e3-7b9df8b56440"}}
+schema: 20261028090000

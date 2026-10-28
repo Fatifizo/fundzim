@@ -1,0 +1,4 @@
+default 5990ms: 26/30 ok {"apiRequestContext.get: socket hang up":4}
+default 6000ms: 19/30 ok {"apiRequestContext.get: socket hang up":11}
+connection-close 5990ms: 30/30 ok {}
+connection-close 6000ms: 30/30 ok {}

@@ -16,3 +16,16 @@ f24c492734bd51fb998754374c75287fe4842095db2ce25f08003fbff8af0e33  ./regression-s
 12e3b2d4420a68b87a9deb332fc9869510229772de796a59bece0557410f4a33  ./scripts/hint.mjs
 83d201e0613f3144937ba2a10e0c8a51046bb7e907bf3241074c52af15e17758  ./scripts/node-race.mjs
 63fbc63a18da76a0a687993e68cb01bc328266d54655f324946441f290ec2e93  ./scripts/pw-race.mjs
+62ceb885ead966e153b2ef475e70d812785974836f30d8be2536792f77e046b3  ./verification-2026-10-28/csp-test-repeat30-bdbc607.log.txt
+8469d4d92fd12b6e7c6c2eaa2b317ef5252ca397d5dd41fb765db5e8fae82d86  ./verification-2026-10-28/e2e-full-bdbc607.log.txt
+08300ce997881cc751645e1b3f7298ce81ec6d3af8e4cb98dbf6d332d073b324  ./verification-2026-10-28/e2e-real-r11-attempt1-bootstrap-targeted-stopped-dev-project.log.txt
+4d60e52efeaf47a1a2097c4665ab93d7c68701546d7265a0aa912753db9556cc  ./verification-2026-10-28/e2e-real-r11-bdbc607.log.txt
+4dfcc393fd875ae85f7a892157965a88ca74e9406f7f509d07f68c02a80ae02b  ./verification-2026-10-28/isolation-fundzim-r11-bdbc607.txt
+2b2236fdfe498c70bc99e8335518a41a2353cc8e364af63a98b06dd0fb268d4c  ./verification-2026-10-28/real-stack-dev-web-healthz-node-agent-sweep.txt
+247d6bcca7000093ea114e4c5430c66f78e309af93f2f320dbb01cdd9b653004  ./verification-2026-10-28/real-stack-dev-web-healthz-undici-sweep.txt
+beaf417ed32f0ce492db0fa2bfe700e64b96be56a584c7fb6f72a968e527c81a  ./verification-2026-10-28/real-stack-r11-web-healthz-playwright-default-vs-close.txt
+34d3098cfbf36be853af8cd282d94b5f50194a2e76368d14638e4b02f3a70171  ./verification-2026-10-28/regression-spec-repeat10-bdbc607.log.txt
+ff52413cc95241b5866d00dd3d17b765eecded958a6ad2cbeeda9cb466c8ee80  ./verification-2026-10-28/regression-spec-v2-after.txt
+e16422d96156158a70b6dba59e64170a96cc30e1413fad3a15b125a06456034b  ./verification-2026-10-28/regression-spec-v2-mutation-no-request-fixture.txt
+8c1c464cac6786fb39c470c279b66731ff7fe89996d1c272eec075750a019be8  ./verification-2026-10-28/teardown-and-dev-restore.txt
+0cac78045e71a5af271f42731bd756c97e1bc9e554da91fb028cde3f88f67ac8  ./verification-2026-10-28/web-unit-bdbc607.txt

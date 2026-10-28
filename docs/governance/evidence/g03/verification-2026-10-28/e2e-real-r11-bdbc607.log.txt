@@ -1,0 +1,97 @@
+
+> fundzim@0.1.0 test:e2e:real
+> playwright test -c playwright.real.config.ts
+
+[real-stack setup] bootstrap ceremony: (re)creating two super admins
+[real-stack setup] staff fixture: creating kycReviewer (KYC_REVIEWER)
+[real-stack setup] staff fixture: creating provReviewer (REVIEWER)
+[real-stack setup] staff fixture: creating provCompliance (COMPLIANCE)
+[real-stack setup] staff fixture: creating moderator (ADMIN)
+[real-stack setup] staff fixture: creating reviewer (REVIEWER)
+[real-stack setup] staff fixture: creating compliance (COMPLIANCE)
+[real-stack setup] staff fixture: creating finance1 (FINANCE)
+[real-stack setup] staff fixture: creating finance2 (FINANCE)
+[real-stack setup] staff fixture: creating 4 unlinked REVIEWER candidates for the linked-account test
+[real-stack] invite:e2e-real-staff-linkedvucyr-mvrz5vkwkk2d@example.test POST /auth/staff-invitation/start: rate limited, waiting 30 s
+[real-stack] invite:e2e-real-staff-linkedvucyr-mvrz5vkwkk2d@example.test POST /auth/staff-invitation/finish: rate limited, waiting 44 s
+[real-stack] invite:e2e-real-staff-linked4zilh-mvrz7jt7g9yf@example.test POST /auth/staff-invitation/start: rate limited, waiting 42 s
+[real-stack] invite:e2e-real-staff-linked4zilh-mvrz7jt7g9yf@example.test POST /auth/staff-invitation/finish: rate limited, waiting 44 s
+[real-stack] invite:e2e-real-staff-linkedxjix6-mvrz9gzan5wr@example.test POST /auth/staff-invitation/start: rate limited, waiting 44 s
+[real-stack] invite:e2e-real-staff-linkedxjix6-mvrz9gzan5wr@example.test POST /auth/staff-invitation/finish: rate limited, waiting 44 s
+[real-stack] invite:e2e-real-staff-linkedrtazb-mvrzbf3ch3m7@example.test POST /auth/staff-invitation/start: rate limited, waiting 43 s
+[real-stack] invite:e2e-real-staff-linkedrtazb-mvrzbf3ch3m7@example.test POST /auth/staff-invitation/finish: rate limited, waiting 44 s
+[real-stack setup] staff ready (368 s)
+[real-stack] user:owner-s2wios POST /auth/verify-email: rate limited, waiting 41 s
+[real-stack setup] owner e2e-real-owner-s2wios-mvrzdcwddclk@example.test identity-verified (414 s)
+[real-stack setup] 23 campaigns created with scanned covers (444 s)
+[real-stack setup] run s2wios provisioned in 451 s
+
+Running 64 tests using 1 worker
+
+  ✓   1 [staff-desktop] › e2e-real/staff-ledger.spec.ts:15:5 › synthetic fixture posted by an ADMIN appears balanced and TEST_ONLY in the finance UI (6.4s)
+  ✓   2 [staff-desktop] › e2e-real/staff-ledger.spec.ts:63:5 › payout operations overview: TEST payouts through the simulator only, production BLOCKED; no access without payout.view (1.9s)
+  ✓   3 [staff-desktop] › e2e-real/staff-ledger.spec.ts:88:5 › fees: TEST fees only, production fee charging BLOCKED, per-currency revenue; no access without fee.view (2.0s)
+  ✓   4 [staff-desktop] › e2e-real/staff-moderation.spec.ts:88:5 › staff sign in with password and authenticator code through the login page (1.4s)
+  ✓   5 [staff-desktop] › e2e-real/staff-moderation.spec.ts:101:5 › review queue → assign → start review → request changes; the owner sees only the message and resubmits (3.2s)
+  ✓   6 [staff-desktop] › e2e-real/staff-moderation.spec.ts:139:5 › resubmitted campaign: approve with step-up; the owner publishes in the UI; the public page is live (4.4s)
+  ✓   7 [staff-desktop] › e2e-real/staff-moderation.spec.ts:170:5 › suspension in the UI removes the public page and the listing; reactivation restores both (4.0s)
+  ✓   8 [staff-desktop] › e2e-real/staff-moderation.spec.ts:194:5 › HIGH tier (MEDICAL): first approval waits for a second, different approver; COMPLIANCE gives it in the UI; staff publish (5.4s)
+  ✓   9 [staff-desktop] › e2e-real/staff-moderation.spec.ts:239:5 › HIGH tier: a COMPLIANCE officer who gave the first approval cannot give the second (UI hides it, API refuses) (2.4s)
+  ✓  10 [staff-desktop] › e2e-real/staff-moderation.spec.ts:262:5 › self-approval prevention: a staff member linked (real ceremony) to the owner's personal account is refused (21.5s)
+  ✓  11 [staff-desktop] › e2e-real/staff-reconciliation.spec.ts:26:5 › a TEST statement imported in the UI is scanned, parsed and reconciled; the dashboard stays TEST-only (35.9s)
+  ✓  12 [desktop-chromium] › e2e-real/a11y.spec.ts:25:7 › public home page: no serious axe violations, no CSP violations (2.3s)
+  ✓  13 [desktop-chromium] › e2e-real/a11y.spec.ts:25:7 › public discovery page: no serious axe violations, no CSP violations (2.6s)
+  ✓  14 [desktop-chromium] › e2e-real/a11y.spec.ts:25:7 › public category page: no serious axe violations, no CSP violations (2.2s)
+  ✓  15 [desktop-chromium] › e2e-real/a11y.spec.ts:25:7 › public trending page: no serious axe violations, no CSP violations (1.5s)
+  ✓  16 [desktop-chromium] › e2e-real/a11y.spec.ts:25:7 › public featured page: no serious axe violations, no CSP violations (1.5s)
+  ✓  17 [desktop-chromium] › e2e-real/a11y.spec.ts:25:7 › public province page: no serious axe violations, no CSP violations (1.7s)
+  ✓  18 [desktop-chromium] › e2e-real/a11y.spec.ts:25:7 › public campaign page: no serious axe violations, no CSP violations (2.0s)
+  ✓  19 [desktop-chromium] › e2e-real/a11y.spec.ts:25:7 › public safety page: no serious axe violations, no CSP violations (1.6s)
+  ✓  20 [desktop-chromium] › e2e-real/a11y.spec.ts:45:7 › staff reports page: no serious axe violations, no CSP violations (2.4s)
+  ✓  21 [desktop-chromium] › e2e-real/a11y.spec.ts:45:7 › staff featured placements page: no serious axe violations, no CSP violations (3.0s)
+  ✓  22 [desktop-chromium] › e2e-real/a11y.spec.ts:45:7 › staff discovery overview page: no serious axe violations, no CSP violations (3.3s)
+  ✓  23 [desktop-chromium] › e2e-real/a11y.spec.ts:45:7 › staff trending ranking page: no serious axe violations, no CSP violations (3.2s)
+  ✓  24 [desktop-chromium] › e2e-real/discovery.spec.ts:15:5 › search: the catalogue is indexed by the worker; terms are marked; hidden campaigns never appear (873ms)
+  ✓  25 [desktop-chromium] › e2e-real/discovery.spec.ts:34:5 › referral link: a code is issued for a public campaign and the visit drops it from the address bar (590ms)
+  ✓  26 [desktop-chromium] › e2e-real/discovery.spec.ts:49:5 › preview image route follows public visibility (368ms)
+  ✓  27 [desktop-chromium] › e2e-real/featured.spec.ts:29:5 › a reviewer requests a featured placement, a compliance officer approves it; it is featured on the home page until removed (4.0s)
+  ✓  28 [desktop-chromium] › e2e-real/public.spec.ts:49:5 › home page loads with navigation into discovery (553ms)
+  ✓  29 [desktop-chromium] › e2e-real/public.spec.ts:59:5 › discovery: search finds every catalogue campaign across keyset pages (2.2s)
+  ✓  30 [desktop-chromium] › e2e-real/public.spec.ts:78:5 › discovery: category filtering (search form and category page) (1.6s)
+  ✓  31 [desktop-chromium] › e2e-real/public.spec.ts:95:5 › campaign page: approved content, no donations, canonical URL and the exact WhatsApp share link (652ms)
+  ✓  32 [desktop-chromium] › e2e-real/public.spec.ts:119:5 › copy link puts the canonical URL (plus an anonymous referral code, Stage 16) on the clipboard (677ms)
+  ✓  33 [desktop-chromium] › e2e-real/public.spec.ts:139:5 › suspended campaigns are gone: 404 page, absent from discovery and the public API (1.6s)
+  ✓  34 [desktop-chromium] › e2e-real/public.spec.ts:150:5 › unlisted campaigns stay out of discovery but open by link (1.7s)
+  ✓  35 [desktop-chromium] › e2e-real/public.spec.ts:161:5 › only approved updates are public: hidden and pending-moderation updates never appear (902ms)
+  ✓  36 [desktop-chromium] › e2e-real/public.spec.ts:181:5 › private data stays private: no beneficiary name, owner email, legal name or internal ids in the HTML (1.9s)
+  ✓  37 [desktop-chromium] › e2e-real/public.spec.ts:209:5 › robots.txt and noindex follow SITE_INDEXING (disallow) (550ms)
+  ✓  38 [desktop-chromium] › e2e-real/public.spec.ts:232:5 › sitemap.xml lists live public campaigns and categories, never drafts, suspended or unlisted campaigns (46ms)
+  ✓  39 [desktop-chromium] › e2e-real/public.spec.ts:250:5 › short links /c/{code} and non-canonical slugs redirect permanently to the canonical campaign URL (1.1s)
+  ✓  40 [desktop-chromium] › e2e-real/report.spec.ts:30:5 › a visitor reports a campaign; staff see it without the contact email and escalate it in the UI (2.7s)
+  ✓  41 [mobile-chromium] › e2e-real/a11y.spec.ts:25:7 › public home page: no serious axe violations, no CSP violations (2.5s)
+  ✓  42 [mobile-chromium] › e2e-real/a11y.spec.ts:25:7 › public discovery page: no serious axe violations, no CSP violations (2.8s)
+  ✓  43 [mobile-chromium] › e2e-real/a11y.spec.ts:25:7 › public category page: no serious axe violations, no CSP violations (2.4s)
+  ✓  44 [mobile-chromium] › e2e-real/a11y.spec.ts:25:7 › public trending page: no serious axe violations, no CSP violations (1.7s)
+  ✓  45 [mobile-chromium] › e2e-real/a11y.spec.ts:25:7 › public featured page: no serious axe violations, no CSP violations (1.7s)
+  ✓  46 [mobile-chromium] › e2e-real/a11y.spec.ts:25:7 › public province page: no serious axe violations, no CSP violations (1.9s)
+  ✓  47 [mobile-chromium] › e2e-real/a11y.spec.ts:25:7 › public campaign page: no serious axe violations, no CSP violations (2.0s)
+  ✓  48 [mobile-chromium] › e2e-real/a11y.spec.ts:25:7 › public safety page: no serious axe violations, no CSP violations (1.7s)
+  ✓  49 [mobile-chromium] › e2e-real/a11y.spec.ts:45:7 › staff reports page: no serious axe violations, no CSP violations (2.6s)
+  ✓  50 [mobile-chromium] › e2e-real/a11y.spec.ts:45:7 › staff featured placements page: no serious axe violations, no CSP violations (3.2s)
+  ✓  51 [mobile-chromium] › e2e-real/a11y.spec.ts:45:7 › staff discovery overview page: no serious axe violations, no CSP violations (3.5s)
+  ✓  52 [mobile-chromium] › e2e-real/a11y.spec.ts:45:7 › staff trending ranking page: no serious axe violations, no CSP violations (3.3s)
+  ✓  53 [mobile-chromium] › e2e-real/public.spec.ts:49:5 › home page loads with navigation into discovery (707ms)
+  ✓  54 [mobile-chromium] › e2e-real/public.spec.ts:59:5 › discovery: search finds every catalogue campaign across keyset pages (2.1s)
+  ✓  55 [mobile-chromium] › e2e-real/public.spec.ts:78:5 › discovery: category filtering (search form and category page) (1.7s)
+  ✓  56 [mobile-chromium] › e2e-real/public.spec.ts:95:5 › campaign page: approved content, no donations, canonical URL and the exact WhatsApp share link (797ms)
+  ✓  57 [mobile-chromium] › e2e-real/public.spec.ts:119:5 › copy link puts the canonical URL (plus an anonymous referral code, Stage 16) on the clipboard (831ms)
+  ✓  58 [mobile-chromium] › e2e-real/public.spec.ts:139:5 › suspended campaigns are gone: 404 page, absent from discovery and the public API (1.5s)
+  ✓  59 [mobile-chromium] › e2e-real/public.spec.ts:150:5 › unlisted campaigns stay out of discovery but open by link (1.7s)
+  ✓  60 [mobile-chromium] › e2e-real/public.spec.ts:161:5 › only approved updates are public: hidden and pending-moderation updates never appear (1.1s)
+  ✓  61 [mobile-chromium] › e2e-real/public.spec.ts:181:5 › private data stays private: no beneficiary name, owner email, legal name or internal ids in the HTML (2.0s)
+  ✓  62 [mobile-chromium] › e2e-real/public.spec.ts:209:5 › robots.txt and noindex follow SITE_INDEXING (disallow) (639ms)
+  ✓  63 [mobile-chromium] › e2e-real/public.spec.ts:232:5 › sitemap.xml lists live public campaigns and categories, never drafts, suspended or unlisted campaigns (38ms)
+  ✓  64 [mobile-chromium] › e2e-real/public.spec.ts:250:5 › short links /c/{code} and non-canonical slugs redirect permanently to the canonical campaign URL (1.1s)
+
+  64 passed (10.6m)
+::notice title=🎭 Playwright Run Summary::  64 passed (10.6m)
