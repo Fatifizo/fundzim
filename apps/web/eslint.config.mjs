@@ -29,6 +29,25 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  // G-03 (docs/governance/evidence/g03-investigation-report.md): e2e specs must use the `test` of e2e/helpers.ts, whose
+  // fixtures give test-setup API requests a fresh connection. Importing `test` from @playwright/test bypasses them.
+  {
+    files: ["e2e/**/*.spec.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@playwright/test",
+              importNames: ["test"],
+              message: "Import `test` from ./helpers (fresh connections for test-setup API requests, G-03); keep expect and types from @playwright/test.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

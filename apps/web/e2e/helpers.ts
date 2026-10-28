@@ -23,11 +23,18 @@ function withFreshConnections(context: BrowserContext) {
   return context;
 }
 
-/** Use this `test` in every spec: the default context and every `browser.newContext()` get fresh setup connections. */
-// (the fixture callback is named `provide`, not `use`: the React hooks lint rule would mistake it for a hook)
+/**
+ * Use this `test` in every spec: the default context, every `browser.newContext()` and the built-in `request` fixture
+ * get fresh setup connections. (The fixture callback is named `provide`, not `use`: the React hooks lint rule would
+ * mistake it for a hook.)
+ */
 export const test = base.extend({
   context: async ({ context }, provide) => {
     await provide(withFreshConnections(context));
+  },
+  request: async ({ request }, provide) => {
+    freshConnectionPerRequest(request);
+    await provide(request);
   },
   browser: [
     async ({ browser }, provide) => {

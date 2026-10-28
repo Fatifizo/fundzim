@@ -21,6 +21,11 @@ async function probeServer() {
     req.resume();
     req.on("end", () => {
       seen.push({ socket: req.socket, connection: req.headers.connection, path: req.url ?? "" });
+      if (req.url === "/page") {
+        res.setHeader("content-type", "text/html");
+        res.end("<!doctype html><title>probe</title><p>probe</p>");
+        return;
+      }
       res.statusCode = req.url === "/fail" ? 500 : 201;
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ ok: res.statusCode === 201 }));
@@ -45,11 +50,12 @@ async function postAcrossIdleClose(api: APIRequestContext, url: string, rounds: 
   return outcomes;
 }
 
-test("test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up", async ({ page, browser }) => {
+test("test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up", async ({ page, browser, request: requestFixture }) => {
   const probe = await probeServer();
   const extra = await browser.newContext();
   try {
-    for (const api of [page.request, extra.request]) {
+    // the default context's client, a browser.newContext() client and the built-in `request` fixture
+    for (const api of [page.request, extra.request, requestFixture]) {
       probe.seen.length = 0;
       for (let i = 0; i < 3; i++) expect((await api.post(`${probe.url}/setup`, { data: { i } })).status()).toBe(201); // back to back
       const outcomes = await postAcrossIdleClose(api, probe.url, 3);
@@ -59,6 +65,19 @@ test("test-setup requests use a fresh connection each, so an idle-connection clo
     }
   } finally {
     await extra.close();
+    await probe.close();
+  }
+});
+
+test("the browser's own traffic keeps its normal keep-alive connections", async ({ page }) => {
+  const probe = await probeServer();
+  try {
+    for (let i = 0; i < 3; i++) expect((await page.goto(`${probe.url}/page`))?.status()).toBe(200);
+    const pages = probe.seen.filter((s) => s.path === "/page");
+    expect(pages).toHaveLength(3);
+    expect(pages.every((s) => s.connection !== "close")).toBe(true);
+    expect(new Set(pages.map((s) => s.socket)).size, "the browser reuses its connection").toBeLessThan(pages.length);
+  } finally {
     await probe.close();
   }
 });
