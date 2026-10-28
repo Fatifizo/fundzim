@@ -1,0 +1,6 @@
+unprotected gap 5985ms: 19/20 ok {"apiRequestContext.get: socket hang up":1}
+unprotected gap 5995ms: 14/20 ok {"apiRequestContext.get: socket hang up":6}
+unprotected gap 6000ms: 16/20 ok {"apiRequestContext.get: socket hang up":4}
+shared-fixture gap 5985ms: 20/20 ok {}
+shared-fixture gap 5995ms: 20/20 ok {}
+shared-fixture gap 6000ms: 20/20 ok {}

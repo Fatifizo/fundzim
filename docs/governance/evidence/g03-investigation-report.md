@@ -5,13 +5,15 @@
 | Date | 2026-10-28 |
 | Repository | `/home/administrator/projects/fundzim` (remote `Fatifizo/fundzim`) |
 | Branch | `remediation/g03-e2e-socket-hangup`, created from `d0be53e` (head of `remediation/g02-fee-draft-notice`) |
-| Commits | `02aac0e` (fix), `8a293df` (report), `bdbc607` (coverage of the `request` fixture, browser-traffic test, lint guard), then the verification report commit |
+| Commits | `02aac0e` (fix), `8a293df` (report), `bdbc607` (coverage of the `request` fixture, browser-traffic test, lint guard), then the verification report commit; `cec643d` (verification report). Real-stack remediation (§12): branch `remediation/g03-real-stack-connections` from `cec643d`, `e063113` (code), then its report commit |
 | Untouched | `main` (`a552de2`), `remediation/integrity-status` (`d3d45c6`), G-02 commits `d83d1ac` and `d0be53e` (preserved), every database. No merge, no deployment |
 | Author | Claude Code. **Not independently reviewed** |
 | Status | **FIXED ON THE BRANCH — NOT REVIEWED** (§9) |
 
 Evidence files are in `evidence/g03/` with `SHA256SUMS`. The final verification of 2026-10-28 is §11; its files are in
 `evidence/g03/verification-2026-10-28/`.
+The real-stack remediation is §12, with files in `evidence/g03/real-stack-2026-10-28/`. §12 supersedes risks 3 and 4
+of §9 and the real-stack rows of §11.4; those sections are kept as written.
 
 ## 1. Original failure
 
@@ -295,3 +297,137 @@ Not covered: specs outside `e2e/**/*.spec.ts`, notably `e2e-real/`. That suite d
 | Mock-API coverage | fixed, guarded, regression-tested |
 | Real-stack coverage | **exposed, not fixed**; baseline run passed |
 | Independent review | **none** (no reviewer, D-01a) |
+
+## 12. Real-stack remediation and `route.fetch()` disposition (2026-10-28)
+
+Branch `remediation/g03-real-stack-connections`, created from `cec643d` (G-02 and G-03 commits preserved; nothing merged).
+Code commit **`e063113`**. Evidence: `evidence/g03/real-stack-2026-10-28/`.
+
+### 12.1 Root cause and conditions (unchanged, now shown on the real stack)
+
+- **Server side.** The compose `fundzim-web` container (Next standalone, Node 24.21, no `KEEP_ALIVE_TIMEOUT`) closes idle
+  connections at 6 s, measured through Docker's port publishing (§11.4).
+- **Client side.** Playwright's request client reuses an idle connection right up to that close.
+- **Conditions for a failure.** A request through a reused connection within roughly 15–40 ms before the close fails with
+  `apiRequestContext.*: socket hang up` before the server reads it.
+- **Measured on disposable `fundzim-r12` (`e063113`).** Read-only `GET /healthz`, 20 trials per gap at 5 985 / 5 995 /
+  6 000 ms (`real-stack-r12-shared-fixture-vs-unprotected.txt`):
+  - unprotected client: **49/60 OK** (11 hang-ups);
+  - the shared fixture's `freshConnectionPerRequest`: **60/60 OK**.
+
+### 12.2 Real-stack request paths
+
+| Path (file:line) | Client | Created by | Fixture (after `e063113`) | Exposed before? |
+|---|---|---|---|---|
+| `staff-ledger.spec.ts:24,33,83,101,108,114`; `staff-moderation.spec.ts:93,183,211,252`; `staff-reconciliation.spec.ts:23,35` | Playwright `page.request` | contexts from `browser.newContext()` in the specs and in `support/browser.ts:26,102` (signed-in staff, incl. `storageState`) | yes (worker-scoped `browser` fixture wraps `newContext`) | yes |
+| `support/browser.ts:108` (`/api/v1/me` after sign-in) | Playwright `page.request` | same | yes | yes |
+| `public.spec.ts:199,210,234,259,270`; `discovery.spec.ts:36,40,51,55` | built-in `request` fixture | Playwright | yes (`request` fixture override) | yes |
+| default `page` / `context` of each real-stack test | Playwright | test fixtures | yes (`context` fixture) | yes |
+| `support/http.ts:146` (all provisioning through the web proxy), `global-setup.ts:42` (readiness) | Node built-in `fetch` (undici) | global setup, before any page | no wrapper needed | **no.** It never reused a connection at gaps ≥ 2.9 s and had 0 failures at 5 990–6 000 ms (`undici-in-process-probe.txt`; §11.4 sweep) |
+| `support/mailpit.ts:14,21` | undici | global setup | no wrapper needed | **no.** Mailpit (Go) sends no keep-alive timeout; 0/48 failures at gaps 1–10 s (`real-stack-r12-mailpit-undici-sweep.txt`) |
+
+`storageState` calls are file I/O, not HTTP.
+
+### 12.3 `route.fetch()` (the only call: `e2e/csp.spec.ts:75`)
+
+- **Measured (`route-fetch-probe-connection-use.txt`).**
+  - `route.fetch()` keeps its own keep-alive connection: 4 routed requests used 1 connection, all `Connection: keep-alive`.
+  - It is not wrapped by the fixture.
+  - It did **not** reuse the connection of the test's earlier setup request, which the fixture closes.
+- **Disposition.** Not exposed in the current use: one `route.fetch()` per test, with no earlier pooled connection, so it
+  always starts on a fresh one. Repeated `route.fetch()` across an idle gap of about 6 s would be exposed. No such use
+  exists; it is documented in the shared fixture's comment.
+- **Regression test.** `e2e/request-connections.spec.ts` "route.fetch never inherits a pooled connection from the test's
+  setup requests". It fails when the fixture's header is removed (mutation, both projects).
+- **Not changed.** Browser interception traffic, because no need was demonstrated.
+
+### 12.4 Changes (`e063113`; test infrastructure only)
+
+- `apps/web/e2e-common/fresh-connections.ts` (new): the fixture, moved unchanged out of `e2e/helpers.ts`, which now
+  re-exports `test`. The 20 mock specs are unchanged.
+- `apps/web/e2e-common/connection-probe.ts` (new): the in-process probe server, shared by both regression specs.
+- `apps/web/e2e-real/*.spec.ts` (8 files): `test` is imported from `../e2e-common/fresh-connections`. Only import lines
+  changed (diff counted: 8 added, 8 replaced).
+- `apps/web/e2e-real/request-connections.spec.ts` (new):
+  - the default context, a `browser.newContext()` context, a `storageState` context and the `request` fixture each use a
+    fresh connection (back to back and across the idle close);
+  - a 500 is reported once;
+  - browser page loads keep their connection;
+  - every wrapped client still reaches `fundzim-web` `/healthz`.
+- `apps/web/playwright.real.config.ts`: the new spec is added to the `desktop-chromium` and `mobile-chromium` projects.
+- `apps/web/e2e/request-connections.spec.ts`: imports the shared probe; adds the `route.fetch()` test.
+- `apps/web/eslint.config.mjs`: the guard also covers `e2e-real/**/*.spec.ts`; the message names both imports.
+- `apps/web/src/__tests__/e2e-import-guard.test.ts`:
+  - real-stack direct import rejected; the shared import accepted;
+  - `e2e-common/fresh-connections.ts`, `e2e-real/global-setup.ts` and `playwright.real.config.ts` unaffected.
+
+Untouched: application code, server configuration, Go code and dependencies, fee, payment, ledger and payout logic. No
+retries were added.
+
+### 12.5 Results
+
+**Local, mock suite, on `e063113`** (not CI):
+
+| Run | Result |
+|---|---|
+| `e2e/request-connections.spec.ts` | 10/10 (5 tests × 2 projects) |
+| …with the fixture's header removed (mutation) | coverage and `route.fetch()` tests **failed** on both projects |
+| …`--repeat-each=10` | **100/100** |
+| `csp.spec.ts` + the originally failing verification test, `--repeat-each=10` | **80/80** |
+| full mock suite | **230 passed, 1 skipped, 1 FAILED**: `discovery.spec.ts:220` [desktop]. This is G-04 below, unrelated to G-03. It then passed 80/80 in isolation and the whole discovery spec 180/180 in parallel (`--repeat-each=10`) |
+| `npm test` | 587/587 (62 files) |
+| `vitest run src/__tests__/e2e-import-guard.test.ts` | 5/5; with the `e2e-real` scope removed (mutation), the real-stack case **failed** |
+| lint, typecheck, build | clean |
+
+**Disposable stack `fundzim-r12`** (built from `e063113`; isolation in `isolation-fundzim-r12-e063113.txt`; dev project
+stopped without `-v`):
+
+| Run | Result |
+|---|---|
+| full real-stack suite (`npm run test:e2e:real`, `COMPOSE_PROJECT_NAME=fundzim-r12`, lock held) | **70 passed** (64 previous + 6 new), 11.5 min |
+| `e2e-real/request-connections.spec.ts --repeat-each=10` | **60/60** |
+| same with the fixture's header removed (mutation) | coverage test **failed** on both projects ("every request on its own connection"); 4 passed |
+| race measurement | §12.1 |
+| environment afterwards | `fundzim-r12` removed with its volumes. The development project was restarted without rebuilding: same image IDs, still at `20261025090000`, "no pending migrations", 9/9 healthy. `e2e-real/.state` restored identical (`teardown-and-dev-restore.txt`) |
+
+**GitHub Actions:**
+
+| Run | Commit | Result |
+|---|---|---|
+| 40675849219 | `cec643d` | success 8/8 |
+| **40711057141** | `e063113` | **failure, 7/8.** `Integration` failed at "Start the API on the runner", before any test. Go module downloads from `proxy.golang.org` failed with `stream error … INTERNAL_ERROR; received from peer` (`go-redis/v9`, `golang.org/x/text`). `e063113` changes no Go code or dependency (`git diff cec643d..e063113 -- go.mod go.sum internal apps/api` is empty). The other 7 jobs passed, including `Web end-to-end` and `Real-stack E2E`. Not re-run (that needs a token); a later green run on another commit does not erase this failure (`ci-40711057141-e063113-integration.txt`) |
+| (report commit) | — | recorded in the final report only after it completes |
+
+### 12.6 New finding
+
+**G-04 (LOW, test): `discovery.spec.ts:220` "poor connectivity … nothing is queued" can fail under load.** Pre-existing;
+unrelated to G-03.
+- **Mechanism.**
+  - The campaign page's `CAMPAIGN_VIEW` event is sent from a React `useEffect` (`TrackCampaignView`), i.e. after
+    hydration.
+  - The test attaches its request listener once the server-rendered heading is visible, which can be before hydration.
+  - When hydration finishes later, the normal view event is recorded and the test reads it as an offline replay.
+- **Evidence.** Seen once in the full suite. 0 failures in 80 isolated and 180 parallel repeats.
+- **Not fixed.** Out of scope; it needs its own reviewed change.
+
+### 12.7 Status, risks, review
+
+**G-03:**
+- The mock suite (§7–11) and the real-stack suite (this section) are protected and regression-tested.
+- The `route.fetch()` disposition is evidence-based.
+- **Not independently reviewed. Not closed.**
+
+**Remaining risks:**
+1. The original CI event is linked to the mechanism by its signature only (§4).
+2. A future repeated `route.fetch()` across an idle gap would be exposed (§12.3).
+3. A Playwright upgrade must keep both regression specs green.
+4. Run 40711057141 is red, with an external cause; there is no green run yet for `e063113`'s exact commit.
+5. G-04 is open.
+6. The real-stack mutation and race measurements are local disposable-stack evidence, not CI.
+
+**Ready for independent review:** yes, subject to D-01a (a reviewer who is not the author account). Review `e063113`:
+- the shared module;
+- the 8 import edits;
+- the two regression specs;
+- the lint guard and its test;
+- this section's evidence.

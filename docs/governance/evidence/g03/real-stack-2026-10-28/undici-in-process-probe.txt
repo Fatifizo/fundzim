@@ -1,0 +1,7 @@
+node v24.21.0
+undici gap 1000ms: trials=8 reused=1 failures=0
+undici gap 2900ms: trials=8 reused=0 failures=0
+undici gap 3100ms: trials=8 reused=0 failures=0
+undici gap 4100ms: trials=8 reused=0 failures=0
+undici gap 5990ms: trials=8 reused=0 failures=0
+undici gap 6000ms: trials=8 reused=0 failures=0

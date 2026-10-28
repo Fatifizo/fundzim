@@ -1,0 +1,184 @@
+
+Running 180 tests using 8 workers
+
+[1/180] [desktop-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[2/180] [desktop-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[3/180] [desktop-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[4/180] [desktop-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[5/180] [desktop-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[6/180] [desktop-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[7/180] [desktop-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[8/180] [desktop-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[9/180] [desktop-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[10/180] [desktop-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[11/180] [desktop-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[12/180] [desktop-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[13/180] [desktop-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[14/180] [desktop-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[15/180] [desktop-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[16/180] [desktop-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[17/180] [desktop-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[18/180] [desktop-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[19/180] [desktop-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[20/180] [desktop-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[21/180] [desktop-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[22/180] [desktop-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[23/180] [desktop-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[24/180] [desktop-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[25/180] [desktop-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[26/180] [desktop-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[27/180] [desktop-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[28/180] [desktop-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[29/180] [desktop-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[30/180] [desktop-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[31/180] [desktop-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[32/180] [desktop-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[33/180] [desktop-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[34/180] [desktop-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[35/180] [desktop-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[36/180] [desktop-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[37/180] [desktop-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[38/180] [desktop-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[39/180] [desktop-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[40/180] [desktop-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[41/180] [desktop-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[42/180] [desktop-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[43/180] [desktop-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[44/180] [desktop-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[45/180] [desktop-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[46/180] [desktop-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[47/180] [desktop-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[48/180] [desktop-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[49/180] [desktop-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[50/180] [desktop-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[51/180] [desktop-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[52/180] [desktop-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[53/180] [desktop-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[54/180] [desktop-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[55/180] [desktop-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[56/180] [desktop-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[57/180] [desktop-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[58/180] [desktop-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[59/180] [desktop-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[60/180] [desktop-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[61/180] [desktop-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[62/180] [desktop-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[63/180] [desktop-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[64/180] [desktop-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[65/180] [desktop-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[66/180] [desktop-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[67/180] [desktop-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[68/180] [desktop-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[69/180] [desktop-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[70/180] [desktop-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[71/180] [desktop-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[72/180] [desktop-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[73/180] [desktop-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[74/180] [desktop-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[75/180] [desktop-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[76/180] [desktop-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[77/180] [desktop-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[78/180] [desktop-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[79/180] [desktop-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[80/180] [desktop-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[81/180] [desktop-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[82/180] [desktop-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[83/180] [desktop-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[84/180] [desktop-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[85/180] [desktop-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[86/180] [desktop-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[87/180] [desktop-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[88/180] [desktop-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[89/180] [desktop-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[90/180] [desktop-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[91/180] [mobile-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[92/180] [mobile-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[93/180] [mobile-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[94/180] [mobile-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[95/180] [mobile-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[96/180] [mobile-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[97/180] [mobile-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[98/180] [mobile-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[99/180] [mobile-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[100/180] [mobile-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[101/180] [mobile-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[102/180] [mobile-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[103/180] [mobile-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[104/180] [mobile-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[105/180] [mobile-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[106/180] [mobile-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[107/180] [mobile-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[108/180] [mobile-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[109/180] [mobile-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[110/180] [mobile-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[111/180] [mobile-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[112/180] [mobile-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[113/180] [mobile-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[114/180] [mobile-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[115/180] [mobile-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[116/180] [mobile-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[117/180] [mobile-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[118/180] [mobile-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[119/180] [mobile-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[120/180] [mobile-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[121/180] [mobile-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[122/180] [mobile-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[123/180] [mobile-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[124/180] [mobile-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[125/180] [mobile-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[126/180] [mobile-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[127/180] [mobile-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[128/180] [mobile-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[129/180] [mobile-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[130/180] [mobile-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[131/180] [mobile-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[132/180] [mobile-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[133/180] [mobile-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[134/180] [mobile-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[135/180] [mobile-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[136/180] [mobile-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[137/180] [mobile-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[138/180] [mobile-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[139/180] [mobile-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[140/180] [mobile-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[141/180] [mobile-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[142/180] [mobile-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[143/180] [mobile-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[144/180] [mobile-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[145/180] [mobile-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[146/180] [mobile-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[147/180] [mobile-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[148/180] [mobile-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[149/180] [mobile-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[150/180] [mobile-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[151/180] [mobile-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[152/180] [mobile-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[153/180] [mobile-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[154/180] [mobile-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[155/180] [mobile-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[156/180] [mobile-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[157/180] [mobile-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[158/180] [mobile-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[159/180] [mobile-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[160/180] [mobile-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[161/180] [mobile-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[162/180] [mobile-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[163/180] [mobile-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[164/180] [mobile-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[165/180] [mobile-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[166/180] [mobile-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[167/180] [mobile-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[168/180] [mobile-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[169/180] [mobile-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[170/180] [mobile-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[171/180] [mobile-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+[172/180] [mobile-chromium] › e2e/discovery.spec.ts:46:5 › locations: browse by province, filter by town, card and page show the coarse place; filtered listings are noindex
+[173/180] [mobile-chromium] › e2e/discovery.spec.ts:87:5 › trending and featured pages explain their rules; recommendations say why; nothing claims money or endorsement
+[174/180] [mobile-chromium] › e2e/discovery.spec.ts:114:5 › aliases: /campaigns/search and /campaigns/category/<slug> redirect permanently to the canonical pages
+[175/180] [mobile-chromium] › e2e/discovery.spec.ts:124:5 › preview image: generated for a public campaign without a cover; 404 once it is not public
+[176/180] [mobile-chromium] › e2e/discovery.spec.ts:205:5 › mobile: the directory, province page and campaign page fit the screen; filters stay usable
+[177/180] [mobile-chromium] › e2e/discovery.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[178/180] [mobile-chromium] › e2e/discovery.spec.ts:141:5 › owner: chooses a location in the editor and reads the analytics page; others get a 404
+[179/180] [mobile-chromium] › e2e/discovery.spec.ts:171:5 › staff: discovery overview and ranking policies with maker-checker
+[180/180] [mobile-chromium] › e2e/discovery.spec.ts:237:5 › poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim
+  180 passed (1.6m)

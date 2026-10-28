@@ -1,0 +1,104 @@
+
+Running 100 tests using 8 workers
+
+[1/100] [desktop-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[2/100] [desktop-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[3/100] [desktop-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[4/100] [desktop-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[5/100] [desktop-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[6/100] [desktop-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[7/100] [desktop-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[8/100] [desktop-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[9/100] [desktop-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[10/100] [desktop-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[11/100] [desktop-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[12/100] [desktop-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[13/100] [desktop-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[14/100] [desktop-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[15/100] [desktop-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[16/100] [desktop-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[17/100] [desktop-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[18/100] [desktop-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[19/100] [desktop-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[20/100] [desktop-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[21/100] [desktop-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[22/100] [desktop-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[23/100] [desktop-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[24/100] [desktop-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[25/100] [desktop-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[26/100] [desktop-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[27/100] [desktop-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[28/100] [desktop-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[29/100] [desktop-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[30/100] [desktop-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[31/100] [desktop-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[32/100] [desktop-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[33/100] [desktop-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[34/100] [desktop-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[35/100] [desktop-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[36/100] [desktop-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[37/100] [desktop-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[38/100] [desktop-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[39/100] [desktop-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[40/100] [desktop-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[41/100] [desktop-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[42/100] [desktop-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[43/100] [desktop-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[44/100] [desktop-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[45/100] [desktop-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[46/100] [desktop-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[47/100] [desktop-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[48/100] [desktop-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[49/100] [desktop-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[50/100] [desktop-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[51/100] [mobile-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[52/100] [mobile-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[53/100] [mobile-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[54/100] [mobile-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[55/100] [mobile-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[56/100] [mobile-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[57/100] [mobile-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[58/100] [mobile-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[59/100] [mobile-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[60/100] [mobile-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[61/100] [mobile-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[62/100] [mobile-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[63/100] [mobile-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[64/100] [mobile-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[65/100] [mobile-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[66/100] [mobile-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[67/100] [mobile-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[68/100] [mobile-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[69/100] [mobile-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[70/100] [mobile-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[71/100] [mobile-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[72/100] [mobile-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[73/100] [mobile-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[74/100] [mobile-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[75/100] [mobile-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[76/100] [mobile-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[77/100] [mobile-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[78/100] [mobile-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[79/100] [mobile-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[80/100] [mobile-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[81/100] [mobile-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[82/100] [mobile-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[83/100] [mobile-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[84/100] [mobile-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[85/100] [mobile-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[86/100] [mobile-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[87/100] [mobile-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[88/100] [mobile-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[89/100] [mobile-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[90/100] [mobile-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[91/100] [mobile-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[92/100] [mobile-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[93/100] [mobile-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[94/100] [mobile-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[95/100] [mobile-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+[96/100] [mobile-chromium] › e2e/request-connections.spec.ts:12:5 › test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up
+[97/100] [mobile-chromium] › e2e/request-connections.spec.ts:31:5 › the browser's own traffic keeps its normal keep-alive connections
+[98/100] [mobile-chromium] › e2e/request-connections.spec.ts:55:5 › control: a plain request client does reuse idle connections (the condition the fix removes)
+[99/100] [mobile-chromium] › e2e/request-connections.spec.ts:44:5 › a server failure on a test-setup request is reported once, not retried or hidden
+[100/100] [mobile-chromium] › e2e/request-connections.spec.ts:73:5 › route.fetch never inherits a pooled connection from the test's setup requests
+  100 passed (59.1s)

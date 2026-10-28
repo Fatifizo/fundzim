@@ -1,0 +1,2 @@
+{"routedRequests":4,"distinctSockets":1,"routedConnectionHeaders":["keep-alive"],"routedReusedSetupSocket":false,"browserNavigationsDirect":0}
+  1 passed (4.3s)

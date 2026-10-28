@@ -1,0 +1,84 @@
+
+Running 80 tests using 8 workers
+
+[1/80] [desktop-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[2/80] [desktop-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[3/80] [desktop-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[4/80] [desktop-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[5/80] [desktop-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[6/80] [desktop-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[7/80] [desktop-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[8/80] [desktop-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[9/80] [desktop-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[10/80] [desktop-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[11/80] [desktop-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[12/80] [desktop-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[13/80] [desktop-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[14/80] [desktop-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[15/80] [desktop-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[16/80] [desktop-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[17/80] [desktop-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[18/80] [desktop-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[19/80] [desktop-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[20/80] [desktop-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[21/80] [desktop-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[22/80] [desktop-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[23/80] [desktop-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[24/80] [desktop-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[25/80] [desktop-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[26/80] [desktop-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[27/80] [desktop-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[28/80] [desktop-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[29/80] [desktop-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[30/80] [desktop-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[31/80] [desktop-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[32/80] [desktop-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[33/80] [desktop-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[34/80] [desktop-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[35/80] [desktop-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[36/80] [desktop-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[37/80] [desktop-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[38/80] [desktop-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[39/80] [desktop-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[40/80] [desktop-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[41/80] [mobile-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[42/80] [mobile-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[43/80] [mobile-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[44/80] [mobile-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[45/80] [mobile-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[46/80] [mobile-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[47/80] [mobile-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[48/80] [mobile-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[49/80] [mobile-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[50/80] [mobile-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[51/80] [mobile-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[52/80] [mobile-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[53/80] [mobile-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[54/80] [mobile-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[55/80] [mobile-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[56/80] [mobile-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[57/80] [mobile-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[58/80] [mobile-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[59/80] [mobile-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[60/80] [mobile-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[61/80] [mobile-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[62/80] [mobile-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[63/80] [mobile-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[64/80] [mobile-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[65/80] [mobile-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[66/80] [mobile-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[67/80] [mobile-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[68/80] [mobile-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[69/80] [mobile-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[70/80] [mobile-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[71/80] [mobile-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[72/80] [mobile-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[73/80] [mobile-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[74/80] [mobile-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[75/80] [mobile-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[76/80] [mobile-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+[77/80] [mobile-chromium] › e2e/csp.spec.ts:44:5 › every public page is served with a per-request nonce and no CSP violations
+[78/80] [mobile-chromium] › e2e/csp.spec.ts:53:5 › signed-in pages: nonce CSP, no violations, hydration works
+[79/80] [mobile-chromium] › e2e/csp.spec.ts:71:5 › an injected inline script without the nonce is blocked
+[80/80] [mobile-chromium] › e2e/verification.spec.ts:505:5 › new pages keep the nonce-only CSP with no violations
+  80 passed (1.8m)

@@ -1,0 +1,6 @@
+undici 1000ms trials=8 failures=0 {}
+undici 3000ms trials=8 failures=0 {}
+undici 4100ms trials=8 failures=0 {}
+undici 5990ms trials=8 failures=0 {}
+undici 6000ms trials=8 failures=0 {}
+undici 10000ms trials=8 failures=0 {}

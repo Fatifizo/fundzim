@@ -1,0 +1,30 @@
+# CI run 40711057141 (commit e063113): job 122896126963 'Integration' — steps and annotations via the unauthenticated public API (2026-10-28T15:14:36Z). Job log needs a token.
+job failure 2026-10-28T14:57:25Z 2026-10-28T14:59:28Z
+ step 1 Set up job success 1
+ step 2 Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 success 2
+ step 3 Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e success 9
+ step 4 Generate throwaway local secrets success 0
+ step 5 Start infrastructure, initialise storage, migrate success 93
+ step 6 Start the API on the runner failure 5
+ step 7 Wait for ClamAV signatures (real malware scanning for the Stage 5 document tests) skipped 0
+ step 8 Start the worker on the runner skipped 0
+ step 9 Integration tests (identity, verification, campaigns, Stage 8 payments and Stage 9 execution isolation, secret manager, conformance suite, evidence — via the running worker, OpenBao, ClamAV and Mailpit) skipped 0
+ step 10 Destructive migration round trip (after stopping the API and worker; throwaway database) skipped 0
+ step 11 Logs on failure success 0
+ step 12 Run docker compose down -v success 11
+ step 23 Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e skipped 0
+ step 24 Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 success 0
+ step 25 Complete job success 0
+## annotations
+--- failure .github 57
+Process completed with exit code 1.
+--- failure internal/platform/ratelimit/distributed.go 12
+github.com/redis/go-redis/v9@v9.23.0: read "https://proxy.golang.org/github.com/redis/go-redis/v9/@v/v9.23.0.zip": stream error: stream ID 5; INTERNAL_ERROR; received from peer
+--- failure .github 8
+golang.org/x/text@v0.42.0: read "https://proxy.golang.org/golang.org/x/text/@v/v0.42.0.zip": stream error: stream ID 23; INTERNAL_ERROR; received from peer
+--- failure .github 7
+golang.org/x/text@v0.42.0: read "https://proxy.golang.org/golang.org/x/text/@v/v0.42.0.zip": stream error: stream ID 23; INTERNAL_ERROR; received from peer
+--- failure internal/auth/passwords/passwords.go 27
+golang.org/x/text@v0.42.0: read "https://proxy.golang.org/golang.org/x/text/@v/v0.42.0.zip": stream error: stream ID 23; INTERNAL_ERROR; received from peer
+--- failure .github 33
+golang.org/x/text@v0.42.0: read "https://proxy.golang.org/golang.org/x/text/@v/v0.42.0.zip": stream error: stream ID 23; INTERNAL_ERROR; received from peer

@@ -1,0 +1,83 @@
+[real-stack setup] staff ready (1 s)
+[real-stack setup] owner e2e-real-owner-qjlfa9-mvs9h1zyutnh@example.test identity-verified (5 s)
+[real-stack setup] 23 campaigns created with scanned covers (37 s)
+[real-stack setup] run qjlfa9 provisioned in 44 s
+
+Running 6 tests using 1 worker
+
+[1/6] [desktop-chromium] › e2e-real/request-connections.spec.ts:12:5 › real-stack test API clients use a fresh connection each: default context, extra and storageState contexts, request fixture
+  1) [desktop-chromium] › e2e-real/request-connections.spec.ts:12:5 › real-stack test API clients use a fresh connection each: default context, extra and storageState contexts, request fixture 
+
+    Error: every request on its own connection
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 5
+    Received: 2
+
+      23 |       for (let i = 0; i < 3; i++) expect((await api.post(`${probe.url}/setup`, { data: { i } })).status()).toBe(201); // back to back
+      24 |       expect(await postAcrossIdleClose(api, probe.url, 2)).toEqual(["201", "201"]);
+    > 25 |       expect(new Set(probe.seen.map((s) => s.socket)).size, "every request on its own connection").toBe(probe.seen.length);
+         |                                                                                                    ^
+      26 |       expect(probe.seen.every((s) => s.connection === "close")).toBe(true);
+      27 |     }
+      28 |   } finally {
+        at /home/administrator/projects/fundzim/apps/web/e2e-real/request-connections.spec.ts:25:100
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e-real/.state/test-results/request-connections-real-s-4892a-te-contexts-request-fixture-desktop-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e-real/.state/test-results/request-connections-real-s-4892a-te-contexts-request-fixture-desktop-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e-real/.state/test-results/request-connections-real-s-4892a-te-contexts-request-fixture-desktop-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace e2e-real/.state/test-results/request-connections-real-s-4892a-te-contexts-request-fixture-desktop-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[2/6] [desktop-chromium] › e2e-real/request-connections.spec.ts:35:5 › real-stack: a server failure is reported once; the browser's own traffic keeps its connections
+[3/6] [desktop-chromium] › e2e-real/request-connections.spec.ts:49:5 › real-stack: every wrapped client still reaches fundzim-web
+[4/6] [mobile-chromium] › e2e-real/request-connections.spec.ts:12:5 › real-stack test API clients use a fresh connection each: default context, extra and storageState contexts, request fixture
+  2) [mobile-chromium] › e2e-real/request-connections.spec.ts:12:5 › real-stack test API clients use a fresh connection each: default context, extra and storageState contexts, request fixture 
+
+    Error: every request on its own connection
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 5
+    Received: 2
+
+      23 |       for (let i = 0; i < 3; i++) expect((await api.post(`${probe.url}/setup`, { data: { i } })).status()).toBe(201); // back to back
+      24 |       expect(await postAcrossIdleClose(api, probe.url, 2)).toEqual(["201", "201"]);
+    > 25 |       expect(new Set(probe.seen.map((s) => s.socket)).size, "every request on its own connection").toBe(probe.seen.length);
+         |                                                                                                    ^
+      26 |       expect(probe.seen.every((s) => s.connection === "close")).toBe(true);
+      27 |     }
+      28 |   } finally {
+        at /home/administrator/projects/fundzim/apps/web/e2e-real/request-connections.spec.ts:25:100
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    e2e-real/.state/test-results/request-connections-real-s-4892a-te-contexts-request-fixture-mobile-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: e2e-real/.state/test-results/request-connections-real-s-4892a-te-contexts-request-fixture-mobile-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    e2e-real/.state/test-results/request-connections-real-s-4892a-te-contexts-request-fixture-mobile-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace e2e-real/.state/test-results/request-connections-real-s-4892a-te-contexts-request-fixture-mobile-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[5/6] [mobile-chromium] › e2e-real/request-connections.spec.ts:35:5 › real-stack: a server failure is reported once; the browser's own traffic keeps its connections
+[6/6] [mobile-chromium] › e2e-real/request-connections.spec.ts:49:5 › real-stack: every wrapped client still reaches fundzim-web
+  2 failed
+    [desktop-chromium] › e2e-real/request-connections.spec.ts:12:5 › real-stack test API clients use a fresh connection each: default context, extra and storageState contexts, request fixture 
+    [mobile-chromium] › e2e-real/request-connections.spec.ts:12:5 › real-stack test API clients use a fresh connection each: default context, extra and storageState contexts, request fixture 
+  4 passed (54.4s)
