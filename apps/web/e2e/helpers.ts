@@ -1,5 +1,43 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type Page } from "@playwright/test";
+import { test as base, expect, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
+
+/**
+ * G-03 (docs/governance/evidence/g03-investigation-report.md): Playwright's request client (`page.request`) keeps idle
+ * keep-alive connections, and the apps under test close an idle connection after 6 s (Node: keepAliveTimeout 5 s +
+ * keepAliveTimeoutBuffer 1 s). A setup request sent in the moment of that close fails with "socket hang up" before the
+ * server reads it. Every test-setup API request therefore uses a fresh connection (`Connection: close`; localhost, so the
+ * cost is negligible). Only the request client is changed: the browser's own traffic keeps its normal connections, and
+ * nothing is retried, so a real server failure still fails the test once.
+ */
+function freshConnectionPerRequest(api: APIRequestContext) {
+  const fetch = api.fetch.bind(api); // post/get/put/patch/delete/head all go through fetch
+  api.fetch = (urlOrRequest, options = {}) => fetch(urlOrRequest, { ...options, headers: { ...options.headers, connection: "close" } });
+}
+
+const covered = new WeakSet<BrowserContext>();
+function withFreshConnections(context: BrowserContext) {
+  if (!covered.has(context)) {
+    covered.add(context);
+    freshConnectionPerRequest(context.request);
+  }
+  return context;
+}
+
+/** Use this `test` in every spec: the default context and every `browser.newContext()` get fresh setup connections. */
+// (the fixture callback is named `provide`, not `use`: the React hooks lint rule would mistake it for a hook)
+export const test = base.extend({
+  context: async ({ context }, provide) => {
+    await provide(withFreshConnections(context));
+  },
+  browser: [
+    async ({ browser }, provide) => {
+      const newContext = browser.newContext.bind(browser);
+      browser.newContext = async (options) => withFreshConnections(await newContext(options));
+      await provide(browser);
+    },
+    { scope: "worker" },
+  ],
+});
 
 /** App instance whose API_BASE_URL is the mock auth API (see e2e/serve.mjs). */
 export const AUTH_BASE_URL = process.env.E2E_AUTH_BASE_URL ?? `http://127.0.0.1:${process.env.E2E_AUTH_PORT ?? 3101}`;

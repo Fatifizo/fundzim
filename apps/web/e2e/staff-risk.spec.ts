@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
-import { AUTH_BASE_URL, createStaff, cspViolations, seriousAxeViolations, signInStaff, TOTP, trackCspViolations, watchForBreakage } from "./helpers";
+import { AUTH_BASE_URL, createStaff, cspViolations, seriousAxeViolations, signInStaff, TOTP, trackCspViolations, watchForBreakage, test } from "./helpers";
 
 // Stage 13 staff risk UI against the mock API (e2e/mock-api/risk.mjs). TEST data only: a score is never proof of fraud,
 // production screening is BLOCKED, a provider "no match" is never a clearance.

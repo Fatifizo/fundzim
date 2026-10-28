@@ -1,6 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 
-import { AUTH_BASE_URL, createUser, PASSWORD, seriousAxeViolations, signIn, TOTP, watchForBreakage } from "./helpers";
+import { AUTH_BASE_URL, createUser, PASSWORD, seriousAxeViolations, signIn, TOTP, watchForBreakage, test } from "./helpers";
 
 // Runs against the app instance wired to the in-memory mock auth API (e2e/mock-api/server.mjs).
 test.use({ baseURL: AUTH_BASE_URL });

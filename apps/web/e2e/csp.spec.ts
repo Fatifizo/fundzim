@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
-import { AUTH_BASE_URL, cspViolations, signIn, trackCspViolations, watchForBreakage } from "./helpers";
+import { AUTH_BASE_URL, cspViolations, signIn, trackCspViolations, watchForBreakage, test } from "./helpers";
 
 // Strict nonce-based CSP (src/proxy.ts, src/lib/security/csp.ts) verified against the production build.
 test.use({ baseURL: AUTH_BASE_URL });

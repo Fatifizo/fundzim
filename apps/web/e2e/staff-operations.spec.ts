@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
-import { AUTH_BASE_URL, createStaff, cspViolations, seriousAxeViolations, signInStaff, TOTP, trackCspViolations, watchForBreakage } from "./helpers";
+import { AUTH_BASE_URL, createStaff, cspViolations, seriousAxeViolations, signInStaff, TOTP, trackCspViolations, watchForBreakage, test } from "./helpers";
 
 // Stage 14 operations portal against the mock API (e2e/mock-api/operations.mjs). TEST data only. Navigation and
 // actions follow the caller's permissions (presentation only — the API authorizes every route).

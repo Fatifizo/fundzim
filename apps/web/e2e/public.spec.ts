@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
-import { AUTH_BASE_URL, createUser, cspViolations, seriousAxeViolations, trackCspViolations, watchForBreakage } from "./helpers";
+import { AUTH_BASE_URL, createUser, cspViolations, seriousAxeViolations, trackCspViolations, watchForBreakage, test } from "./helpers";
 
 // Stage 7 public experience against the mock API (e2e/mock-api/campaigns.mjs). This app instance has
 // PUBLIC_SITE_URL = its own origin and SITE_INDEXING=allow (e2e/serve.mjs).

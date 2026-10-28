@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
-import { AUTH_BASE_URL, createStaff, createUser, cspViolations, seriousAxeViolations, signIn, signInStaff, TOTP, trackCspViolations, watchForBreakage } from "./helpers";
+import { AUTH_BASE_URL, createStaff, createUser, cspViolations, seriousAxeViolations, signIn, signInStaff, TOTP, trackCspViolations, watchForBreakage, test } from "./helpers";
 
 // Stage 16 discovery against the mock API (e2e/mock-api/discovery.mjs): location browsing, filters, trending and featured
 // pages, recommendations, owner analytics and the location editor, staff discovery pages with maker-checker ranking

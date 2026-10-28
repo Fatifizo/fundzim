@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
-import { AUTH_BASE_URL, createStaff, createUser, cspViolations, seriousAxeViolations, signIn, signInStaff, TOTP, trackCspViolations, watchForBreakage } from "./helpers";
+import { AUTH_BASE_URL, createStaff, createUser, cspViolations, seriousAxeViolations, signIn, signInStaff, TOTP, trackCspViolations, watchForBreakage, test } from "./helpers";
 
 // Stage 8 staff payment-operations UI (docs/stage-8/interface-contracts.md §4, §9, §10) against the mock API.
 test.use({ baseURL: AUTH_BASE_URL });

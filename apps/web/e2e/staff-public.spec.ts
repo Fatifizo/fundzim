@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
-import { AUTH_BASE_URL, createStaff, createUser, seriousAxeViolations, signIn, signInStaff, TOTP, watchForBreakage } from "./helpers";
+import { AUTH_BASE_URL, createStaff, createUser, seriousAxeViolations, signIn, signInStaff, TOTP, watchForBreakage, test } from "./helpers";
 
 // Stage 7 staff pages (contract §4) against the mock API: campaign reports triage; Stage 16 featured placements
 // (maker-checker; they replaced the Stage 7 staff picks).

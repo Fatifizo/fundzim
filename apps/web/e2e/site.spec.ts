@@ -1,6 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 
-import { seriousAxeViolations, watchForBreakage } from "./helpers";
+import { seriousAxeViolations, watchForBreakage, test } from "./helpers";
 
 test("homepage renders key sections, honest notices and security headers", async ({ page }) => {
   const problems = watchForBreakage(page);

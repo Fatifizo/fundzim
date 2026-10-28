@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 import {
   AUTH_BASE_URL,
@@ -12,6 +12,7 @@ import {
   TOTP,
   trackCspViolations,
   watchForBreakage,
+  test,
 } from "./helpers";
 
 // Stage 5 verification UI against the in-memory mock API (e2e/mock-api/verification.mjs).

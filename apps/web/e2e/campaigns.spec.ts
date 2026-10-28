@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 import {
   AUTH_BASE_URL,
@@ -11,6 +11,7 @@ import {
   TOTP,
   trackCspViolations,
   watchForBreakage,
+  test,
 } from "./helpers";
 
 // Stage 6 campaign UI against the in-memory mock API (e2e/mock-api/campaigns.mjs).

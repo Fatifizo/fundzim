@@ -1,6 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
-import { AUTH_BASE_URL, createUser, cspViolations, PASSWORD, seriousAxeViolations, signIn, trackCspViolations, watchForBreakage } from "./helpers";
+import { AUTH_BASE_URL, createUser, cspViolations, PASSWORD, seriousAxeViolations, signIn, trackCspViolations, watchForBreakage, test } from "./helpers";
 
 // Stage 11 organiser withdrawals against the mock API (e2e/mock-api/payouts.mjs). TEST balances only.
 test.use({ baseURL: AUTH_BASE_URL });
