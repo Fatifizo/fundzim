@@ -396,7 +396,8 @@ stopped without `-v`):
 |---|---|---|
 | 40675849219 | `cec643d` | success 8/8 |
 | **40711057141** | `e063113` | **failure, 7/8.** `Integration` failed at "Start the API on the runner", before any test. Go module downloads from `proxy.golang.org` failed with `stream error … INTERNAL_ERROR; received from peer` (`go-redis/v9`, `golang.org/x/text`). `e063113` changes no Go code or dependency (`git diff cec643d..e063113 -- go.mod go.sum internal apps/api` is empty). The other 7 jobs passed, including `Web end-to-end` and `Real-stack E2E`. Not re-run (that needs a token); a later green run on another commit does not erase this failure (`ci-40711057141-e063113-integration.txt`) |
-| (report commit) | — | recorded in the final report only after it completes |
+| **40715437694** | `3c97ed6` (documents only) | **failure, 7/8.** `Integration` ran its tests: 254 passed, **1 failed**, 8 skipped. The failure is `TestReconciliationPaymentsEndToEnd` ("simulator line for pay2 not matched: 0", `tests/integration/reconciliation_test.go:572`), a Go reconciliation test this branch does not touch. It is **G-05** below. `Web end-to-end` and `Real-stack E2E` passed (`ci-40715437694-3c97ed6-integration.txt`) |
+| (this record's commit) | — | not claimed here; see the final report |
 
 ### 12.6 New finding
 
@@ -410,6 +411,15 @@ unrelated to G-03.
 - **Evidence.** Seen once in the full suite. 0 failures in 80 isolated and 180 parallel repeats.
 - **Not fixed.** Out of scope; it needs its own reviewed change.
 
+**G-05 (open, unrelated to G-03): `TestReconciliationPaymentsEndToEnd` failed once in CI run 40715437694.**
+- **Assertion.** The sandbox statement line for one payment was not matched (0 active matches) after a reconciliation run.
+- **Commit.** `3c97ed6` changes only documents.
+- **Same Go code passing elsewhere.** It passed in runs 40654287677, 40657724785, 40672295511 and 40675849219. Before
+  those, it failed differently in Stage 19 (a timeout, KI-S19-17, local volume).
+- **Not investigated further here.** Job log access needs a token.
+- **Hypotheses only.** Timing at the statement window's boundary, or the compose worker's concurrent reconciliation runs.
+- **Disposition.** It needs its own investigation and is not dismissed as transient.
+
 ### 12.7 Status, risks, review
 
 **G-03:**
@@ -421,8 +431,9 @@ unrelated to G-03.
 1. The original CI event is linked to the mechanism by its signature only (§4).
 2. A future repeated `route.fetch()` across an idle gap would be exposed (§12.3).
 3. A Playwright upgrade must keep both regression specs green.
-4. Run 40711057141 is red, with an external cause; there is no green run yet for `e063113`'s exact commit.
-5. G-04 is open.
+4. Runs 40711057141 (`e063113`: external Go module proxy errors) and 40715437694 (`3c97ed6`: G-05) are red. There is no
+   all-green run on this branch yet. Both failures are in the Go integration job, which this branch does not change.
+5. G-04 and G-05 are open.
 6. The real-stack mutation and race measurements are local disposable-stack evidence, not CI.
 
 **Ready for independent review:** yes, subject to D-01a (a reviewer who is not the author account). Review `e063113`:

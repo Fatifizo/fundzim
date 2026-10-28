@@ -1,0 +1,27 @@
+# CI run 40715437694 (commit 3c97ed6, documents only): job 122911707956 'Integration' — steps and annotations via the unauthenticated public API (2026-10-28T15:52:35Z). Job log needs a token.
+job failure 2026-10-28T15:23:23Z 2026-10-28T15:50:37Z
+ step 1 Set up job success 1
+ step 2 Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 success 2
+ step 3 Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e success 13
+ step 4 Generate throwaway local secrets success 0
+ step 5 Start infrastructure, initialise storage, migrate success 106
+ step 6 Start the API on the runner success 48
+ step 7 Wait for ClamAV signatures (real malware scanning for the Stage 5 document tests) success 0
+ step 8 Start the worker on the runner success 3
+ step 9 Integration tests (identity, verification, campaigns, Stage 8 payments and Stage 9 execution isolation, secret manager, conformance suite, evidence — via the running worker, OpenBao, ClamAV and Mailpit) failure 1445
+ step 10 Destructive migration round trip (after stopping the API and worker; throwaway database) skipped 0
+ step 11 Logs on failure success 1
+ step 12 Run docker compose down -v success 11
+ step 23 Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e skipped 0
+ step 24 Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 success 0
+ step 25 Complete job success 0
+## annotations
+--- failure .github 932
+Process completed with exit code 1.
+--- notice .github 931
+passed 254, failed 1, skipped 8 (skipped: TestDistributedLoginLimitAcrossReplicas, TestFinancialLoad, TestFinancialReconciliationVolumeSample, TestFinancialWorkerCrashMidFlight, TestFrontendReachesBackend, TestRateLimitFallbackWhenValkeyContainerStopped, TestReconciliationCoverageVolume, TestReconciliationMigrationCompatibility); TestPayments* passed: 25; TestPayout* passed: 14; TestFee* passed: 13; TestRisk* passed: 13; TestOperations* passed: 9; TestNotifications* passed: 13
+--- failure .github 927
+=== RUN   TestReconciliationPaymentsEndToEnd
+    reconciliation_test.go:572: simulator line for pay2 not matched: 0
+--- FAIL: TestReconciliationPaymentsEndToEnd (6.45s)
+
