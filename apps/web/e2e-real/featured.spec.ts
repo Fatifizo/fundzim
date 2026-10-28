@@ -1,5 +1,6 @@
-import { expect, test, type Browser } from "@playwright/test";
+import { expect, type Browser } from "@playwright/test";
 
+import { test } from "../e2e-common/fresh-connections";
 import { answerStepUpIfAsked, staff, staffPage } from "./support/browser";
 import { publicGet } from "./support/http";
 import { loadRun } from "./support/state";

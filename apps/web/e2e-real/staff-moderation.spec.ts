@@ -1,5 +1,6 @@
-import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
+import { test } from "../e2e-common/fresh-connections";
 import { answerStepUpIfAsked, discoveryTitles, ownerContext, staff, staffAction, staffPage, uiStaffLogin } from "./support/browser";
 import { WEB_URL } from "./support/env";
 import { ApiSession } from "./support/http";

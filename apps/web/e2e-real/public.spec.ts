@@ -1,5 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
+import { test } from "../e2e-common/fresh-connections";
 import { discoveryTitles } from "./support/browser";
 import { PUBLIC_SITE_URL, SITE_INDEXING_ALLOWED, WEB_URL } from "./support/env";
 import { publicGet } from "./support/http";

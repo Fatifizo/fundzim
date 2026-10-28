@@ -29,10 +29,11 @@ const eslintConfig = defineConfig([
       ],
     },
   },
-  // G-03 (docs/governance/evidence/g03-investigation-report.md): e2e specs must use the `test` of e2e/helpers.ts, whose
-  // fixtures give test-setup API requests a fresh connection. Importing `test` from @playwright/test bypasses them.
+  // G-03 (docs/governance/evidence/g03-investigation-report.md): browser specs of both suites must use the shared `test`
+  // (e2e-common/fresh-connections.ts; e2e/ imports it through helpers.ts), whose fixtures give test API requests a fresh
+  // connection. Importing `test` from @playwright/test bypasses them.
   {
-    files: ["e2e/**/*.spec.ts"],
+    files: ["e2e/**/*.spec.ts", "e2e-real/**/*.spec.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -41,7 +42,8 @@ const eslintConfig = defineConfig([
             {
               name: "@playwright/test",
               importNames: ["test"],
-              message: "Import `test` from ./helpers (fresh connections for test-setup API requests, G-03); keep expect and types from @playwright/test.",
+              message:
+                "Import `test` from ./helpers (e2e/) or ../e2e-common/fresh-connections (e2e-real/): fresh connections for test API requests, G-03. Keep expect and types from @playwright/test.",
             },
           ],
         },

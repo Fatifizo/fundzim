@@ -40,8 +40,8 @@ export default defineConfig({
       name: "desktop-chromium",
       use: { ...devices["Desktop Chrome"] },
       // discovery.spec.ts: Stage 16's real-stack spec, wired in Stage 17 (it had been left out of every project)
-      testMatch: ["public.spec.ts", "a11y.spec.ts", "featured.spec.ts", "report.spec.ts", "discovery.spec.ts"],
+      testMatch: ["public.spec.ts", "a11y.spec.ts", "featured.spec.ts", "report.spec.ts", "discovery.spec.ts", "request-connections.spec.ts"],
     },
-    { name: "mobile-chromium", use: { ...devices["Pixel 7"] }, testMatch: ["public.spec.ts", "a11y.spec.ts"] },
+    { name: "mobile-chromium", use: { ...devices["Pixel 7"] }, testMatch: ["public.spec.ts", "a11y.spec.ts", "request-connections.spec.ts"] },
   ],
 });

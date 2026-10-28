@@ -1,5 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 
+import { test } from "../e2e-common/fresh-connections";
 import { staff, staffPage } from "./support/browser";
 import { cspViolations, seriousAxeViolations, watchCsp } from "./support/quality";
 import { loadRun } from "./support/state";

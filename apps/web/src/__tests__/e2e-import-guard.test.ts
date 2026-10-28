@@ -2,8 +2,8 @@
 import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 
-// G-03: the lint guard that keeps e2e specs on the `test` of e2e/helpers.ts (fresh connections for test-setup API
-// requests). Linted with the repository's own eslint.config.mjs, as `npm run lint` does.
+// G-03: the lint guard that keeps the browser specs of both suites (e2e/, e2e-real/) on the shared `test` (fresh
+// connections for test API requests). Linted with the repository's own eslint.config.mjs, as `npm run lint` does.
 
 const RULE = "no-restricted-imports";
 const eslint = new ESLint({ cwd: process.cwd() });
@@ -23,6 +23,19 @@ describe("e2e test-import guard", () => {
   it("accepts the helpers `test` with expect and types from @playwright/test", async () => {
     const code = 'import { expect, type Page } from "@playwright/test";\n\nimport { test } from "./helpers";\n\ntest("x", async ({ page }: { page: Page }) => expect(page).toBeTruthy());\n';
     expect(await restricted("e2e/guard-probe.spec.ts", code)).toEqual([]);
+  }, 60_000);
+
+  it("covers the real-stack suite too, accepting the shared fixture there", async () => {
+    expect(await restricted("e2e-real/guard-probe.spec.ts", 'import { expect, test } from "@playwright/test";\ntest("x", async () => expect(1).toBe(1));\n'))
+      .toEqual([expect.stringContaining("../e2e-common/fresh-connections (e2e-real/)")]);
+    const ok = 'import { expect } from "@playwright/test";\n\nimport { test } from "../e2e-common/fresh-connections";\n\ntest("x", async () => expect(1).toBe(1));\n';
+    expect(await restricted("e2e-real/guard-probe.spec.ts", ok)).toEqual([]);
+  }, 60_000);
+
+  it("leaves the shared fixture, real-stack support code and its config alone", async () => {
+    expect(await restricted("e2e-common/fresh-connections.ts", 'import { test as base } from "@playwright/test";\nexport const test = base;\n')).toEqual([]);
+    expect(await restricted("e2e-real/global-setup.ts", 'import { test } from "@playwright/test";\nexport default test;\n')).toEqual([]);
+    expect(await restricted("playwright.real.config.ts", 'import { defineConfig, devices } from "@playwright/test";\nexport default defineConfig({ use: { ...devices["Pixel 7"] } });\n')).toEqual([]);
   }, 60_000);
 
   it("leaves the helpers module, the Playwright config and the unit tests alone", async () => {

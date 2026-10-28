@@ -1,54 +1,13 @@
-import http from "node:http";
-import type { AddressInfo, Socket } from "node:net";
+import { expect, request } from "@playwright/test";
 
-import { expect, request, type APIRequestContext } from "@playwright/test";
-
+import { postAcrossIdleClose, probeServer } from "../e2e-common/connection-probe";
 import { test } from "./helpers";
 
 // G-03: Playwright's request client keeps idle connections, and a Node server closes an idle keep-alive connection at
 // keepAliveTimeout + keepAliveTimeoutBuffer (5 s + 1 s for the apps under test). A setup request sent in the moment the
 // server closes that connection fails with "socket hang up" / ECONNRESET before the server reads it (CI run
-// 40521729530). Test-setup requests therefore use a fresh connection each (helpers.ts `test`). This probe server lives in
-// the test process with a 2 s idle timeout and no grace buffer, so the close lines up with the request. (At 1 s or less
-// the advertised `Keep-Alive: timeout=1` falls within Node's client-side buffer and connections are not reused at all,
-// which would hide the condition.)
-
-const IDLE_CLOSE_MS = 2000;
-
-async function probeServer() {
-  const seen: { socket: Socket; connection: string | undefined; path: string }[] = [];
-  const server = http.createServer((req, res) => {
-    req.resume();
-    req.on("end", () => {
-      seen.push({ socket: req.socket, connection: req.headers.connection, path: req.url ?? "" });
-      if (req.url === "/page") {
-        res.setHeader("content-type", "text/html");
-        res.end("<!doctype html><title>probe</title><p>probe</p>");
-        return;
-      }
-      res.statusCode = req.url === "/fail" ? 500 : 201;
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ ok: res.statusCode === 201 }));
-    });
-  });
-  server.keepAliveTimeout = IDLE_CLOSE_MS;
-  server.keepAliveTimeoutBuffer = 0;
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  return { url, seen, close: () => new Promise<void>((resolve) => server.close(() => resolve())) };
-}
-
-const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** Sends `rounds` POSTs, each exactly when the server closes the previous request's idle connection. */
-async function postAcrossIdleClose(api: APIRequestContext, url: string, rounds: number) {
-  const outcomes: string[] = [];
-  for (let i = 0; i < rounds; i++) {
-    if (i > 0) await pause(IDLE_CLOSE_MS);
-    outcomes.push(await api.post(`${url}/setup`, { data: { i } }).then((r) => String(r.status()), (e: Error) => e.message.split("\n")[0] ?? e.message));
-  }
-  return outcomes;
-}
+// 40521729530). Test-setup requests therefore use a fresh connection each (helpers.ts `test`, from
+// e2e-common/fresh-connections.ts). The probe server is e2e-common/connection-probe.ts.
 
 test("test-setup requests use a fresh connection each, so an idle-connection close cannot hang them up", async ({ page, browser, request: requestFixture }) => {
   const probe = await probeServer();
@@ -104,6 +63,25 @@ test("control: a plain request client does reuse idle connections (the condition
     test.info().annotations.push({ type: "G-03 control across the idle close", description: outcomes.join(", ") });
   } finally {
     await plain.dispose();
+    await probe.close();
+  }
+});
+
+// G-03 report §12: route.fetch() is not wrapped by the fixture. It keeps its own keep-alive connection, but it never
+// inherits one from the test's setup requests (they close theirs), so a single route.fetch per test (csp.spec.ts) always
+// starts on a fresh connection. Repeated route.fetch calls across an idle gap would need their own protection.
+test("route.fetch never inherits a pooled connection from the test's setup requests", async ({ page }) => {
+  const probe = await probeServer();
+  try {
+    await page.route("**/routed*", async (route) => route.fulfill({ response: await route.fetch() }));
+    expect((await page.request.post(`${probe.url}/setup`, { data: {} })).status()).toBe(201);
+    await page.goto(`${probe.url}/routed-1`);
+    const setup = probe.seen.find((s) => s.path === "/setup");
+    const routed = probe.seen.find((s) => s.path === "/routed-1");
+    expect(setup?.connection).toBe("close");
+    expect(routed, "the routed request reached the server").toBeDefined();
+    expect(routed?.socket, "route.fetch started on its own connection").not.toBe(setup?.socket);
+  } finally {
     await probe.close();
   }
 });

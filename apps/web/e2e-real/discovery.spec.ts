@@ -1,5 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 
+import { test } from "../e2e-common/fresh-connections";
 import { WEB_URL } from "./support/env";
 import { publicGet } from "./support/http";
 import { loadRun } from "./support/state";
