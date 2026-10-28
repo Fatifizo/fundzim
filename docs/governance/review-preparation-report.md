@@ -108,7 +108,17 @@ NOT CLOSED.**
     (`e2e/helpers.ts:52`) — **G-03**, below.
   - **No green CI run exists yet for the fix commit.**
 
-**G-03 — intermittent connection reset in the e2e test helper (new, not fixed).**
+**G-03 update (2026-10-28): FIXED ON BRANCH `remediation/g03-e2e-socket-hangup` (`02aac0e`, from `d0be53e`). NOT REVIEWED.
+NOT CLOSED.**
+- **Cause, reproduced.** A keep-alive race: Playwright's request client reuses idle connections, and the apps under test
+  close them at 6 s. A request sent in the ~40 ms before that close fails with `apiRequestContext.post: socket hang up`.
+- **Fix.** Test-setup requests use a fresh connection, applied by a fixture in `e2e/helpers.ts`. Test infrastructure only.
+- **Tests.** A regression spec that is red before the fix and green after it, with a mutation check.
+- **Results.** Local: 60/60 repeats of the regression spec and 60/60 of the originally failing test. CI run 40654287677:
+  8/8.
+- **Report:** `evidence/g03-investigation-report.md`.
+
+**G-03 — intermittent connection reset in the e2e test helper (as first recorded).**
 - **Observed.** In CI run 40521729530, `createUser` (`apps/web/e2e/helpers.ts:52`) got `socket hang up` on
   `POST /api/v1/__mock/users` to the auth app (port 3101). This happened before the page under test was involved.
 - **Unrelated to G-02.**

@@ -1,0 +1,13 @@
+5960ms trials=40 reused=40 failures=3 e.g. ECONNRESET read ECONNRESET reused=true
+5970ms trials=40 reused=40 failures=9 e.g. ECONNRESET read ECONNRESET reused=true
+5980ms trials=40 reused=40 failures=17 e.g. ECONNRESET read ECONNRESET reused=true
+5985ms trials=40 reused=40 failures=12 e.g. ECONNRESET read ECONNRESET reused=true
+5990ms trials=40 reused=40 failures=12 e.g. ECONNRESET read ECONNRESET reused=true
+5995ms trials=40 reused=40 failures=26 e.g. ECONNRESET read ECONNRESET reused=true
+6000ms trials=40 reused=32 failures=32 e.g. ECONNRESET socket hang up reused=true
+6005ms trials=40 reused=0 failures=0
+6010ms trials=40 reused=0 failures=0
+6015ms trials=40 reused=0 failures=0
+6020ms trials=40 reused=0 failures=0
+6030ms trials=40 reused=0 failures=0
+6040ms trials=40 reused=0 failures=0

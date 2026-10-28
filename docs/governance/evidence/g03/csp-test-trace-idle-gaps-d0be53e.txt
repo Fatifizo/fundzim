@@ -1,0 +1,5 @@
+# verification.spec.ts 'new pages keep the nonce-only CSP' (desktop), local trace on d0be53e: page.request calls and the idle time before each
+POST /api/v1/__mock/users         duration=68ms idle_before=-
+POST /api/v1/__mock/users         duration=17ms idle_before=6657ms
+POST /api/v1/__mock/kyc-submitted duration=24ms idle_before=2ms
+POST /api/v1/__mock/staff         duration=10ms idle_before=8ms

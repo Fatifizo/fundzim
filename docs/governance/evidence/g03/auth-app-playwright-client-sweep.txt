@@ -1,0 +1,5 @@
+5970ms trials=40 failures=0 {}
+5985ms trials=40 failures=12 {"apiRequestContext.post: read ECONNRESET":6,"apiRequestContext.post: socket hang up":6}
+5995ms trials=40 failures=16 {"apiRequestContext.post: read ECONNRESET":7,"apiRequestContext.post: socket hang up":9}
+6000ms trials=40 failures=7 {"apiRequestContext.post: read ECONNRESET":4,"apiRequestContext.post: socket hang up":3}
+6010ms trials=40 failures=0 {}

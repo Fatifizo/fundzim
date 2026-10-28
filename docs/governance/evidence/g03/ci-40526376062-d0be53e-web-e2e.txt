@@ -1,0 +1,17 @@
+# CI run 40526376062 (commit d0be53e), job 122266979196 'Web end-to-end (Playwright)' — annotations and step timings via the unauthenticated public API (2026-10-28T07:11:15Z). Job logs (403) and the Playwright artifact (401) need a token.
+job success 2026-10-27T14:58:44Z 2026-10-27T15:07:16Z
+ step 1 Set up job success 2026-10-27T14:58:45Z 1
+ step 2 Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 success 2026-10-27T14:58:46Z 3
+ step 3 Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 success 2026-10-27T14:58:49Z 5
+ step 4 Run npm ci --no-audit --no-fund success 2026-10-27T14:58:54Z 10
+ step 5 Playwright system dependencies (Chromium) success 2026-10-27T14:59:04Z 23
+ step 6 Playwright Chromium browser success 2026-10-27T14:59:27Z 9
+ step 7 Run npm run test:e2e success 2026-10-27T14:59:36Z 458
+ step 8 Keep the Playwright report and traces of a failed run (mock API only; no real credentials) skipped 2026-10-27T15:07:14Z 0
+ step 15 Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 success 2026-10-27T15:07:14Z 0
+ step 16 Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 success 2026-10-27T15:07:14Z 0
+ step 17 Complete job success 2026-10-27T15:07:14Z 0
+## annotations
+--- notice .github 279 🎭 Playwright Run Summary
+  1 skipped
+  221 passed (7.6m)

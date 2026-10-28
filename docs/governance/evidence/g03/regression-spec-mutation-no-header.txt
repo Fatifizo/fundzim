@@ -1,0 +1,6 @@
+desktop-chromium failed test-setup requests use a fresh connection each, so an idle- | ['Error: every request on its own connection'] []
+desktop-chromium passed a server failure on a test-setup request is reported once, n | [] []
+desktop-chromium passed control: a plain request client does reuse idle connections  | [] ['201, 201, 201']
+mobile-chromium failed test-setup requests use a fresh connection each, so an idle- | ['Error: every request on its own connection'] []
+mobile-chromium passed a server failure on a test-setup request is reported once, n | [] []
+mobile-chromium passed control: a plain request client does reuse idle connections  | [] ['201, 201, 201']

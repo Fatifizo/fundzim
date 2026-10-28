@@ -1,0 +1,6 @@
+default 5985ms: 8/40 ok {"apiRequestContext.post: read ECONNRESET":30,"apiRequestContext.post: socket hang up":2}
+default 5995ms: 13/40 ok {"apiRequestContext.post: socket hang up":10,"apiRequestContext.post: read ECONNRESET":17}
+default 6000ms: 32/40 ok {"apiRequestContext.post: socket hang up":2,"apiRequestContext.post: read ECONNRESET":6}
+connection-close-per-request 5985ms: 40/40 ok {}
+connection-close-per-request 5995ms: 40/40 ok {}
+connection-close-per-request 6000ms: 40/40 ok {}

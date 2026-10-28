@@ -1,0 +1,45 @@
+# CI run 40521729530 (commit d83d1ac), job 122250330179 'Web end-to-end (Playwright)' — annotations and step timings via the unauthenticated public API (2026-10-28T07:11:14Z). Job logs (403) and the Playwright artifact (401) need a token.
+job failure 2026-10-27T14:30:22Z 2026-10-27T14:38:43Z
+ step 1 Set up job success 2026-10-27T14:30:23Z 1
+ step 2 Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 success 2026-10-27T14:30:24Z 2
+ step 3 Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 success 2026-10-27T14:30:26Z 1
+ step 4 Run npm ci --no-audit --no-fund success 2026-10-27T14:30:27Z 13
+ step 5 Playwright system dependencies (Chromium) success 2026-10-27T14:30:40Z 12
+ step 6 Playwright Chromium browser success 2026-10-27T14:30:52Z 11
+ step 7 Run npm run test:e2e failure 2026-10-27T14:31:03Z 456
+ step 8 Keep the Playwright report and traces of a failed run (mock API only; no real credentials) success 2026-10-27T14:38:39Z 2
+ step 15 Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 skipped 2026-10-27T14:38:41Z 0
+ step 16 Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 success 2026-10-27T14:38:41Z 0
+ step 17 Complete job success 2026-10-27T14:38:41Z 0
+## annotations
+--- failure .github 345 
+Process completed with exit code 1.
+--- notice .github 341 🎭 Playwright Run Summary
+  1 failed
+    [desktop-chromium] › e2e/verification.spec.ts:504:5 › new pages keep the nonce-only CSP with no violations 
+  1 skipped
+  220 passed (7.6m)
+--- failure apps/web/e2e/helpers.ts 52 [desktop-chromium] › e2e/verification.spec.ts:504:5 › new pages keep the nonce-only CSP with no violations
+  1) [desktop-chromium] › e2e/verification.spec.ts:504:5 › new pages keep the nonce-only CSP with no violations 
+    Error: apiRequestContext.post: socket hang up
+    Call log:
+      - → POST http://127.0.0.1:3101/api/v1/__mock/users
+        - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36
+        - accept: */*
+        - accept-encoding: gzip,deflate,br
+        - content-type: application/json
+        - content-length: 153
+        - cookie: fz_session=<redacted>; fz_csrf=<redacted>
+
+
+       at helpers.ts:52
+
+      50 | ) {
+      51 |   const email = `e2e-${Date.now()}-${process.pid}-${counter++}@example.test`;
+    > 52 |   const res = await page.request.post(`${AUTH_BASE_URL}/api/v1/__mock/users`, {
+         |                                  ^
+      53 |     data: {
+      54 |       email,
+      55 |       display_name: opts.displayName ?? "E2E Person",
+        at createUser (/home/runner/work/fundzim/fundzim/apps/web/e2e/helpers.ts:52:34)
+        at /home/runner/work/fundzim/fundzim/apps/web/e2e/verification.spec.ts:543:37

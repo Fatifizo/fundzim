@@ -1,0 +1,23 @@
+# plain Node v24.21.0: server keepAliveTimeout 5000 + buffer 1000 vs http.Agent({keepAlive:true}); 10 trials per gap; same process
+server keepAliveTimeout 5000 node v24.21.0
+first response keep-alive header: timeout=5
+10 5900ms ok reused=true
+10 5950ms ok reused=true
+10 6000ms FAIL:ECONNRESET socket hang up reused=true
+10 6050ms ok reused=false
+10 6100ms ok reused=false
+
+# client expiry vs advertised timeout (same process; 6 trials per gap)
+server 2000+0ms, gap 1900ms: {"reused":6}
+server 2000+0ms, gap 2000ms: {"ERR ECONNRESET reused=true":5,"new":1}
+server 2000+0ms, gap 2100ms: {"new":6}
+server 5000+1000ms, gap 4100ms: {"reused":6}
+server 5000+1000ms, gap 5900ms: {"reused":6}
+server 5000+1000ms, gap 6000ms: {"ERR ECONNRESET reused=true":5,"new":1}
+
+# reuse vs advertised timeout
+server keepAliveTimeout=1000 buffer=0: back-to-back reused=false, after 50ms reused=false
+server keepAliveTimeout=2000 buffer=0: back-to-back reused=true, after 50ms reused=true
+server keepAliveTimeout=3000 buffer=0: back-to-back reused=true, after 50ms reused=true
+server keepAliveTimeout=5000 buffer=1000: back-to-back reused=true, after 50ms reused=true
+agent option agentKeepAliveTimeoutBuffer default: 1000
