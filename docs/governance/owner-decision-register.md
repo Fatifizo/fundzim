@@ -1,4 +1,4 @@
-# Owner decision register (current; governance gate, 2026-10-27)
+# Owner decision register (current; governance gate, 2026-10-27; status refreshed 2026-10-30)
 
 This register tracks the decisions that block integration or launch. The identifiers are those of
 `docs/stage-20/owner-decision-pack.md`, plus D-01a (Phase 2) and LR-012 (`docs/compliance/open-legal-questions.md`). Historical
@@ -10,15 +10,46 @@ is not in this table.
 
 | Decision | Required action | Required authority / evidence | Status |
 |---|---|---|---|
-| D-01 | Protect `main`; establish merge controls | Repository administrator; settings verified by the `main-branch-protection.md` §7 queries | **OPEN** (verified 2026-10-27: `protected: false`, no rulesets) |
-| D-01a | Arrange an independent second reviewer | A named, available reviewer who is not the author account; `independent-review-process.md` | **OPEN** |
-| D-15 | Decide the review scope for integration: the whole range `a552de2..<candidate>` (Stages 1–20 and Phases 1–6), or Phases 1–6 first | Owner, with the reviewer; `review-scope-phases-1-6.md` §1 | **OPEN** (added 2026-10-27) |
+| D-01 | Protect `main`; establish merge controls | Repository administrator; settings verified by the `main-branch-protection.md` §7 queries | **OPEN** (verified 2026-10-30: `protected: false`, 0 rulesets, 0 branch rules; the protection endpoint needs a token) |
+| D-01a | Arrange an independent second reviewer | A named, available reviewer who is not the author account; `independent-review-process.md` | **OPEN** (no reviewer named; the G-02/G-03 handover is prepared: `independent-review-handover.md`, 2026-10-30) |
+| D-15 | Decide the review scope for integration: the whole range `a552de2..<candidate>` (Stages 1–20 and Phases 1–6), or Phases 1–6 first | Owner, with the reviewer; `review-scope-phases-1-6.md` §1 | **OPEN — scope not accepted** (added 2026-10-27; unchanged 2026-10-30) |
 | D-05 | Approve expected financial and operational volumes | Owner / operations capacity decision | **OPEN** |
 | D-06 | Approve reconciliation freshness and maximum full-sweep duration, including the integrity-verification staleness threshold (engineering default 1 h, Phase 6) | Owner / operations, supported by measurements | **OPEN** |
 | D-10 | Approve alert thresholds and a human notification destination | Owner / operations; a delivery path verified end to end | **OPEN** |
 | D-12 | Decide artifact signing and verification | Owner / security / release | **OPEN** |
 | D-13 | Record formal stage and remediation acceptance | Authorised owner entries in `docs/governance/stage-acceptance-register.md` | **OPEN** (register: 21 rows NOT_RECORDED; remediation Phases 1–6 not listed) |
 | LR-012 | Resolve evidence and record retention | Legal / privacy authority; documented decision | **OPEN** (LEGAL_REVIEW_REQUIRED) |
+
+## Findings awaiting independent review, or open (status only; 2026-10-30)
+
+These are findings, not owner decisions. They are listed here so the decisions that unblock them are visible. **None is
+closed.** Closing one needs evidence for that item, and for G-02 and G-03 an independent review.
+
+| Item | Status | Where it stands | What it needs |
+|---|---|---|---|
+| G-02 (fee-draft notice lost on refresh) | **AWAITING INDEPENDENT REVIEW** | fixed on `remediation/g02-fee-draft-notice` (`d83d1ac`; docs `d0be53e`) | D-01a reviewer; review per `independent-review-handover.md` |
+| G-03 (Playwright connection race, mock and real-stack suites) | **AWAITING INDEPENDENT REVIEW** | fixed on `remediation/g03-e2e-socket-hangup` and `remediation/g03-real-stack-connections` (code `02aac0e`, `bdbc607`, `e063113`; head `ec1cdc5`) | D-01a reviewer; review per `independent-review-handover.md` and `g03-review-package.md` |
+| G-04 (`discovery.spec.ts:220` counts the first view event as a replay) | **OPEN**: test-design issue, established (reproduced 20/20 with CPU throttling) | not fixed | owner authorises a separate test-only branch |
+| G-05 (`TestReconciliationPaymentsEndToEnd` failed once in CI run 40715437694) | **OPEN**: unexplained reconciliation test failure, cause unknown | not reproduced (21 local runs); CI log needs a token | owner authorises a separate investigation, with CI log access |
+
+## Before an independent review can start (owner decisions; none taken)
+
+1. **Name the independent reviewer (D-01a).**
+   - The reviewer must not be the implementation account (`Fatifizo`, under which Claude Code commits) and must not have
+     authored or pushed a commit in the reviewed range.
+   - The reviewer needs read access to the repository. To approve a pull request later, they also need the corresponding
+     GitHub permission, which the administrator grants.
+   - Claude Code does not add collaborators or permissions.
+2. **Confirm the review scope.** The review covers G-02 and G-03 only (`independent-review-handover.md` §1). A PASS
+   approves neither a merge nor integration.
+3. **Approval of G-02/G-03 does not authorise integration of the earlier stages.**
+   - A merge into `main` carries Stages 1–20 and remediation Phases 1–6, none of which is independently reviewed.
+   - The full integration scope must be decided separately under **D-15**.
+4. **Configure and verify branch protection (D-01) before any controlled integration.** Apply
+   `main-branch-protection.md` §5 and verify it with §7. The review itself does not need it; the integration does.
+5. **Decide what happens to G-04 and G-05**: separate branches or investigations, each with its own authorisation.
+6. **Record outcomes** (review records, closure of findings, acceptance under D-13) **in the owner's name only**. Claude
+   Code records no decision, approval or acceptance.
 
 ## Details
 
