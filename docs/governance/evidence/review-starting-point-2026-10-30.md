@@ -33,7 +33,7 @@ on `main`). A cancelled run is neither a pass nor a failure.
 
 **Earlier runs.** The run-to-commit table is unchanged; see `reviewer-instructions-emb99.md` §6.
 - No run on the code commit `e063113` itself is fully green.
-- Its identical code tree is now fully green in 40720405660, 40992515372, 41014930811 and 41019540201.
+- Its identical code tree is now fully green in 40720405660, 40992515372, 41014930811, 41019540201 and 41052140146.
 - It failed once on G-05 (40715437694).
 
 ## 3. Evidence integrity
