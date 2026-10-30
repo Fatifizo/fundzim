@@ -1,6 +1,6 @@
 # Reviewer instructions — `emB99`: independent review of G-02 and G-03
 
-**Status: REVIEW NOT STARTED. Reviewer acceptance PENDING.** Prepared 2026-10-30 by Claude Code, the author of the
+**Status: REVIEW NOT STARTED. Acceptance reported by the owner on 2026-10-30. Please confirm it in your record.** Prepared 2026-10-30 by Claude Code, the author of the
 changes under review. These instructions tell you where to look. They are not evidence that anything is correct.
 **Examine the source and re-run the tests yourself. Do not accept the implementation's reports at face value.**
 

@@ -11,7 +11,7 @@ is not in this table.
 | Decision | Required action | Required authority / evidence | Status |
 |---|---|---|---|
 | D-01 | Protect `main`; establish merge controls | Repository administrator; settings verified by the `main-branch-protection.md` §7 queries | **OPEN** (verified 2026-10-30: `protected: false`, 0 rulesets, 0 branch rules; the protection endpoint needs a token) |
-| D-01a | Arrange an independent second reviewer | A named, available reviewer who is not the author account; `independent-review-process.md` | **OPEN — reviewer DESIGNATED: `emB99`** (owner's instruction, 2026-10-30; scope G-02 and G-03 only). Read access VERIFIED (public repository); collaborator access PENDING (needs an administrator); reviewer acceptance PENDING; no review record yet (`independent-review-handover.md` §0) |
+| D-01a | Arrange an independent second reviewer | A named, available reviewer who is not the author account; `independent-review-process.md` | **OPEN — reviewer DESIGNATED: `emB99`** (owner's instruction, 2026-10-30; scope G-02 and G-03 only). Reviewer acceptance REPORTED BY THE OWNER (2026-10-30; no reviewer-authored confirmation yet). Read access VERIFIED (public repository); collaborator access PENDING (needs an administrator); no review record yet (`independent-review-handover.md` §0) |
 | D-15 | Decide the review scope for integration: the whole range `a552de2..<candidate>` (Stages 1–20 and Phases 1–6), or Phases 1–6 first | Owner, with the reviewer; `review-scope-phases-1-6.md` §1 | **OPEN — scope not accepted** (added 2026-10-27; unchanged 2026-10-30) |
 | D-05 | Approve expected financial and operational volumes | Owner / operations capacity decision | **OPEN** |
 | D-06 | Approve reconciliation freshness and maximum full-sweep duration, including the integrity-verification staleness threshold (engineering default 1 h, Phase 6) | Owner / operations, supported by measurements | **OPEN** |
@@ -27,15 +27,15 @@ closed.** Closing one needs evidence for that item, and for G-02 and G-03 an ind
 
 | Item | Status | Where it stands | What it needs |
 |---|---|---|---|
-| G-02 (fee-draft notice lost on refresh) | **AWAITING INDEPENDENT REVIEW** | fixed on `remediation/g02-fee-draft-notice` (`d83d1ac`; docs `d0be53e`) | reviewer `emB99` designated (acceptance and collaborator access pending); review per `independent-review-handover.md` |
-| G-03 (Playwright connection race, mock and real-stack suites) | **AWAITING INDEPENDENT REVIEW** | fixed on `remediation/g03-e2e-socket-hangup` and `remediation/g03-real-stack-connections` (code `02aac0e`, `bdbc607`, `e063113`; head `ec1cdc5`) | reviewer `emB99` designated (acceptance and collaborator access pending); review per `independent-review-handover.md` and `g03-review-package.md` |
+| G-02 (fee-draft notice lost on refresh) | **AWAITING INDEPENDENT REVIEW** | fixed on `remediation/g02-fee-draft-notice` (`d83d1ac`; docs `d0be53e`) | reviewer `emB99` designated and accepted (owner-reported; collaborator access pending); review not started; review per `independent-review-handover.md` |
+| G-03 (Playwright connection race, mock and real-stack suites) | **AWAITING INDEPENDENT REVIEW** | fixed on `remediation/g03-e2e-socket-hangup` and `remediation/g03-real-stack-connections` (code `02aac0e`, `bdbc607`, `e063113`; head `ec1cdc5`) | reviewer `emB99` designated and accepted (owner-reported; collaborator access pending); review not started; review per `independent-review-handover.md` and `g03-review-package.md` |
 | G-04 (`discovery.spec.ts:220` counts the first view event as a replay) | **OPEN**: test-design issue, established (reproduced 20/20 with CPU throttling) | not fixed | owner authorises a separate test-only branch |
 | G-05 (`TestReconciliationPaymentsEndToEnd` failed once in CI run 40715437694) | **OPEN**: unexplained reconciliation test failure, cause unknown | not reproduced (21 local runs); CI log needs a token | owner authorises a separate investigation, with CI log access |
 
 ## Before an independent review can start (owner decisions; none taken)
 
-1. **Name the independent reviewer (D-01a).** **Done 2026-10-30: `emB99`.** Remaining: the reviewer's acceptance, and
-   collaborator access if a counting GitHub approval is wanted.
+1. **Name the independent reviewer (D-01a).** **Done 2026-10-30: `emB99`; accepted (owner-reported, 2026-10-30).**
+   Remaining: collaborator access if a counting GitHub approval is wanted.
    - The reviewer must not be the implementation account (`Fatifizo`, under which Claude Code commits) and must not have
      authored or pushed a commit in the reviewed range.
    - The reviewer needs read access to the repository. To approve a pull request later, they also need the corresponding
@@ -78,8 +78,10 @@ closed.** Closing one needs evidence for that item, and for G-02 and G-03 an ind
   `Fatifizo`, id 236812721) for G-02 and G-03 only. Evidence: `evidence/reviewer-emb99-verification-2026-10-30.txt`.
   - Verified: the account exists, the repository is public (read access), and `emB99` has no commit in the review range
     or the history.
-  - Pending: the reviewer's acceptance; collaborator access (granted and verified by an administrator, needed for a
-    counting GitHub approval); the first completed review record.
+  - Accepted: reported by the owner on 2026-10-30. There is no reviewer-authored confirmation in the repository yet; the
+    review record will carry it.
+  - Pending: collaborator access (granted and verified by an administrator, needed for a counting GitHub approval);
+    the first completed review record.
   - Not verifiable from GitHub data: that a person other than the owner controls the account.
 
 ### D-15: review scope for integration (added 2026-10-27)
