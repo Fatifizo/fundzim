@@ -2,7 +2,7 @@
 
 **Status: HANDOVER PREPARED. REVIEWER DESIGNATED AND ACCEPTED. REVIEW NOT STARTED.**
 - The designated reviewer is `emB99` (§0).
-- Acceptance: as reported by the owner. Collaborator access: PENDING.
+- Acceptance and collaborator access: both as reported by the owner, 2026-10-30.
 - G-02 and G-03 are fixed on their branches, **not reviewed and not closed**.
 - Claude Code wrote every change listed here and this handover. Nothing in this document is a review, an approval or an
   owner decision.
@@ -30,7 +30,7 @@ Companion documents:
 | Review status | **NOT STARTED** |
 | Reviewer acceptance | **ACCEPTED, as reported by the repository owner to Claude Code on 2026-10-30 (07:20 UTC); no reviewer-authored confirmation exists in the repository yet (no issue, comment or fork by `emB99` at that time).** The reviewer should confirm it in their review record (decision template §1) |
 | Repository read access | **VERIFIED**: the repository is public (`private: false`), so any GitHub account can read and clone it |
-| Collaborator status and permission | **PENDING / NOT VERIFIABLE**. The collaborator and permission endpoints need a token (HTTP 401). A GitHub approval on a pull request that counts toward required reviews needs collaborator access, which only a repository administrator can grant and verify |
+| Collaborator status and permission | **GRANTED, as reported by the repository owner on 2026-10-30.** Not independently verified: the collaborator and permission endpoints still need a token (HTTP 401 at 11:53 UTC). Unknown: the permission level (a counting pull-request approval needs at least write), and whether `emB99` has accepted the GitHub invitation (access is active only then). An administrator can confirm both with `gh api repos/Fatifizo/fundzim/collaborators/emB99/permission` with an administrator's token |
 | Independence (technical) | **VERIFIED as far as GitHub data allows.** `emB99` is a different account from the implementation account `Fatifizo` (id 236812721). All 11 commits in `d3d45c6..4be36ec` are authored and committed by `Fatifizo`. `emB99` appears nowhere in the repository history and is not a contributor |
 | Independence (person) | **not verifiable from GitHub data.** That a different person controls `emB99` rests on the owner's designation |
 | Review commit | **to be recorded when the reviewer begins** (the full SHA of the head they review) |
@@ -223,9 +223,8 @@ CLARIFICATION) and records it with `independent-review-decision-template.md`.
 ## 9. Preconditions before a review starts
 
 These are the owner's decisions; see `owner-decision-register.md`, "Before an independent review can start".
-1. The owner names the reviewer (D-01a). **Done on 2026-10-30: `emB99` (§0).** Acceptance is reported by the owner
-   (2026-10-30). Still pending: for a GitHub approval that counts, collaborator access granted and verified by an
-   administrator.
+1. The owner names the reviewer (D-01a). **Done on 2026-10-30: `emB99` (§0).** Acceptance and collaborator access are both
+   reported by the owner (2026-10-30). Unverified: the permission level, and whether the invitation has been accepted.
 
    The reviewer is not the implementation account, and read access is verified.
 2. The owner confirms that this review covers only G-02 and G-03. The integration scope remains D-15.

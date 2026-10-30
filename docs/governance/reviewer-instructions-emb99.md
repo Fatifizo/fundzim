@@ -168,11 +168,12 @@ IDs). Items are as in `independent-review-handover.md` §8:
    - corrective actions;
    - a recommendation per item (APPROVE / APPROVE WITH CONDITIONS / REJECT).
 2. Submit it as a pull request.
-   - From a fork, if you do not have collaborator access. The repository is public.
-   - From a branch, if the administrator has granted access.
+   - From a branch: collaborator access was granted (owner-reported, 2026-10-30). Accept the GitHub invitation first, if
+     you have not.
+   - From a fork, if that is not yet active. The repository is public.
    - Raise findings as pull-request review comments or issues as well, if you prefer.
-3. A GitHub approval counts toward required reviews only with collaborator access, which the administrator grants.
-   Record your approval in the record either way.
+3. A GitHub approval counts toward required reviews only with collaborator access of at least write permission. Record
+   your approval in the record either way.
 4. The owner decides on closing G-02/G-03 and on acceptance. Your recommendation is an input, not the closure.
 
 ## 11. Independence
