@@ -1,0 +1,18 @@
+# Reviewer account verification for the designated reviewer (owner's instruction: emb99), 2026-10-30T07:02:43Z
+# Source: the unauthenticated public GitHub REST API (no token; read-only) and the local git history.
+== GET /users/emb99
+{'login': 'emB99', 'id': 61978640, 'type': 'User', 'site_admin': False, 'created_at': '2020-03-09T14:18:44Z'}
+== GET /users/Fatifizo (implementation account)
+{'login': 'Fatifizo', 'id': 236812721, 'type': 'User', 'site_admin': False, 'created_at': '2025-10-08T12:14:21Z'}
+== GET /repos/Fatifizo/fundzim
+{'full_name': 'Fatifizo/fundzim', 'private': False, 'visibility': 'public'}
+== GET /repos/Fatifizo/fundzim/collaborators/emB99 -> HTTP 401 (needs authentication)
+== GET /repos/Fatifizo/fundzim/collaborators/emB99/permission -> HTTP 401 (needs authentication)
+== GET /repos/Fatifizo/fundzim/contributors
+[('Fatifizo', 1)]
+== git log d3d45c6..4be36ec author|committer names (review range G-02 + G-03)
+     11 Fatifizo|Fatifizo
+== GitHub-attributed author/committer logins for the 11 commits in the range
+     11 Fatifizo Fatifizo
+== occurrences of emb99 (case-insensitive) in author/committer names of all local history: 0
+== conclusion: account exists (canonical login emB99); distinct from Fatifizo; no commit in the range; read access VERIFIED by public visibility; collaborator status and permission NOT VERIFIABLE without a token (PENDING); control of the account by a person other than the owner cannot be established from GitHub data

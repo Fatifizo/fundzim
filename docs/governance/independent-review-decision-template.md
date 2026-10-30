@@ -1,9 +1,10 @@
-# Independent-review decision record — TEMPLATE (blank)
+# Independent-review decision record — TEMPLATE (designated reviewer prefilled; everything else blank)
 
-This is a template. It records nothing until an independent reviewer completes a copy.
+This is a template. It records nothing until the independent reviewer completes a copy. Only the designated-reviewer
+account is prefilled (D-01a, 2026-10-30). Every other field, including the outcomes and the approval, is for the reviewer.
 - Copy it to `docs/governance/reviews/<YYYY-MM-DD>-<item>-<reviewer>.md` and add it through a reviewed pull request
   (`independent-review-process.md` §5).
-- Leave this file blank.
+- Leave this file as it is (only the designated reviewer is prefilled).
 - The reviewer must not be the implementation account (`Fatifizo`) and must not have authored or pushed a commit in the
   reviewed range.
 - The handover is `independent-review-handover.md`.
@@ -13,10 +14,11 @@ This is a template. It records nothing until an independent reviewer completes a
 | Field | Value |
 |---|---|
 | Reviewer name | |
-| Reviewer account | |
+| Designated reviewer account | `emB99` (GitHub id 61978640; designated 2026-10-30, `independent-review-handover.md` §0) |
+| Reviewer account used for this review (must be the designated account) | |
 | Role | |
 | Independence statement (authored or pushed no commit in the range; not the implementation account) | |
-| Named by the owner on (D-01a reference) | |
+| Named by the owner on (D-01a reference) | 2026-10-30 |
 | Date of review | |
 | Repository | `Fatifizo/fundzim` |
 | Item(s) reviewed (G-02, G-03) | |

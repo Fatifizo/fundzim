@@ -1,7 +1,8 @@
 # Independent-review handover — G-02 and G-03
 
-**Status: HANDOVER PREPARED. NO REVIEW HAS TAKEN PLACE.**
-- No independent reviewer has been named (D-01a).
+**Status: HANDOVER PREPARED. REVIEWER DESIGNATED. REVIEW NOT STARTED.**
+- The designated reviewer is `emB99` (§0).
+- Reviewer acceptance: PENDING. Collaborator access: PENDING.
 - G-02 and G-03 are fixed on their branches, **not reviewed and not closed**.
 - Claude Code wrote every change listed here and this handover. Nothing in this document is a review, an approval or an
   owner decision.
@@ -18,6 +19,23 @@ Companion documents:
 - the review method: `independent-review-process.md`;
 - the decision template: `independent-review-decision-template.md`;
 - the owner decisions: `owner-decision-register.md`, "Before an independent review can start".
+
+## 0. Designated reviewer (recorded 2026-10-30)
+
+| Field | Value |
+|---|---|
+| Designated reviewer | **`emB99`**: GitHub user id 61978640, created 2020-03-09. Designated as `emb99`; GitHub usernames are case-insensitive and the canonical login is `emB99` |
+| Designated by | the repository owner's instruction to Claude Code, 2026-10-30 (D-01a). Claude Code records the designation and does not make it |
+| Review scope | **G-02 and G-03 only** (§1) |
+| Review status | **NOT STARTED** |
+| Reviewer acceptance | **PENDING**: the reviewer has not confirmed that they accept the review |
+| Repository read access | **VERIFIED**: the repository is public (`private: false`), so any GitHub account can read and clone it |
+| Collaborator status and permission | **PENDING / NOT VERIFIABLE**. The collaborator and permission endpoints need a token (HTTP 401). A GitHub approval on a pull request that counts toward required reviews needs collaborator access, which only a repository administrator can grant and verify |
+| Independence (technical) | **VERIFIED as far as GitHub data allows.** `emB99` is a different account from the implementation account `Fatifizo` (id 236812721). All 11 commits in `d3d45c6..4be36ec` are authored and committed by `Fatifizo`. `emB99` appears nowhere in the repository history and is not a contributor |
+| Independence (person) | **not verifiable from GitHub data.** That a different person controls `emB99` rests on the owner's designation |
+| Review commit | **to be recorded when the reviewer begins** (the full SHA of the head they review) |
+| Evidence | `evidence/reviewer-emb99-verification-2026-10-30.txt` |
+| Reviewer instructions | `reviewer-instructions-emb99.md` |
 
 ## 1. Purpose and scope
 
@@ -139,6 +157,7 @@ a documentation-only commit runs every suite on the code tree it contains.
 | 40715437694 | `3c97ed6` | docs (code tree = `e063113`) | **7/8** | yes: 254 passed, **1 failed** (G-05) | a test failure of unknown cause |
 | 40720405660 | `812bb3c` | docs (code tree = `e063113`) | 8/8 | yes: integration 255/0/8, real-stack 70, mock 231 + 1 | the exact code tree of `e063113` passed every suite |
 | 40992515372 | `ec1cdc5` | docs (code tree = `e063113`) | 8/8 | yes: same counts | same tree, second all-green run |
+| 41014930811 | `4be36ec` | docs (code tree = `e063113`) | 8/8 | yes | same tree, third all-green run (recorded 2026-10-30) |
 
 **Code commits vs documentation-only commits.**
 - No run **on the code commit `e063113` itself** is fully green.
@@ -204,7 +223,10 @@ CLARIFICATION) and records it with `independent-review-decision-template.md`.
 ## 9. Preconditions before a review starts
 
 These are the owner's decisions; see `owner-decision-register.md`, "Before an independent review can start".
-1. The owner names the reviewer (D-01a). The reviewer is not the implementation account `Fatifizo` and has read access to
-   the repository.
+1. The owner names the reviewer (D-01a). **Done on 2026-10-30: `emB99` (§0).** Still pending:
+   - the reviewer's acceptance;
+   - for a GitHub approval that counts, collaborator access granted and verified by an administrator.
+
+   The reviewer is not the implementation account, and read access is verified.
 2. The owner confirms that this review covers only G-02 and G-03. The integration scope remains D-15.
 3. Branch protection (D-01) is needed before any controlled integration. It is not needed for the review itself.
