@@ -4,6 +4,8 @@
 changes under review. These instructions tell you where to look. They are not evidence that anything is correct.
 **Examine the source and re-run the tests yourself. Do not accept the implementation's reports at face value.**
 
+The owner's brief for this review is `review-brief-emb99.md`.
+
 ## 1. Objective
 
 Give an independent, explicit recommendation on two remediations, based on your own reading of the code and your own test
