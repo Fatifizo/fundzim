@@ -113,6 +113,7 @@ runs every suite on the code it contains.
 | 40720405660 | `812bb3c` | docs (same code as `e063113`) | 8/8 | yes |
 | 40992515372 | `ec1cdc5` | docs (same code as `e063113`) | 8/8 | yes |
 | 41014930811 | `4be36ec` | docs (same code as `e063113`) | 8/8 | yes |
+| later runs | `c0d01d8` … `e05f6ec` | docs (same code as `e063113`) | see `evidence/review-starting-point-2026-10-30.md` (author's verification) | — |
 
 **The distinction to judge.** No CI run on the code commit `e063113` *itself* is fully green. Runs on later
 documentation-only commits with a byte-identical code tree are (`git diff e063113 <commit> -- . ':!docs'` is empty). Decide
