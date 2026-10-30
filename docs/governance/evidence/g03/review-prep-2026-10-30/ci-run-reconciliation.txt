@@ -1,0 +1,47 @@
+## 40675849219 cec643d105ecdf01e16443690718ca5565808fb4 remediation/g03-e2e-socket-hangup push completed success attempt 1
+   success | Container images (build, SBOM, vulnerability  | 122773927655
+   success | Real-stack E2E (compose + Playwright) | 122773927992
+   success | Go (format, vet, unit tests, vulnerabilities) | 122773928132
+   success | Web (lint, types, unit tests, build, audit) | 122773928154
+   success | OpenAPI and SQL design drafts | 122773928157
+   success | Secret scanning | 122773928220
+   success | Web end-to-end (Playwright) | 122773928228
+   success | Integration (real PostgreSQL, Valkey, Garage, | 122773928292
+     note:   64 passed (11.0m)
+     note:   1 skipped /   229 passed (6.7m)
+     note: passed 255, failed 0, skipped 8 (skipped: TestDistributedLoginLimitAcrossReplicas, TestFinancialLoad, TestFinancialReconciliationVolumeSample, TestFinancialWorkerCrashMid
+## 40711057141 e06311391fa6d10d042c54aa32ebdd35ab1618a7 remediation/g03-real-stack-connections push completed failure attempt 1
+   failure | Integration (real PostgreSQL, Valkey, Garage, | 122896126963
+   success | Web (lint, types, unit tests, build, audit) | 122896127224
+   success | Container images (build, SBOM, vulnerability  | 122896127416
+   success | OpenAPI and SQL design drafts | 122896127486
+   success | Web end-to-end (Playwright) | 122896127498
+   success | Secret scanning | 122896127501
+   success | Go (format, vet, unit tests, vulnerabilities) | 122896127545
+   success | Real-stack E2E (compose + Playwright) | 122896127626
+     note:   1 skipped /   231 passed (8.4m)
+     note:   70 passed (11.3m)
+## 40715437694 3c97ed699a7c9a8d1e0c56869b092c3b1b8281dd remediation/g03-real-stack-connections push completed failure attempt 1
+   success | Real-stack E2E (compose + Playwright) | 122911707440
+   success | Secret scanning | 122911707663
+   success | Container images (build, SBOM, vulnerability  | 122911707691
+   success | OpenAPI and SQL design drafts | 122911707741
+   success | Go (format, vet, unit tests, vulnerabilities) | 122911707929
+   failure | Integration (real PostgreSQL, Valkey, Garage, | 122911707956
+   success | Web (lint, types, unit tests, build, audit) | 122911707991
+   success | Web end-to-end (Playwright) | 122911708073
+     note:   70 passed (11.3m)
+     note: passed 254, failed 1, skipped 8 (skipped: TestDistributedLoginLimitAcrossReplicas, TestFinancialLoad, TestFinancialReconciliationVolumeSample, TestFinancialWorkerCrashMid
+     note:   1 skipped /   231 passed (8.3m)
+## 40720405660 812bb3c20caab11aaa542a5a594d99d072288d4e remediation/g03-real-stack-connections push completed success attempt 1
+   success | Integration (real PostgreSQL, Valkey, Garage, | 122929428584
+   success | Web (lint, types, unit tests, build, audit) | 122929429133
+   success | Secret scanning | 122929429279
+   success | OpenAPI and SQL design drafts | 122929429410
+   success | Real-stack E2E (compose + Playwright) | 122929429416
+   success | Go (format, vet, unit tests, vulnerabilities) | 122929429445
+   success | Container images (build, SBOM, vulnerability  | 122929429632
+   success | Web end-to-end (Playwright) | 122929429641
+     note: passed 255, failed 0, skipped 8 (skipped: TestDistributedLoginLimitAcrossReplicas, TestFinancialLoad, TestFinancialReconciliationVolumeSample, TestFinancialWorkerCrashMid
+     note:   70 passed (11.3m)
+     note:   1 skipped /   231 passed (7.2m)

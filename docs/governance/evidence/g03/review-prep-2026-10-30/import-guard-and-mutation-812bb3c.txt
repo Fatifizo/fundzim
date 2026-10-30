@@ -1,0 +1,7 @@
+# import guard on 812bb3c
+      Tests  5 passed (5)
+# mutation: G-03 no-restricted-imports block removed
+     × rejects `test` from @playwright/test in an e2e spec, also when aliased 1908ms
+     × covers the real-stack suite too, accepting the shared fixture there 11ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 3 passed (5)

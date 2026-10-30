@@ -1,0 +1,4 @@
+G04-CAPTURED {"ms":511,"offlineAt":1,"body":"{\"events\":[{\"type\":\"CAMPAIGN_VIEW\",\"slug\":\"offline-notice-zqmvuby9e31iart0-efrb9td0jd\",\"source\":\"DIRECT\"}]}"}
+G04-CAPTURED {"ms":508,"offlineAt":1,"body":"{\"events\":[{\"type\":\"CAMPAIGN_VIEW\",\"slug\":\"offline-notice-zqmvuby9dp1iars0-m4wj8sedm3\",\"source\":\"DIRECT\"}]}"}
+G04-CAPTURED {"ms":531,"offlineAt":2,"body":"{\"events\":[{\"type\":\"CAMPAIGN_VIEW\",\"slug\":\"offline-notice-zqmvuby9dt1iarr0-3r5hzkfdka\",\"source\":\"DIRECT\"}]}"}
+  3 failed

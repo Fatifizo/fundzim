@@ -1,0 +1,13 @@
+# GitHub governance state via the unauthenticated public REST API (read-only), 2026-10-30T02:34:20Z
+== GET /branches/main
+{'name': 'main', 'protected': False, 'commit': 'a552de2'}
+== GET /branches/main/protection
+{'message': 'Requires authentication', 'status': '401'}
+== GET /rulesets
+list, length 0
+== GET /rules/branches/main
+list, length 0
+== GET /pulls?state=all
+list, length 0
+== GET /contents/.github/CODEOWNERS
+{'message': 'Not Found', 'status': '404'}

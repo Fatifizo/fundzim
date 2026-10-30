@@ -1,0 +1,7 @@
+version: {"data":{"name":"FundZim","version":"0.1.0-dev","build":"unknown","commit":"812bb3c20caab11aaa542a5a594d99d072288d4e"},"meta":{"request_id":"01a18a8f-8d9b-75de-8cc7-180ab86daed8"}}
+dev containers running: 0
+APP_ENV=development
+PAYMENTS_EXECUTION_ENVIRONMENT=LOCAL_SIMULATOR
+PAYOUTS_EXECUTION_ENVIRONMENT=LOCAL_SIMULATOR
+production secret refs: 0
+schema: 20261028090000

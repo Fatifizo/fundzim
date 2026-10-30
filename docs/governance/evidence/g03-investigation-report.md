@@ -442,3 +442,20 @@ unrelated to G-03.
 - the two regression specs;
 - the lint guard and its test;
 - this section's evidence.
+
+### 12.8 Review preparation (2026-10-30)
+
+The review package is `docs/governance/g03-review-package.md`; evidence is in `evidence/g03/review-prep-2026-10-30/`.
+
+- **Correction (R-1).** The spec line numbers in §12.2 predate the import edit. Every cited line in
+  `staff-ledger.spec.ts`, `staff-moderation.spec.ts`, `staff-reconciliation.spec.ts`, `public.spec.ts` and
+  `discovery.spec.ts` is one higher on `e063113`/`812bb3c`. The `support/`, `global-setup.ts` and `csp.spec.ts` citations
+  are correct. §12.2 is kept as written; the package's §3 has the current lines.
+- **CI.** The run-to-commit mapping is in package §5.
+  - Run 40720405660 (`812bb3c`, documentation-only) passed 8/8 and executed every suite.
+  - Its source tree is byte-identical outside `docs/` to code commit `e063113`.
+  - No run on `e063113` itself is fully green.
+- **G-04: a test-design flaw, established.** It reproduced 20/20 with CPU throttling, and the captured request is the
+  page's first `CAMPAIGN_VIEW`, not a replay.
+- **G-05: cause unknown, not reproduced.** 20 isolated runs and 1 full suite passed on disposable `fundzim-r13`.
+- **G-03: still not reviewed and not closed.**

@@ -1,0 +1,42 @@
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (39.04s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (6.48s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (7.26s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (8.76s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (6.27s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (8.72s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (6.20s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (8.78s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (8.02s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (6.17s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (9.51s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (6.43s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (8.18s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (8.49s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (7.33s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (8.29s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (7.89s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (8.22s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (8.33s)
+=== RUN   TestReconciliationPaymentsEndToEnd
+--- PASS: TestReconciliationPaymentsEndToEnd (8.23s)
+PASS
+ok  	github.com/Fatifizo/fundzim/tests/integration	186.698s

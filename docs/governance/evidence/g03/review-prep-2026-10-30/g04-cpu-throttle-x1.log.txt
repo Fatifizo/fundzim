@@ -1,0 +1,14 @@
+
+Running 10 tests using 8 workers
+
+[1/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[2/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[3/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[4/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[5/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[6/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[7/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[8/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[9/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[10/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+  10 passed (6.6s)

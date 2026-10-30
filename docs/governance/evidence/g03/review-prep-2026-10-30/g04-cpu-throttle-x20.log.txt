@@ -1,0 +1,344 @@
+
+Running 10 tests using 8 workers
+
+[1/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[2/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[3/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[4/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[5/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[6/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[7/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[8/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+  1) [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "http://127.0.0.1:3101/api/v1/discovery/events",
+    + ]
+
+      234 |   await context.setOffline(false);
+      235 |   await expect(page.getByRole("status").filter({ hasText: "You are offline." })).toHaveCount(0);
+    > 236 |   expect(sent).toEqual([]); // no replay of anything sent while offline
+          |                ^
+      237 | });
+      238 |
+      239 | test("poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim", async ({ page }) => {
+        at /home/administrator/projects/fundzim/apps/web/e2e/.g04-probe.spec.ts:236:16
+
+    Error Context: test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat1/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  2) [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "http://127.0.0.1:3101/api/v1/discovery/events",
+    + ]
+
+      234 |   await context.setOffline(false);
+      235 |   await expect(page.getByRole("status").filter({ hasText: "You are offline." })).toHaveCount(0);
+    > 236 |   expect(sent).toEqual([]); // no replay of anything sent while offline
+          |                ^
+      237 | });
+      238 |
+      239 | test("poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim", async ({ page }) => {
+        at /home/administrator/projects/fundzim/apps/web/e2e/.g04-probe.spec.ts:236:16
+
+    Error Context: test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat6/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat6/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat6/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  3) [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "http://127.0.0.1:3101/api/v1/discovery/events",
+    + ]
+
+      234 |   await context.setOffline(false);
+      235 |   await expect(page.getByRole("status").filter({ hasText: "You are offline." })).toHaveCount(0);
+    > 236 |   expect(sent).toEqual([]); // no replay of anything sent while offline
+          |                ^
+      237 | });
+      238 |
+      239 | test("poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim", async ({ page }) => {
+        at /home/administrator/projects/fundzim/apps/web/e2e/.g04-probe.spec.ts:236:16
+
+    Error Context: test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  4) [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "http://127.0.0.1:3101/api/v1/discovery/events",
+    + ]
+
+      234 |   await context.setOffline(false);
+      235 |   await expect(page.getByRole("status").filter({ hasText: "You are offline." })).toHaveCount(0);
+    > 236 |   expect(sent).toEqual([]); // no replay of anything sent while offline
+          |                ^
+      237 | });
+      238 |
+      239 | test("poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim", async ({ page }) => {
+        at /home/administrator/projects/fundzim/apps/web/e2e/.g04-probe.spec.ts:236:16
+
+    Error Context: test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat4/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  5) [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "http://127.0.0.1:3101/api/v1/discovery/events",
+    + ]
+
+      234 |   await context.setOffline(false);
+      235 |   await expect(page.getByRole("status").filter({ hasText: "You are offline." })).toHaveCount(0);
+    > 236 |   expect(sent).toEqual([]); // no replay of anything sent while offline
+          |                ^
+      237 | });
+      238 |
+      239 | test("poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim", async ({ page }) => {
+        at /home/administrator/projects/fundzim/apps/web/e2e/.g04-probe.spec.ts:236:16
+
+    Error Context: test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat7/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat7/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat7/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  6) [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "http://127.0.0.1:3101/api/v1/discovery/events",
+    + ]
+
+      234 |   await context.setOffline(false);
+      235 |   await expect(page.getByRole("status").filter({ hasText: "You are offline." })).toHaveCount(0);
+    > 236 |   expect(sent).toEqual([]); // no replay of anything sent while offline
+          |                ^
+      237 | });
+      238 |
+      239 | test("poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim", async ({ page }) => {
+        at /home/administrator/projects/fundzim/apps/web/e2e/.g04-probe.spec.ts:236:16
+
+    Error Context: test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat2/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  7) [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "http://127.0.0.1:3101/api/v1/discovery/events",
+    + ]
+
+      234 |   await context.setOffline(false);
+      235 |   await expect(page.getByRole("status").filter({ hasText: "You are offline." })).toHaveCount(0);
+    > 236 |   expect(sent).toEqual([]); // no replay of anything sent while offline
+          |                ^
+      237 | });
+      238 |
+      239 | test("poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim", async ({ page }) => {
+        at /home/administrator/projects/fundzim/apps/web/e2e/.g04-probe.spec.ts:236:16
+
+    Error Context: test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat3/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  8) [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "http://127.0.0.1:3101/api/v1/discovery/events",
+    + ]
+
+      234 |   await context.setOffline(false);
+      235 |   await expect(page.getByRole("status").filter({ hasText: "You are offline." })).toHaveCount(0);
+    > 236 |   expect(sent).toEqual([]); // no replay of anything sent while offline
+          |                ^
+      237 | });
+      238 |
+      239 | test("poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim", async ({ page }) => {
+        at /home/administrator/projects/fundzim/apps/web/e2e/.g04-probe.spec.ts:236:16
+
+    Error Context: test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat5/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat5/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat5/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[9/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+[10/10] [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued
+  9) [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "http://127.0.0.1:3101/api/v1/discovery/events",
+    + ]
+
+      234 |   await context.setOffline(false);
+      235 |   await expect(page.getByRole("status").filter({ hasText: "You are offline." })).toHaveCount(0);
+    > 236 |   expect(sent).toEqual([]); // no replay of anything sent while offline
+          |                ^
+      237 | });
+      238 |
+      239 | test("poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim", async ({ page }) => {
+        at /home/administrator/projects/fundzim/apps/web/e2e/.g04-probe.spec.ts:236:16
+
+    Error Context: test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat9/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat9/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat9/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  10) [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "http://127.0.0.1:3101/api/v1/discovery/events",
+    + ]
+
+      234 |   await context.setOffline(false);
+      235 |   await expect(page.getByRole("status").filter({ hasText: "You are offline." })).toHaveCount(0);
+    > 236 |   expect(sent).toEqual([]); // no replay of anything sent while offline
+          |                ^
+      237 | });
+      238 |
+      239 | test("poster: a printable page with a QR code of the short link; only for public campaigns; never a money claim", async ({ page }) => {
+        at /home/administrator/projects/fundzim/apps/web/e2e/.g04-probe.spec.ts:236:16
+
+    Error Context: test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat8/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat8/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/.g04-probe-poor-connectivi-ddad4--readable-nothing-is-queued-desktop-chromium-repeat8/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  10 failed
+    [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+    [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+    [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+    [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+    [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+    [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+    [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+    [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+    [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
+    [desktop-chromium] › e2e/.g04-probe.spec.ts:220:5 › poor connectivity: going offline is announced and the page stays readable; nothing is queued 
